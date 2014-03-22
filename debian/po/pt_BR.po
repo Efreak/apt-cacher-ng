@@ -1,0 +1,232 @@
+# Debconf translations for apt-cacher-ng.
+# Copyright (C) 2014 THE apt-cacher-ng'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the apt-cacher-ng package.
+# Bruno Gurgel <bruno.gurgel@gmail.com>, 2010.
+# Adriano Rafael Gomes <adrianorg@arg.eti.br>, 2010, 2014.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: apt-cacher-ng 0.7.24-2\n"
+"Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
+"POT-Creation-Date: 2014-01-27 06:52+0100\n"
+"PO-Revision-Date: 2014-01-29 22:02-0200\n"
+"Last-Translator: Adriano Rafael Gomes <adrianorg@arg.eti.br>\n"
+"Language-Team: Brazilian Portuguese <debian-l10n-portuguese@lists.debian."
+"org>\n"
+"Language: pt_BR\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#. Type: select
+#. Choices
+#: ../apt-cacher-ng.templates:2001
+msgid "Set up once"
+msgstr "Configurar uma vez"
+
+#. Type: select
+#. Choices
+#: ../apt-cacher-ng.templates:2001
+msgid "Set up now and update later"
+msgstr "Configurar agora e atualizar depois"
+
+#. Type: select
+#. Choices
+#: ../apt-cacher-ng.templates:2001
+msgid "No automated setup"
+msgstr "Sem configuração automatizada"
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid "Automatic remapping of client requests:"
+msgstr "Remapeamento automático das requisições dos clientes:"
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid ""
+"Apt-Cacher NG can download packages from repositories other than those "
+"requested by the clients. This allows it to cache content effectively, and "
+"makes it easy for an administrator to switch to another mirror later. The "
+"URL remapping can be set up automatically, using a configuration based on "
+"the current state of /etc/apt/sources.list."
+msgstr ""
+"O Apt-Cacher NG pode baixar pacotes de repositórios diferentes daqueles "
+"requisitados pelos clientes. Isso permite fazer cache de conteúdo de forma "
+"eficaz, e torna a troca para outros repositórios mais fácil para o "
+"administrador. O remapeamento de URL pode ser configurado automaticamente, "
+"usando uma configuração baseada no estado atual de /etc/apt/sources.list."
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid ""
+"Please specify whether the remapping should be configured once now, or "
+"reconfigured on every update of Apt-Cacher NG (modifying the configuration "
+"files each time), or left unconfigured."
+msgstr ""
+"Por favor, especifique se o remapeamento deverá ser configurado apenas uma "
+"vez agora, ou reconfigurado a cada atualização do Apt-Cacher NG (modificando "
+"os arquivos de configuração cada vez), ou deixado desconfigurado."
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid ""
+"Selecting \"No automated setup\" will leave the existing configuration "
+"unchanged. It will need to be updated manually."
+msgstr ""
+"Selecionar \"Sem configuração automatizada\" deixará inalterada a "
+"configuração existente. Ela precisará ser atualizada manualmente."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid "Listening address(es) for Apt-Cacher NG:"
+msgstr "Endereço(s) de escuta para o Apt-Cacher NG:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid ""
+"Please specify the local addresses that Apt-Cacher NG should listen on "
+"(multiple entries must be separated by spaces)."
+msgstr ""
+"Por favor, especifique os endereços locais que o Apt-Cacher NG deverá "
+"escutar (múltiplas entradas devem ser separadas por espaços)."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid ""
+"Each entry must be an IP address or hostname associated with a local network "
+"interface. Generic protocol-specific addresses are also supported, such as "
+"0.0.0.0 for listening on all IPv4-enabled interfaces."
+msgstr ""
+"Cada entrada deve ser um endereço IP ou nome de máquina associados a uma "
+"interface de rede local. Endereços genéricos específicos a protocolos também "
+"são suportados, tais como 0.0.0.0 para escutar em todas as interfaces "
+"habilitadas para IPv4."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid ""
+"If this field is left empty, Apt-Cacher NG will listen on all interfaces, "
+"with all supported protocols."
+msgstr ""
+"Se esse campo for deixado vazio, o Apt-Cacher NG escutará em todas as "
+"interfaces, com todos os protocolos suportados."
+
+#. Type: string
+#. Description
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001 ../apt-cacher-ng.templates:6001
+msgid ""
+"The special word \"keep\" keeps the value from the current (or default) "
+"configuration unchanged."
+msgstr ""
+"A palavra especial \"keep\" mantém inalterado o valor da configuração atual "
+"(ou padrão)."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:4001
+msgid "Listening TCP port:"
+msgstr "Porta TCP de escuta:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:4001
+msgid ""
+"Please specify the TCP port that Apt-Cacher NG should listen on for incoming "
+"HTTP (proxy) requests. The default value is port 3142, but it can be set to "
+"9999 to emulate apt-proxy."
+msgstr ""
+"Por favor, especifique a porta TCP que o Apt-Cacher NG deverá escutar para "
+"requisições HTTP (proxy) de entrada. O valor padrão é a porta 3142, mas ela "
+"pode ser configurada para 9999 para emular o apt-proxy."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:4001
+msgid ""
+"If this field is left empty, the value from the current configuration "
+"remains unchanged."
+msgstr ""
+"Se esse campo for deixado vazio, o valor da configuração atual permanecerá "
+"inalterado."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:5001
+msgid "Top-level directory for package cache:"
+msgstr "Diretório de nível superior para cache de pacotes:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:5001
+msgid ""
+"The main cache storage directory should be located on a file system without "
+"file name restrictions."
+msgstr ""
+"O diretório principal de armazenamento de cache deverá ser localizado em um "
+"sistema de arquivos sem restrições nos nomes de arquivos."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:5001
+msgid ""
+"If this field is left empty, the value from the current configuration "
+"remains unchanged or is set to the default of /var/cache/apt-cacher-ng."
+msgstr ""
+"Se esse campo for deixado vazio, o valor da configuração atual permanecerá "
+"inalterado ou será definido para o padrão de /var/cache/apt-cacher-ng."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid "Proxy to use for downloads:"
+msgstr "Proxy a ser utilizado para downloads:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid "Please specify the proxy server to use for downloads."
+msgstr ""
+"Por favor, especifique o servidor proxy a ser utilizado para downloads."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid ""
+"Username and password for the proxy server can be included here following "
+"the user:pass@host:port scheme. However, please check the documentation for "
+"limitations."
+msgstr ""
+"Nome de usuário e senha para o servidor proxy podem ser incluídos aqui "
+"seguindo o esquema usuário:senha@máquina:porta. No entanto, por favor, "
+"verifique a documentação para limitações."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid ""
+"If this field is left empty, Apt-Cacher NG will not use any proxy server."
+msgstr ""
+"Se esse campo for deixado vazio, o Apt-Cacher NG não usará nenhum servidor "
+"proxy."
+
+#~ msgid ""
+#~ "This remapping of URLs can be configured now in an automated way based on "
+#~ "the current state of /etc/apt/sources.list. Optionally, this process can "
+#~ "be repeated on every package update (modifying the configuration files "
+#~ "each time)."
+#~ msgstr ""
+#~ "Esse remapeamento de URLs pode ser configurado agora de uma forma "
+#~ "automatizada baseada no estado atual do /etc/apt/sources.list. "
+#~ "Opcionalmente, esse processo pode ser repetido em cada atualização de "
+#~ "pacote (modificando os arquivos de configuração a cada vez)."

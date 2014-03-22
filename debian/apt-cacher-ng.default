@@ -1,0 +1,18 @@
+# Defaults for apt-cacher-ng initscript
+# sourced by /etc/init.d/apt-cacher-ng
+# installed at /etc/default/apt-cacher-ng by the maintainer scripts
+
+#
+# This is a POSIX shell fragment
+#
+
+# Set to non-empty value to disable the start of the service at boot time
+# DISABLED=1
+
+# See umask(2) or chmod(1) for details.
+# 002 would make new files writable by group.
+#
+# umask 022
+
+# Additional options that are passed to the Daemon.
+DAEMON_OPTS=" -c /etc/apt-cacher-ng "

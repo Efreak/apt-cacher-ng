@@ -1,0 +1,19 @@
+Document: apt-cacher-ng
+Title: Apt-Cacher NG Manual
+Author: Eduard Bloch <blade@debian.org>
+Abstract: Manual for administrators and users of Apt-Cacher NG
+ Apt-Cacher NG is a HTTP proxy for small networks with smart management of
+ cached data. It's designed for download of installation packages for various
+ software distribution.
+ .
+ This documentation contains a quick installation guide and detailed
+ configuration and usage documentation.
+Section: System/Package Management
+
+Format: HTML
+Index: /usr/share/doc/apt-cacher-ng/html/index.html
+Files: /usr/share/doc/apt-cacher-ng/html/*.html
+
+Format: PDF
+Files: /usr/share/doc/apt-cacher-ng/apt-cacher-ng.pdf
+

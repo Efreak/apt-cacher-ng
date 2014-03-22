@@ -1,0 +1,33 @@
+/var/log/apt-cacher-ng/apt-cache*.log {
+        su apt-cacher-ng apt-cacher-ng
+        size 10M
+        missingok
+        rotate 7
+        compress
+        delaycompress
+        notifempty
+        create
+        postrotate
+                if [ -s /var/run/apt-cacher-ng/pid ] ; then
+                        kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)"
+                fi
+        endscript
+}
+
+/var/log/apt-cacher-ng/apt-cache*.err {
+        su apt-cacher-ng apt-cacher-ng
+        size 10M
+        missingok
+        rotate 7
+        compress
+        delaycompress
+        notifempty
+        create
+        postrotate
+                if [ -s /var/run/apt-cacher-ng/pid ] ; then
+                        kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)"
+                fi
+        endscript
+}
+
+

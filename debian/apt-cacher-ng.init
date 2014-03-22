@@ -1,0 +1,93 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          apt-cacher-ng
+# Required-Start:    $local_fs $network $remote_fs
+# Required-Stop:     $local_fs $network $remote_fs
+# Should-Start:      $named
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Apt-Cacher NG package proxy
+# Description:       This script powers up the package proxy daemon
+### END INIT INFO
+
+# Author: Eduard Bloch <blade@debian.org>
+
+test -r /etc/default/rcS && . /etc/default/rcS
+. /lib/lsb/init-functions
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+DAEMON=/usr/sbin/apt-cacher-ng
+NAME=apt-cacher-ng
+DESC=apt-cacher-ng
+USER=apt-cacher-ng
+GROUP=apt-cacher-ng
+
+test -x $DAEMON || exit 0
+
+# Include apt-cacher-ng defaults if available
+if [ -f /etc/default/apt-cacher-ng ] ; then
+	. /etc/default/apt-cacher-ng
+fi
+
+test -z "$DISABLED" || exit 0
+
+# our runtime state files directory, will be purged on startup!
+RUNDIR="/var/run/$NAME"
+
+PIDFILE="$RUNDIR/pid"
+SOCKETFILE="$RUNDIR/socket"
+DAEMON_OPTS="$DAEMON_OPTS pidfile=$PIDFILE SocketPath=$SOCKETFILE foreground=0  $EXTRA_ACNG_OPTS "
+
+do_start() {
+   PIDOF=$(pidof apt-cacher-ng)
+   if [ -n "$PIDOF" ] && [ -e "$PIDFILE" ] && [ "$PIDOF" = "$(cat $PIDFILE)" ] ; then
+      return 255
+   fi
+   rm -rf "$RUNDIR" || return 1
+   install -d --mode=0755 -o $USER -g $GROUP "$RUNDIR" || return 1
+   start-stop-daemon --start --chuid $USER --group $GROUP --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_OPTS
+}
+
+do_stop() {
+
+	if ! start-stop-daemon --stop --retry 15 --quiet --pidfile $PIDFILE \
+     --exec $DAEMON
+  then
+     if ! test -e "$PIDFILE" && ! start-stop-daemon --stop \
+        --retry TERM/10/KILL/5 --exec $DAEMON
+     then
+        return $?
+     fi
+  fi
+  rm -f $PIDFILE
+  return 0
+	
+}
+
+case "$1" in
+   start)
+      log_daemon_msg "Starting $DESC" "$NAME"
+      do_start
+      log_end_msg $?
+      ;;
+   stop)
+      log_daemon_msg "Stopping $DESC" "$NAME"
+      do_stop
+      log_end_msg $?
+      ;;
+   restart|force-reload)
+      log_daemon_msg "Restarting $DESC" "$NAME"
+      do_stop
+      do_start
+      log_end_msg $?
+      ;;
+   status)
+      status_of_proc "$DAEMON" "$NAME" && exit 0 || exit $?
+      ;;
+   *)
+      echo "Usage: $0 {start|stop|status|restart|force-reload}" >&2
+      exit 3
+      ;;
+esac
+
+:

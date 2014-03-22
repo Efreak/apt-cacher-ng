@@ -1,0 +1,12 @@
+#!/bin/bash -e
+
+cat <<EOF
+Please include all modified configuration files in your bug report as suggested
+by reportbug. Please review the attached file contents and strip sensitive
+data like passwords and (confidential) network hostnames.
+
+If you observe an error in some maintenance task (including cron job reports)
+then please attach the most recent log file named like maint_*.log from 
+/var/log/apt-cacher-ng/ or from your alternative log file directory.
+
+EOF

@@ -1,0 +1,240 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: apt-cacher-ng 0.7.26\n"
+"Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
+"POT-Creation-Date: 2014-01-27 06:52+0100\n"
+"PO-Revision-Date: 2014-03-22 12:33 +0100\n"
+"Last-Translator: Eduard Bloch <blade@debian.org>\n"
+"Language-Team: German <debian-l10n-german@lists.debian.org>\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Poedit-Language: German\n"
+"X-Poedit-Country: GERMANY\n"
+"X-Poedit-SourceCharset: utf-8\n"
+"X-Language: de_DE\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Source-Language: C\n"
+
+#. Type: select
+#. Choices
+#: ../apt-cacher-ng.templates:2001
+msgid "Set up once"
+msgstr "Nur ein Mal einrichten"
+
+#. Type: select
+#. Choices
+#: ../apt-cacher-ng.templates:2001
+msgid "Set up now and update later"
+msgstr "Jetzt einrichten und später aktualisieren"
+
+#. Type: select
+#. Choices
+#: ../apt-cacher-ng.templates:2001
+msgid "No automated setup"
+msgstr "Keine automatisierte Einrichtung"
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid "Automatic remapping of client requests:"
+msgstr "Automatische Umleitung der Client-Anfragen:"
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid ""
+"Apt-Cacher NG can download packages from repositories other than those "
+"requested by the clients. This allows it to cache content effectively, and "
+"makes it easy for an administrator to switch to another mirror later. The "
+"URL remapping can be set up automatically, using a configuration based on "
+"the current state of /etc/apt/sources.list."
+msgstr ""
+"Apt-Cacher NG kann Pakete aus anderen Depots beziehen als von denen, die in "
+"Client-Aufrufen angegeben wurden. Dadurch kann der Cache effektiver "
+"arbeiten, außerdem kann nachträglich einfacher auf anderen Spiegelserver "
+"umgestellt werden. Diese URL-Abbildung kann jetzt automatisch eingerichtet "
+"werden, unter Bezug des aktuellen Inhalts von /etc/apt/sources.list."
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid ""
+"Please specify whether the remapping should be configured once now, or "
+"reconfigured on every update of Apt-Cacher NG (modifying the configuration "
+"files each time), or left unconfigured."
+msgstr ""
+"Bitte auswählen, ob die URL-Abbildung jetzt einmalig konfiguriert werden "
+"soll, oder bei jeder Aktuallisierung von Apt-Cacher NG (Konfiguration wird "
+"jedes mal angepasst), oder gar nicht konfiguriert werden soll."
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid ""
+"Selecting \"No automated setup\" will leave the existing configuration "
+"unchanged. It will need to be updated manually."
+msgstr ""
+"Auswahl von »Keine automatisierte Konfiguration« rührt bestehende "
+"Konfigurationsdateien nicht an. Diese müssen dann per Hand gepflegt werden."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid "Listening address(es) for Apt-Cacher NG:"
+msgstr "Mit Apt-Cacher NG verbundene Adresse(n):"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid ""
+"Please specify the local addresses that Apt-Cacher NG should listen on "
+"(multiple entries must be separated by spaces)."
+msgstr ""
+"Verbindung annehmende Adressen oder Rechnernamen, mehrere Einträge sind mit "
+"Leerzeichen zu trennen."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid ""
+"Each entry must be an IP address or hostname associated with a local network "
+"interface. Generic protocol-specific addresses are also supported, such as "
+"0.0.0.0 for listening on all IPv4-enabled interfaces."
+msgstr ""
+"Jeder Eintrag entspricht einer Adresse (IP oder Computername), hinter der "
+"eine lokale Netzwerkschnittstelle steht. Generische protokollspezifische "
+"Adressen werden ebenfalls unterstützt, wie 0.0.0.0 als Beschreibung "
+"sämtlicher IPv4-Schnittstellen."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid ""
+"If this field is left empty, Apt-Cacher NG will listen on all interfaces, "
+"with all supported protocols."
+msgstr "Ein leerer Eintrag bedeutet alle Schnittstellen und Protokolle."
+
+#. Type: string
+#. Description
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001 ../apt-cacher-ng.templates:6001
+msgid ""
+"The special word \"keep\" keeps the value from the current (or default) "
+"configuration unchanged."
+msgstr ""
+"Das besondere Schlüsselwort \"keep\" lässt die derzeitige Einstellung "
+"(beziehungsweise Standardeinstellung) unverändert."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:4001
+msgid "Listening TCP port:"
+msgstr "Annehmender TCP-Port:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:4001
+msgid ""
+"Please specify the TCP port that Apt-Cacher NG should listen on for incoming "
+"HTTP (proxy) requests. The default value is port 3142, but it can be set to "
+"9999 to emulate apt-proxy."
+msgstr ""
+"Konfiguriert den TCP-Port, auf dem Apt-Cacher NG die hereinkommenden "
+"(Proxy-)HTTP-Anfragen annimmt. Standard ist 3142, es kann auch auf 9999 "
+"gesetzt werden, um apt-proxy zu emulieren."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:4001
+msgid ""
+"If this field is left empty, the value from the current configuration "
+"remains unchanged."
+msgstr "Eine leerer Eintrag belässt die derzeitige Konfiguration unverändert."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:5001
+msgid "Top-level directory for package cache:"
+msgstr "Oberstes Verzeichnis des Paket-Caches:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:5001
+msgid ""
+"The main cache storage directory should be located on a file system without "
+"file name restrictions."
+msgstr ""
+"Das Hauptverzeichnis des Paket-Caches sollte auf einem Dateisystem ohne "
+"Beschränkungen bezüglich Dateinamen liegen."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:5001
+msgid ""
+"If this field is left empty, the value from the current configuration "
+"remains unchanged or is set to the default of /var/cache/apt-cacher-ng."
+msgstr ""
+"Eine leere Eingabe belässt die derzeitige Konfiguration unverändert "
+"(gegebenenfalls auf dem Standardverzeichnis /var/cache/apt-cacher-ng )."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid "Proxy to use for downloads:"
+msgstr "Proxy für das Herunterladen:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid "Please specify the proxy server to use for downloads."
+msgstr "Proxy für das Herunterladen:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid ""
+"Username and password for the proxy server can be included here following "
+"the user:pass@host:port scheme. However, please check the documentation for "
+"limitations."
+msgstr ""
+"Benutzername und Passwort für den Proxy-Server können hier nach dem Muster "
+"benutzer:passwort@rechner:port übergeben werden, aber siehe auch Handbuch "
+"für Einschränkungen. Ein leerer String hier bedeutet, direkte Verbindungen "
+"zu verwenden."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid ""
+"If this field is left empty, Apt-Cacher NG will not use any proxy server."
+msgstr "Ein leerer Eintrag hier bedeutet Zugriff ohne Proxy."
+
+#~ msgid ""
+#~ "This remapping of URLs can be configured now in an automated way based on "
+#~ "the current state of /etc/apt/sources.list. Optionally, this process can "
+#~ "be repeated on every package update (modifying the configuration files "
+#~ "each time)."
+#~ msgstr ""
+#~ "Automatische Umleitung der URLs kann jetzt automatisch einrichtet werden, "
+#~ "basierend auf dem derzeitigen Stand von /etc/apt/sources.list. Optional "
+#~ "kann dieser Prozess bei jeder Aktualisierung des Pakets durchgeführt "
+#~ "werden (und dabei jedes Mal die Konfigurationsdateien verändern)."
+
+#~ msgid "Bind Address(es):"
+#~ msgstr "Verbundene Adressen:"
+
+#~ msgid "Example: localhost 192.168.7.254"
+#~ msgstr "Beispiel: localhost 192.168.7.254"
+
+#~ msgid ""
+#~ "A special word \"keep\" can be used here to avoid changing this value and "
+#~ "use the current value instead."
+#~ msgstr ""
+#~ "Das Schlüsselwort \"keep\" an dieser Stelle sorgt dafür, dass der "
+#~ "derzeitige Wert unverändert bleibt."
+
+#~ msgid "Default: all (will listen on all interfaces and protocols)"
+#~ msgstr "Standard: all (lauscht auf allen Anschlüssen und Protokollen)"

@@ -1,0 +1,222 @@
+# Czech translation of apt-cacher-ng debconf messages.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the apt-cacher-ng package.
+# Miroslav Kure <kurem@debian.cz>, 2009--2014
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: apt-cacher-ng\n"
+"Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
+"POT-Creation-Date: 2014-01-27 06:52+0100\n"
+"PO-Revision-Date: 2014-02-09 16:37+0100\n"
+"Last-Translator: Miroslav Kure <kurem@debian.cz>\n"
+"Language-Team: Czech <debian-l10n-czech@lists.debian.org>\n"
+"Language: cs\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. Type: select
+#. Choices
+#: ../apt-cacher-ng.templates:2001
+msgid "Set up once"
+msgstr "Nastavit jednou"
+
+#. Type: select
+#. Choices
+#: ../apt-cacher-ng.templates:2001
+msgid "Set up now and update later"
+msgstr "Nastavit nyní a průběžně aktualizovat"
+
+#. Type: select
+#. Choices
+#: ../apt-cacher-ng.templates:2001
+msgid "No automated setup"
+msgstr "Nenastavovat automaticky"
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid "Automatic remapping of client requests:"
+msgstr "Automatické přesměrování klientských požadavků:"
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid ""
+"Apt-Cacher NG can download packages from repositories other than those "
+"requested by the clients. This allows it to cache content effectively, and "
+"makes it easy for an administrator to switch to another mirror later. The "
+"URL remapping can be set up automatically, using a configuration based on "
+"the current state of /etc/apt/sources.list."
+msgstr ""
+"Apt-Cacher NG umí stahovat balíky i z jiných repositářů, než které si "
+"vyžádali klienti. To umožňuje efektivní používání lokální mezipaměti a také "
+"to správcům umožňuje jednoduše měnit používané zrcadlo. Přepisování URL je "
+"možné nastavit automaticky na základě aktuálního obsahu /etc/apt/sources."
+"list."
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid ""
+"Please specify whether the remapping should be configured once now, or "
+"reconfigured on every update of Apt-Cacher NG (modifying the configuration "
+"files each time), or left unconfigured."
+msgstr ""
+"Vyberte si, zda se má přesměrování nastavit pouze jednou (nyní), při každé "
+"aktualizaci Apt-Cacher NG, nebo ponechat nenastavené."
+
+#. Type: select
+#. Description
+#: ../apt-cacher-ng.templates:2002
+msgid ""
+"Selecting \"No automated setup\" will leave the existing configuration "
+"unchanged. It will need to be updated manually."
+msgstr ""
+"Možnost „Nenastavovat automaticky“ ponechá stávající nastavení nedotčeno a "
+"budete je muset upravit ručně."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid "Listening address(es) for Apt-Cacher NG:"
+msgstr "Adresy, na kterých má Apt-Cacher NG naslouchat:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid ""
+"Please specify the local addresses that Apt-Cacher NG should listen on "
+"(multiple entries must be separated by spaces)."
+msgstr ""
+"Zadejte lokální adresy, na kterých má Apt-Cacher NG naslouchat (adresy musí "
+"být odděleny mezerami)."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid ""
+"Each entry must be an IP address or hostname associated with a local network "
+"interface. Generic protocol-specific addresses are also supported, such as "
+"0.0.0.0 for listening on all IPv4-enabled interfaces."
+msgstr ""
+"Každý záznam musí být IP adresou nebo jménem počítače svázaným s lokálním "
+"síťovým rozhraním. Podporovány jsou i obecné adresy jako např. 0.0.0.0 pro "
+"naslouchání na všech rozhraních s IPv4."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001
+msgid ""
+"If this field is left empty, Apt-Cacher NG will listen on all interfaces, "
+"with all supported protocols."
+msgstr ""
+"Ponecháte-li prázdné, bude Apt-Cacher NG naslouchat na všech rozhraních "
+"všemi podporovanými protokoly."
+
+#. Type: string
+#. Description
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:3001 ../apt-cacher-ng.templates:6001
+msgid ""
+"The special word \"keep\" keeps the value from the current (or default) "
+"configuration unchanged."
+msgstr ""
+"Speciální slovo „keep“ ponechá hodnotu ze současného (nebo výchozího) "
+"nastavení."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:4001
+msgid "Listening TCP port:"
+msgstr "TCP port:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:4001
+msgid ""
+"Please specify the TCP port that Apt-Cacher NG should listen on for incoming "
+"HTTP (proxy) requests. The default value is port 3142, but it can be set to "
+"9999 to emulate apt-proxy."
+msgstr ""
+"Zadejte TCP port, na kterém má Apt-Cacher NG naslouchat příchozím HTTP "
+"požadavkům. Výchozí port je 3142, ale pro emulaci apt-proxy můžete použít "
+"hodnotu 9999."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:4001
+msgid ""
+"If this field is left empty, the value from the current configuration "
+"remains unchanged."
+msgstr "Ponecháte-li prázdné, použije se hodnota ze současného nastavení."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:5001
+msgid "Top-level directory for package cache:"
+msgstr "Hlavní adresář pro cache balíků:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:5001
+msgid ""
+"The main cache storage directory should be located on a file system without "
+"file name restrictions."
+msgstr ""
+"Hlavní adresář pro uchovávání cache balíků by měl být umístěn na souborovém "
+"systému, který neomezuje názvy souborů."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:5001
+msgid ""
+"If this field is left empty, the value from the current configuration "
+"remains unchanged or is set to the default of /var/cache/apt-cacher-ng."
+msgstr ""
+"Ponecháte-li prázdné, použije se hodnota ze stávajícího nastavení, nebo "
+"výchozí hodnota /var/cache/apt-cacher-ng."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid "Proxy to use for downloads:"
+msgstr "Proxy pro stahování:"
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid "Please specify the proxy server to use for downloads."
+msgstr "Zadejte proxy server pro stahování."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid ""
+"Username and password for the proxy server can be included here following "
+"the user:pass@host:port scheme. However, please check the documentation for "
+"limitations."
+msgstr ""
+"Případné uživatelské jméno a heslo k proxy serveru můžete zadat ve tvaru "
+"uživatel:heslo@počítač:port. Podrobnosti a omezení tohoto přístupu naleznete "
+"v dokumentaci."
+
+#. Type: string
+#. Description
+#: ../apt-cacher-ng.templates:6001
+msgid ""
+"If this field is left empty, Apt-Cacher NG will not use any proxy server."
+msgstr ""
+"Ponecháte-li prázdné, Apt-Cacher NG nebude používat žádný proxy server."
+
+#~ msgid ""
+#~ "This remapping of URLs can be configured now in an automated way based on "
+#~ "the current state of /etc/apt/sources.list. Optionally, this process can "
+#~ "be repeated on every package update (modifying the configuration files "
+#~ "each time)."
+#~ msgstr ""
+#~ "Toto přesměrování URL se nyní může nastavit zcela automaticky podle "
+#~ "aktuálního /etc/apt/sources.list. Další možností je opakovat tento proces "
+#~ "při každé aktualizaci balíků (tzn. konfigurační soubory se pokaždé změní)."

@@ -1,0 +1,12 @@
+apt-cacher-ng (0.7.24-1) unstable; urgency=low
+
+  * Starting with version 0.7.23-1, there is a new sequence of Debconf dialogs 
+    for basic settings (CacheDir, Port, Proxy and BindAdresses). They are
+    stored in an additional *.conf file overriding the settings from acng.conf
+    but there is also a way to disable this override.
+  * Now it's especially recommended to keep acng.conf in /etc/apt-cacher-ng
+    unchanged ("maintainer's version") and store local configuration changes to
+    a system specific file like /etc/apt-cacher-ng/local.conf, in order to make
+    handling of acng.conf much easier in future.
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 19 Dec 2013 14:04:50 +0100

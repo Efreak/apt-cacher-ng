@@ -1,0 +1,79 @@
+# These templates have been reviewed by the debian-l10n-english
+# team
+#
+# If modifications/additions/rewording are needed, please ask
+# debian-l10n-english@lists.debian.org for advice.
+#
+# Even minor modifications require translation updates and such
+# changes should be coordinated with translators and reviewers.
+
+Template: apt-cacher-ng/gentargetmode
+Type: select
+__Choices: Set up once, Set up now and update later, No automated setup
+Default: Set up once
+_Description: Automatic remapping of client requests:
+ Apt-Cacher NG can download packages from repositories other than those
+ requested by the clients. This allows it to cache content effectively,
+ and makes it easy for an administrator to switch to another mirror later.
+ The URL remapping can be set up automatically, using a configuration
+ based on the current state of /etc/apt/sources.list.
+ .
+ Please specify whether the remapping should be configured once now, or
+ reconfigured on every update of Apt-Cacher NG (modifying the
+ configuration files each time), or left unconfigured.
+ .
+ Selecting "No automated setup" will leave the existing configuration
+ unchanged. It will need to be updated manually.
+
+Template: apt-cacher-ng/bindaddress
+Type: string
+Default: keep
+_Description: Listening address(es) for Apt-Cacher NG:
+ Please specify the local addresses that Apt-Cacher NG should listen on
+ (multiple entries must be separated by spaces).
+ .
+ Each entry must be an IP address or hostname associated with a local
+ network interface. Generic protocol-specific addresses are also
+ supported, such as 0.0.0.0 for listening on all IPv4-enabled interfaces.
+ .
+ If this field is left empty, Apt-Cacher NG will listen on all
+ interfaces, with all supported protocols.
+ .
+ The special word "keep" keeps the value from the current (or default)
+ configuration unchanged.
+
+Template: apt-cacher-ng/port
+Type: string
+Default: keep
+_Description: Listening TCP port:
+ Please specify the TCP port that Apt-Cacher NG should listen on for
+ incoming HTTP (proxy) requests. The default value is port 3142, but it
+ can be set to 9999 to emulate apt-proxy.
+ .
+ If this field is left empty, the value from the current configuration
+ remains unchanged.
+
+Template: apt-cacher-ng/cachedir
+Type: string
+Default: keep
+_Description: Top-level directory for package cache:
+ The main cache storage directory should be located on a file system without
+ file name restrictions.
+ .
+ If this field is left empty, the value from the current configuration
+ remains unchanged or is set to the default of /var/cache/apt-cacher-ng.
+
+Template: apt-cacher-ng/proxy
+Type: string
+Default: keep
+_Description: Proxy to use for downloads:
+ Please specify the proxy server to use for downloads.
+ .
+ Username and password for the proxy server can be included here following the
+ user:pass@host:port scheme. However, please check the documentation for limitations.
+ .
+ If this field is left empty, Apt-Cacher NG will not use any proxy
+ server.
+ .
+ The special word "keep" keeps the value from the current (or default)
+ configuration unchanged.

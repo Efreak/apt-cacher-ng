@@ -1,0 +1,5 @@
+usr/sbin
+etc/apt-cacher-ng
+etc/avahi/services
+usr/lib/apt-cacher-ng
+var/lib/apt-cacher-ng

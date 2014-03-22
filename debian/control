@@ -1,0 +1,29 @@
+Source: apt-cacher-ng
+Section: net
+Priority: optional
+Maintainer: Eduard Bloch <blade@debian.org>
+Build-Depends: debhelper (>= 9), cmake (>= 2.6.2), libbz2-dev, zlib1g-dev, liblzma-dev, libfuse-dev [!hurd-i386], pkg-config, libwrap0-dev, lsb-base (>> 3.0-6), dh-systemd (>= 1.5), po-debconf, libssl-dev
+Standards-Version: 3.9.5
+Homepage: http://www.unix-ag.uni-kl.de/~bloch/acng/
+
+Package: apt-cacher-ng
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
+Pre-Depends: dpkg (>= 1.15.6)
+Recommends: ed, avahi-daemon
+Conflicts: logrotate (<< 3.8.0)
+Suggests: doc-base, libfuse2 (>= 2.5), curl | wget
+Description: caching proxy server for software repositories
+ Apt-Cacher NG is a caching proxy for downloading packages from Debian-style
+ software repositories (or possibly from other types).
+ .
+ The main principle is that a central machine hosts the proxy for a local
+ network, and clients configure their APT setup to download through it.
+ Apt-Cacher NG keeps a copy of all useful data that passes through it, and when
+ a similar request is made, the cached copy of the data is delivered without
+ being re-downloaded.
+ .
+ Apt-Cacher NG has been designed from scratch as a replacement for
+ apt-cacher, but with a focus on maximizing throughput with low system
+ resource requirements. It can also be used as replacement for apt-proxy and
+ approx with no need to modify clients' sources.list files.
