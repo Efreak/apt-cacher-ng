@@ -1,0 +1,10 @@
+# This is a configuration file. All lines starting with # are ignored.
+#
+# WARNING: this file is maintained by configuration scripts of the apt-cacher-ng
+# package. All manual changes WILL BE LOST after the next package upgrade as
+# long as a line looking exactly like #09f369bf9c82a2210934e82213360226
+# is found inside. Remove or modify that line to stop auto-updates of this file.
+#09f369bf9c82a2210934e82213360226
+
+# Debian mirrors use geodns to dispatch to the nearest location
+http://ftp.debian.org

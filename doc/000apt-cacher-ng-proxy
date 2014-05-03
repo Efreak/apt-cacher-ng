@@ -1,0 +1,12 @@
+# This configuration snipped is intended to be stored in /etc/apt/apt.conf.d/
+# on the client system in order to change a regular setup to use apt-cacher-ng.
+#
+Acquire::http::Proxy "http://192.168.0.245:3142/";
+
+# Little optimization. A value of 10 has been used in earlier version of
+# apt-get but was disabled in the beginning of the second decade because of
+# incompatibilities with certain HTTP proxies. However, it still beneficial
+# with proxy servers that support it good enough (like apt-cacher-ng).
+#
+Acquire::http::Pipeline-Depth "23";
+

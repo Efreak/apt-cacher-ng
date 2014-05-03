@@ -1,0 +1,11 @@
+# example hooks file
+# all commands are passed through external system() call and are executed by the system shell.
+
+# executed before a connection to the relevant mirror is issued
+PreUp: logger up
+
+# executed after the last connection to the relevant mirror is closed and a timeout has passed
+Down: logger down
+
+# timeout to wait before executing the "Down" command
+DownTimeout: 7

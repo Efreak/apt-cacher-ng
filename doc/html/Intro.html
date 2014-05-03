@@ -1,0 +1,47 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=US-ASCII">
+<title>Introduction</title>
+<link rel="previous" href="index.html">
+<link rel="ToC" href="index.html">
+<link rel="up" href="index.html">
+<link rel="next" href="usage.html">
+</head>
+<body>
+<p><a href="index.html">Previous</a> | <a href="index.html">Contents</a> | <a href="usage.html">Next</a></p>
+<h1><a name="Intro"></a>Chapter 1: Introduction</h1>
+<p>
+apt-cacher-ng attempts to achieve the same goals as related proxies - it acts as a proxy which is used by clients in the local network to share the data that has been downloaded. It monitors the state of packages and is capable of merging downloads of the same packages from different locations (real or simulated).
+</p>
+<p>
+The program reuses many ideas behind the other famous proxy, its predecessor apt-cacher 1.x (which has been written in Perl). In contrast to apt-cacher, different aspects have been declared as primary targets during the development of apt-cacher-ng:
+</p>
+<ul><li>
+lightweight implementation - allow use on systems with low memory and processing resources
+</li>
+<li>
+internal (native) threading - avoiding process fork'ing wherever possible, avoiding kludges for pseudo-thread synchronization, avoiding relying on special file system features for internal operations where possible
+</li>
+<li>
+real (effective) support of HTTP pipelining, using an internal client with native stream control (having the nice side effect: reduction of resource overhead and minimization of possible points of failure)
+</li>
+<li>
+avoiding featuritis where they cause too much bloat and the functionality can be provided by native OS features
+</li>
+<li>
+reliable but efficient content merging in the local package pool, avoiding delivering of wrong data.
+</li>
+</ul>
+<p>
+As with apt-cacher, explicit tracking of dynamically changed and unchanged files is established, and the use in non-Debian environment is supported.
+</p>
+<p>
+Long story: Not all goals have been achieved. The initial plan of using background databases to merge any download from any arbitrary location has been dropped because of complexity and performance considerations, reliable heuristics could not be found either. Instead, a semi-automated solution has been created which used machine-parsable files with mirror information, like the one available for Debian mirrors in <a href="http://anonscm.debian.org/viewvc/webwml/webwml/english/mirror/Mirrors.masterlist?view=co">Debian's CVS repository</a>.
+</p>
+
+<hr><address>Comments to <a href='mailto:blade@debian.org'>blade@debian.org</a>
+<br>
+[Eduard Bloch, Sat, 08 Oct 2011 23:18:17 +0200]</address></body>
+</html>

@@ -1,0 +1,37 @@
+Requirements:
+
+ - Linux or POSIX.1-2001 compliant environment
+ - GNU make, CMake 2.6.2 or newer
+ - GCC and Boost headers (http://boost.org)
+   OR GCC 4.x and its libstdc++ with header files
+   OR a GCC compatible compiler and STL with C++-0x compliant smart pointers
+ - zlib, libbz2 und their development components
+ - (optional) libzma from XZ and its development components
+ - (optional) recent FUSE library and its development files for the
+   "virtual mirror" filesystem
+
+Build and installation instructions:
+
+ - run "make"
+ - if an error occurs, read the message, solve the problem, run "make distclean"
+   and retry with "make"
+ - when done, copy build/apt-cacher-ng and build/in.acng to /usr/local/sbin
+ - make apt-cacher-ng be executed at system startup time.
+   debian/apt-cacher-ng.init might serve as inspiration.
+ - for Avahi file installation, install contrib/apt-cacher-ng.service as needed
+
+Configuration:
+
+ - create a directory for cached files and for log files
+ - set ownership and directory permissions in a way which allows 
+   read/write/mkdir actions to the user account used to run apt-cacher-ng later
+ - copy conf directory to /etc/apt-cacher-ng or similar location. 
+ - adapt acng.conf and other *.conf files in that configuration directory. 
+   See user manual (doc/apt-cacher-ng.pdf or doc/README) for instructions.
+ - run apt-cacher-ng -c yourConfigurationDirectory
+ - visit Command-and-Control web interface of apt-cacher-ng, link can be found
+   among other instructions at http://yourHostName:portNumber/ , which might be
+   http://localhost:3142/ with the default configuration
+ - for apt clients, there is a config snipped in contrib/10-apt-cacher-ng.conf
+   which might be installed into /etc/apt/apt.conf.d/.
+

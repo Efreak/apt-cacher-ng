@@ -1,0 +1,18 @@
+<?xml version="1.0" standalone='no'?>
+<!--
+From: Lisandro Damián Nicanor Pérez Meyer <lisandro@debian.org>
+X-Source: http://blog.surgut.co.uk/2013/03/avahi-apt-cacher-ng-sbuild.html
+ See http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=704790 for details.
+-->
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+ <name replace-wildcards="yes">apt-cacher-ng proxy on %h</name>
+ <service protocol="ipv6">
+  <type>_apt_proxy._tcp</type>
+  <port>3142</port>
+ </service>
+ <service protocol="ipv4">
+  <type>_apt_proxy._tcp</type>
+  <port>3142</port>
+ </service>
+</service-group>

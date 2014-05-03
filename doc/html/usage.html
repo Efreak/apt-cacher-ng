@@ -1,0 +1,32 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=US-ASCII">
+<title>Running apt-cacher-ng</title>
+<link rel="previous" href="Intro.html">
+<link rel="ToC" href="index.html">
+<link rel="up" href="index.html">
+<link rel="next" href="config-servquick.html">
+</head>
+<body>
+<p><a href="Intro.html">Previous</a> | <a href="index.html">Contents</a> | <a href="config-servquick.html">Next</a></p>
+<h1><a name="usage"></a>Chapter 2: Running apt-cacher-ng</h1>
+<p>
+Run "build/apt-cacher-ng -c conf" when configured where conf is the configuration directory. See <a href="config-serv.html#cfgfiles">section 4.2</a> for details on possible and required contents of this directory.
+</p>
+<p>
+Most options from the configuration file can also be passed through command line parameters. Just append them with the same format as in the configuration file but without separating spaces inside, e.g.
+</p>
+<pre><code>Port:4855 ForeGround=1
+</code></pre>
+<p>
+For convenience, the colon can also be replaced with the equals sign and letter case does not matter, so this is also possible:
+</p>
+<pre><code>port=4855 foreground:1.
+</code></pre>
+
+<hr><address>Comments to <a href='mailto:blade@debian.org'>blade@debian.org</a>
+<br>
+[Eduard Bloch, Sat, 08 Oct 2011 23:18:17 +0200]</address></body>
+</html>

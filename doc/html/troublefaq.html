@@ -1,0 +1,164 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=US-ASCII">
+<title>Troubleshooting</title>
+<link rel="previous" href="howtos.html">
+<link rel="ToC" href="index.html">
+<link rel="up" href="index.html">
+<link rel="next" href="bugs.html">
+</head>
+<body>
+<p><a href="howtos.html">Previous</a> | <a href="index.html">Contents</a> | <a href="bugs.html">Next</a></p>
+
+<ul>
+<li><a href="#troublefaq">Chapter 9: Troubleshooting</a>
+<ul>
+<li><a href="#debug">9.1 Debugging</a></li>
+<li><a href="#cleanup-damaged">9.2 Problem: keeps delivering damaged files</a></li>
+<li><a href="#cleanup-prob">9.3 Problem: regular expiration action reproducibly aborts</a></li>
+<li><a href="#prob">9.4 Problem: download fails with 503 ... status message</a></li>
+<li><a href="#prob-freeze">9.5 Problem: <code>apt-get</code> freezes when downloading files</a></li>
+<li><a href="#prob-bzip2">9.6 <code>apt-get</code> reports corrupted bzip2 data</a></li>
+<li><a href="#prob-eaddrinuse">9.7 Problem: <code>apt-cacher-ng</code> refuses to start with "Address already in use"</a></li>
+</ul></li>
+</ul>
+<h1><a name="troublefaq"></a>Chapter 9: Troubleshooting</h1>
+<h2><a name="debug"></a>9.1 Debugging</h2>
+<p>
+Preliminary meanings of Debug option settings are:
+</p>
+<ul><li>
+0: No debug printing
+</li>
+<li>
+1: Log file buffers are flushed faster
+</li>
+<li>
+2: Some additional information appears within usual transfer/error logs
+</li>
+<li>
+4: extra debug information is written to apt-cacher.err (also enables lots of additional trace points when apt-cacher-ng binary is built with debug configuration, see <a href="#prob-freeze">section 9.5</a> for details)
+</li>
+</ul>
+<p>
+To combine that settings, add them (i.e. 7 enables all messages and log flushing)
+</p>
+<p>
+Getting HTTP headers from apt-get works like this:
+</p>
+<pre><code>apt-get update -o Debug::Acquire::Http=true
+</code></pre>
+<h2><a name="cleanup-damaged"></a>9.2 Problem: keeps delivering damaged files</h2>
+<p>
+Even in this millennium, sometimes damaged files are downloaded from the server and are stored in the cache. Sometimes lazy maintainers of 3rd party archives replace package files with the same name but different contents. Sometimes the server's file system gets corrupted without detection by the OS.
+</p>
+<p>
+Anyhow, there might be cases where cached data becomes invalid. Volatile files might be replaced by fixed version on some future download but static package files are never changed upon completion and even incomplete downloads are resumed and keep bad data downloaded before.
+</p>
+<p>
+Usually the damage is only discovered by the client later. The particular file can be located in the cache and replaced manually. And if there are many of them, a mass file check might be needed to clean the mess. Fortunately, there are helpers in cache maintenance interface to automate this process.
+</p>
+<p>
+To start, visit the web control interface and check the options of <em>Expiration</em> task. Enable the check for explicit paths and the check of data contents, then start the expiration. With this parameters, complete files with incorrect checksum are detected. The default action for such files is adding them to a list of damage files. After that, the "Delete damaged files" button in the main web page can be used to remove them (or the Show button to display them first). Alternatively, the checkboxes appearing aside of each damage detection can be used together with the control buttons which appear at the end of the report. And another way of dealing with them is truncating (setting to zero size). This can be done on-the-fly and is enabled by the expiration parameters, or with the appropriate command button in the web interface.
+</p>
+<p>
+NOTE: several index files and related support files can create false positives, i.e. as incomplete or bad files. This usually happens because their volatile contents has changed but the file was not downloaded for a while and another version of it was used instead (like bzip2-compressed instead of gzip-compressed or uncompressed). The default code attempts to detect files with good reasons to stay in the cache and does not mark them as damaged.
+</p>
+<h2><a name="cleanup-prob"></a>9.3 Problem: regular expiration action reproducibly aborts</h2>
+<p>
+A quick investigation of action logs should help identifying the problem. A typical one is a mirror listed somewhere which is not reachable when expiration runs.
+</p>
+<p>
+Unfortunately there is no simple and safe way to solve this. One method is setting the ExAbortOnProblems configuration variable, but this can destroy the whole cache if a bigger problem with index file occurs and this state remains unnoticed for many days until ExTreshold period (see configuration) is over.
+</p>
+<p>
+Another way is listing the index files of the faulty mirrors to a special file. It needs to be stored as "ignore_list" in the configuration directory and store one path name per line with paths relative to the cache directory, as seen in the error messages.
+</p>
+<h2><a name="prob"></a>9.4 Problem: download fails with 503 ... status message</h2>
+<p>
+Code 503 usually represents an internal failure which could not be described correctly by other HTTP status codes. In the most cases it's caused by file system errors or incorrect cache directory setup, like files or directories with incorrect owner, missing write/read permissions for the effective user account or other system related exceptions like running out of disk space.
+</p>
+<p>
+The log file <code>apt-cacher.err</code> located in the <code>LogDir</code> directory should document more details. In case it doesn't, setting the <code>Debug</code> config option to a higher value might reveal more information.
+</p>
+<p>
+Fixing permission problems shouldn't be a real challenge for system administrators. Usually, a command set like this should do the trick on Debian/Ubuntu systems, assuming that all group users should receive write access to the cache files:
+</p>
+<pre><code> chown -R apt-cacher-ng:apt-cacher-ng /var/cache/apt-cacher-ng
+ chmod -R a+rX,g+rw,u+rw /var/cache/apt-cacher-ng
+</code></pre>
+<h2><a name="prob-freeze"></a>9.5 Problem: <code>apt-get</code> freezes when downloading files</h2>
+<p>
+Solution: First, check:
+</p>
+<ul><li>
+Free disk space and inode usage (<code>df</code>, <code>df -i</code>)
+</li>
+<li>
+Internet connection to the remote sites (browse them via HTTP, e.g. visiting http://ftp.your.mirror)
+</li>
+</ul>
+<p>
+If nothing helps then you may have hit a spooky problem which is hard to track down. If you like, help the author on problem identification. To do that, do:
+</p>
+<pre><code>  su -
+  # enter root password
+  cd /tmp
+  apt-get source apt-cacher-ng
+  apt-get build-dep apt-cacher-ng
+  cd apt-cacher-ng-*
+  make distclean all DEBUG=1
+  /etc/init.d/apt-cacher-ng stop
+  ./apt-cacher-ng -c /etc/apt-cacher-ng logdir=/tmp foreground=1 debug=7
+  # (let apt-get run now, on timeouts just wait &gt;&gt; 20 seconds)
+  # stop the daemon with Ctrl-C
+  /etc/init.d/apt-cacher-ng start
+  # compress /tmp/apt-cacher.err and send it to author
+  chown -R apt-cacher-ng:apt-cacher-ng /var/cache/apt-cacher-ng
+</code></pre>
+<p>
+The value of debug can be varied to have different verbosity (see <a href="#debug">section 9.1</a> for more information about Debug levels).
+</p>
+<h2><a name="prob-bzip2"></a>9.6 <code>apt-get</code> reports corrupted bzip2 data</h2>
+<p>
+Symptoms: apt-get fails to run through "update" no matter what you do. And you may have get a message like this one.
+</p>
+<pre><code>99% [6 Packages bzip2 0] [Waiting for headers] [Waiting for headers]
+bzip2: Data integrity error when decompressing.
+        Input file = (stdin), output file = (stdout)
+
+It is possible that the compressed file(s) have become corrupted.
+You can use the -tvv option to test integrity of such files.
+
+You can use the `bzip2recover' program to attempt to recover
+data from undamaged sections of corrupted files.
+
+Err http://debian.netcologne.de unstable/main Packages              
+  Sub-process bzip2 returned an error code (2)
+</code></pre>
+<ul><li>
+This might be one of Apt's problem with insufficient handling of errors, i.e. passing incomplete files to bzip2 on premature connection termination. Retry the update and it might work.
+</li>
+<li>
+Another issue is more severe: old versions of apt-cacher-ng had a bug which could cause data corruption while resuming downloads however this problem appears only in unusual conditions. To make sure there are no broken files in your repository, run the Expiration task with content verification enabled, and also "immediate deletion" (or delete later after checking the list). See <a href="maint.html#cleanup-manual">section 7.1.1</a> for details.
+</li>
+</ul>
+<h2><a name="prob-eaddrinuse"></a>9.7 Problem: <code>apt-cacher-ng</code> refuses to start with "Address already in use"</h2>
+<p>
+Another service is already listening on the port which apt-cacher-ng is configured to use. This might be the apt-cacher daemon which used the same port number by default. To identify the daemon behind that process, use the fuser utility, executing it as root for IPv4 and IPv6 protocol versions. Example:
+</p>
+<pre><code>fuser -4 -v -n tcp 3142
+fuser -6 -v -n tcp 3142
+                    USER        PID ACCESS COMMAND
+3142/tcp:           xwwwfsd   17914 F....  xwwwfsd
+</code></pre>
+<p>
+(where 3142 is the port number from the apt-cacher-ng configuration file). To resolve the collision, reconfigure the other daemon or apt-cacher-ng to use another free port (and reconfigure the clients to use the new apt-cacher-ng port accordingly).
+</p>
+
+<hr><address>Comments to <a href='mailto:blade@debian.org'>blade@debian.org</a>
+<br>
+[Eduard Bloch, Sat, 08 Oct 2011 23:18:17 +0200]</address></body>
+</html>

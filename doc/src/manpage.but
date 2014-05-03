@@ -1,0 +1,56 @@
+\title Apt-Cacher-NG User Manual
+
+\cfg{man-identity}{apt-cacher-ng}{8}{November 2007}{apt-cacher-ng}{Eduard Bloch}
+\cfg{man-filename}{apt-cacher-ng.8}
+\cfg{man-mindepth}{1}
+
+\A{manpage} Halibut \cw{man} page
+
+
+\H{manpage-name} NAME
+
+\cw{apt-cacher-ng} \u2013{\u2212{-}} caching proxy for software package downloads
+
+\H{manpage-synopsis} SYNOPSIS
+
+\c apt-cacher-ng [-c confdir] [-h] [optname=optvalue ...]
+
+\H{manpage-description} DESCRIPTION
+
+Apt-Cacher NG is a caching proxy for software packages which are downloaded by
+Unix/Linux system distribution mechanisms from mirror servers accessible via
+HTTP.
+
+\H{manpage-options} OPTIONS
+
+The command-line options supported by \c{apt-cacher-ng} are:
+
+\dt \cw{-c} \e{confdir}
+
+\dd Scan the specified configuration directory and interpret configuration
+  files find there.
+
+\dt \cw{-h}
+
+\dd Short option summary
+
+\dt \e{varname=varopt}
+
+\dd The options from the configuration can be passed on the command line as key=value pairs.
+
+\H{manpage-signals} SIGNALS
+
+Only few signals are handled in non-default ways.
+
+\cw{SIGUSR1} closes and reopens log files.
+
+\cw{SIGTERM} and \cw{SIGINT} close log files and stop the daemon.
+
+\H{manpage-more-information} MORE INFORMATION
+
+For more information on Apt-Cacher NG, read the User Manual which can be found
+either in the doc/pdf directory of the software source package or installed in
+the documentation directory of apt-cacher-ng by your distribution.
+
+
+\versionid Eduard Bloch, Wed, 14 Nov 2007 00:21:52 +0100

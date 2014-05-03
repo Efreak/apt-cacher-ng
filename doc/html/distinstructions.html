@@ -1,0 +1,72 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=US-ASCII">
+<title>Distribution specific instructions</title>
+<link rel="previous" href="secure.html">
+<link rel="ToC" href="index.html">
+<link rel="up" href="index.html">
+<link rel="next" href="maint.html">
+</head>
+<body>
+<p><a href="secure.html">Previous</a> | <a href="index.html">Contents</a> | <a href="maint.html">Next</a></p>
+
+<ul>
+<li><a href="#distinstructions">Chapter 6: Distribution specific instructions</a>
+<ul>
+<li><a href="#hin-debuntu">6.1 Debian and Ubuntu</a></li>
+<li><a href="#hint-suse">6.2 OpenSUSE</a></li>
+<li><a href="#hints-fccore">6.3 Fedora Core</a></li>
+<li><a href="#hint-alx">6.4 Arch Linux</a></li>
+<li><a href="#hints-sfnet">6.5 Sourceforge mirror network</a></li>
+<li><a href="#hint-cygwin">6.6 Cygwin mirrors</a></li>
+<li><a href="#hints-limexpire">6.7 Limited expiration</a></li>
+</ul></li>
+</ul>
+<h1><a name="distinstructions"></a>Chapter 6: Distribution specific instructions</h1>
+<h2><a name="hin-debuntu"></a>6.1 Debian and Ubuntu</h2>
+<p>
+Use as is. Report bugs using reportbug (Debian) or to Launchpad (Ubuntu).
+</p>
+<h2><a name="hint-suse"></a>6.2 OpenSUSE</h2>
+<p>
+Server can be used as is with limited expiration (see below, and see <code>INSTALL</code> file for compilation hints). The merging mode (multiple servers mapped into the same repository) is not preconfigured in the example configuration. This is object to research, competent support is required.
+</p>
+<p>
+Clients can configure apt-cacher-ng as central proxy in Yast ("Network devices"/"Proxy" tab). If this is not desirable then each sofware source can be edited to be redirected through the server. This can be done in the Software Installer view of Yast2, see menu Configuration/Repositories. To edit them quickly, switch to URL editing mode and insert <code>host:port/</code> (of the apt-cacher-ng server) between <code>http://</code> and the source server name.
+</p>
+<h2><a name="hints-fccore"></a>6.3 Fedora Core</h2>
+<p>
+Attempts to add apt-cacher-ng support ended up in pain and the author lost any motivation in further research on this subject.
+</p>
+<h2><a name="hint-alx"></a>6.4 Arch Linux</h2>
+<p>
+Mostly usable. The mirror structure design has been identified by trial-and-error and the regular expressions might need some tuning by experts.
+</p>
+<p>
+The installer seems to have no way to specify a dedicated proxy but it's possible to edit the source URL and insert the <code>host:port/</code> part into it. The pacman mirror list can be modified the same way.
+</p>
+<p>
+Expiration code should work in the basic mode (index data is extracted from *.db.tar.gz files). File checksum checking mode might also work (untested). The example configuration contains a preconfigured list of mirrors which can be rebuilt with the Makefile if needed. The preferred backend server can be specified like with other distributions (see above for details).
+</p>
+<h2><a name="hints-sfnet"></a>6.5 Sourceforge mirror network</h2>
+<p>
+Not a Linux distro but commonly used by those to download certain files. Therefore most mirrors can get unified access cache sharing the files in the same cache repository. Some .exe files there are never expired.
+</p>
+<h2><a name="hint-cygwin"></a>6.6 Cygwin mirrors</h2>
+<p>
+While not being a pure Linux distro it's mostly GNU and has a nice mirror setup. Proxy server can be used as is with limited expiration (see below). Apt-cacher-ng can also be compiled and used on Windows machines in Cygwin environment (see <code>INSTALL</code> file for details).
+</p>
+<p>
+Clients need to specify the server as HTTP proxy in the setup.exe wizard, only HTTP mirrors should be selected in the mirror list.
+</p>
+<h2><a name="hints-limexpire"></a>6.7 Limited expiration</h2>
+<p>
+The expiration code for Non-Debian/Ubuntu repositories is quite limited due to lack of man-power or know-how. For some distros, the support is limited to checks of the filename and no further validation is supported. Therefore, the extra validation of path location or file contents should NOT be turned on when running expiration with data from that distros in the cache, because good data may be deleted in this case.
+</p>
+
+<hr><address>Comments to <a href='mailto:blade@debian.org'>blade@debian.org</a>
+<br>
+[Eduard Bloch, Sat, 08 Oct 2011 23:18:17 +0200]</address></body>
+</html>

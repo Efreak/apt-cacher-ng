@@ -1,0 +1,89 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=US-ASCII">
+<title>Apt-Cacher-NG User Manual</title>
+<link rel="next" href="Intro.html">
+</head>
+<body>
+<p>Previous | Contents | <a href="Intro.html">Next</a></p>
+<h1>Apt-Cacher-NG User Manual</h1>
+<p>
+Apt-Cacher NG is a caching proxy for software packages which are downloaded by Unix/Linux system distribution mechanisms from mirror servers accessible via HTTP.
+</p>
+<p>
+This manual provides an overview of Apt-Cacher-NG's features and a walk through the required configuration steps for server administrators and users of the proxy.
+</p>
+
+<ul>
+<li><a href="Intro.html#Intro">Chapter 1: Introduction</a></li>
+<li><a href="usage.html#usage">Chapter 2: Running apt-cacher-ng</a></li>
+<li><a href="config-servquick.html#config-servquick">Chapter 3: Basic Configuration</a>
+<ul>
+<li><a href="config-servquick.html#server-config">3.1 Server Configuration</a></li>
+<li><a href="config-servquick.html#config-client">3.2 Client Configuration</a></li>
+</ul></li>
+<li><a href="config-serv.html#config-serv">Chapter 4: Advanced Server Configuration</a>
+<ul>
+<li><a href="config-serv.html#Vocabulary">4.1 Vocabulary</a></li>
+<li><a href="config-serv.html#cfgfiles">4.2 Configuration file types</a></li>
+<li><a href="config-serv.html#repmap">4.3 Repositories and URL mapping</a></li>
+</ul></li>
+<li><a href="secure.html#secure">Chapter 5: Security</a>
+<ul>
+<li><a href="secure.html#acl-bind-iface">5.1 Access control by IP interface</a></li>
+<li><a href="secure.html#acl-libwrap">5.2 Access control with libwrap</a></li>
+<li><a href="secure.html#acl-inetd">5.3 Access control with inetd</a></li>
+<li><a href="secure.html#acl-iptables">5.4 Access control with iptables</a></li>
+<li><a href="secure.html#acl-tgtports">5.5 Target port filter</a></li>
+</ul></li>
+<li><a href="distinstructions.html#distinstructions">Chapter 6: Distribution specific instructions</a>
+<ul>
+<li><a href="distinstructions.html#hin-debuntu">6.1 Debian and Ubuntu</a></li>
+<li><a href="distinstructions.html#hint-suse">6.2 OpenSUSE</a></li>
+<li><a href="distinstructions.html#hints-fccore">6.3 Fedora Core</a></li>
+<li><a href="distinstructions.html#hint-alx">6.4 Arch Linux</a></li>
+<li><a href="distinstructions.html#hints-sfnet">6.5 Sourceforge mirror network</a></li>
+<li><a href="distinstructions.html#hint-cygwin">6.6 Cygwin mirrors</a></li>
+<li><a href="distinstructions.html#hints-limexpire">6.7 Limited expiration</a></li>
+</ul></li>
+<li><a href="maint.html#maint">Chapter 7: Maintenance</a>
+<ul>
+<li><a href="maint.html#chapter-cleanup">7.1 Cache cleanup</a></li>
+<li><a href="maint.html#distkill">7.2 Removal of distribution releases</a></li>
+</ul></li>
+<li><a href="howtos.html#howtos">Chapter 8: HOWTOs and FAQ</a>
+<ul>
+<li><a href="howtos.html#imp">8.1 Package import</a></li>
+<li><a href="howtos.html#cache-overview">8.2 Cache overview</a></li>
+<li><a href="howtos.html#jigdo">8.3 JIGDO usage</a></li>
+<li><a href="howtos.html#prob-proxy">8.4 Avoid use of apt-cacher-ng for certain hosts</a></li>
+<li><a href="howtos.html#howto-dontcache1">8.5 Avoid caching for certain domains or certain file types</a></li>
+<li><a href="howtos.html#howto-faster">8.6 How to make big download series faster</a></li>
+<li><a href="howtos.html#howto-importiso">8.7 How to import DVDs or ISO images</a></li>
+<li><a href="howtos.html#howto-importdisk">8.8 How to integrate DVDs or ISO image data</a></li>
+<li><a href="howtos.html#howto-hooks">8.9 How to execute commands before and after going online?</a></li>
+<li><a href="howtos.html#howto-interfaces">8.10 Listen to only specific interfaces or IP protocols</a></li>
+<li><a href="howtos.html#howto-outproto">8.11 How to avoid use of IPv4 (or IPv6) where possible?</a></li>
+<li><a href="howtos.html#howto-acngfs">8.12 Use the proxy without storing all data twice</a></li>
+<li><a href="howtos.html#mirroring">8.13 Partial Mirroring</a></li>
+</ul></li>
+<li><a href="troublefaq.html#troublefaq">Chapter 9: Troubleshooting</a>
+<ul>
+<li><a href="troublefaq.html#debug">9.1 Debugging</a></li>
+<li><a href="troublefaq.html#cleanup-damaged">9.2 Problem: keeps delivering damaged files</a></li>
+<li><a href="troublefaq.html#cleanup-prob">9.3 Problem: regular expiration action reproducibly aborts</a></li>
+<li><a href="troublefaq.html#prob">9.4 Problem: download fails with 503 ... status message</a></li>
+<li><a href="troublefaq.html#prob-freeze">9.5 Problem: <code>apt-get</code> freezes when downloading files</a></li>
+<li><a href="troublefaq.html#prob-bzip2">9.6 <code>apt-get</code> reports corrupted bzip2 data</a></li>
+<li><a href="troublefaq.html#prob-eaddrinuse">9.7 Problem: <code>apt-cacher-ng</code> refuses to start with "Address already in use"</a></li>
+</ul></li>
+<li><a href="bugs.html#bugs">Chapter 10: Known Bugs and Limitations</a></li>
+<li><a href="cont.html#cont">Chapter 11: Contact</a></li>
+</ul>
+
+<hr><address>Comments to <a href='mailto:blade@debian.org'>blade@debian.org</a>
+<br>
+[Eduard Bloch, Sat, 08 Oct 2011 23:18:17 +0200]</address></body>
+</html>

@@ -1,0 +1,4 @@
+# This is a configuration file. All lines starting with # are ignored.
+
+# gentoo mirrors use geodns to dispatch to the nearest location
+http://distfiles.gentoo.org/
