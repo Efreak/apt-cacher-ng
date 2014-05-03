@@ -1,12 +1,14 @@
 
 TODO:
 
+Download rate limiting (throttling)
+
 Add expiration for installer images using SHA256SUMS or MD5SUMS (whichever is covered by the Release file)
 
 Use cache control headers where possible
 
 [for s.] root startup and EUID changing for privileged port use
-[maybe] Don't die if at leat one socket was open on start. Plus, retry to open sockets on HUP. document this... ifup can send hups?!
+[maybe, what was the urgent reason again...?!] Don't die if at leat one socket was open on start. Plus, retry to open sockets on HUP. document this... ifup can send hups?!
 [debian] don't install acngfs manpage on hurd... or finally fix and build acngfs for hurd
 
 > And after a code review yesterday I think the html log is still not a
