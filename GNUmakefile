@@ -16,10 +16,9 @@ endif
 
 DBTMP=dbgen/tmp
 
-all: apt-cacher-ng in.acng
-	-$(MAKE) acngfs
-
-apt-cacher-ng in.acng acngfs clean: config
+# pass down to cmake's Makefile, but all targets depend on config
+default: all
+apt-cacher-ng in.acng acngfs clean all: config
 	@$(MAKE) -C build $@
 
 config: build/.config-stamp
@@ -35,14 +34,14 @@ build/.dir-stamp:
 distclean:
 	rm -rf build $(DBTMP) acsyscap.h *.o Makefile
 
-doc: build/.doc-stamp
-build/.doc-stamp: build/.dir-stamp doc/src/README.but doc/src/manpage.but doc/src/acngfs.but doc/src/textparm.but GNUmakefile
+doc: README
+README: build/.dir-stamp doc/src/README.but doc/src/manpage.but doc/src/acngfs.but doc/src/textparm.but GNUmakefile
 	@mkdir -p doc/html doc/man
 	halibut --text=doc/README doc/src/textparm.but doc/src/README.but
 	halibut --pdf=doc/apt-cacher-ng.pdf doc/src/README.but
 	cd doc/html && halibut --html ../src/README.but
 	cd doc/man && halibut --man ../src/manpage.but && halibut --man ../src/acngfs.but
-	@>$@
+	cp doc/README README
 
 fixversion: VERSION
 	mkdir -p build/tmp
@@ -53,17 +52,10 @@ VERSION=$(shell cat VERSION)
 DISTNAME=apt-cacher-ng-$(VERSION)
 DEBSRCNAME=apt-cacher-ng_$(shell echo $(VERSION) | sed -e "s,pre,~pre,").orig.tar.xz
 
-tarball: fixversion doc 
-#	if test "$(shell svn status | grep -v -i make)" ; then echo Uncommited files found. Run \"svn status\" to display them. ; exit 1 ; fi
-	@if test -f ../$(DISTNAME).tar.xz ; then echo ../$(DISTNAME).tar.xz exists, not overwritting ; exit 1; fi
-	-svn up
-	rm -rf tmp
-	mkdir tmp
-	svn export . tmp/$(DISTNAME)
-	cp -l tmp/$(DISTNAME)/doc/README tmp/$(DISTNAME)
-	rm -rf tmp/$(DISTNAME)/debian tmp/$(DISTNAME)/tmp tmp/$(DISTNAME)/orig tmp/$(DISTNAME)/trash
-	tar -f - -c -C tmp $(DISTNAME) | xz -9 > ../$(DISTNAME).tar.xz
-	rm -rf tmp
+tarball: fixversion doc notdebianbranch nosametarball
+	git diff-index --quiet HEAD || git commit -a
+	git archive --prefix $(DISTNAME)/ HEAD | xz -9 > ../$(DISTNAME).tar.xz
+#	cp -l tmp/$(DISTNAME)/doc/README tmp/$(DISTNAME)
 	test -e /etc/debian_version && ln -f ../$(DISTNAME).tar.xz ../$(DEBSRCNAME) || true
 	test -e ../tarballs && ln -f ../$(DISTNAME).tar.xz ../tarballs/$(DEBSRCNAME) || true
 	test -e ../build-area && ln -f ../$(DISTNAME).tar.xz ../build-area/$(DEBSRCNAME) || true
@@ -71,15 +63,21 @@ tarball: fixversion doc
 tarball-remove:
 	rm -f ../$(DISTNAME).tar.xz ../tarballs/$(DEBSRCNAME) ../$(DEBSRCNAME) ../build-area/$(DEBSRCNAME)
 
-SVNBASE=$(shell svn info | grep ^URL: | cut -f2 -d' ' | xargs dirname)
-release: tarball
-#release:
-	svn ci
-	svn cp $(SVNBASE)/trunk $(SVNBASE)/tags/release_$(shell cat VERSION)
+release: noremainingwork tarball
+	git tag upstream/$(VERSION)
 
 unrelease: tarball-remove
-#unrelease:
-	svn rm $(SVNBASE)/tags/release_$(shell cat VERSION)
+	git tag -d upstream/$(VERSION)
+
+noremainingwork:
+	test ! -e TODO.next # the quick reminder for the next release should be empty
+
+notdebianbranch:
+	test ! -f debian/rules # make sure it is not run from the wrong branch
+
+nosametarball:
+	test ! -f ../$(DISTNAME).tar.xz # make sure not to overwrite existing tarball
+	test ! -f ../tarballs/$(DEBSRCNAME)
 
 # Main rule to be called to update all databases. Does two things, first get
 # and pre-filter raw data, second: check the sources and generate final lists,
@@ -170,5 +168,5 @@ doxy:
 # execute them always and consider done afterwards
 .PHONY: gendbs clean distclean config conf/gentoo_mirrors.gz
 
-# no MT, cmake doesn't like it
+# the dependencies in THIS Makefile shall be processed as sequence
 .NOTPARALLEL:
