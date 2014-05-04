@@ -9,7 +9,7 @@ INCLUDE (CheckIncludeFiles)
 INCLUDE_DIRECTORIES(. ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
 # minimum prqs
-list(APPEND AcngLdList pthread z bz2)
+list(APPEND AcngLdList pthread)
 
 INCLUDE(CheckIncludeFiles)
 INCLUDE(CheckCXXSourceCompiles)
@@ -40,19 +40,23 @@ CHECK_INCLUDE_FILES ("sys/vfs.h" HAVE_SYS_VFS_H)
 # header check should be enough, gzip should be everywhere nowadays
 #CHECK_INCLUDE_FILES("gzip.h" HAVE_ZLIB)
 FIND_PATH(HAVE_ZLIB zlib.h )
-if(NOT HAVE_ZLIB)
+if(HAVE_ZLIB)
+	list(APPEND AcngLdList z)
+	INCLUDE_DIRECTORIES(${HAVE_ZLIB})
+else(HAVE_ZLIB)
    message(FATAL_ERROR "apt-cacher-ng requires gzip library and development files ${HAVE_ZLIB}")
-endif(NOT HAVE_ZLIB)
+endif(HAVE_ZLIB)
 
 INCLUDE(FindBZip2)
 if (BZIP2_FOUND)
    SET(HAVE_LIBBZ2 1)
    MARK_AS_ADVANCED(HAVE_LIBBZ2)
+	INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIR})
+	list(APPEND AcngLdList bz2)
 else (BZIP2_FOUND)
-   message(FATAL_ERROR "apt-cacher-ng requires bzip2 library and development files")
+   message("apt-cacher-ng requires bzip2 library and development files for bz2 format support")
 endif (BZIP2_FOUND)
 
-INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIR})
 
 SET(CMAKE_REQUIRED_FLAGS " ${FLAGS_MIN} -Wl,--as-needed")
 SET(TESTSRC "int main() {return 0;}")
@@ -298,7 +302,7 @@ if(fuse_FOUND AND HAVE_FUSE_25)
 
 
 else(fuse_FOUND AND HAVE_FUSE_25)
-   message("FUSE not found or incompatible, not building acngfs")
+   message("FUSE not found or not compatible, not building acngfs")
 endif(fuse_FOUND AND HAVE_FUSE_25)
 
 

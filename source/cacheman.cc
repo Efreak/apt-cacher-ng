@@ -1289,6 +1289,9 @@ void tCacheMan::UpdateIndexFiles()
 
 void tCacheMan::InstallBz2edPatchResult(tContId2eqClass::iterator eqClassIter)
 {
+#ifndef HAVE_LIBBZ2
+	return;
+#else
 	if(!acfg::recompbz2)
 		return;
 
@@ -1353,6 +1356,7 @@ void tCacheMan::InstallBz2edPatchResult(tContId2eqClass::iterator eqClassIter)
 #endif
 		Propagate(sFreshBz2Rel, eqClassIter);
 	}
+#endif
 }
 
 tCacheMan::enumIndexType tCacheMan::GuessIndexTypeFromURL(const mstring &sPath)

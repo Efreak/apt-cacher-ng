@@ -23,6 +23,16 @@
 #undef HAVE_LIBBZ2
 #undef HAVE_ZLIB
 #undef HAVE_LZMA
+#else
+
+#ifndef HAVE_ZLIB
+#warning Zlib or its development files are not available. Install them (e.g. zlib1g-dev) and run "make clean". Gzip format support disabled.
+#endif
+
+#ifndef HAVE_LIBBZ2
+#warning LibBz2 or its development files are not available. Install them (e.g. libbz2-dev) and run "make clean". Bzip2 format support disabled.
+#endif
+
 #endif
 
 using namespace MYSTD;
@@ -74,8 +84,8 @@ public:
 		return false;
 	}
 };
-#else
-#define tBzDec IDecompressor
+static const uint8_t bz2Magic[] =
+{ 'B', 'Z', 'h' };
 #endif
 
 #ifdef HAVE_ZLIB
@@ -115,9 +125,8 @@ public:
 		return false;
 	}
 };
-
-#else
-#define tGzDec IDecompressor
+static const uint8_t gzMagic[] =
+{ 0x1f, 0x8b, 0x8 };
 #endif
 
 #ifdef HAVE_LZMA
@@ -164,13 +173,9 @@ public:
 		return false;
 	}
 };
-#else
-class tXzDec : public IDecompressor
-{
-public:
-	tXzDec() {}
-	tXzDec(bool) {}
-};
+static const uint8_t xzMagic[] =
+{ 0xfd, '7', 'z', 'X', 'Z', 0x0 },
+lzmaMagic[] = {0x5d, 0, 0, 0x80};
 #endif
 
 filereader::filereader() 
@@ -186,12 +191,6 @@ filereader::filereader()
 {
 };
 
-static const uint8_t gzMagic[] =
-{ 0x1f, 0x8b, 0x8 }, bz2Magic[] =
-{ 'B', 'Z', 'h' }, xzMagic[] =
-{ 0xfd, '7', 'z', 'X', 'Z', 0x0 },
-lzmaMagic[] = {0x5d, 0, 0, 0x80};
-
 bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 {
 	Close(); // reset to clean state
@@ -203,10 +202,14 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 
 	if (bNoMagic)
 		m_Dec.reset();
+#ifdef HAVE_LIBBZ2
 	else if (endsWithSzAr(sFilename, ".bz2"))
 		m_Dec.reset(new tBzDec);
+#endif
+#ifdef HAVE_ZLIB
 	else if (endsWithSzAr(sFilename, ".gz"))
 		m_Dec.reset(new tGzDec);
+#endif
 #ifdef HAVE_LZMA
 	else if(endsWithSzAr(sFilename, ".xz"))
 		m_Dec.reset(new tXzDec(false));
@@ -218,10 +221,15 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 		filereader fh;
 		if (fh.OpenFile(sFilename, true) && fh.GetSize() >= 10)
 		{
-			if (0 == memcmp(gzMagic, fh.GetBuffer(), _countof(gzMagic)))
+			if(false) {}
+#ifdef HAVE_ZLIB
+			else if (0 == memcmp(gzMagic, fh.GetBuffer(), _countof(gzMagic)))
 				m_Dec.reset(new tGzDec);
+#endif
+#ifdef HAVE_LIBBZ2
 			else if (0 == memcmp(bz2Magic, fh.GetBuffer(), _countof(bz2Magic)))
 				m_Dec.reset(new tBzDec);
+#endif
 #ifdef HAVE_LZMA
 			else if (0 == memcmp(xzMagic, fh.GetBuffer(), _countof(xzMagic)))
 				m_Dec.reset(new tXzDec);

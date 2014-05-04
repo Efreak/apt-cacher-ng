@@ -30,14 +30,6 @@
 #error Unable to find smart pointer implementation, install Boost or recent compiler with STL containing TR1 components. Set BOOSTDIR in Makefile if needed.
 #endif
 
-#ifndef HAVE_ZLIB
-#warning Zlib or its development files are not available. Install them (e.g. zlib1g-dev) and run "make clean". Gzip format support disabled.
-#endif
-
-#ifndef HAVE_LIBBZ2
-#warning LibBz2 or its development files are not available. Install them (e.g. libbz2-dev) and run "make clean". Bzip2 format support disabled.
-#endif
-
 // make off_t be a 64 bit type
 // added in Makefile... #define _FILE_OFFSET_BITS 64
 
