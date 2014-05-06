@@ -689,8 +689,8 @@ bool tCacheMan::Inject(cmstring &from, cmstring &to,
 		{
 		}
 		// noone else should attempt to store file through it
-		virtual bool DownloadStartedStoreHeader(const header &, const char *,
-				bool, bool*)
+		virtual bool DownloadStartedStoreHeader(const header & h, const char *pNextData,
+				bool bForcedRestart, bool&) override
 		{
 			return false;
 		}
@@ -816,10 +816,10 @@ bool tCacheMan::Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassI
 		tStrPos cpos=FindComPos(*it);
 		string sBasename=it->substr(0, cpos);
 		string sux=cpos==stmiss ? "" : it->substr(FindComPos(*it));
-		for(cmstring *ps=suxeWempty; ps<suxeWempty+_countof(suxeWempty); ps++)
+		for(auto& compsuf : suxeWempty)
 		{
-			if(sux==*ps) continue; // touch me not
-			mstring sBro = sBasename+*ps;
+			if(sux==compsuf) continue; // touch me not
+			mstring sBro = sBasename+compsuf;
 			tS2IDX::iterator kv=m_indexFilesRel.find(sBro);
 			if(kv!=m_indexFilesRel.end() && kv->second.vfile_ondisk)
 			{
@@ -833,7 +833,7 @@ bool tCacheMan::Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassI
 
 				// if we have a freshly unpacked version and bro should be the the same
 				// and bro is older than the donor file for some reason... update bro!
-				if (psTmpUnpackedAbs && ps->empty())
+				if (psTmpUnpackedAbs && compsuf.empty())
 				{
 					struct stat stbuf;
 					time_t broModTime;

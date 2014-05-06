@@ -237,17 +237,17 @@ void StrSubst(mstring &contents, const mstring &from, const mstring &to);
 #if _FILE_OFFSET_BITS == 32
 #error Unsupported: _FILE_OFFSET_BITS == 32 with large long size
 #else
-#define OFF_T_FMT "%"PRId64
+#define OFF_T_FMT "%" PRId64
 #endif
 
 #else // not a 64bit arch?
 
 #if 64 == _FILE_OFFSET_BITS
-#define OFF_T_FMT "%"PRId64
+#define OFF_T_FMT "%" PRId64
 #endif
 
 #if 32 == _FILE_OFFSET_BITS
-#define OFF_T_FMT "%"PRId32
+#define OFF_T_FMT "%" PRId32
 #endif
 
 #endif // !64bit arch

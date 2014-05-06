@@ -72,25 +72,21 @@ struct tDlJob
 		STATE_FINISHJOB
 	} tDlState;
 
-	const acfg::tRepoData * m_pBEdata;
+	const acfg::tRepoData * m_pBEdata=NULL;
 
 	tHttpUrl m_fileUri;
-	const tHttpUrl *m_pCurBackend;
+	const tHttpUrl *m_pCurBackend=NULL;
 
-	uint_fast8_t m_eReconnectASAP;
+	uint_fast8_t m_eReconnectASAP =0;
 
-	off_t m_nRest;
+	off_t m_nRest =0;
 
-	tDlState m_DlState;
+	tDlState m_DlState = STATE_GETHEADER;
 
 	int m_nRedirRemaining;
 
 	inline void Init()
 	{
-		m_nRest = 0;
-		m_eReconnectASAP = 0;
-		m_DlState = STATE_GETHEADER;
-		m_pCurBackend = NULL;
 		if (m_pStorage)
 			m_pStorage->IncDlRefCount();
 	}
@@ -611,7 +607,7 @@ inline bool dlcon::SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg)
 				return true;
 		}
 
-		for (vector<tHttpUrl>::const_iterator it=job->m_pBEdata->m_backends.begin();
+		for (auto it=job->m_pBEdata->m_backends.begin();
 				it!=job->m_pBEdata->m_backends.end(); ++it)
 		{
 			bliter = m_blacklist.find(make_pair(it->sHost, it->GetPort()));
@@ -957,22 +953,6 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 	return EFLAG_JOB_BROKEN|HINT_DISCON;
 }
 
-inline void CleanRunning(tDljQueue &inpipe)
-{
-	for(tDljQueue::iterator it = inpipe.begin(); it!= inpipe.end();)
-	{
-		if(*it && (**it).m_pStorage
-				&& (**it).m_pStorage->GetStatus() >= fileitem::FIST_DLRECEIVING)
-		{
-			// someone else is doing it -> drop
-			inpipe.erase(it++);
-			continue;
-		}
-		else
-			++it;
-	}
-}
-
 void dlcon::WorkLoop()
 {
 	LOGSTART("dlcon::WorkLoop");
@@ -1255,9 +1235,24 @@ void dlcon::WorkLoop()
 				// already processed by it and try to continue somewhere else.
 				// This way, the overall number of collisions and reconnects is minimized
 
-        		CleanRunning(inpipe); // seriously, I want lambdas
+        		auto cleaner = [](tDljQueue &joblist)
+        		{
+        			for(auto it = joblist.begin(); it!= joblist.end();)
+        			{
+        				if(*it && (**it).m_pStorage
+        						&& (**it).m_pStorage->GetStatus() >= fileitem::FIST_DLRECEIVING)
+        				{
+        					// someone else is doing it -> drop
+        					joblist.erase(it++);
+        					continue;
+        				}
+        				else
+        					++it;
+        			}
+        		};
+        		cleaner(inpipe);
         		setLockGuard;
-        		CleanRunning(m_qNewjobs);
+        		cleaner(m_qNewjobs);
         	}
         }
 

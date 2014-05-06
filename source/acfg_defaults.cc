@@ -17,13 +17,13 @@ capath("/etc/ssl/certs"), cafile;
 
 #define INFOLDER "(^|.*/)"
 #define COMPRLIST "(\\.gz|\\.bz2|\\.lzma|\\.xz)"
-#define ALXPATTERN ".*\\.(db|files|abs)(\\.tar"COMPRLIST")?"
+#define ALXPATTERN ".*\\.(db|files|abs)(\\.tar" COMPRLIST ")?"
 #define COMPOPT COMPRLIST"?"
 //#define COMPONENT_OPTIONAL "(-[a-z0-9-])"
 //#define PARANOIASOURCE "(\\.orig|\\.debian)"
 
-string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar"COMPRLIST"(\\.gpg)?"
-		"|\\.diff"COMPRLIST"|\\.jigdo|\\.template|changelog|copyright"
+string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST "(\\.gpg)?"
+		"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
 		"|\\.udeb|\\.debdelta|\\.diff/.*\\.gz|(Devel)?ReleaseAnnouncement(\\?.*)?"
 		"|[a-f0-9]+-(susedata|updateinfo|primary|deltainfo).xml.gz" //opensuse, index data, hash in filename
 		"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
@@ -31,17 +31,17 @@ string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar"COMPRLIST"(\\.gpg)?"
 ")$");
 
 string vfilepat(INFOLDER
-		"(Index|Packages"COMPOPT"|InRelease|Release|Release\\.gpg|custom\\.gpg|mirrors.txt|"
-		"Sources"COMPOPT"|release|index\\.db-.*\\.gz|Contents-[^/]*"COMPOPT
-		"|pkglist[^/]*\\.bz2|rclist[^/]*\\.bz2|meta-release[^/]*|Translation[^/]*"COMPOPT
+		"(Index|Packages" COMPOPT "|InRelease|Release|Release\\.gpg|custom\\.gpg|mirrors.txt|"
+		"Sources" COMPOPT "|release|index\\.db-.*\\.gz|Contents-[^/]*" COMPOPT
+		"|pkglist[^/]*\\.bz2|rclist[^/]*\\.bz2|meta-release[^/]*|Translation[^/]*" COMPOPT
 		"|MD5SUMS|SHA1SUMS" // d-i stuff
 		"|((setup|setup-legacy)(\\.ini|\\.bz2|\\.hint)(\\.sig)?)|mirrors\\.lst" // cygwin
 		"|repo(index|md)\\.xml(\\.asc|\\.key)?|directory\\.yast" // opensuse
 		"|products|content(\\.asc|\\.key)?|media" // opensuse 2, are they important?
 		"|filelists\\.xml\\.gz|filelists\\.sqlite\\.bz2|repomd\\.xml" // SL, http://ra.khe.sh/computers/linux/apt-cacher-ng-with-yum.html
 		"|packages\\.[a-zA-Z][a-zA-Z]\\.gz|info\\.txt|license\\.tar\\.gz|license\\.zip" //opensuse
-		"|"ALXPATTERN // Arch Linux
-		"|metalink\\?repo|.*prestodelta\\.xml\\.gz|repodata/.*\\.(xml|sqlite)"COMPRLIST // CentOS
+		"|" ALXPATTERN // Arch Linux
+		"|metalink\\?repo|.*prestodelta\\.xml\\.gz|repodata/.*\\.(xml|sqlite)" COMPRLIST // CentOS
 		")$" // end of only-filename paterns
 		"|/dists/.*/installer-[^/]+/[^0-9][^/]+/images/.*"); // d-i stuff but not containing a number (year) in the revision directory (like "current", "beta", ...)
 
@@ -49,11 +49,11 @@ string vfilepat(INFOLDER
 //string wfilepat(vfilepat);
 string wfilepat(INFOLDER
 		"(Release|InRelease|Release\\.gpg|custom\\.gpg"
-		"|(Packages|Sources)"COMPRLIST"?"
-		"|Translation[^/]*"COMPRLIST"?" // to be checked, but they should never really go anywhere
+		"|(Packages|Sources)" COMPRLIST "?"
+		"|Translation[^/]*" COMPRLIST "?" // to be checked, but they should never really go anywhere
 		"|MD5SUMS|SHA1SUMS"
 		"|.*\\.xml" // SUSE
-		"|"ALXPATTERN // Arch Linux
+		"|" ALXPATTERN // Arch Linux
 		"|[a-z]+32.exe"
 		")$"
 		"|/dists/.*/installer-.*/images/.*");

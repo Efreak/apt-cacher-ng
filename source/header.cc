@@ -338,7 +338,7 @@ MYSTD::string header::GenInfoHeaders()
 {
 	    string ret="Date: ";
 	    ret+=tCurrentTime();
-	    ret+="\r\nServer: Debian Apt-Cacher NG/"ACVERSION"\r\n";
+	    ret+="\r\nServer: Debian Apt-Cacher NG/" ACVERSION "\r\n";
 	    return ret;
 }
 

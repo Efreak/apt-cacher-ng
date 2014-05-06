@@ -53,7 +53,7 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 
 	LOG("Host resolved");
 
-	for (struct addrinfo * pCur=m_resolvedInfo; pCur; pCur = pCur->ai_next)
+	for (auto pCur=m_resolvedInfo; pCur; pCur = pCur->ai_next)
 	{
 		if (pCur->ai_socktype == SOCK_STREAM&& pCur->ai_protocol == IPPROTO_TCP)
 		{

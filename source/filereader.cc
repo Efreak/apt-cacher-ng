@@ -63,7 +63,7 @@ public:
 		BZ2_bzDecompressEnd(&strm);
 		inited = false;
 	}
-	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf)
+	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) override
 	{
 		strm.next_in = szInBuf + nBufPos;
 		strm.avail_in = nBufSize - nBufPos;
@@ -104,7 +104,7 @@ public:
 		deflateEnd(&strm);
 		inited = false;
 	}
-	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf)
+	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) override
 	{
 		strm.next_in = (uint8_t*) szInBuf + nBufPos;
 		strm.avail_in = nBufSize - nBufPos;
@@ -152,7 +152,7 @@ public:
 		lzma_end(&strm);
 		inited = false;
 	}
-	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf)
+	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) override
 	{
 		strm.next_in = (uint8_t*) szInBuf + nBufPos;
 		strm.avail_in = nBufSize - nBufPos;
@@ -434,15 +434,15 @@ class csumSHA1 : public csumBase, public SHA_INFO
 {
 public:
 	csumSHA1() { sha_init(this); }
-	void add(const char *data, size_t size) { sha_update(this, (SHA_BYTE*) data, size); }
-	void finish(uint8_t* ret) { sha_final(ret, this); }
+	void add(const char *data, size_t size) override { sha_update(this, (SHA_BYTE*) data, size); }
+	void finish(uint8_t* ret) override { sha_final(ret, this); }
 };
 class csumMD5 : public csumBase, public md5_state_s
 {
 public:
 	csumMD5() { md5_init(this); }
-	void add(const char *data, size_t size) { md5_append(this, (md5_byte_t*) data, size); }
-	void finish(uint8_t* ret) { md5_finish(this, ret); }
+	void add(const char *data, size_t size) override { md5_append(this, (md5_byte_t*) data, size); }
+	void finish(uint8_t* ret) override { md5_finish(this, ret); }
 };
 
 auto_ptr<csumBase> csumBase::GetChecker(CSTYPES type)
@@ -468,7 +468,7 @@ bool filereader::GetChecksum(const mstring & sFileName, int csType, uint8_t out[
 bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *fDump)
 //bool filereader::GetSha1Sum(uint8_t out[], off_t &scannedSize, FILE *fDump)
 {
-	auto_ptr<csumBase> summer = csumBase::GetChecker(CSTYPES(csType));
+	unique_ptr<csumBase> summer(csumBase::GetChecker(CSTYPES(csType)));
 	scannedSize=0;
 	
 	if(!m_Dec.get())
@@ -516,7 +516,7 @@ void check_algos()
 {
 	const char testvec[]="abc";
 	uint8_t out[20];
-	auto_ptr<csumBase> ap = csumBase::GetChecker(CSTYPE_SHA1);
+	unique_ptr<csumBase> ap(csumBase::GetChecker(CSTYPE_SHA1));
 	ap->add(testvec, sizeof(testvec)-1);
 	ap->finish(out);
 	if(!CsEqual("a9993e364706816aba3e25717850c26c9cd0d89d", out, 20))

@@ -10,7 +10,7 @@ public:
 			const char *mimetype,
 			const char *httpcode);
 	virtual ~tStaticFileSend();
-	void Run(const mstring &cmd);
+	void Run(const mstring &cmd) override;
 	virtual void ModContents(mstring & contents, cmstring &cmd);
 protected:
 	const char *m_sFileName, *m_sMimeType, *m_sHttpCode;
@@ -25,7 +25,7 @@ class tDeleter : public tStaticFileSend
 {
 public:
 	inline tDeleter(int fd) : tStaticFileSend(fd, "delconfirm.html", "text/html", "200 OK") {}
-	virtual void ModContents(mstring & contents, cmstring &cmd);
+	virtual void ModContents(mstring & contents, cmstring &cmd) override;
 };
 
 
