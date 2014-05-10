@@ -335,7 +335,7 @@ string tHttpUrl::ToURI(bool bUrlEscaped) const
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 
-tStrDeq ExpandFilePattern(const string &pattern, bool bSorted)
+tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted)
 {
 	tStrDeq srcs;
 #ifdef HAVE_WORDEXP

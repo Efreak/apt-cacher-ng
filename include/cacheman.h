@@ -222,10 +222,10 @@ private:
 };
 
 
-static const string suxe[] = { ".bz2", ".gz", ".lzma", ".xz"};
-static const string suxeWempty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
-static const string suxeByLhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
-static const string suxeByCompSize[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
+static const string compSuffixes[] = { ".bz2", ".gz", ".lzma", ".xz"};
+static const string compSuffixesAndEmpty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
+static const string compSuffixesAndEmptyByLikelyhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
+static const string compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
 
 bool CompDebVerLessThan(cmstring &s1, cmstring s2);
 extern time_t m_gMaintTimeNow;

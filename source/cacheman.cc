@@ -362,7 +362,7 @@ static const string relKey("/Release"), inRelKey("/InRelease");
 inline tStrPos FindComPos(const string &s)
 {
 	tStrPos compos(stmiss);
-	for(const string *p=suxe; p<suxe+_countof(suxe) && stmiss==compos; p++)
+	for(const string *p=compSuffixes; p<compSuffixes+_countof(compSuffixes) && stmiss==compos; p++)
 		if(endsWith(s, *p))
 			compos=s.size()-p->size();
 	return compos;
@@ -370,8 +370,8 @@ inline tStrPos FindComPos(const string &s)
 static unsigned short FindCompIdx(cmstring &s)
 {
 	unsigned short i=0;
-	for(;i<_countof(suxe); i++)
-		if(endsWith(s, suxe[i]))
+	for(;i<_countof(compSuffixes); i++)
+		if(endsWith(s, compSuffixes[i]))
 			break;
 	return i;
 }
@@ -816,7 +816,7 @@ bool tCacheMan::Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassI
 		tStrPos cpos=FindComPos(*it);
 		string sBasename=it->substr(0, cpos);
 		string sux=cpos==stmiss ? "" : it->substr(FindComPos(*it));
-		for(auto& compsuf : suxeWempty)
+		for(auto& compsuf : compSuffixesAndEmpty)
 		{
 			if(sux==compsuf) continue; // touch me not
 			mstring sBro = sBasename+compsuf;
@@ -966,7 +966,7 @@ void tCacheMan::UpdateIndexFiles()
 			string sNativeName=it->first.substr(0, FindComPos(it->first));
 			tContId sCandId=it->second;
 			// find a better one which serves as the flag content id for the whole group
-			for(cmstring *ps=suxeByLhood; ps<suxeByLhood+_countof(suxeByLhood); ps++)
+			for(cmstring *ps=compSuffixesAndEmptyByLikelyhood; ps<compSuffixesAndEmptyByLikelyhood+_countof(compSuffixesAndEmptyByLikelyhood); ps++)
 			{
 				tFile2Cid::iterator it2=recvr.m_file2cid.find(sNativeName+*ps);
 				if(it2 != recvr.m_file2cid.end())

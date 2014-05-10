@@ -47,8 +47,7 @@ string sPopularPath("/debian/");
 string tmpDontcache, tmpDontcacherq, tmpDontcacheResolved;
 
 tStrMap localdirs;
-lockable mimemap_lock;
-NoCaseStringMap mimemap;
+static class : public lockable, public NoCaseStringMap {} mimemap;
 
 MYSTD::bitset<65536> *pUserPorts = NULL;
 
@@ -368,7 +367,7 @@ tStrDeq ExpandFileTokens(cmstring &token)
 				dir->resize(dir->size()-1);
 
 			// temporary only
-			srcs = ExpandFilePattern(*dir + sPathSep + sPath, true);
+			srcs = ExpandFilePattern( (cmstring) *dir + sPathSep + sPath, true);
 			if (srcs.size() == 1 && GetFileSize(srcs[0], -23) == off_t(-23))
 				continue; // file not existing, wildcard returned
 
@@ -516,7 +515,7 @@ inline void _ParseLocalDirs(cmstring &value)
 cmstring & GetMimeType(cmstring &path)
 {
 	{
-		lockguard g(mimemap_lock);
+		lockguard g(mimemap);
 		static bool inited = false;
 		if (!inited)
 		{

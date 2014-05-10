@@ -10,7 +10,7 @@
 
 class fileitem;
 typedef SHARED_PTR<fileitem> tFileItemPtr;
-typedef MYSTD::multimap<mstring, tFileItemPtr> tFiGlobMap;
+class tFiGlobMap : public lockable, public MYSTD::multimap<mstring, tFileItemPtr> {};
 
 //! Base class containing all required data and methods for communication with the download sources
 class fileitem : public condition

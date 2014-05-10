@@ -273,7 +273,7 @@ inline off_t atoofft(LPCSTR p, off_t nDefVal)
 
 mstring offttosH(off_t n);
 
-tStrDeq ExpandFilePattern(const mstring &pattern, bool bSorted=false);
+tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted=false);
 
 //void MakeAbsolutePath(mstring &dirToFix, const mstring &reldir);
 

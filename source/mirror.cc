@@ -74,7 +74,7 @@ tStrDeq GetVariants(cmstring &mine)
 {
 	tStrDeq ret;
 	string base;
-	for(cmstring *p=suxeWempty; p<suxeWempty+_countof(suxeWempty); p++)
+	for(cmstring *p=compSuffixesAndEmpty; p<compSuffixesAndEmpty+_countof(compSuffixesAndEmpty); p++)
 	{
 		if(endsWith(mine, *p))
 		{
@@ -82,7 +82,7 @@ tStrDeq GetVariants(cmstring &mine)
 			break;
 		}
 	}
-	for(cmstring *p=suxeWempty; p<suxeWempty+_countof(suxeWempty); p++)
+	for(cmstring *p=compSuffixesAndEmpty; p<compSuffixesAndEmpty+_countof(compSuffixesAndEmpty); p++)
 	{
 		string cand=base+*p;
 		if(cand!=mine)
@@ -215,8 +215,8 @@ void pkgmirror::Action(const string &cmd)
 	// were added by Release file scan. Choose the prefered simply by extension.
 
 	restart_clean2: // start over if the set changed while having a hot iterator
-	for (const string *p = suxeByCompSize; p < suxeByCompSize
-	+ _countof(suxeByCompSize); p++)
+	for (const string *p = compSuffixesAndEmptyByRatio; p < compSuffixesAndEmptyByRatio
+	+ _countof(compSuffixesAndEmptyByRatio); p++)
 	{
 		for (tStrSet::iterator it = srcs.begin(); it != srcs.end(); it++)
 		{
