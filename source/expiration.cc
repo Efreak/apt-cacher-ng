@@ -325,7 +325,7 @@ inline void expiration::DropExceptionalVersions()
 inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 {
 	LOGSTART("expiration::_RemoveAndStoreStatus");
-	FILE *f(NULL);
+	FILE_RAII f;
     if(!bPurgeNow)
     {
 
@@ -333,12 +333,12 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 
         string sDbFileAbs=CACHE_BASE+FNAME_PENDING;
 
-        f = fopen(sDbFileAbs.c_str(), "w");
+        f.p = fopen(sDbFileAbs.c_str(), "w");
         if(!f)
         {
             SendChunk("Unable to open " FNAME_PENDING " for writing, attempting to recreate... ");
             ::unlink(sDbFileAbs.c_str());
-            f=::fopen(sDbFileAbs.c_str(), "w");
+            f.p=::fopen(sDbFileAbs.c_str(), "w");
             if(f)
                 SendChunk("OK\n<br>\n");
             else
@@ -407,8 +407,6 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 					k.dirRel.c_str(), k.file.c_str());
 		}
 	}
-    if(f)
-        fclose(f);
 
     // now just kill dangling header files
 	for(set<tFileNdir>::iterator it=m_trashCandHeadSet.begin();

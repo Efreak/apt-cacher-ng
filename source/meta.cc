@@ -550,7 +550,7 @@ inline bool is_safe_url_char(char c)
 
 void UrlEscapeAppend(cmstring &s, mstring &sTarget)
 {
-	for(cmstring::const_iterator it=s.begin(); it!=s.end();++it)
+	for(auto it=s.begin(); it!=s.end();++it)
 	{
 		if(is_safe_url_char(*it))
 			sTarget+=*it;
@@ -589,7 +589,7 @@ mstring DosEscape(cmstring &s)
 bool UrlUnescapeAppend(cmstring &from, mstring & to)
 {
 	bool ret=true;
-	for(string::size_type i=0; i<from.length(); i++)
+	for(tStrPos i=0; i<from.length(); i++)
 	{
 		if(from[i] != '%')
 			to+=from[i];
