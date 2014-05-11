@@ -192,8 +192,7 @@ void SetupConAndGo(int fd, const char *szClientName=NULL)
 
 void CreateUnixSocket() {
 	string & sPath=acfg::fifopath;
-	struct sockaddr_un addr_unx;
-	memset(&addr_unx, 0, sizeof(addr_unx));
+	auto addr_unx = sockaddr_un();
 	
 	int jo=1;
 	size_t size = sPath.length()+1+offsetof(struct sockaddr_un, sun_path);
@@ -236,6 +235,7 @@ void CreateUnixSocket() {
 
 void Setup()
 {
+	LOGSTART2s("Setup", 0);
 	using namespace acfg;
 	
 	if (fifopath.empty() && port.empty())
@@ -246,8 +246,7 @@ void Setup()
 	
 	if (atoi(port.c_str())>0)
 	{
-		struct addrinfo    hints;
-		memset(&hints, 0, sizeof hints);
+		auto hints = addrinfo();
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE;
 		hints.ai_family = 0;
@@ -269,28 +268,29 @@ void Setup()
 		    
 		    for(p=res; p; p=p->ai_next)
 		    {
-		    	int sockip = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-				if (sockip<0)
+		    	int nSockFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+				if (nSockFd<0)
 					goto error_socket;
 
-          // if we have a dual-stack IP implementation (like on Linux) then
-          // explicitely disable the shadow v4 listener. Otherwise it might be
-          // bound, or maybe not, and then maybe because of the dual-behaviour,
-          // or maybe because of real errors; we just cannot know for sure but
-          // we have to.
+				// if we have a dual-stack IP implementation (like on Linux) then
+				// explicitely disable the shadow v4 listener. Otherwise it might be
+				// bound, or maybe not, and then maybe because of the dual-behaviour,
+				// or maybe because of real errors; we just cannot know for sure but
+				// we have to.
 #if defined(IPV6_V6ONLY) && defined(SOL_IPV6)
-		    	if(p->ai_family==AF_INET6)
-		    		setsockopt(sockip, SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
+				if(p->ai_family==AF_INET6)
+					setsockopt(nSockFd, SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
 #endif		    	
-				setsockopt(sockip, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+				setsockopt(nSockFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 				
 				
-		    	if (::bind(sockip, p->ai_addr, p->ai_addrlen))
+		    	if (::bind(nSockFd, p->ai_addr, p->ai_addrlen))
 		    		goto error_bind;
-		    	if (listen(sockip, SO_MAXCONN))
+		    	if (listen(nSockFd, SO_MAXCONN))
 		    		goto error_listen;
 		    	
-		    	g_vecSocks.push_back(sockip);
+			USRDBG( "created socket, fd: " << nSockFd);// << ", for bindaddr: "<<bindaddr);
+		    	g_vecSocks.push_back(nSockFd);
 		    	
 		    	continue;
 
@@ -318,7 +318,7 @@ void Setup()
 				goto close_socket;
 
 				close_socket:
-				forceclose(sockip);
+				forceclose(nSockFd);
 		    }
 		    freeaddrinfo(res);
 		    continue;

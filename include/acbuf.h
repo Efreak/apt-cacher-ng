@@ -106,7 +106,7 @@ public:
 
     inline tSS() : m_fmtmode(dec){}
     inline tSS(size_t sz) : m_fmtmode(dec) { setsize(sz); }
-    inline tSS(const tSS &src) : m_fmtmode(src.m_fmtmode) { add(src.data(), src.size()); }
+    inline tSS(const tSS &src) : acbuf(), m_fmtmode(src.m_fmtmode) { add(src.data(), src.size()); }
     tSS & addEscaped(const char *fmt);
     inline tSS & operator<<(const char c) { reserve(size()+1); *(wptr())=c; got(1); return *this;}
 

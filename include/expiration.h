@@ -46,7 +46,7 @@ protected:
 
 	void DropExceptionalVersions();
 
-	std::ofstream m_damageList;
+	MYSTD::ofstream m_damageList;
 	bool m_bIncompleteIsDamaged;
 
 private:

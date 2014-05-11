@@ -51,11 +51,10 @@ public:
 #include <bzlib.h>
 class tBzDec : public IDecompressor
 {
-	bz_stream strm;
+	bz_stream strm = bz_stream();
 public:
 	tBzDec()
 	{
-		::memset(&strm, 0, sizeof(strm));
 		inited = (BZ_OK == BZ2_bzDecompressInit(&strm, 1, EXTREME_MEMORY_SAVING));
 	}
 	~tBzDec()
@@ -92,11 +91,10 @@ static const uint8_t bz2Magic[] =
 #include <zlib.h>
 class tGzDec : public IDecompressor
 {
-	z_stream strm;
+	z_stream strm = z_stream();
 public:
 	tGzDec()
 	{
-		::memset(&strm, 0, sizeof(strm));
 		inited = (Z_OK == inflateInit2(&strm, 47));
 	}
 	~tGzDec()
@@ -134,11 +132,10 @@ static const uint8_t gzMagic[] =
 
 class tXzDec : public IDecompressor
 {
-	lzma_stream strm;
+	lzma_stream strm = lzma_stream();
 public:
 	tXzDec(bool lzmaFormat=false)
 	{
-		::memset(&strm, 0, sizeof(strm));
 		if(lzmaFormat)
 			inited = (LZMA_OK == lzma_alone_decoder(&strm,
 					EXTREME_MEMORY_SAVING ? 32000000 : MAX_VAL(uint64_t)));

@@ -61,14 +61,6 @@ struct tHeadLabelMap
 } label_map;
 #endif
 
-header::header()
-:
-	type(INVALID),
-	m_nEstimLength(0)
-{
-	memset(h, 0, sizeof(h));
-}
-
 header::header(const header &s)
 :type(s.type),
  frontLine(s.frontLine),

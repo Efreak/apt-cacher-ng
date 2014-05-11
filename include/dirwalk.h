@@ -4,18 +4,14 @@
 #include "config.h"
 #include <string>
 
-#ifndef MYSTD
-#define MYSTD std
-#endif
-
-#include "sys/stat.h"
+#include <sys/stat.h>
 
 class IFileHandler
 {
 public:
-	virtual bool ProcessRegular(const mstring &sPath, const struct stat &) =0;
-	virtual bool ProcessOthers(const mstring &sPath, const struct stat &)=0;
-	virtual bool ProcessDirAfter(const mstring &sPath, const struct stat &)=0;
+	virtual bool ProcessRegular(const MYSTD::string &sPath, const struct stat &) =0;
+	virtual bool ProcessOthers(const MYSTD::string &sPath, const struct stat &)=0;
+	virtual bool ProcessDirAfter(const MYSTD::string &sPath, const struct stat &)=0;
 	virtual ~IFileHandler() {};
 };
 

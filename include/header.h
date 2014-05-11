@@ -36,16 +36,16 @@ class header {
       };
 #define ACNGFSMARK XORIG
 
-      eHeadType type;
+      eHeadType type = INVALID;
       mstring frontLine;
-      unsigned int m_nEstimLength;
+      unsigned int m_nEstimLength=0;
       
-      char *h[HEADPOS_MAX];
+      char *h[HEADPOS_MAX] = {0};
                            
-      header();
+      inline header(){};
+      ~header();
       header(const header &);
       header& operator=(const header&); 
-      ~header();
       
       static mstring GenInfoHeaders();
       static bool ParseDate(const char *, struct tm*);

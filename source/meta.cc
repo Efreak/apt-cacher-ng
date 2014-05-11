@@ -339,20 +339,18 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted)
 {
 	tStrDeq srcs;
 #ifdef HAVE_WORDEXP
-	wordexp_t p;
-	memset(&p, 0, sizeof(p));
-    if(0==wordexp(pattern.c_str(), &p, 0))
-    {
-    	for(char **s=p.we_wordv; s<p.we_wordv+p.we_wordc;s++)
-    		srcs.push_back(*s);
-    	wordfree(&p);
-    }
-    if(bSorted) MYSTD::sort(srcs.begin(), srcs.end());
+	auto p=wordexp_t();
+	if(0==wordexp(pattern.c_str(), &p, 0))
+	{
+		for(char **s=p.we_wordv; s<p.we_wordv+p.we_wordc;s++)
+			srcs.push_back(*s);
+		wordfree(&p);
+	}
+	if(bSorted) MYSTD::sort(srcs.begin(), srcs.end());
 #elif defined(HAVE_GLOB)
-	glob_t p;
-	memset(&p, 0, sizeof(p));
+	auto p=glob_t();
 	if(0==glob(pattern.c_str(), GLOB_DOOFFS | (bSorted ? 0 : GLOB_NOSORT),
-			NULL, &p))
+				NULL, &p))
 	{
 		for(char **s=p.gl_pathv; s<p.gl_pathv+p.gl_pathc;s++)
 			srcs.push_back(*s);
