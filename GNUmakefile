@@ -4,15 +4,8 @@ ifneq ($(DEBUG),)
 	 CMAKEOPTS += -DADDDEBUGSRC=1 --debug-trycompile --debug-output
 endif
 
-ifneq ($(CXXFLAGS),)
-CMAKEOPTS += "-DCMAKE_CXX_FLAGS=$(CXXFLAGS)"
-else
-CMAKEOPTS += "-DCMAKE_CXX_FLAGS=-g -O3 -Wall"
-endif
-
-ifneq ($(LDFLAGS),)
-CMAKEOPTS += "-DCMAKE_EXE_LINKER_FLAGS=$(LDFLAGS)"
-endif
+export CXXFLAGS
+export LDFLAGS
 
 DBTMP=dbgen/tmp
 

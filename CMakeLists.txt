@@ -20,21 +20,56 @@ INCLUDE(CheckIncludeFiles)
 SET(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
-# common required flags
-SET(FLAGS_MIN " -pthread -Wall -D_FILE_OFFSET_BITS=64 -std=c++11 ")
+# common required flags to be used later for CMAKE_REQUIRED_FLAGS, CXXFLAGS
+# (via initial CMAKE_REQUIRED_FLAGS) can override them
+SET(FLAGS_MIN " -pthread -g -O3 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_REQUIRED_FLAGS}")
+# not so for linker flags, get them from environment if available
+SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS} $ENV{LDFLAGS}")
 
 IF(CMAKE_SYSTEM MATCHES "Darwin")
    SET(FLAGS_MIN " ${FLAGS_MIN} -D_DARWIN_C_SOURCE ")
 ENDIF(CMAKE_SYSTEM MATCHES "Darwin")
+
+SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
+
+# Various feature checks
 CHECK_INCLUDE_FILES ("sys/param.h;sys/mount.h" HAVE_SYS_MOUNT_H)
 CHECK_INCLUDE_FILES ("sys/vfs.h" HAVE_SYS_VFS_H)
 
-#SET(CMAKE_REQUIRED_FLAGS " -std=gnu++0x ")
-#CHECK_CXX_SOURCE_COMPILES("int main() {return 0;}" NEEDS_GNU_0x)
-#if(NEEDS_GNU_0x)
-#   SET(FLAGS_MIN " ${FLAGS_MIN} -std=gnu++0x ")
-#endif(NEEDS_GNU_0x)
+# if the compiler knows the switch, use it, otherwise try to work without it
+SET(CXX11_TESTSRC "struct z{int a=3;}; int main(){int a[3];for(auto x:a) return x;}")
+# if the compiler knows the switch, use it, otherwise try to work without it
+SET(CMAKE_REQUIRED_FLAGS " ${FLAGS_MIN} -std=c++11 ")
+CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" SET_CXX11_FLAGS)
+if(SET_CXX11_FLAGS)
+   SET(FLAGS_MIN ${CMAKE_REQUIRED_FLAGS})
+else(SET_CXX11_FLAGS)
+   SET(CMAKE_REQUIRED_FLAGS ${FLAGS_MIN})
+   CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" CXX11_IS_DEFAULT)
+   IF(NOT CXX11_IS_DEFAULT)
+      message(FATAL_ERROR "Error: failed to configure compiler for C++11 support. For GCC, version 4.7 or newer is required.")
+   ENDIF(NOT CXX11_IS_DEFAULT)
+endif(SET_CXX11_FLAGS)
 
+SET(CMAKE_REQUIRED_FLAGS "${FLAGS_MIN} -flto")
+SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN} -flto ")
+CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_LTO)
+if(USE_LTO)
+   SET(FLAGS_MIN ${CMAKE_REQUIRED_FLAGS})
+   SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
+else(USE_LTO)
+   SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
+endif(USE_LTO)
+
+
+SET(CMAKE_REQUIRED_FLAGS ${FLAGS_MIN})
+SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}  -Wl,--as-needed ")
+CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_WLASNEEDED)
+if(USE_WLASNEEDED)
+   SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
+else(USE_WLASNEEDED)
+   SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
+endif(USE_WLASNEEDED)
 
 #INCLUDE(FindZLIB) # broken, hangs for 10 seconds
 # header check should be enough, gzip should be everywhere nowadays
@@ -57,15 +92,7 @@ else (BZIP2_FOUND)
    message("apt-cacher-ng requires bzip2 library and development files for bz2 format support")
 endif (BZIP2_FOUND)
 
-
-SET(CMAKE_REQUIRED_FLAGS " ${FLAGS_MIN} -Wl,--as-needed")
-SET(TESTSRC "int main() {return 0;}")
-CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_WL_AS_NEEDED)
-
-# this flags are set to common base for the rest of the tests
-SET(CMAKE_REQUIRED_FLAGS " ${FLAGS_MIN} ")
-
-
+SET(CMAKE_REQUIRED_FLAGS ${FLAGS_MIN})
 SET(CMAKE_REQUIRED_LIBRARIES lzma)
 SET(TESTSRC "
 #include <lzma.h>
@@ -226,13 +253,17 @@ endif(NOT HAVE_BOOST_SMARTPTR)
 
 SET(CMAKE_REQUIRED_LIBRARIES dl)
 CHECK_CXX_SOURCE_COMPILES("#include \"${CMAKE_SOURCE_DIR}/include/testdlopen.h\"" HAVE_DLOPEN)
-SET(CMAKE_REQUIRED_LIBRARIES "")
 
 # maybe enable workaround for platforms with a weird implementation
 SET(CMAKE_REQUIRED_LIBRARIES pthread)
 CHECK_CXX_SOURCE_RUNS("#include \"${CMAKE_SOURCE_DIR}/include/testpthread.h\"" PTHREAD_COND_TIMEDWAIT_TIME_RANGE_OK)
-SET(CMAKE_REQUIRED_LIBRARIES "")
 
+
+##################################
+# All checks done, start building
+
+SET(CMAKE_REQUIRED_LIBRARIES "")
+SET(CMAKE_REQUIRED_FLAGS ${FLAGS_MIN})
 
 FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
 ADD_EXECUTABLE(apt-cacher-ng ${SRCS})
@@ -241,12 +272,11 @@ TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList})
 
 SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES COMPILE_FLAGS ${FLAGS_MIN})
 
-
 ADD_EXECUTABLE(in.acng client/client.cc)
 SET_TARGET_PROPERTIES(in.acng PROPERTIES COMPILE_FLAGS ${FLAGS_MIN})
 
 IF(HAVE_WL_AS_NEEDED)
-SET_TARGET_PROPERTIES(in.acng apt-cacher-ng PROPERTIES LINK_FLAGS  -Wl,--as-needed)
+SET_TARGET_PROPERTIES(in.acng apt-cacher-ng PROPERTIES LINK_FLAGS)
 # funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used
 # there). However, it needs to be investigated - the alternative linking makes
 # the binary 40kb larger, might include higher relocation costs and bigger
@@ -278,7 +308,7 @@ SET(TESTSRC "
 #include <fuse.h>
 int main() { return 0; }
 ")
-SET(CMAKE_REQUIRED_FLAGS ${fuse_cflags})
+SET(CMAKE_REQUIRED_FLAGS " ${FLAGS_MIN} ${fuse_cflags}")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_FUSE_25)
 
 if(fuse_FOUND AND HAVE_FUSE_25)
@@ -295,11 +325,6 @@ if(fuse_FOUND AND HAVE_FUSE_25)
    else(HAVE_DLOPEN)
       TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS} ${SSL_LIB_LIST})
    endif(HAVE_DLOPEN)
-
-   IF(HAVE_WL_AS_NEEDED)
-      SET_TARGET_PROPERTIES(acngfs PROPERTIES LINK_FLAGS  -Wl,--as-needed)
-   ENDIF(HAVE_WL_AS_NEEDED)
-
 
 else(fuse_FOUND AND HAVE_FUSE_25)
    message("FUSE not found or not compatible, not building acngfs")
