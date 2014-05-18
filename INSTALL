@@ -39,3 +39,13 @@ Configuration:
  - for apt clients, there is a config snipped in contrib/10-apt-cacher-ng.conf
    which might be installed into /etc/apt/apt.conf.d/.
 
+Special flags:
+
+Certain variables can be passed to the make command via call arguments or
+environment variables to customize the build.
+
+ - DEBUG=1 : creates binaries with additional debugging code included. Warning:
+   extremelly increased log size.
+ - CXX : overrides the default compiler (for example, CXX=clang++-3.0)
+ - CXXFLAGS : parameters passed to the compiler after the default ones
+ - LDFLAGS : parameters passed to the linker call (compiler call for linking)
