@@ -996,17 +996,30 @@ void tCacheMan::UpdateIndexFiles()
 		}
 	}
 
+	auto dbgDump = [&](const char *msg) {
 #ifdef DEBUG
-	for(const auto& cp : m_eqClasses)
-	{
-		SendFmt<<"__TID: " << cp.first.first<<cp.first.second<<"<br>\n"
-			<< "bz2TID:" << cp.second.bz2VersContId.first<< cp.second.bz2VersContId.second<<"<br>\n"
-			<< "idxTID:"<<cp.second.diffIdxId.first << cp.second.diffIdxId.second <<"<br>\n"
-			<< "Paths:<br>\n";
-		for(const auto& path : cp.second.paths)
-			SendFmt<<"&nbsp;&nbsp;&nbsp;" << path <<"<br>\n";
-	}
+		tSS jo;
+		jo << "#########################################################################<br>\n"
+			<< "## " <<  msg  << "<br>\n"
+			<< "#########################################################################<br>\n";
+		for(const auto& cp : m_eqClasses)
+		{
+			jo <<"TID: " 
+				<< cp.first.first<<cp.first.second<<"<br>\n"
+				<< "bz2TID:" << cp.second.bz2VersContId.first
+				<< cp.second.bz2VersContId.second<<"<br>\n"
+				<< "idxTID:"<<cp.second.diffIdxId.first 
+                                << cp.second.diffIdxId.second <<"<br>\n"
+				<< "Paths:<br>\n";
+			for(const auto& path : cp.second.paths)
+				jo <<"&nbsp;&nbsp;&nbsp;" << path <<"<br>\n";
+		}
+		SendChunk(jo);
+#else
+		(void) msg;
 #endif
+	};
+	dbgDump("After class building:");
 
 	if(CheckStopSignal())
 		return;
@@ -1036,6 +1049,7 @@ void tCacheMan::UpdateIndexFiles()
 			m_eqClasses.erase(it++);
 	}
 	ERRMSGABORT;
+	dbgDump("Refined (1):");
 
 	// Let the most recent files be in the front of the list, but the uncompressed ones have priority
 	for(tContId2eqClass::iterator it=m_eqClasses.begin(); it!=m_eqClasses.end();it++)
@@ -1048,22 +1062,7 @@ void tCacheMan::UpdateIndexFiles()
 			SetFlags(*its).bros=&(it->second.paths);
 		}
 	}
-
-#ifdef DEBUG
-	for(tContId2eqClass::iterator it=m_eqClasses.begin(); it!=m_eqClasses.end();it++)
-	{
-		SendFmt<<"TID: " << it->first.first<<it->first.second<<"<br>"
-				<< "bz2TID:" << it->second.bz2VersContId.first<< it->second.bz2VersContId.second<<"<br>"
-				<< "idxTID:"<<it->second.diffIdxId.first << it->second.diffIdxId.second <<"<br>"
-				<< "Paths:<br>";
-		for(tStrDeq::const_iterator its=it->second.paths.begin();
-				its!=it->second.paths.end(); its++)
-		{
-			SendFmt<<"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << *its<<"<br>";
-		}
-	}
-	SendChunk("<br><br><b>FOLLOWING VOID WHICH BINDS</b><br><br>");
-#endif
+	dbgDump("Refined (2):");
 
 	DelTree(SABSPATH("_actmp")); // do one to test the permissions
 	/* wrong check but ignore for now
@@ -1268,6 +1267,8 @@ void tCacheMan::UpdateIndexFiles()
 		if(CheckStopSignal())
 			return;
 	}
+
+	dbgDump("Refined (3):");
 
 	MTLOGDEBUG("<br><br><b>NOW GET THE REST</b><br><br>");
 
