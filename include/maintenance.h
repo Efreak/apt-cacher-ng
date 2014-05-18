@@ -36,7 +36,7 @@ protected:
 	void SendChunk(const char *data, size_t size, bool bRemoteOnly=false);
 	inline void SendChunk(const char *x, bool b=false) { SendChunk(x, x?strlen(x):0, b); }
 	// for customization in base classes
-	virtual void AfterSendChunk(const char *data, size_t size) {};
+	virtual void AfterSendChunk(const char* /*data*/, size_t /*size*/) {};
 
 	bool SendRawData(const char *data, size_t len, int flags);
 	virtual void EndTransfer();

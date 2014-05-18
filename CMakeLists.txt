@@ -278,8 +278,7 @@ SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES COMPILE_FLAGS ${FLAGS_MIN})
 ADD_EXECUTABLE(in.acng client/client.cc)
 SET_TARGET_PROPERTIES(in.acng PROPERTIES COMPILE_FLAGS ${FLAGS_MIN})
 
-IF(HAVE_WL_AS_NEEDED)
-SET_TARGET_PROPERTIES(in.acng apt-cacher-ng PROPERTIES LINK_FLAGS)
+#IF(HAVE_WL_AS_NEEDED)
 # funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used
 # there). However, it needs to be investigated - the alternative linking makes
 # the binary 40kb larger, might include higher relocation costs and bigger
@@ -287,7 +286,7 @@ SET_TARGET_PROPERTIES(in.acng apt-cacher-ng PROPERTIES LINK_FLAGS)
 # server process.
 #TARGET_LINK_LIBRARIES(in.acng supc++)
 #SET_TARGET_PROPERTIES(in.acng PROPERTIES LINKER_LANGUAGE C)
-ENDIF(HAVE_WL_AS_NEEDED)
+#ENDIF(HAVE_WL_AS_NEEDED)
 
 
 ############################################

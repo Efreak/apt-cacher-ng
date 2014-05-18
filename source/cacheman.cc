@@ -996,20 +996,17 @@ void tCacheMan::UpdateIndexFiles()
 		}
 	}
 
-	/*
-	for(tContId2eqClass::iterator it=m_eqClasses.begin(); it!=m_eqClasses.end();it++)
+#ifdef DEBUG
+	for(const auto& cp : m_eqClasses)
 	{
-		SendFmt<<"__TID: " << it->first.first<<it->first.second<<"<br>"
-				<< "bz2TID:" << it->second.bz2VersContId.first<< it->second.bz2VersContId.second<<"<br>"
-				<< "idxTID:"<<it->second.diffIdxId.first << it->second.diffIdxId.second <<"<br>"
-				<< "Paths:<br>";
-		for(tStrDeq::const_iterator its=it->second.paths.begin();
-				its!=it->second.paths.end(); its++)
-		{
-			SendFmt<<"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << *its<<"<br>";
-		}
+		SendFmt<<"__TID: " << cp.first.first<<cp.first.second<<"<br>\n"
+			<< "bz2TID:" << cp.second.bz2VersContId.first<< cp.second.bz2VersContId.second<<"<br>\n"
+			<< "idxTID:"<<cp.second.diffIdxId.first << cp.second.diffIdxId.second <<"<br>\n"
+			<< "Paths:<br>\n";
+		for(const auto& path : cp.second.paths)
+			SendFmt<<"&nbsp;&nbsp;&nbsp;" << path <<"<br>\n";
 	}
-	*/
+#endif
 
 	if(CheckStopSignal())
 		return;
