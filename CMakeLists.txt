@@ -38,11 +38,25 @@ CHECK_INCLUDE_FILES ("sys/vfs.h" HAVE_SYS_VFS_H)
 
 # if the compiler knows the switch, use it, otherwise try to work without it
 SET(CXX11_TESTSRC "struct z{int a=3;}; int main(){int a[3];for(auto x:a) return x;}")
+
 # if the compiler knows the switch, use it, otherwise try to work without it
 SET(CMAKE_REQUIRED_FLAGS " ${FLAGS_MIN} -std=c++11 ")
 CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" SET_CXX11_FLAGS)
 if(SET_CXX11_FLAGS)
    SET(FLAGS_MIN ${CMAKE_REQUIRED_FLAGS})
+
+# also look for a very specific cygwin bug
+SET(GNU11_BUGSRC "
+#include <cstdio>
+int main() { char buf[20]; return snprintf(buf,3,0); }
+")
+CHECK_CXX_SOURCE_COMPILES("${GNU11_BUGSRC}" HAS_NOGNU11BUG)
+if(NOT HAS_NOGNU11BUG)
+message("WARNING: this compiler seems to have an old bug with missing definitions, trying to workaround. See http://cygwin.com/ml/cygwin/2012-04/msg00140.html for details.")
+   SET(FLAGS_MIN " ${CMAKE_REQUIRED_FLAGS} -std=gnu++11 " )
+endif(NOT HAS_NOGNU11BUG)
+
+
 else(SET_CXX11_FLAGS)
    SET(CMAKE_REQUIRED_FLAGS ${FLAGS_MIN})
    CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" CXX11_IS_DEFAULT)

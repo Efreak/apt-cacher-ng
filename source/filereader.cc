@@ -26,11 +26,11 @@
 #else
 
 #ifndef HAVE_ZLIB
-#warning Zlib or its development files are not available. Install them (e.g. zlib1g-dev) and run "make clean". Gzip format support disabled.
+#warning Zlib or its development files are not available. Install them (e.g. zlib1g-dev) and run "make distclean". Gzip format support disabled.
 #endif
 
 #ifndef HAVE_LIBBZ2
-#warning LibBz2 or its development files are not available. Install them (e.g. libbz2-dev) and run "make clean". Bzip2 format support disabled.
+#warning LibBz2 or its development files are not available. Install them (e.g. libbz2-dev) and run "make distclean". Bzip2 format support disabled.
 #endif
 
 #endif
