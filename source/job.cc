@@ -531,7 +531,7 @@ void job::PrepareDownload() {
 			m_sMaintCmd="/";
 			return;
 		}
-		LOG("refined path: " << tUrl.sPath);
+		LOG("refined path: " << tUrl.sPath << "\n on host: " << tUrl.sHost);
 
 		char *pEnd(0);
 		UINT nPort = 80;

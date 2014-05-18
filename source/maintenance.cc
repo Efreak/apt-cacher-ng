@@ -15,6 +15,8 @@
 #include "sockio.h"
 #include "caddrinfo.h"
 
+#include "debug.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -185,6 +187,8 @@ string & tWUIPage::GetHostname()
 #warning FIXME, something is wrong, dispatches allways to the maint page
 void DispatchAndRunMaintTask(cmstring &cmd, int conFD, const char * szAuthLine)
 {
+	LOGSTARTs("DispatchAndRunMaintTask");
+	LOG("cmd: " << cmd);
 	tWUIPage *pWorker(NULL);
 	if(!szAuthLine)
 		szAuthLine="";
@@ -239,10 +243,14 @@ void DispatchAndRunMaintTask(cmstring &cmd, int conFD, const char * szAuthLine)
 			else if(cmd.find("doCount=")!=stmiss)
 				pWorker = new tStaticFileSend(conFD, "report.html", "text/html", "200 OK");
 			else // ok... just show the default page
+			{
+				LOG("Unknown operation, fall back to default admin page");
 				goto l_show_cnc;
+			}
 		}
-		else if (cmd.compare(1, acfg::reportpage.length(), acfg::reportpage) == 0)
+		else if (!acfg::reportpage.empty() && cmd.compare(1, acfg::reportpage.length(), acfg::reportpage) == 0)
 		{
+			LOG("matched admin page: " << acfg::reportpage);
 			l_show_cnc:
 			pWorker = new tStaticFileSend(conFD, "report.html", "text/html", "200 OK");
 		}
