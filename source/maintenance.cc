@@ -69,11 +69,30 @@ void tWUIPage::SendChunk(const char *data, size_t len, bool bRemoteOnly)
 		return;
 	}
 
-	char buf[23];
-	int l=sprintf(buf, "%x\r\n", (UINT) len);
-	SendRawData(buf, l, MSG_MORE|MSG_NOSIGNAL);
-	SendRawData(data, len, MSG_MORE|MSG_NOSIGNAL);
-	SendRawData("\r\n", 2, MSG_NOSIGNAL);
+	if(len>135)
+	{
+		// send HTTP chunk header
+		char buf[23];
+		int l=sprintf(buf, "%x\r\n", (UINT) len);
+		SendRawData(buf, l, MSG_MORE|MSG_NOSIGNAL);
+		SendRawData(data, len, MSG_MORE|MSG_NOSIGNAL);
+		SendRawData("\r\n", 2, MSG_NOSIGNAL);
+	}
+	else
+	{
+#warning Make performance evaluation, maybe this is nonsense after all
+		/*
+		 *
+		 * /var/log/apt-cacher-ng $ cat maint* | perl -e '$max=135; while(<>) { $cnt++; $l=length($_); $x{$l}++; }; sub END{ for(sort(keys(%x))) {print "$x{$_} len $_\n"; $bel+=$x{$_} if $_<$max;}; print $bel/$cnt*100 . "% unter max $max\n";}'
+
+		 * */
+
+		char buf[160];
+		int l=sprintf(buf, "%x\r\n", (UINT) len);
+		memcpy(buf+l, data, len);
+                memcpy(buf+l+len, "\r\n", 2);
+		SendRawData(buf, l+len+2, MSG_NOSIGNAL);
+	}
 
 	if(!bRemoteOnly)
 		AfterSendChunk(data, len);
@@ -163,6 +182,7 @@ string & tWUIPage::GetHostname()
 	return m_sHostname;
 }
 
+#warning FIXME, something is wrong, dispatches allways to the maint page
 void DispatchAndRunMaintTask(cmstring &cmd, int conFD, const char * szAuthLine)
 {
 	tWUIPage *pWorker(NULL);
