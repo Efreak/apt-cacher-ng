@@ -351,15 +351,16 @@ errnoFmter::errnoFmter(const char *prefix)
 
 #ifdef DEBUG
 
-static lockable mx_dbgStackMark;
-MYMAP<pthread_t, int> stackDepths;
+static class : public lockable, public MYMAP<pthread_t, int>
+{} stackDepths;
+
 t_logger::t_logger(const char *szFuncName,  const void * ptr)
 {
 	m_id = pthread_self();
 	m_szName = szFuncName;
 	callobj = uintptr_t(ptr);
 	{
-		lockguard __lockguard(&mx_dbgStackMark);
+		lockguard __lockguard(stackDepths);
 		m_nLevel = stackDepths[m_id]++;
 	}
 	// writing to the level of parent since it's being "created there"
@@ -373,7 +374,7 @@ t_logger::~t_logger()
 	m_nLevel--;
 	GetFmter() << "<< " << m_szName << " ["<<m_id<<" | "<<callobj <<"]";
 	Write();
-	lockguard __lockguard(&mx_dbgStackMark);
+	lockguard __lockguard(stackDepths);
 	stackDepths[m_id]--;
 	if(0 == stackDepths[m_id])
 		stackDepths.erase(m_id);

@@ -335,24 +335,22 @@ string tHttpUrl::ToURI(bool bUrlEscaped) const
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 
-tStrDeq ExpandFilePattern(const string &pattern, bool bSorted)
+tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted)
 {
 	tStrDeq srcs;
 #ifdef HAVE_WORDEXP
-	wordexp_t p;
-	memset(&p, 0, sizeof(p));
-    if(0==wordexp(pattern.c_str(), &p, 0))
-    {
-    	for(char **s=p.we_wordv; s<p.we_wordv+p.we_wordc;s++)
-    		srcs.push_back(*s);
-    	wordfree(&p);
-    }
-    if(bSorted) MYSTD::sort(srcs.begin(), srcs.end());
+	auto p=wordexp_t();
+	if(0==wordexp(pattern.c_str(), &p, 0))
+	{
+		for(char **s=p.we_wordv; s<p.we_wordv+p.we_wordc;s++)
+			srcs.push_back(*s);
+		wordfree(&p);
+	}
+	if(bSorted) MYSTD::sort(srcs.begin(), srcs.end());
 #elif defined(HAVE_GLOB)
-	glob_t p;
-	memset(&p, 0, sizeof(p));
+	auto p=glob_t();
 	if(0==glob(pattern.c_str(), GLOB_DOOFFS | (bSorted ? 0 : GLOB_NOSORT),
-			NULL, &p))
+				NULL, &p))
 	{
 		for(char **s=p.gl_pathv; s<p.gl_pathv+p.gl_pathc;s++)
 			srcs.push_back(*s);
@@ -550,7 +548,7 @@ inline bool is_safe_url_char(char c)
 
 void UrlEscapeAppend(cmstring &s, mstring &sTarget)
 {
-	for(cmstring::const_iterator it=s.begin(); it!=s.end();++it)
+	for(auto it=s.begin(); it!=s.end();++it)
 	{
 		if(is_safe_url_char(*it))
 			sTarget+=*it;
@@ -589,7 +587,7 @@ mstring DosEscape(cmstring &s)
 bool UrlUnescapeAppend(cmstring &from, mstring & to)
 {
 	bool ret=true;
-	for(string::size_type i=0; i<from.length(); i++)
+	for(tStrPos i=0; i<from.length(); i++)
 	{
 		if(from[i] != '%')
 			to+=from[i];

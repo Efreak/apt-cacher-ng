@@ -528,10 +528,10 @@ void job::PrepareDownload() {
 		
 		if(!tUrl.SetHttpUrl(sReqPath, false))
 		{
-			m_sMaintCmd="/";
+			m_eMaintWorkType=tSpecialRequest::workUSERINFO;
 			return;
 		}
-		LOG("refined path: " << tUrl.sPath);
+		LOG("refined path: " << tUrl.sPath << "\n on host: " << tUrl.sHost);
 
 		char *pEnd(0);
 		UINT nPort = 80;
@@ -560,18 +560,13 @@ void job::PrepareDownload() {
 
 		LOG("input uri: "<<tUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode);
 
-		tStrPos nRepNameLen=acfg::reportpage.size();
-		if(nRepNameLen>0)
+		if(!acfg::reportpage.empty())
 		{
-			if(startsWith(tUrl.sHost, acfg::reportpage))
+			m_eMaintWorkType = tSpecialRequest::DispatchMaintWork(sReqPath,
+					m_pReqHead->h[header::AUTHORIZATION]);
+			if(m_eMaintWorkType != tSpecialRequest::workNotSpecial)
 			{
-				m_sMaintCmd=sReqPath;
-				return;
-			}
-			if (tUrl.sHost == "style.css")
-			{
-				LOG("support CSS style file");
-				m_sMaintCmd = "/style.css";
+				m_sFileLoc = sReqPath;
 				return;
 			}
 		}
@@ -591,7 +586,7 @@ void job::PrepareDownload() {
 		if(!tUrl.sPath.empty() && endsWithSzAr(tUrl.sPath, "/"))
 		{
 			LOG("generic user information page");
-			m_sMaintCmd="/";
+			m_eMaintWorkType=tSpecialRequest::workUSERINFO;
 			return;
 		}
 
@@ -738,10 +733,10 @@ job::eJobResult job::SendData(int confd, int nAllJobCount)
 {
 	LOGSTART("job::SendData");
 
-	if(!m_sMaintCmd.empty())
+	if(m_eMaintWorkType)
 	{
-		DispatchAndRunMaintTask(m_sMaintCmd, confd, m_pReqHead->h[header::AUTHORIZATION]);
-			return R_DISCON; // just stop and close connection
+		tSpecialRequest::RunMaintWork(m_eMaintWorkType, m_sFileLoc, confd);
+		return R_DISCON; // just stop and close connection
 	}
 	
 	off_t nGoodDataSize(0);
@@ -1027,7 +1022,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 			bool bFreshnessForced = (m_type != rechecks::FILE_INDEX
 				|| m_pReqHead->h[header::ACNGFSMARK] || !pIfmo);
 
-			struct tm tm1={0}, tm2={0};
+			auto tm1=tm(), tm2=tm();
 			bool bIfModSeenAndChecked=false;
 			if(pIfmo && header::ParseDate(pIfmo, &tm1) && header::ParseDate(pLastMo, &tm2))
 			{

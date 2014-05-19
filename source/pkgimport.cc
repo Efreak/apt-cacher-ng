@@ -34,11 +34,6 @@ using namespace MYSTD;
  *
 */
 
-pkgimport::pkgimport(int fd) : tCacheMan(fd), m_bLookForIFiles(false)
-{
-	m_sTypeName="File Import";
-}
-
 /*
 inline bool IsIndexDiff(const string & sPath)
 {

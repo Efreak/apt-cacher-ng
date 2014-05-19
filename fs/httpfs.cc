@@ -149,14 +149,14 @@ struct tDlDescLocal : public tDlDesc
 	}
 };
 
-static lockable mxCache;
 struct tFileId
 { off_t m_size; mstring m_ctime;
 tFileId() : m_size(0) {};
 tFileId(off_t a, mstring b) : m_size(a), m_ctime(b) {};
 bool operator!=(tFileId other) const { return m_size != other.m_size || m_ctime != other.m_ctime;}
 };
-static map<string, tFileId> remote_info_cache;
+static class : public lockable, public map<string, tFileId>
+{} remote_info_cache;
 
 struct tDlDescRemote : public tDlDesc
 {
@@ -298,7 +298,7 @@ public:
 		};
 
 		{
-			lockguard g(mxCache);
+			lockguard g(remote_info_cache);
 			map<string, tFileId>::const_iterator it = remote_info_cache.find(path);
 			if (it != remote_info_cache.end())
 				fid = it->second;
@@ -316,7 +316,7 @@ public:
 
 		if (m_ftype == rechecks::FILE_PKG && fidOrig != fid)
 		{
-			lockguard g(mxCache);
+			lockguard g(remote_info_cache);
 			remote_info_cache[m_path] = fid;
 		}
 
@@ -331,7 +331,7 @@ public:
 	{
 		stbuf = statTempl;
 		{
-			lockguard g(mxCache);
+			lockguard g(remote_info_cache);
 			map<string, tFileId>::const_iterator it = remote_info_cache.find(m_path);
 			if (it != remote_info_cache.end())
 			{
@@ -393,7 +393,7 @@ public:
 		{
 			if (m_ftype == rechecks::FILE_PKG) // not caching volatile stuff
 			{
-				lockguard g(mxCache);
+				lockguard g(remote_info_cache);
 				remote_info_cache[m_path] =
 						tFileId(stbuf.st_size, probe->GetHeaderUnlocked().h[header::LAST_MODIFIED]);
 			}

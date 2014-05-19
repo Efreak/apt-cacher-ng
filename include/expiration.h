@@ -3,25 +3,12 @@
 
 #include "cacheman.h"
 
-class expiration : public tCacheMan, ifileprocessor
+class expiration : public tCacheOperation, ifileprocessor
 {
 public:
-
-	enum workType
-	{
-		expire,
-		list,
-		purge,
-		listDamaged,
-		purgeDamaged,
-		truncDamaged
-	};
-	expiration(int fd, workType type);
-	virtual ~expiration();
+	using tCacheOperation::tCacheOperation;
 
 protected:
-
-	workType m_mode;
 
 	tS2DAT m_trashCandSet;
 	set<tFileNdir> m_trashCandHeadSet; // just collect the list of seen head files
@@ -30,15 +17,15 @@ protected:
 	void LoadPreviousData(bool bForceInsert);
 
 	// callback implementations
-	virtual void Action(const mstring &);
+	virtual void Action(const mstring &) override;
 	// for FileHandler
-	virtual bool ProcessRegular(const mstring &sPath, const struct stat &);
+	virtual bool ProcessRegular(const mstring &sPath, const struct stat &) override;
 
 	// for ifileprocessor
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUnpackForCsumming);
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUnpackForCsumming) override;
 
 	virtual void UpdateFingerprint(const mstring &sPathRel, off_t nOverrideSize,
-				uint8_t *pOverrideSha1, uint8_t *pOverrideMd5);
+				uint8_t *pOverrideSha1, uint8_t *pOverrideMd5) override;
 
 	void LoadHints();
 
@@ -46,11 +33,11 @@ protected:
 
 	void DropExceptionalVersions();
 
-	std::ofstream m_damageList;
-	bool m_bIncompleteIsDamaged;
+	MYSTD::ofstream m_damageList;
+	bool m_bIncompleteIsDamaged = false;
 
 private:
-	int m_nPrevFailCount;
+	int m_nPrevFailCount =0;
 	bool CheckAndReportError();
 };
 

@@ -72,10 +72,11 @@ inline void checkForceFclose(FILE* &fh)
 
 struct FILE_RAII
 {
-	FILE *p;
-	inline FILE_RAII() : p(NULL) {}
-	inline void close() { checkForceFclose(p); };
+	FILE *p = NULL;
+	inline FILE_RAII() {};
 	inline ~FILE_RAII() { close(); }
+	operator FILE* () const { return p; }
+	inline void close() { checkForceFclose(p); };
 private:
 	FILE_RAII(const FILE_RAII&);
 	FILE_RAII operator=(const FILE_RAII&);

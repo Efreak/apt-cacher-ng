@@ -10,7 +10,7 @@
 
 class fileitem;
 typedef SHARED_PTR<fileitem> tFileItemPtr;
-typedef MYSTD::multimap<mstring, tFileItemPtr> tFiGlobMap;
+class tFiGlobMap : public lockable, public MYSTD::multimap<mstring, tFileItemPtr> {};
 
 //! Base class containing all required data and methods for communication with the download sources
 class fileitem : public condition
@@ -104,10 +104,10 @@ public:
 	inline fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
 	virtual ~fileitem_with_storage();
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
-	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow);
+	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
 	virtual bool DownloadStartedStoreHeader(const header & h, const char *pNextData,
-			bool bForcedRestart, bool&);
-	virtual bool StoreFileData(const char *data, unsigned int size);
+			bool bForcedRestart, bool&) override;
+	virtual bool StoreFileData(const char *data, unsigned int size) override;
 
 	inline static mstring NormalizePath(cmstring &sPathRaw)
 	{

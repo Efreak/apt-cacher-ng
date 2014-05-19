@@ -35,8 +35,8 @@ static cmstring sPatchResRel("_actmp/patch.result");
 static unsigned int nKillLfd=1;
 time_t m_gMaintTimeNow=0;
 
-tCacheMan::tCacheMan(int fd) :
-	tWuiBgTask(fd),
+tCacheOperation::tCacheOperation(int fd, tSpecialRequest::eMaintWorkType type) :
+	tSpecOpDetachable(fd, type),
 	m_bErrAbort(false), m_bVerbose(false), m_bForceDownload(false),
 	m_bScanInternals(false), m_bByPath(false), m_bByChecksum(false), m_bSkipHeaderChecks(false),
 	m_bNeedsStrictPathsHere(false), m_bTruncateDamaged(false),
@@ -48,26 +48,26 @@ tCacheMan::tCacheMan(int fd) :
 
 }
 
-tCacheMan::~tCacheMan()
+tCacheOperation::~tCacheOperation()
 {
 	delete m_pDlcon;
 	m_pDlcon=NULL;
 }
 
-bool tCacheMan::ProcessOthers(const string & sPath, const struct stat &)
+bool tCacheOperation::ProcessOthers(const string & sPath, const struct stat &)
 {
 	// NOOP
 	return true;
 }
 
-bool tCacheMan::ProcessDirAfter(const string & sPath, const struct stat &)
+bool tCacheOperation::ProcessDirAfter(const string & sPath, const struct stat &)
 {
 	// NOOP
 	return true;
 }
 
 
-bool tCacheMan::AddIFileCandidate(const string &sPathRel)
+bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 {
 	if(sPathRel.empty())
 		return false;
@@ -87,7 +87,7 @@ bool tCacheMan::AddIFileCandidate(const string &sPathRel)
 	return false;
 }
 
-const tCacheMan::tIfileAttribs & tCacheMan::GetFlags(cmstring &sPathRel) const
+const tCacheOperation::tIfileAttribs & tCacheOperation::GetFlags(cmstring &sPathRel) const
 {
 	tS2IDX::const_iterator it=m_indexFilesRel.find(sPathRel);
 	if(m_indexFilesRel.end()==it)
@@ -95,13 +95,13 @@ const tCacheMan::tIfileAttribs & tCacheMan::GetFlags(cmstring &sPathRel) const
 	return it->second;
 }
 
-tCacheMan::tIfileAttribs &tCacheMan::SetFlags(cmstring &sPathRel)
+tCacheOperation::tIfileAttribs &tCacheOperation::SetFlags(cmstring &sPathRel)
 {
 	ASSERT(!sPathRel.empty());
 	return sPathRel.empty() ? attr_dummy : m_indexFilesRel[sPathRel];
 }
 
-bool tCacheMan::IsDeprecatedArchFile(cmstring &sFilePathRel)
+bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 {
 	tStrPos pos = sFilePathRel.rfind("/dists/");
 	if(pos == stmiss)
@@ -159,7 +159,7 @@ bool tCacheMan::IsDeprecatedArchFile(cmstring &sFilePathRel)
 }
 
 
-bool tCacheMan::Download(const MYSTD::string & sFilePathRel, bool bIndexFile,
+bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFile,
 		int nVerbosity, tGetItemDelegate *pItemDelg, const char *pForcedURL)
 {
 
@@ -362,7 +362,7 @@ static const string relKey("/Release"), inRelKey("/InRelease");
 inline tStrPos FindComPos(const string &s)
 {
 	tStrPos compos(stmiss);
-	for(const string *p=suxe; p<suxe+_countof(suxe) && stmiss==compos; p++)
+	for(const string *p=compSuffixes; p<compSuffixes+_countof(compSuffixes) && stmiss==compos; p++)
 		if(endsWith(s, *p))
 			compos=s.size()-p->size();
 	return compos;
@@ -370,8 +370,8 @@ inline tStrPos FindComPos(const string &s)
 static unsigned short FindCompIdx(cmstring &s)
 {
 	unsigned short i=0;
-	for(;i<_countof(suxe); i++)
-		if(endsWith(s, suxe[i]))
+	for(;i<_countof(compSuffixes); i++)
+		if(endsWith(s, compSuffixes[i]))
 			break;
 	return i;
 }
@@ -512,7 +512,7 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 	return ret.csType != CSTYPE_INVALID ? &ret : NULL;
 }
 
-bool tCacheMan::PatchFile(const string &srcRel,
+bool tCacheOperation::PatchFile(const string &srcRel,
 		const string &diffIdxPathRel, tPListConstIt pit, tPListConstIt itEnd,
 		const tFingerprint *verifData)
 {
@@ -604,7 +604,7 @@ bool tCacheMan::PatchFile(const string &srcRel,
 }
 
 // dirty little helper used to store the head and only the head to a specified location
-class fakeCon : public ::tCacheMan::tGetItemDelegate
+class fakeCon : public ::tCacheOperation::tGetItemDelegate
 {
    public:
 	cmstring & sTempDataRel, &sReferencePathRel;
@@ -640,7 +640,7 @@ class fakeCon : public ::tCacheMan::tGetItemDelegate
 	virtual ~fakeCon() {}
 };
 
-bool tCacheMan::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sReferencePathRel,
+bool tCacheOperation::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sReferencePathRel,
 		off_t nWantedSize)
 {
 	fakeCon contor(sTempDataRel, sReferencePathRel);
@@ -649,7 +649,7 @@ bool tCacheMan::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sReferencePat
 
 
 
-bool tCacheMan::Inject(cmstring &from, cmstring &to,
+bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 		bool bSetIfileFlags, bool bUpdateRefdata, const header *pHead, bool bTryLink)
 {
 	LOGSTART("tCacheMan::Inject");
@@ -689,8 +689,8 @@ bool tCacheMan::Inject(cmstring &from, cmstring &to,
 		{
 		}
 		// noone else should attempt to store file through it
-		virtual bool DownloadStartedStoreHeader(const header &, const char *,
-				bool, bool*)
+		virtual bool DownloadStartedStoreHeader(const header & h, const char *pNextData,
+				bool bForcedRestart, bool&) override
 		{
 			return false;
 		}
@@ -765,7 +765,7 @@ bool tCacheMan::Inject(cmstring &from, cmstring &to,
 }
 
 
-bool tCacheMan::Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
+bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
 		cmstring *psTmpUnpackedAbs)
 {
 #ifdef DEBUG_FLAGS
@@ -816,10 +816,10 @@ bool tCacheMan::Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassI
 		tStrPos cpos=FindComPos(*it);
 		string sBasename=it->substr(0, cpos);
 		string sux=cpos==stmiss ? "" : it->substr(FindComPos(*it));
-		for(cmstring *ps=suxeWempty; ps<suxeWempty+_countof(suxeWempty); ps++)
+		for(auto& compsuf : compSuffixesAndEmpty)
 		{
-			if(sux==*ps) continue; // touch me not
-			mstring sBro = sBasename+*ps;
+			if(sux==compsuf) continue; // touch me not
+			mstring sBro = sBasename+compsuf;
 			tS2IDX::iterator kv=m_indexFilesRel.find(sBro);
 			if(kv!=m_indexFilesRel.end() && kv->second.vfile_ondisk)
 			{
@@ -833,7 +833,7 @@ bool tCacheMan::Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassI
 
 				// if we have a freshly unpacked version and bro should be the the same
 				// and bro is older than the donor file for some reason... update bro!
-				if (psTmpUnpackedAbs && ps->empty())
+				if (psTmpUnpackedAbs && compsuf.empty())
 				{
 					struct stat stbuf;
 					time_t broModTime;
@@ -874,13 +874,13 @@ bool tCacheMan::Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassI
 	return true;
 }
 
-void tCacheMan::StartDlder()
+void tCacheOperation::StartDlder()
 {
 	if (!m_pDlcon)
 		m_pDlcon = new dlcon(true);
 }
 
-void tCacheMan::UpdateIndexFiles()
+void tCacheOperation::UpdateIndexFiles()
 {
 	LOGSTART("expiration::UpdateIndexFiles()");
 
@@ -966,7 +966,7 @@ void tCacheMan::UpdateIndexFiles()
 			string sNativeName=it->first.substr(0, FindComPos(it->first));
 			tContId sCandId=it->second;
 			// find a better one which serves as the flag content id for the whole group
-			for(cmstring *ps=suxeByLhood; ps<suxeByLhood+_countof(suxeByLhood); ps++)
+			for(cmstring *ps=compSuffixesAndEmptyByLikelyhood; ps<compSuffixesAndEmptyByLikelyhood+_countof(compSuffixesAndEmptyByLikelyhood); ps++)
 			{
 				tFile2Cid::iterator it2=recvr.m_file2cid.find(sNativeName+*ps);
 				if(it2 != recvr.m_file2cid.end())
@@ -996,20 +996,30 @@ void tCacheMan::UpdateIndexFiles()
 		}
 	}
 
-	/*
-	for(tContId2eqClass::iterator it=m_eqClasses.begin(); it!=m_eqClasses.end();it++)
-	{
-		SendFmt<<"__TID: " << it->first.first<<it->first.second<<"<br>"
-				<< "bz2TID:" << it->second.bz2VersContId.first<< it->second.bz2VersContId.second<<"<br>"
-				<< "idxTID:"<<it->second.diffIdxId.first << it->second.diffIdxId.second <<"<br>"
-				<< "Paths:<br>";
-		for(tStrDeq::const_iterator its=it->second.paths.begin();
-				its!=it->second.paths.end(); its++)
+	auto dbgDump = [&](const char *msg) {
+#ifdef DEBUG
+		tSS printBuf;
+		printBuf << "#########################################################################<br>\n"
+			<< "## " <<  msg  << "<br>\n"
+			<< "#########################################################################<br>\n";
+		for(const auto& cp : m_eqClasses)
 		{
-			SendFmt<<"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << *its<<"<br>";
+			printBuf <<"TID: " 
+				<< cp.first.first<<cp.first.second<<"<br>\n"
+				<< "bz2TID:" << cp.second.bz2VersContId.first
+				<< cp.second.bz2VersContId.second<<"<br>\n"
+				<< "idxTID:"<<cp.second.diffIdxId.first 
+                                << cp.second.diffIdxId.second <<"<br>\n"
+				<< "Paths:<br>\n";
+			for(const auto& path : cp.second.paths)
+				printBuf <<"&nbsp;&nbsp;&nbsp;" << path <<"<br>\n";
 		}
-	}
-	*/
+		SendChunk(printBuf);
+#else
+		(void) msg;
+#endif
+	};
+	dbgDump("After class building:");
 
 	if(CheckStopSignal())
 		return;
@@ -1039,6 +1049,7 @@ void tCacheMan::UpdateIndexFiles()
 			m_eqClasses.erase(it++);
 	}
 	ERRMSGABORT;
+	dbgDump("Refined (1):");
 
 	// Let the most recent files be in the front of the list, but the uncompressed ones have priority
 	for(tContId2eqClass::iterator it=m_eqClasses.begin(); it!=m_eqClasses.end();it++)
@@ -1051,22 +1062,7 @@ void tCacheMan::UpdateIndexFiles()
 			SetFlags(*its).bros=&(it->second.paths);
 		}
 	}
-
-#ifdef DEBUG
-	for(tContId2eqClass::iterator it=m_eqClasses.begin(); it!=m_eqClasses.end();it++)
-	{
-		SendFmt<<"TID: " << it->first.first<<it->first.second<<"<br>"
-				<< "bz2TID:" << it->second.bz2VersContId.first<< it->second.bz2VersContId.second<<"<br>"
-				<< "idxTID:"<<it->second.diffIdxId.first << it->second.diffIdxId.second <<"<br>"
-				<< "Paths:<br>";
-		for(tStrDeq::const_iterator its=it->second.paths.begin();
-				its!=it->second.paths.end(); its++)
-		{
-			SendFmt<<"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << *its<<"<br>";
-		}
-	}
-	SendChunk("<br><br><b>FOLLOWING VOID WHICH BINDS</b><br><br>");
-#endif
+	dbgDump("Refined (2):");
 
 	DelTree(SABSPATH("_actmp")); // do one to test the permissions
 	/* wrong check but ignore for now
@@ -1272,6 +1268,8 @@ void tCacheMan::UpdateIndexFiles()
 			return;
 	}
 
+	dbgDump("Refined (3):");
+
 	MTLOGDEBUG("<br><br><b>NOW GET THE REST</b><br><br>");
 
 	// fetch all remaining stuff
@@ -1287,8 +1285,11 @@ void tCacheMan::UpdateIndexFiles()
 
 }
 
-void tCacheMan::InstallBz2edPatchResult(tContId2eqClass::iterator eqClassIter)
+void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator eqClassIter)
 {
+#ifndef HAVE_LIBBZ2
+	return;
+#else
 	if(!acfg::recompbz2)
 		return;
 
@@ -1353,9 +1354,10 @@ void tCacheMan::InstallBz2edPatchResult(tContId2eqClass::iterator eqClassIter)
 #endif
 		Propagate(sFreshBz2Rel, eqClassIter);
 	}
+#endif
 }
 
-tCacheMan::enumIndexType tCacheMan::GuessIndexTypeFromURL(const mstring &sPath)
+tCacheOperation::enumIndexType tCacheOperation::GuessIndexTypeFromURL(const mstring &sPath)
 {
 	tStrPos pos = sPath.rfind(SZPATHSEP);
 	string sPureIfileName = (stmiss == pos) ? sPath : sPath.substr(pos + 1);
@@ -1395,7 +1397,7 @@ tCacheMan::enumIndexType tCacheMan::GuessIndexTypeFromURL(const mstring &sPath)
 	return EIDX_UNSUPPORTED;
 }
 
-bool tCacheMan::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD::string &sPath,
+bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD::string &sPath,
 		enumIndexType idxType)
 {
 
@@ -1764,7 +1766,7 @@ bool tCacheMan::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD::strin
 	return reader.CheckGoodState(false);
 }
 
-void tCacheMan::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
+void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 {
 	LOGSTART("expiration::_ParseVolatileFilesAndHandleEntries");
 	for(tS2IDX::const_iterator it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end(); it++)
@@ -1827,7 +1829,7 @@ void tCacheMan::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 	}
 }
 
-void tCacheMan::AddDelCbox(cmstring &sFileRel)
+void tCacheOperation::AddDelCbox(cmstring &sFileRel)
 {
 	MYSTD::pair<tStrSet::iterator,bool> ck = m_delCboxFilter.insert(sFileRel);
 	if(! ck.second)
@@ -1838,14 +1840,14 @@ void tCacheMan::AddDelCbox(cmstring &sFileRel)
 			<< "\" value=\"" << sFileRel << "\">Tag</label>";
 
 }
-void tCacheMan::TellCount(uint nCount, off_t nSize)
+void tCacheOperation::TellCount(uint nCount, off_t nSize)
 {
 	SendFmt << "<br>\n" << nCount <<" package file(s) marked "
 			"for removal in few days. Estimated disk space to be released: "
 			<< offttosH(nSize) << ".<br>\n<br>\n";
 }
 
-void tCacheMan::SetCommonUserFlags(cmstring &cmd)
+void tCacheOperation::SetCommonUserFlags(cmstring &cmd)
 {
 	m_bErrAbort=(cmd.find("abortOnErrors=aOe")!=stmiss);
 	m_bByPath=(cmd.find("byPath")!=stmiss);
@@ -1857,7 +1859,7 @@ void tCacheMan::SetCommonUserFlags(cmstring &cmd)
 }
 
 
-void tCacheMan::PrintStats(cmstring &title)
+void tCacheOperation::PrintStats(cmstring &title)
 {
 	multimap<off_t, cmstring*> sorted;
 	off_t total=0;
@@ -1890,10 +1892,10 @@ void tCacheMan::PrintStats(cmstring &title)
 int parseidx_demo(LPCSTR file)
 {
 
-	class tParser : public tCacheMan, ifileprocessor
+	class tParser : public tCacheOperation, ifileprocessor
 	{
 	public:
-		tParser() : tCacheMan(2) {};
+		tParser() : tCacheOperation(2, tSpecialRequest::workIMPORT) {};
 		inline int demo(LPCSTR file)
 		{
 			return !ParseAndProcessIndexFile(*this, file, GuessIndexTypeFromURL(file));
@@ -1909,7 +1911,7 @@ int parseidx_demo(LPCSTR file)
 		virtual bool ProcessRegular(const mstring &sPath, const struct stat &) {return true;}
 		virtual bool ProcessOthers(const mstring &sPath, const struct stat &) {return true;}
 		virtual bool ProcessDirAfter(const mstring &sPath, const struct stat &) {return true;}
-		virtual void Action(const mstring &) {};
+		virtual void Action(const mstring &) override {};
 	}
 	mgr;
 

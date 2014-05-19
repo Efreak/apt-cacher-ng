@@ -242,7 +242,6 @@ void tcpconnect::Disconnect()
 	termsocket_quick(m_conFd);
 }
 
-lockable conPoolMx;
 using namespace MYSTD;
 struct tHostHint // could derive from pair but prefer to save some bytes with references
 {
@@ -271,8 +270,8 @@ struct tHostHint // could derive from pair but prefer to save some bytes with re
 #endif
 
 };
-typedef multimap<tHostHint, MYSTD::pair<tTcpHandlePtr, time_t> > tConPool;
-tConPool spareConPool;
+class : public lockable, public multimap<tHostHint, MYSTD::pair<tTcpHandlePtr, time_t> >
+{} spareConPool;
 
 tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, acfg::tRepoData::IHookHandler *pStateTracker
@@ -303,8 +302,8 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		p.reset();
 #else
 	{ // mutex context
-		lockguard __g(conPoolMx);
-		tConPool::iterator it=spareConPool.find(key);
+		lockguard __g(spareConPool);
+		auto it=spareConPool.find(key);
 		if(spareConPool.end() == it)
 		{
 			p.reset(new tcpconnect);
@@ -384,7 +383,7 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 
 #ifndef NOCONCACHE
 	time_t now=GetTime();
-	lockguard __g(conPoolMx);
+	lockguard __g(spareConPool);
 	ldbg("caching connection " << handle.get());
 
 	// a DOS?
@@ -408,7 +407,7 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 
 time_t tcpconnect::BackgroundCleanup()
 {
-	lockguard __g(conPoolMx);
+	lockguard __g(spareConPool);
 	time_t now=GetTime();
 
 	fd_set rfds;
@@ -416,7 +415,7 @@ time_t tcpconnect::BackgroundCleanup()
 	int nMaxFd=0;
 
 	// either drop the old ones, or stuff them into a quick select call to find the good sockets
-	for (tConPool::iterator it = spareConPool.begin(); it != spareConPool.end();)
+	for (auto it = spareConPool.begin(); it != spareConPool.end();)
 	{
 		if (now >= (it->second.second + TIME_SOCKET_EXPIRE_CLOSE))
 			spareConPool.erase(it++);
@@ -434,7 +433,7 @@ time_t tcpconnect::BackgroundCleanup()
 	tv.tv_usec = 1;
 	int r=select(nMaxFd + 1, &rfds, NULL, NULL, &tv);
 	// on error, also do nothing, or stop when r fds are processed
-	for (tConPool::iterator it = spareConPool.begin(); r>0 && it != spareConPool.end(); r--)
+	for (auto it = spareConPool.begin(); r>0 && it != spareConPool.end(); r--)
 	{
 		if(FD_ISSET(it->second.first->GetFD(), &rfds))
 			spareConPool.erase(it++);
@@ -457,20 +456,20 @@ void tcpconnect::KillLastFile()
 
 void tcpconnect::dump_status()
 {
-	lockguard __g(conPoolMx);
+	lockguard __g(spareConPool);
 	tSS msg;
 	msg << "TCP connection cache:\n";
-	for (tConPool::iterator it = spareConPool.begin(); it != spareConPool.end();++it)
+	for (auto& x : spareConPool)
 	{
-		if(! it->second.first)
+		if(! x.second.first)
 		{
-			msg << "[BAD HANDLE] recycle at " << it->second.second << "\n";
+			msg << "[BAD HANDLE] recycle at " << x.second.second << "\n";
 			continue;
 		}
 
-		msg << it->second.first->m_conFd << ": for "
-				<< it->first.pHost << ":" << it->first.pPort
-				<< ", recycled at " << it->second.second << "\n";
+		msg << x.second.first->m_conFd << ": for "
+				<< x.first.pHost << ":" << x.first.pPort
+				<< ", recycled at " << x.second.second << "\n";
 	}
 #ifdef DEBUG
 	msg << "dbg counts, con: " << __sync_fetch_and_add(&nConCount, 0)

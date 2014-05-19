@@ -43,7 +43,7 @@ class dlcon : public lockable
     	dlcon & operator=(const dlcon&);
     	dlcon(const dlcon&);
     	
-    	friend class tDlJob;
+    	friend struct tDlJob;
     	
     	tDljQueue m_qNewjobs;
 

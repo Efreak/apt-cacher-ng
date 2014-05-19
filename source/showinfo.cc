@@ -9,15 +9,19 @@
 using namespace MYSTD;
 
 const char szReportButton[] =
-"<tr><td class=\"colcont\"><form action=\"#top\">"
+"<tr><td class=\"colcont\"><form action=\"\" method=\"get\">"
 					"<input type=\"submit\" name=\"doCount\" value=\"Count Data\"></form>"
 					"</td><td class=\"colcont\" colspan=8 valign=top><font size=-2>"
 					"<i>Not calculated, click \"Count data\"</i></font></td></tr>";
 
 // some NOOPs
-tStaticFileSend::tStaticFileSend(int fd, const char *s,
-		const char *m, const char *c) :
-	tWUIPage(fd), m_sFileName(s), m_sMimeType(m), m_sHttpCode(c)
+tStaticFileSend::tStaticFileSend(int fd,
+		tSpecialRequest::eMaintWorkType type,
+		const char *s,
+		const char *m, const char *c)
+:
+	tSpecialRequest(fd, type),
+	m_sFileName(s), m_sMimeType(m), m_sHttpCode(c)
 {
 }
 
@@ -29,7 +33,7 @@ void tStaticFileSend::ModContents(mstring & contents, cmstring &cmd)
 {
 	StrSubst(contents, "$SERVERIP", GetHostname());
 	StrSubst(contents, "$SERVERPORT", acfg::port.c_str());
-	StrSubst(contents, "$REPAGE", SZPATHSEPUNIX + acfg::reportpage);
+	StrSubst(contents, "$REPAGE",  acfg::reportpage);
 
 	tSS footer;
 	_AddFooter(footer);
@@ -91,7 +95,6 @@ void tDeleter::ModContents(mstring & contents, cmstring &cmd)
 		return;
 	}
 	tStrVec files;
-	bool bConfirmMode(stmiss==cmd.find("doDeleteYes"));
 	tSS sHidParms;
 	mstring params(cmd, qpos+1);
 
@@ -118,7 +121,7 @@ void tDeleter::ModContents(mstring & contents, cmstring &cmd)
 			contents.clear();
 			return;
 		}
-		if(bConfirmMode)
+		if(m_mode == workDELETECONFIRM)
 		{
 			sHidParms << "<input type=\"hidden\" name=\"kf" << ++lfd << "\" value=\""
 					<< *it <<"\">\n";
@@ -134,7 +137,7 @@ void tDeleter::ModContents(mstring & contents, cmstring &cmd)
 	StrSubst(contents, "$COUNT", ltos(files.size()));
 	StrSubst(contents, "$STUFF", sHidParms);
 
-	if(!bConfirmMode)
+	if(m_mode == workDELETE)
 	{
 		StrSubst(contents, "$VISACTION", "visible");
 		StrSubst(contents, "$VISQUESTION", "hidden;height:0px;");

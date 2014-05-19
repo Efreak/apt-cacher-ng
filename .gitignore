@@ -1,0 +1,7 @@
+/Debug
+.*project
+.settings
+*.swp
+*~
+build
+TODO.next

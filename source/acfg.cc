@@ -47,8 +47,7 @@ string sPopularPath("/debian/");
 string tmpDontcache, tmpDontcacherq, tmpDontcacheResolved;
 
 tStrMap localdirs;
-lockable mimemap_lock;
-NoCaseStringMap mimemap;
+static class : public lockable, public NoCaseStringMap {} mimemap;
 
 MYSTD::bitset<65536> *pUserPorts = NULL;
 
@@ -144,35 +143,32 @@ struct fct_lt_host
 	}
 };
 typedef multimap<tHttpUrl,const string*, fct_lt_host> tMapUrl2StringPtr; 
-typedef tMapUrl2StringPtr::iterator tUrl2RepIter;
 tMapUrl2StringPtr mapUrl2pVname;
 
-typedef map<const string, tRepoData> tRepMap;
-tRepMap repoparms;
+MYSTD::map<cmstring, tRepoData> repoparms;
 
 string * GetStringPtr(const string &key) {
-	for(unsigned int i=0; i<_countof(n2sTbl); i++)
+	for(auto &ent : n2sTbl)
 	{
-		if(0==strcasecmp(key.c_str(), n2sTbl[i].name))
+		if(0==strcasecmp(key.c_str(), ent.name))
 		{
-			if(n2sTbl[i].warn)
-				cerr << "Warning, " << key << ": " << n2sTbl[i].warn << endl;
-
-			return n2sTbl[i].ptr;
+			if(ent.warn)
+				cerr << "Warning, " << key << ": " << ent.warn << endl;
+			return ent.ptr;
 		}
 	}
 	return NULL;
 }
 
 int * GetIntPtr(const string &key, int &base) {
-	for(unsigned int i=0; i<_countof(n2iTbl); i++)
+	for(auto &ent : n2iTbl)
 	{
-		if(0==strcasecmp(key.c_str(), n2iTbl[i].name))
+		if(0==strcasecmp(key.c_str(), ent.name))
 		{
-			if(n2iTbl[i].warn)
-				cerr << "Warning, " << key << ": " << n2iTbl[i].warn << endl;
-			base = n2iTbl[i].base;
-			return n2iTbl[i].ptr;
+			if(ent.warn)
+				cerr << "Warning, " << key << ": " << ent.warn << endl;
+			base = ent.base;
+			return ent.ptr;
 		}
 	}
 	return NULL;
@@ -254,11 +250,11 @@ bool ReadOneConfFile(const string & szFilename)
 	return true;
 }
 
-inline const string * GetRepoEntryNamePtr(const string & sRepName)
+inline cmstring * GetRepoEntryNamePtr(const string & sRepName)
 {
 	// save some memory by storing only pointer to its entry in the map since the life time is guaranteed
 
-	tRepMap::iterator it = repoparms.find(sRepName);
+	auto it = repoparms.find(sRepName);
 	if(repoparms.end() == it)
 	{
 		repoparms[sRepName] = tRepoData();
@@ -364,17 +360,14 @@ tStrDeq ExpandFileTokens(cmstring &token)
 	else
 	{
 		tStrMap bname2path;
-
-		mstring* paths[] =
-		{ &suppdir, &confdir };
-		for (mstring **ps = paths; ps < paths + _countof(paths); ++ps)
+		for (const auto& dir : { &suppdir, &confdir })
 		{
 			// chop slashes. That should not be required but better be sure.
-			while(endsWithSzAr(**ps, sPathSep) && (**ps).size()>1)
-				(**ps).resize((**ps).size()-1);
+			while(endsWithSzAr(*dir, sPathSep) && dir->size()>1)
+				dir->resize(dir->size()-1);
 
 			// temporary only
-			srcs = ExpandFilePattern(**ps + sPathSep + sPath, true);
+			srcs = ExpandFilePattern( (cmstring) *dir + sPathSep + sPath, true);
 			if (srcs.size() == 1 && GetFileSize(srcs[0], -23) == off_t(-23))
 				continue; // file not existing, wildcard returned
 
@@ -522,7 +515,7 @@ inline void _ParseLocalDirs(cmstring &value)
 cmstring & GetMimeType(cmstring &path)
 {
 	{
-		lockguard g(mimemap_lock);
+		lockguard g(mimemap);
 		static bool inited = false;
 		if (!inited)
 		{
@@ -746,7 +739,7 @@ cmstring * GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResid
 	sRetPathResidual.clear();
 	
 	// get all the URLs matching THE HOSTNAME
-	pair<tUrl2RepIter,tUrl2RepIter> range=mapUrl2pVname.equal_range(in);
+	auto range=mapUrl2pVname.equal_range(in);
 	if(range.first==range.second)
 		return NULL;
 	
@@ -754,7 +747,7 @@ cmstring * GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResid
 	string const * psBestHit(NULL);
 		
 	// now find the longest directory part which is the suffix of requested URL's path
-	for (tUrl2RepIter & it=range.first; it!=range.second; it++)
+	for (auto& it=range.first; it!=range.second; it++)
 	{
 		// rewrite rule path must be a real prefix
 		// it's also surrounded by /, ensured during construction
@@ -777,7 +770,7 @@ cmstring * GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResid
 
 const tRepoData * GetBackendVec(cmstring &vname)
 {
-	tRepMap::iterator it=repoparms.find(vname);
+	auto it=repoparms.find(vname);
 	if(it==repoparms.end() || it->second.m_backends.empty())
 		return NULL;
 	return & it->second;
@@ -912,23 +905,19 @@ void ReadRewriteFile(const string & sFile, const string & sRepName)
 				BARF("Parse error, missing Site: field around line "
 						<< sFile << ":"<< reader.GetCurrentLine());
 			}
-			for (tStrVecIterConst itHost=hosts.begin();
-			itHost!=hosts.end(); 
-			itHost++)
+			for (const auto& host : hosts)
 			{
-				for (tStrVecIterConst itPath=paths.begin();
-				itPath!=paths.end(); 
-				itPath++)
+				for (const auto& path : paths)
 				{
 					//mapUrl2pVname[*itHost+*itPath]= &itHostiVec->first;
 					tHttpUrl url;
-					url.sHost=*itHost;
-					url.sPath=*itPath;
+					url.sHost=host;
+					url.sPath=path;
 					pair<tHttpUrl,const string*> info(url, GetRepoEntryNamePtr(sRepName));
 					mapUrl2pVname.insert(info);
 
 #ifdef DEBUG
-						cerr << "Mapping: "<< *itHost << *itPath
+						cerr << "Mapping: "<< host << path
 						<< " -> "<< sRepName <<endl;
 #endif
 				}
@@ -1047,6 +1036,8 @@ void PostProcConfig(bool bDumpConfig)
    if(!acfg::agentname.empty())
 	   acfg::agentheader=string("User-Agent: ")+acfg::agentname + "\r\n";
    
+   stripPrefixChars(acfg::reportpage, '/');
+
    trimString(acfg::requestapx);
    if(!acfg::requestapx.empty())
 	   acfg::requestapx = unEscape(acfg::requestapx);
@@ -1117,35 +1108,38 @@ void PostProcConfig(bool bDumpConfig)
 
    if (acfg::debug >= LOG_MORE || bDumpConfig)
 	{
-	   MYSTD::ostream &cmine(bDumpConfig ? cout : cerr);
-		for (UINT i = 0; i < _countof(n2sTbl); i++)
-			if (n2sTbl[i].ptr)
-				cmine << n2sTbl[i].name << " = " << *(n2sTbl[i].ptr) << endl;
+	   ostream &cmine(bDumpConfig ? cout : cerr);
+
+		for (auto& n2s: n2sTbl)
+			if (n2s.ptr)
+				cmine << n2s.name << " = " << *n2s.ptr << endl;
 
 		if (acfg::debug >= LOG_DEBUG)
 		{
 			cerr << "escaped version:" << endl;
-			for (UINT i = 0; i < _countof(n2sTbl); i++)
-				if (n2sTbl[i].ptr)
+			for (const auto& n2s: n2sTbl)
+			{
+				if (n2s.ptr)
 				{
-					cerr << n2sTbl[i].name << " = ";
-					for (const char *p = n2sTbl[i].ptr->c_str(); *p; p++)
+					cerr << n2s.name << " = ";
+					for (const char *p = n2s.ptr->c_str(); *p; p++)
 						if ('\\' == *p)
 							cmine << "\\\\";
 						else
 							cmine << *p;
 					cmine << endl;
 				}
+			}
 		}
 
-		for (UINT i = 0; i < _countof(n2iTbl); i++)
-			if (n2iTbl[i].ptr)
-				cmine << n2iTbl[i].name << " = \"" << *(n2iTbl[i].ptr) << "\"\n";
+		for (const auto& n2i : n2iTbl)
+			if (n2i.ptr)
+				cmine << n2i.name << " = " << *n2i.ptr << endl;
 	}
 
 #ifndef DEBUG
    if(acfg::debug >= LOG_DEBUG)
-	   cerr << "\n\nAdditional debugging information not compiled in.\n\n";
+	   cerr << "\n\nAdditional debugging information not compiled in." << endl << endl;
 #endif
    
 #if 0 //def DEBUG
@@ -1189,11 +1183,11 @@ void PostProcConfig(bool bDumpConfig)
 time_t BackgroundCleanup()
 {
 	time_t ret(END_OF_TIME), now(time(0));
-	for (tRepMap::iterator it = repoparms.begin(); it != repoparms.end(); ++it)
+	for (const auto& parm : repoparms)
 	{
-		if (!it->second.m_pHooks)
+		if (!parm.second.m_pHooks)
 			continue;
-		tHookHandler & hooks = *(static_cast<tHookHandler*> (it->second.m_pHooks));
+		tHookHandler & hooks = *(static_cast<tHookHandler*> (parm.second.m_pHooks));
 		lockguard g(hooks);
 		if (hooks.downTimeNext)
 		{

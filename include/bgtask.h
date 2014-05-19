@@ -13,11 +13,12 @@
 #include <iostream>
 #include <fstream>
 
-class tWuiBgTask : public tWUIPage
+class tSpecOpDetachable : public tSpecialRequest
 {
 public:
-	tWuiBgTask(int);
-	virtual ~tWuiBgTask();
+	// forward all constructors, no specials here
+	using tSpecialRequest::tSpecialRequest;
+	virtual ~tSpecOpDetachable();
 
 	 /*!
 	  * This execution implementation makes sure that only one task runs
@@ -25,7 +26,7 @@ public:
 	  *
 	  * Work is to be done the Action() method implemented by the subclasses.
 	  */
-	virtual void Run(const mstring &cmd);
+	virtual void Run(const mstring &cmd) override;
 
 protected:
 	bool CheckStopSignal();
@@ -33,14 +34,13 @@ protected:
 	// to be implemented by subclasses
 	virtual void Action(const mstring &) =0;
 
-	void AfterSendChunk(const char *data, size_t size);
+	void AfterSendChunk(const char *data, size_t size) override;
 
 	void DumpLog(time_t id);
 
 	time_t GetTaskId();
 
-	bool m_bShowControls;
-	mstring m_sTypeName;
+	bool m_bShowControls = false;
 
 private:
 
@@ -77,15 +77,15 @@ extern pthread_mutex_t abortMx;
 extern bool bSigTaskAbort;
 
 #ifdef DEBUG
-class tBgTester : public tWuiBgTask
+class tBgTester : public tSpecOpDetachable
 {
 public:
-	inline tBgTester(int fd): tWuiBgTask(fd)
+	inline tBgTester(int fd, tSpecialRequest::eMaintWorkType mode)
+	: tSpecOpDetachable(fd, mode)
 	{
 		m_szDecoFile="maint.html";
-		m_sTypeName="Tick-Tack-Tick-Tack";
 	}
-	void Action(cmstring &);
+	void Action(cmstring &) override;
 };
 #endif // DEBUG
 

@@ -21,6 +21,7 @@
 #define ASSERT(x)
 #define LOG(x)
 #define LOGSTART(x)
+#define LOGSTARTs(x)
 #define LOGSTART2(x,y)
 #define LOGSTART2s(x,y)
 #define DBGQLOG(x)

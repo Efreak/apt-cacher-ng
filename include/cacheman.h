@@ -80,15 +80,14 @@ typedef MYMAP<tContId, tClassDesc>::iterator tClassMapIter;
 void DelTree(const string &what);
 
 
-class tCacheMan :
+class tCacheOperation :
 	public IFileHandler,
-	public tWuiBgTask
-	// , public ifileprocessor
+	public tSpecOpDetachable
 {
 
 public:
-	tCacheMan(int);
-	virtual ~tCacheMan();
+	tCacheOperation(int,tSpecialRequest::eMaintWorkType);
+	virtual ~tCacheOperation();
 
 	// having this here makes no sense except of working around an ICE bug of gcc 4.3/4.4.x
 	class tGetItemDelegate
@@ -205,8 +204,8 @@ private:
 	bool Propagate(const string &donorRel, tContId2eqClass::iterator eqClassIter,
 			cmstring *psTmpUnpackedAbs=NULL);
 	void InstallBz2edPatchResult(tContId2eqClass::iterator eqClassIter);
-	tCacheMan(const tCacheMan&);
-	tCacheMan& operator=(const tCacheMan&);
+	tCacheOperation(const tCacheOperation&);
+	tCacheOperation& operator=(const tCacheOperation&);
 	bool PatchFile(const mstring &srcRel, const mstring &patchIdxLocation,
 			tPListConstIt pit, tPListConstIt itEnd,
 			const tFingerprint *verifData);
@@ -222,10 +221,10 @@ private:
 };
 
 
-static const string suxe[] = { ".bz2", ".gz", ".lzma", ".xz"};
-static const string suxeWempty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
-static const string suxeByLhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
-static const string suxeByCompSize[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
+static const string compSuffixes[] = { ".bz2", ".gz", ".lzma", ".xz"};
+static const string compSuffixesAndEmpty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
+static const string compSuffixesAndEmptyByLikelyhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
+static const string compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
 
 bool CompDebVerLessThan(cmstring &s1, cmstring s2);
 extern time_t m_gMaintTimeNow;

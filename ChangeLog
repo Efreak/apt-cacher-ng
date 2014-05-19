@@ -1,3 +1,15 @@
+apt-cacher-ng (0.7.27) BETA; urgency=low
+
+  * code review and refactoring with C++11 features, now requiring language
+    feature support of GCC 4.7 or newer
+  * enabled Link Time Optimization with modern GCC/binutils
+  * better checks for compiler and linker features
+  * Portability fixes for systems w/o zlib of libbz2
+  * Source tree cleanup
+  * Lots of refactoring on maintenance page factory code, including bugfix:
+    Displaying user info page rather than admin page if the admin page site
+    name was not configured in the config at all
+
 apt-cacher-ng (0.7.26) BETA; urgency=low
 
   * FIX: Correct re-escaping URLs on internal forwarding and stop

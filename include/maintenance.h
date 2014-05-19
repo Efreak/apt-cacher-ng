@@ -18,16 +18,40 @@
 
 #define MAINT_PFX "maint_"
 
-class tWUIPage
+class tSpecialRequest
 {
 public:
+	enum eMaintWorkType : int
+	{
+		workNotSpecial =0,
+
+		// expiration types
+		workExExpire,
+		workExList,
+		workExPurge,
+		workExListDamaged,
+		workExPurgeDamaged,
+		workExTruncDamaged,
+		//workBGTEST,
+		workUSERINFO,
+		workMAINTREPORT,
+		workAUTHREQUEST,
+		workAUTHREJECT,
+		workIMPORT,
+		workMIRROR,
+		workDELETE,
+		workDELETECONFIRM,
+		workCOUNTSTATS,
+		workSTYLESHEET
+		//, workRAWDUMP
+	};
 	/*!
 	 *  @brief Main execution method for maintenance tasks.
 	 */
 	virtual void Run(const mstring &cmd)=0;
 
-	tWUIPage(int fd);
-	virtual ~tWUIPage();
+	tSpecialRequest(int fd, tSpecialRequest::eMaintWorkType type);
+	virtual ~tSpecialRequest();
 
 protected:
 	inline void SendChunk(const mstring &x) { SendChunk(x.data(), x.size()); }
@@ -36,7 +60,7 @@ protected:
 	void SendChunk(const char *data, size_t size, bool bRemoteOnly=false);
 	inline void SendChunk(const char *x, bool b=false) { SendChunk(x, x?strlen(x):0, b); }
 	// for customization in base classes
-	virtual void AfterSendChunk(const char *data, size_t size) {};
+	virtual void AfterSendChunk(const char* /*data*/, size_t /*size*/) {};
 
 	bool SendRawData(const char *data, size_t len, int flags);
 	virtual void EndTransfer();
@@ -44,10 +68,11 @@ protected:
 	//void SendDecoration(bool bBegin, const char *szDecoFile=NULL);
 	void SendChunkedPageHeader(const char *httpcode=NULL, const char *mimetype=NULL);
 	int m_reportFD;
-	const char *m_szDecoFile;
+	LPCSTR m_szDecoFile;
+	LPCSTR GetTaskName();
 private:
-	tWUIPage(const tWUIPage&);
-	tWUIPage& operator=(const tWUIPage&);
+	tSpecialRequest(const tSpecialRequest&);
+	tSpecialRequest& operator=(const tSpecialRequest&);
 	mstring m_sHostname;
 
 public:
@@ -56,7 +81,7 @@ public:
 	class tFmtSendObj
 	{
 	public:
-		inline tFmtSendObj(tWUIPage *p, bool remoteOnly)
+		inline tFmtSendObj(tSpecialRequest *p, bool remoteOnly)
 		: m_parent(*p), m_bRemoteOnly(remoteOnly) { }
 		inline ~tFmtSendObj()
 		{
@@ -66,9 +91,9 @@ public:
 				m_parent.m_fmtHelper.clear();
 			}
 		}
-		tWUIPage &m_parent;
+		tSpecialRequest &m_parent;
 	private:
-		tFmtSendObj operator=(const tWUIPage::tFmtSendObj&);
+		tFmtSendObj operator=(const tSpecialRequest::tFmtSendObj&);
 		bool m_bRemoteOnly;
 	};
 
@@ -76,8 +101,14 @@ public:
 #define SendFmtRemote tFmtSendObj(this, true).m_parent.m_fmtHelper
 
 	tSS m_fmtHelper;
-};
 
-void DispatchAndRunMaintTask(cmstring &cmd, int fd, const char *auth);
+	static eMaintWorkType DispatchMaintWork(cmstring &cmd, const char *auth);
+	static void RunMaintWork(eMaintWorkType jobType, cmstring &cmd, int fd);
+
+protected:
+	eMaintWorkType m_mode;
+
+	static tSpecialRequest* MakeMaintWorker(int fd, eMaintWorkType type);
+};
 
 #endif /*MAINTENANCE_H_*/

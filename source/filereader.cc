@@ -23,6 +23,16 @@
 #undef HAVE_LIBBZ2
 #undef HAVE_ZLIB
 #undef HAVE_LZMA
+#else
+
+#ifndef HAVE_ZLIB
+#warning Zlib or its development files are not available. Install them (e.g. zlib1g-dev) and run "make distclean". Gzip format support disabled.
+#endif
+
+#ifndef HAVE_LIBBZ2
+#warning LibBz2 or its development files are not available. Install them (e.g. libbz2-dev) and run "make distclean". Bzip2 format support disabled.
+#endif
+
 #endif
 
 using namespace MYSTD;
@@ -41,11 +51,10 @@ public:
 #include <bzlib.h>
 class tBzDec : public IDecompressor
 {
-	bz_stream strm;
+	bz_stream strm = bz_stream();
 public:
 	tBzDec()
 	{
-		::memset(&strm, 0, sizeof(strm));
 		inited = (BZ_OK == BZ2_bzDecompressInit(&strm, 1, EXTREME_MEMORY_SAVING));
 	}
 	~tBzDec()
@@ -53,7 +62,7 @@ public:
 		BZ2_bzDecompressEnd(&strm);
 		inited = false;
 	}
-	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf)
+	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) override
 	{
 		strm.next_in = szInBuf + nBufPos;
 		strm.avail_in = nBufSize - nBufPos;
@@ -74,19 +83,18 @@ public:
 		return false;
 	}
 };
-#else
-#define tBzDec IDecompressor
+static const uint8_t bz2Magic[] =
+{ 'B', 'Z', 'h' };
 #endif
 
 #ifdef HAVE_ZLIB
 #include <zlib.h>
 class tGzDec : public IDecompressor
 {
-	z_stream strm;
+	z_stream strm = z_stream();
 public:
 	tGzDec()
 	{
-		::memset(&strm, 0, sizeof(strm));
 		inited = (Z_OK == inflateInit2(&strm, 47));
 	}
 	~tGzDec()
@@ -94,7 +102,7 @@ public:
 		deflateEnd(&strm);
 		inited = false;
 	}
-	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf)
+	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) override
 	{
 		strm.next_in = (uint8_t*) szInBuf + nBufPos;
 		strm.avail_in = nBufSize - nBufPos;
@@ -115,9 +123,8 @@ public:
 		return false;
 	}
 };
-
-#else
-#define tGzDec IDecompressor
+static const uint8_t gzMagic[] =
+{ 0x1f, 0x8b, 0x8 };
 #endif
 
 #ifdef HAVE_LZMA
@@ -125,11 +132,10 @@ public:
 
 class tXzDec : public IDecompressor
 {
-	lzma_stream strm;
+	lzma_stream strm = lzma_stream();
 public:
 	tXzDec(bool lzmaFormat=false)
 	{
-		::memset(&strm, 0, sizeof(strm));
 		if(lzmaFormat)
 			inited = (LZMA_OK == lzma_alone_decoder(&strm,
 					EXTREME_MEMORY_SAVING ? 32000000 : MAX_VAL(uint64_t)));
@@ -143,7 +149,7 @@ public:
 		lzma_end(&strm);
 		inited = false;
 	}
-	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf)
+	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) override
 	{
 		strm.next_in = (uint8_t*) szInBuf + nBufPos;
 		strm.avail_in = nBufSize - nBufPos;
@@ -164,13 +170,9 @@ public:
 		return false;
 	}
 };
-#else
-class tXzDec : public IDecompressor
-{
-public:
-	tXzDec() {}
-	tXzDec(bool) {}
-};
+static const uint8_t xzMagic[] =
+{ 0xfd, '7', 'z', 'X', 'Z', 0x0 },
+lzmaMagic[] = {0x5d, 0, 0, 0x80};
 #endif
 
 filereader::filereader() 
@@ -186,12 +188,6 @@ filereader::filereader()
 {
 };
 
-static const uint8_t gzMagic[] =
-{ 0x1f, 0x8b, 0x8 }, bz2Magic[] =
-{ 'B', 'Z', 'h' }, xzMagic[] =
-{ 0xfd, '7', 'z', 'X', 'Z', 0x0 },
-lzmaMagic[] = {0x5d, 0, 0, 0x80};
-
 bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 {
 	Close(); // reset to clean state
@@ -203,10 +199,14 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 
 	if (bNoMagic)
 		m_Dec.reset();
+#ifdef HAVE_LIBBZ2
 	else if (endsWithSzAr(sFilename, ".bz2"))
 		m_Dec.reset(new tBzDec);
+#endif
+#ifdef HAVE_ZLIB
 	else if (endsWithSzAr(sFilename, ".gz"))
 		m_Dec.reset(new tGzDec);
+#endif
 #ifdef HAVE_LZMA
 	else if(endsWithSzAr(sFilename, ".xz"))
 		m_Dec.reset(new tXzDec(false));
@@ -218,10 +218,15 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 		filereader fh;
 		if (fh.OpenFile(sFilename, true) && fh.GetSize() >= 10)
 		{
-			if (0 == memcmp(gzMagic, fh.GetBuffer(), _countof(gzMagic)))
+			if(false) {}
+#ifdef HAVE_ZLIB
+			else if (0 == memcmp(gzMagic, fh.GetBuffer(), _countof(gzMagic)))
 				m_Dec.reset(new tGzDec);
+#endif
+#ifdef HAVE_LIBBZ2
 			else if (0 == memcmp(bz2Magic, fh.GetBuffer(), _countof(bz2Magic)))
 				m_Dec.reset(new tBzDec);
+#endif
 #ifdef HAVE_LZMA
 			else if (0 == memcmp(xzMagic, fh.GetBuffer(), _countof(xzMagic)))
 				m_Dec.reset(new tXzDec);
@@ -426,15 +431,15 @@ class csumSHA1 : public csumBase, public SHA_INFO
 {
 public:
 	csumSHA1() { sha_init(this); }
-	void add(const char *data, size_t size) { sha_update(this, (SHA_BYTE*) data, size); }
-	void finish(uint8_t* ret) { sha_final(ret, this); }
+	void add(const char *data, size_t size) override { sha_update(this, (SHA_BYTE*) data, size); }
+	void finish(uint8_t* ret) override { sha_final(ret, this); }
 };
 class csumMD5 : public csumBase, public md5_state_s
 {
 public:
 	csumMD5() { md5_init(this); }
-	void add(const char *data, size_t size) { md5_append(this, (md5_byte_t*) data, size); }
-	void finish(uint8_t* ret) { md5_finish(this, ret); }
+	void add(const char *data, size_t size) override { md5_append(this, (md5_byte_t*) data, size); }
+	void finish(uint8_t* ret) override { md5_finish(this, ret); }
 };
 
 auto_ptr<csumBase> csumBase::GetChecker(CSTYPES type)
@@ -460,7 +465,7 @@ bool filereader::GetChecksum(const mstring & sFileName, int csType, uint8_t out[
 bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *fDump)
 //bool filereader::GetSha1Sum(uint8_t out[], off_t &scannedSize, FILE *fDump)
 {
-	auto_ptr<csumBase> summer = csumBase::GetChecker(CSTYPES(csType));
+	unique_ptr<csumBase> summer(csumBase::GetChecker(CSTYPES(csType)));
 	scannedSize=0;
 	
 	if(!m_Dec.get())
@@ -508,7 +513,7 @@ void check_algos()
 {
 	const char testvec[]="abc";
 	uint8_t out[20];
-	auto_ptr<csumBase> ap = csumBase::GetChecker(CSTYPE_SHA1);
+	unique_ptr<csumBase> ap(csumBase::GetChecker(CSTYPE_SHA1));
 	ap->add(testvec, sizeof(testvec)-1);
 	ap->finish(out);
 	if(!CsEqual("a9993e364706816aba3e25717850c26c9cd0d89d", out, 20))

@@ -19,7 +19,6 @@ using namespace MYSTD;
 mstring sReplDir("_altStore" SZPATHSEP);
 
 static tFiGlobMap mapItems;
-lockable mapLck;
 
 header const & fileitem::GetHeaderUnlocked()
 {
@@ -696,7 +695,7 @@ inline void fileItemMgmt::Unreg()
 	if(!m_ptr)
 		return;
 
-	lockguard managementLock(mapLck);
+	lockguard managementLock(mapItems);
 
 	// invalid or not globally registered?
 	if(m_ptr->m_globRef == mapItems.end())
@@ -740,7 +739,7 @@ fileItemMgmt fileItemMgmt::GetRegisteredFileItem(cmstring &sPathUnescaped, bool 
 	MYTRY
 	{
 		mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
-		lockguard lockGlobalMap(mapLck);
+		lockguard lockGlobalMap(mapItems);
 		tFiGlobMap::iterator it=mapItems.find(sPathRel);
 		if(it!=mapItems.end())
 		{
@@ -805,7 +804,7 @@ fileItemMgmt fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 	if (!spCustomFileItem || spCustomFileItem->m_sPathRel.empty())
 		return fileItemMgmt();
 
-	lockguard lockGlobalMap(mapLck);
+	lockguard lockGlobalMap(mapItems);
 
 	if(ContHas(mapItems, spCustomFileItem->m_sPathRel))
 		return fileItemMgmt(); // conflict, another agent is already active
@@ -826,7 +825,7 @@ fileItemMgmt fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 time_t fileItemMgmt::BackgroundCleanup()
 {
 	LOGSTART2s("fileItemMgmt::BackgroundCleanup", GetTime());
-	lockguard lockGlobalMap(mapLck);
+	lockguard lockGlobalMap(mapItems);
 	tFiGlobMap::iterator it, here;
 
 	time_t now=GetTime();
