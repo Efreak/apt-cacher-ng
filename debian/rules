@@ -10,7 +10,7 @@ override_dh_install:
 	dh_install $(test -e build/acngfs || echo -Xacngfs)
 	cp systemd/apt-cacher-ng.service debian
 	cp systemd/apt-cacher-ng.conf debian/apt-cacher-ng.tmpfile
-	install -m 755 expire-caller.pl $(TGT)/usr/lib/apt-cacher-ng
+	install -m 755 scripts/expire-caller.pl $(TGT)/usr/lib/apt-cacher-ng
 
 override_dh_installinit:
 	dh_installinit -- defaults 18
