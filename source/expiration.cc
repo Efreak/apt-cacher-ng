@@ -438,13 +438,13 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 
 void expiration::Action(const string & cmd)
 {
-	if (m_mode==purge)
+	if (m_mode==workExPurge)
 	{
 		LoadPreviousData(true);
 		RemoveAndStoreStatus(true);
 		return;
 	}
-	if (m_mode==list)
+	if (m_mode==workExList)
 	{
 		LoadPreviousData(true);
 		off_t nSpace(0);
@@ -478,7 +478,7 @@ void expiration::Action(const string & cmd)
 		return;
 	}
 
-	if(m_mode==purgeDamaged || m_mode==listDamaged || m_mode==truncDamaged)
+	if(m_mode==workExPurgeDamaged || m_mode==workExListDamaged || m_mode==workExTruncDamaged)
 	{
 		filereader f;
 		if(!f.OpenFile(SABSPATH(FNAME_DAMAGED)))
@@ -492,13 +492,13 @@ void expiration::Action(const string & cmd)
 			if(s.empty())
 				continue;
 
-			if(m_mode == purgeDamaged)
+			if(m_mode == workExPurgeDamaged)
 			{
 				SendFmt << "Removing " << s << "<br>\n";
 				::unlink(SZABSPATH(s));
 				::unlink(SZABSPATH(s+".head"));
 			}
-			else if(m_mode == truncDamaged)
+			else if(m_mode == workExTruncDamaged)
 			{
 				SendFmt << "Truncating " << s << "<br>\n";
 				ignore_value(::truncate(SZABSPATH(s), 0));
@@ -683,26 +683,6 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		finfo.fpr.size = stinfo.st_size;
 	}
     return true;
-}
-
-
-expiration::expiration(int fd, workType type) :
-		tCacheMan(fd), m_mode(type), m_bIncompleteIsDamaged(false), m_nPrevFailCount(0)
-{
-	switch(type)
-	{
-	case list: m_sTypeName="Listing unreferenced"; break;
-	case listDamaged: m_sTypeName="Listing damaged files"; break;
-	case purgeDamaged: m_sTypeName="Removing damaged files"; break;
-	case truncDamaged: m_sTypeName="Truncating damaged files to zero size"; break;
-	case expire:
-	default:
-		m_sTypeName="Expiration"; break;
-	}
-}
-
-expiration::~expiration()
-{
 }
 
 void expiration::LoadHints()

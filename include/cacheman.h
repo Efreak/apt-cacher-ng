@@ -80,15 +80,14 @@ typedef MYMAP<tContId, tClassDesc>::iterator tClassMapIter;
 void DelTree(const string &what);
 
 
-class tCacheMan :
+class tCacheOperation :
 	public IFileHandler,
-	public tWuiBgTask
-	// , public ifileprocessor
+	public tSpecOpDetachable
 {
 
 public:
-	tCacheMan(int);
-	virtual ~tCacheMan();
+	tCacheOperation(int,tSpecialRequest::eMaintWorkType);
+	virtual ~tCacheOperation();
 
 	// having this here makes no sense except of working around an ICE bug of gcc 4.3/4.4.x
 	class tGetItemDelegate
@@ -205,8 +204,8 @@ private:
 	bool Propagate(const string &donorRel, tContId2eqClass::iterator eqClassIter,
 			cmstring *psTmpUnpackedAbs=NULL);
 	void InstallBz2edPatchResult(tContId2eqClass::iterator eqClassIter);
-	tCacheMan(const tCacheMan&);
-	tCacheMan& operator=(const tCacheMan&);
+	tCacheOperation(const tCacheOperation&);
+	tCacheOperation& operator=(const tCacheOperation&);
 	bool PatchFile(const mstring &srcRel, const mstring &patchIdxLocation,
 			tPListConstIt pit, tPListConstIt itEnd,
 			const tFingerprint *verifData);

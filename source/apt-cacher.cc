@@ -35,6 +35,8 @@ using namespace MYSTD;
 #include "csmapping.h"
 #endif
 
+#include "maintenance.h"
+
 static void usage();
 static void SetupCacheDir();
 void term_handler(int signum);
@@ -42,7 +44,7 @@ void log_handler(int signum);
 void dump_handler(int signum);
 void check_algos();
 
-void DispatchAndRunMaintTask(cmstring &cmd, int fd, const char *auth);
+//void DispatchAndRunMaintTask(cmstring &cmd, int fd, const char *auth);
 int wcat(LPCSTR url, LPCSTR proxy);
 
 typedef struct sigaction tSigAct;
@@ -257,8 +259,9 @@ int main(int argc, char **argv)
 
 	if (bForceCleanup)
 	{
-		DispatchAndRunMaintTask(acfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
-				fileno(stdout), acfg::adminauth.c_str());
+		tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
+				acfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
+				fileno(stdout));
 		exit(0);
 	}
 

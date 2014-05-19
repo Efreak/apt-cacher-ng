@@ -20,17 +20,6 @@
 
 using namespace MYSTD;
 
-pkgmirror::pkgmirror(int fd): tCacheMan(fd),
-m_bCalcSize(false), m_bSkipIxUpdate(false), m_bDoDownload(false), m_bAsNeeded(false),
-m_bUseDelta(false), m_totalSize(0), m_totalHave(0), m_pDeltaSrc(NULL), m_repCutLen(0)
-{
-	m_sTypeName="Mirroring";
-}
-
-pkgmirror::~pkgmirror()
-{
-}
-
 bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &stinfo)
 {
 	if (endsWithSzAr(sPath, ".head"))

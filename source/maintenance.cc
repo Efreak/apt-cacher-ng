@@ -28,17 +28,18 @@ using namespace MYSTD;
 
 #define MAINT_HTML_DECO "maint.html" 
 
-tWUIPage::tWUIPage(int fd) :
+tSpecialRequest::tSpecialRequest(int fd, tSpecialRequest::eMaintWorkType type) :
 	m_reportFD(fd),
-	m_szDecoFile(NULL)
+	m_szDecoFile(NULL),
+	m_mode(type)
 {
 }
 
-tWUIPage::~tWUIPage()
+tSpecialRequest::~tSpecialRequest()
 {
 }
 
-bool tWUIPage::SendRawData(const char *data, size_t len, int flags)
+bool tSpecialRequest::SendRawData(const char *data, size_t len, int flags)
 {
 	if(m_reportFD<3) // nothing raw to send for stdout
 		return true;
@@ -60,7 +61,7 @@ bool tWUIPage::SendRawData(const char *data, size_t len, int flags)
 	return true;
 }
 
-void tWUIPage::SendChunk(const char *data, size_t len, bool bRemoteOnly)
+void tSpecialRequest::SendChunk(const char *data, size_t len, bool bRemoteOnly)
 {
 	if(!data || !len || m_reportFD<0)
 		return;
@@ -70,42 +71,23 @@ void tWUIPage::SendChunk(const char *data, size_t len, bool bRemoteOnly)
 		ignore_value(::write(m_reportFD, data, len));
 		return;
 	}
-
-	if(len>135)
-	{
-		// send HTTP chunk header
-		char buf[23];
-		int l=sprintf(buf, "%x\r\n", (UINT) len);
-		SendRawData(buf, l, MSG_MORE|MSG_NOSIGNAL);
-		SendRawData(data, len, MSG_MORE|MSG_NOSIGNAL);
-		SendRawData("\r\n", 2, MSG_NOSIGNAL);
-	}
-	else
-	{
-#warning Make performance evaluation, maybe this is nonsense after all
-		/*
-		 *
-		 * /var/log/apt-cacher-ng $ cat maint* | perl -e '$max=135; while(<>) { $cnt++; $l=length($_); $x{$l}++; }; sub END{ for(sort(keys(%x))) {print "$x{$_} len $_\n"; $bel+=$x{$_} if $_<$max;}; print $bel/$cnt*100 . "% unter max $max\n";}'
-
-		 * */
-
-		char buf[160];
-		int l=sprintf(buf, "%x\r\n", (UINT) len);
-		memcpy(buf+l, data, len);
-                memcpy(buf+l+len, "\r\n", 2);
-		SendRawData(buf, l+len+2, MSG_NOSIGNAL);
-	}
+	// send HTTP chunk header
+	char buf[23];
+	int l = sprintf(buf, "%x\r\n", (UINT) len);
+	SendRawData(buf, l, MSG_MORE | MSG_NOSIGNAL);
+	SendRawData(data, len, MSG_MORE | MSG_NOSIGNAL);
+	SendRawData("\r\n", 2, MSG_NOSIGNAL);
 
 	if(!bRemoteOnly)
 		AfterSendChunk(data, len);
 }
 
-void tWUIPage::EndTransfer() 
+void tSpecialRequest::EndTransfer() 
 {
 	SendRawData(_SZ2PS("0\r\n\r\n"), MSG_NOSIGNAL);
 }
 
-void tWUIPage::SendChunkedPageHeader(const char *httpcode, const char *mimetype)
+void tSpecialRequest::SendChunkedPageHeader(const char *httpcode, const char *mimetype)
 {
 	tSS s(100);
 	s <<  "HTTP/1.1 " << (httpcode ? httpcode : "200") << " OK\r\n"
@@ -115,13 +97,11 @@ void tWUIPage::SendChunkedPageHeader(const char *httpcode, const char *mimetype)
 	SendRawData(s.data(), s.length(), MSG_MORE);
 }
 
-class tAuthRequest : public tWUIPage
+class tAuthRequest : public tSpecialRequest
 {
 public:
-	tAuthRequest(int fd) : tWUIPage(fd)
-	{
-	}
-	void Run(const string &)
+	using tSpecialRequest::tSpecialRequest;
+	void Run(const string &) override
 	{
 		const char authmsg[] = "HTTP/1.1 401 Not Authorized\r\nWWW-Authenticate: "
         "Basic realm=\"For login data, see AdminAuth in Apt-Cacher NG config files\"\r\n"
@@ -135,13 +115,11 @@ public:
 	}
 };
 
-class authbounce : public tWUIPage
+class authbounce : public tSpecialRequest
 {
 public:
-	authbounce(int fd) : tWUIPage(fd)
-	{
-	}
-	void Run(const string &)
+	using tSpecialRequest::tSpecialRequest;
+	void Run(const string &) override
 	{
 		const char authmsg[] = "HTTP/1.1 200 Not Authorized\r\n"
         "Connection: Close\r\n"
@@ -152,7 +130,7 @@ public:
 	}
 };
 
-string & tWUIPage::GetHostname()
+string & tSpecialRequest::GetHostname()
 {
 	if (m_sHostname.empty())
 	{
@@ -184,86 +162,142 @@ string & tWUIPage::GetHostname()
 	return m_sHostname;
 }
 
-#warning FIXME, something is wrong, dispatches allways to the maint page
-void DispatchAndRunMaintTask(cmstring &cmd, int conFD, const char * szAuthLine)
+LPCSTR tSpecialRequest::GetTaskName()
 {
-	LOGSTARTs("DispatchAndRunMaintTask");
-	LOG("cmd: " << cmd);
-	tWUIPage *pWorker(NULL);
-	if(!szAuthLine)
-		szAuthLine="";
+	switch(m_mode)
+	{
+	case workNotSpecial: return "ALARM";
+	case workExExpire: return "Expiration";
+	case workExList: return "Expired Files Listing";
+	case workExPurge: return "Expired Files Purging";
+	case workExListDamaged: return "Listing Damaged Files";
+	case workExPurgeDamaged: return "Truncating Damaged Files";
+	case workExTruncDamaged: return "Truncating damaged files to zero size";
+	//case workRAWDUMP: /*fall-through*/
+	//case workBGTEST: return "42";
+	case workUSERINFO: return "General Configuration Information";
+	case workMAINTREPORT: return "Status Report and Maintenance Tasks Overview";
+	case workAUTHREQUEST: return "Authentication Required";
+	case workAUTHREJECT: return "Authentication Denied";
+	case workIMPORT: return "Data Import";
+	case workMIRROR: return "Archive Mirroring";
+	case workDELETE: return "Manual File Deletion";
+	case workDELETECONFIRM: return "Manual File Deletion (Confirmed)";
+	case workCOUNTSTATS: return "Status Report With Statistics";
+	case workSTYLESHEET: return "CSS";
+	}
+	return "SpecialOperation";
+}
 
-#ifdef DEBUG
-		if(cmd.find("tickTack")!=stmiss)
-		{
-			tBgTester(conFD).Run(cmd);
-			return;
-		}
+tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd, const char* auth)
+{
+	LOGSTARTs("DispatchMaintWork");
+	LOG("cmd: " << cmd);
+
+#if 0 // defined(DEBUG)
+	if(cmd.find("tickTack")!=stmiss)
+	{
+		tBgTester(conFD).Run(cmd);
+		return;
+	}
 #endif
 
-	// not effective, why? signal(SIGPIPE, SIG_IGN);
-	
-	MYTRY
-	{
-		//MYSTD::cout << "vgl: " << authLine << " und " << acfg::adminauth << "\n";
-		// admin actions are passed with GET parameters, appended after ?
-		tStrPos qpos=cmd.find('?');
-		if(qpos!=stmiss)
-		{
-			if( ! acfg::adminauth.empty() && acfg::adminauth!=szAuthLine )
-				pWorker = new tAuthRequest(conFD);
-			else if(StrHas(cmd, "doExpire="))
-				pWorker = new expiration(conFD, expiration::expire);
-			else if(StrHas(cmd, "justShow="))
-				pWorker = new expiration(conFD, expiration::list);
-			else if(StrHas(cmd, "justRemove="))
-				pWorker = new expiration(conFD, expiration::purge);
-			else if(StrHas(cmd, "justShowDamaged="))
-				pWorker = new expiration(conFD, expiration::listDamaged);
-			else if(StrHas(cmd, "justRemoveDamaged="))
-				pWorker = new expiration(conFD, expiration::purgeDamaged);
-			else if(StrHas(cmd, "justTruncDamaged="))
-				pWorker = new expiration(conFD, expiration::truncDamaged);
-			else if(cmd.find("doImport=")!=stmiss)
-				pWorker=new pkgimport(conFD);
-			else if(cmd.find("doMirror=")!=stmiss)
-			{
-				if(acfg::adminauth.empty())
-					pWorker=new authbounce(conFD);
-				else
-					pWorker=new pkgmirror(conFD);
-			}
-			else if(cmd.find("doDelete=")!=stmiss ||cmd.find("doDeleteYes=")!=stmiss)
-			{
-				if(acfg::adminauth.empty())
-					pWorker=new authbounce(conFD);
-				else
-					pWorker=new tDeleter(conFD);
-			}
-			else if(cmd.find("doCount=")!=stmiss)
-				pWorker = new tStaticFileSend(conFD, "report.html", "text/html", "200 OK");
-			else // ok... just show the default page
-			{
-				LOG("Unknown operation, fall back to default admin page");
-				goto l_show_cnc;
-			}
-		}
-		else if (!acfg::reportpage.empty() && cmd.compare(1, acfg::reportpage.length(), acfg::reportpage) == 0)
-		{
-			LOG("matched admin page: " << acfg::reportpage);
-			l_show_cnc:
-			pWorker = new tStaticFileSend(conFD, "report.html", "text/html", "200 OK");
-		}
-		else if (cmd == "/style.css")
-			pWorker = new tStaticFileSend(conFD, "style.css", "text/css", "200 OK");
-		else
-			pWorker = new tStaticFileSend(conFD, "userinfo.html", "text/html",
-					"404 Usage Information");
+	auto spos=cmd.find_first_not_of('/');
 
-		if(pWorker)
-			pWorker->Run(cmd);
+	string cssString("style.css");
+	if(cmd.substr(spos) == cssString)
+		return workSTYLESHEET;
+
+	// starting like the report page?
+	if(cmd.compare(spos, acfg::reportpage.length(), acfg::reportpage))
+		return workNotSpecial;
+
+	// ok, filename identical, also the end, or having a parameter string?
+	auto parmpos=spos+acfg::reportpage.length();
+	if(parmpos == cmd.length())
+		return workMAINTREPORT;
+	// not smaller, was already compared, can be only longer
+
+	if (cmd.at(parmpos) != '?')
+		return workNotSpecial; // weird, overlength but not cgi parameter
+
+	// all of the following need authorization if configured, enforce it
+	if (!acfg::adminauth.empty())
+	{
+		if(!auth)
+			return workAUTHREQUEST;
+
+		if(acfg::adminauth != auth)
+			return workAUTHREJECT;
+		// else: confirmed
+	}
+
+	struct { LPCSTR trigger; tSpecialRequest::eMaintWorkType type; } matches [] =
+	{
+			"doExpire=", workExExpire,
+			"justShow=", workExList,
+			"justRemove=", workExPurge,
+			"justShowDamaged=", workExListDamaged,
+			"justRemoveDamaged=", workExPurgeDamaged,
+			"justTruncDamaged=", workExTruncDamaged,
+			"doImport=", workIMPORT,
+			"doMirror=", workMIRROR,
+			"doDelete=", workDELETE,
+			"doDeleteYes=", workDELETE,
+			"doCount=", workCOUNTSTATS
+	};
+	for(auto& match: matches)
+		if(StrHasFrom(cmd, match.trigger, parmpos))
+			return match.type;
+
+	// something weird, go to the main page
+	return workMAINTREPORT;
+}
+
+tSpecialRequest* tSpecialRequest::MakeMaintWorker(int conFD, eMaintWorkType type)
+{
+	switch (type)
+	{
+	case workNotSpecial:
+		return NULL;
+	case workExExpire:
+	case workExList:
+	case workExPurge:
+	case workExListDamaged:
+	case workExPurgeDamaged:
+	case workExTruncDamaged:
+		return new expiration(conFD, type);
+	case workUSERINFO:
+		return new tStaticFileSend(conFD, type, "userinfo.html", "text/html", "404 Usage Information");
+	case workMAINTREPORT:
+	case workCOUNTSTATS:
+		return new tStaticFileSend(conFD, type, "report.html", "text/html", "200 OK");
+	case workAUTHREQUEST:
+		return new tAuthRequest(conFD, type);
+	case workAUTHREJECT:
+		return new authbounce(conFD, type);
+	case workIMPORT:
+		return new pkgimport(conFD, type);
+	case workMIRROR:
+		return new pkgmirror(conFD, type);
+	case workDELETE:
+	case workDELETECONFIRM:
+		return new tDeleter(conFD, type);
+	case workSTYLESHEET:
+		return new tStaticFileSend(conFD, type, "style.css", "text/css", "200 OK");
+	}
+	return NULL;
+}
+
+void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd)
+{
+	MYTRY {
+		SHARED_PTR<tSpecialRequest> p;
+		p.reset(MakeMaintWorker(fd, jobType));
+		if(p)
+			p->Run(cmd);
 	}
 	MYCATCH(...)
-	{ /* whatever */ };
-	delete pWorker;
+	{
+	}
 }

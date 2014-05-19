@@ -3,10 +3,12 @@
 
 #include "maintenance.h"
 
-class tStaticFileSend : public tWUIPage
+class tStaticFileSend : public tSpecialRequest
 {
 public:
-	tStaticFileSend(int, const char * filename,
+	tStaticFileSend(int,
+			tSpecialRequest::eMaintWorkType type,
+			const char * filename,
 			const char *mimetype,
 			const char *httpcode);
 	virtual ~tStaticFileSend();
@@ -24,7 +26,8 @@ private:
 class tDeleter : public tStaticFileSend
 {
 public:
-	inline tDeleter(int fd) : tStaticFileSend(fd, "delconfirm.html", "text/html", "200 OK") {}
+	inline tDeleter(int fd, tSpecialRequest::eMaintWorkType type)
+	: tStaticFileSend(fd, type, "delconfirm.html", "text/html", "200 OK") {};
 	virtual void ModContents(mstring & contents, cmstring &cmd) override;
 };
 

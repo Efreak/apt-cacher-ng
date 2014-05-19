@@ -116,6 +116,7 @@ inline void trimString(mstring &s, LPCSTR junk=SPACECHARS)
 #define endsWithSzAr(where, what) ((where).size()>=(sizeof((what))-1) && \
 		0==(where).compare((where).size()-(sizeof((what))-1), (sizeof((what))-1), (what)))
 #define stripSuffix(where, what) if(endsWithSzAr(where, what)) where.erase(where.size()-sizeof(what)+1);
+#define stripPrefixChars(where, what) where.erase(0, where.find_first_not_of(what))
 
 #define setIfNotEmpty(where, cand) { if(where.empty() && !cand.empty()) where = cand; }
 #define setIfNotEmpty2(where, cand, alt) { if(where.empty()) { if(!cand.empty()) where = cand; else where = alt; } }
@@ -298,6 +299,7 @@ mstring DosEscape(cmstring &s);
 #define ContHas(stlcont, needle) ((stlcont).find(needle) != (stlcont).end())
 
 #define StrHas(haystack, needle) (haystack.find(needle) != stmiss)
+#define StrHasFrom(haystack, needle, startpos) (haystack.find(needle, startpos) != stmiss)
 
 off_t GetFileSize(cmstring & path, off_t defret);
 

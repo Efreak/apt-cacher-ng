@@ -1036,6 +1036,8 @@ void PostProcConfig(bool bDumpConfig)
    if(!acfg::agentname.empty())
 	   acfg::agentheader=string("User-Agent: ")+acfg::agentname + "\r\n";
    
+   stripPrefixChars(acfg::reportpage, '/');
+
    trimString(acfg::requestapx);
    if(!acfg::requestapx.empty())
 	   acfg::requestapx = unEscape(acfg::requestapx);
@@ -1106,35 +1108,38 @@ void PostProcConfig(bool bDumpConfig)
 
    if (acfg::debug >= LOG_MORE || bDumpConfig)
 	{
-	   MYSTD::ostream &cmine(bDumpConfig ? cout : cerr);
-		for (UINT i = 0; i < _countof(n2sTbl); i++)
-			if (n2sTbl[i].ptr)
-				cmine << n2sTbl[i].name << " = " << *(n2sTbl[i].ptr) << endl;
+	   ostream &cmine(bDumpConfig ? cout : cerr);
+
+		for (auto& n2s: n2sTbl)
+			if (n2s.ptr)
+				cmine << n2s.name << " = " << *n2s.ptr << endl;
 
 		if (acfg::debug >= LOG_DEBUG)
 		{
 			cerr << "escaped version:" << endl;
-			for (UINT i = 0; i < _countof(n2sTbl); i++)
-				if (n2sTbl[i].ptr)
+			for (const auto& n2s: n2sTbl)
+			{
+				if (n2s.ptr)
 				{
-					cerr << n2sTbl[i].name << " = ";
-					for (const char *p = n2sTbl[i].ptr->c_str(); *p; p++)
+					cerr << n2s.name << " = ";
+					for (const char *p = n2s.ptr->c_str(); *p; p++)
 						if ('\\' == *p)
 							cmine << "\\\\";
 						else
 							cmine << *p;
 					cmine << endl;
 				}
+			}
 		}
 
-		for (UINT i = 0; i < _countof(n2iTbl); i++)
-			if (n2iTbl[i].ptr)
-				cmine << n2iTbl[i].name << " = \"" << *(n2iTbl[i].ptr) << "\"\n";
+		for (const auto& n2i : n2iTbl)
+			if (n2i.ptr)
+				cmine << n2i.name << " = " << *n2i.ptr << endl;
 	}
 
 #ifndef DEBUG
    if(acfg::debug >= LOG_DEBUG)
-	   cerr << "\n\nAdditional debugging information not compiled in.\n\n";
+	   cerr << "\n\nAdditional debugging information not compiled in." << endl << endl;
 #endif
    
 #if 0 //def DEBUG

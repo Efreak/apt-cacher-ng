@@ -9,14 +9,12 @@
 #include "csmapping.h"
 
 
-class pkgimport : public tCacheMan, ifileprocessor
+class pkgimport : public tCacheOperation, ifileprocessor
 {
 
 public:
-	
-	pkgimport(int);
-	
-	void Action(const mstring & src);
+	using tCacheOperation::tCacheOperation;
+	void Action(const mstring & src) override;
 	
 protected:
 	// FileHandler
@@ -44,7 +42,7 @@ private:
 	/* tFprCacheMap m_cacheMap;*/
 	
 
-	bool m_bLookForIFiles;
+	bool m_bLookForIFiles = false;
 	mstring m_sSrcPath;
 		
 	//void _ExtractLocationsFromVolFiles();

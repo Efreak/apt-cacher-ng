@@ -27,11 +27,7 @@ using namespace SMARTPTR_SPACE;
 bool bSigTaskAbort=false;
 pthread_mutex_t abortMx=PTHREAD_MUTEX_INITIALIZER;
 
-tWuiBgTask::tWuiBgTask(int fd) : tWUIPage(fd), m_bShowControls(false)
-{
-}
-
-tWuiBgTask::~tWuiBgTask()
+tSpecOpDetachable::~tSpecOpDetachable()
 {
 	if(m_pTracker)
 		m_pTracker->SetEnd(m_reportStream.is_open() ? off_t(m_reportStream.tellp()) : off_t(0));
@@ -44,7 +40,7 @@ tWuiBgTask::~tWuiBgTask()
 }
 
 // the obligatory definition of static members :-(
-SMARTPTR_SPACE::weak_ptr<tWuiBgTask::tProgressTracker> tWuiBgTask::g_pTracker;
+SMARTPTR_SPACE::weak_ptr<tSpecOpDetachable::tProgressTracker> tSpecOpDetachable::g_pTracker;
 
 void _AddFooter(tSS &msg)
 {
@@ -58,7 +54,7 @@ void _AddFooter(tSS &msg)
  *  TODO: this is kept in expiration class for historical reasons. Should be moved to some shared upper
  * class, like "detachedtask" or something like that
  */
-void tWuiBgTask::Run(const string &cmd)
+void tSpecOpDetachable::Run(const string &cmd)
 {
 
 	if (cmd.find("&sigabort")!=stmiss)
@@ -193,13 +189,8 @@ void tWuiBgTask::Run(const string &cmd)
 				bSigTaskAbort=false;
 			}
 
-			if(m_sTypeName.empty())
-				m_sTypeName="starting";
-			else
-				m_sTypeName.insert(0, "(<b>").append("</b>)");
-
-			SendFmt << "Maintenance task " << m_sTypeName
-					<< ", apt-cacher-ng version: " ACVERSION;
+			SendFmt << "Maintenance task <b>" << GetTaskName()
+					<< "</b>, apt-cacher-ng version: " ACVERSION;
 			SendFmtRemote << " (<a href=" << cmd <<
 					"&sigabort>Cancel</a>)";
 			SendFmt << "<br>";
@@ -237,7 +228,7 @@ void tWuiBgTask::Run(const string &cmd)
 
 }
 
-void tWuiBgTask::tProgressTracker::SetEnd(off_t endSize)
+void tSpecOpDetachable::tProgressTracker::SetEnd(off_t endSize)
 {
 	lockguard g(this);
 	//lockguard g2(&abortMx); // the master may go out of scope, protect weak_ptr
@@ -248,13 +239,13 @@ void tWuiBgTask::tProgressTracker::SetEnd(off_t endSize)
 	notifyAll();
 }
 
-bool tWuiBgTask::CheckStopSignal()
+bool tSpecOpDetachable::CheckStopSignal()
 {
 	lockguard g(&abortMx);
 	return bSigTaskAbort;
 }
 
-void tWuiBgTask::DumpLog(time_t id)
+void tSpecOpDetachable::DumpLog(time_t id)
 {
 	filereader reader;
 
@@ -269,7 +260,7 @@ void tWuiBgTask::DumpLog(time_t id)
 		SendChunk(reader.GetBuffer(), reader.GetSize(), true);
 }
 
-void tWuiBgTask::AfterSendChunk(const char *data, size_t len)
+void tSpecOpDetachable::AfterSendChunk(const char *data, size_t len)
 {
 	if(m_reportStream.is_open())
 	{
@@ -280,7 +271,7 @@ void tWuiBgTask::AfterSendChunk(const char *data, size_t len)
 	}
 }
 
-time_t tWuiBgTask::GetTaskId()
+time_t tSpecOpDetachable::GetTaskId()
 {
 	lockguard guard(&abortMx);
 	tProgTrackPtr pTracked = g_pTracker.lock();
