@@ -5,3 +5,6 @@
 *~
 build
 TODO.next
+dbgen/tmp/*
+doc/dev/*
+perfstats/*
