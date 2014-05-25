@@ -39,7 +39,7 @@ tCacheOperation::tCacheOperation(int fd, tSpecialRequest::eMaintWorkType type) :
 	tSpecOpDetachable(fd, type),
 	m_bErrAbort(false), m_bVerbose(false), m_bForceDownload(false),
 	m_bScanInternals(false), m_bByPath(false), m_bByChecksum(false), m_bSkipHeaderChecks(false),
-	m_bNeedsStrictPathsHere(false), m_bTruncateDamaged(false),
+	m_bTruncateDamaged(false),
 	m_nErrorCount(0),
 	m_nProgIdx(0), m_nProgTell(1), m_pDlcon(NULL)
 {
@@ -327,8 +327,6 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 
 	if (bSuccess && bIndexFile)
 		SetFlags(sFilePathRel).uptodate = true;
-
-	UpdateFingerprint(sFilePathRel, -1, NULL, NULL);
 
 	if (m_bVerbose || !bSuccess)
 	{
@@ -650,7 +648,7 @@ bool tCacheOperation::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sRefere
 
 
 bool tCacheOperation::Inject(cmstring &from, cmstring &to,
-		bool bSetIfileFlags, bool bUpdateRefdata, const header *pHead, bool bTryLink)
+		bool bSetIfileFlags, const header *pHead, bool bTryLink)
 {
 	LOGSTART("tCacheMan::Inject");
 
@@ -749,9 +747,6 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 		return false;
 	}
 	bool bOK = p->Inject(from, *pHead);
-
-	if(bOK && bUpdateRefdata)
-		UpdateFingerprint(to, -1, NULL, NULL);
 
 	MTLOGASSERT(bOK, "Inject: failed");
 
@@ -915,9 +910,9 @@ void tCacheOperation::UpdateIndexFiles()
 	{
 	public:
 		tFile2Cid m_file2cid;
-		virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressForChecksum)
+		virtual void HandlePkgEntry(const tRemoteFileInfo &entry)
 		{
-			if(bUncompressForChecksum) // dunno, ignore
+			if(entry.bInflateForCs) // XXX: no usecase yet, ignore
 				return;
 
 			tStrPos compos=FindComPos(entry.sFileName);
@@ -1473,7 +1468,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 			if (sLine.empty())
 			{
 				if(info.IsUsable())
-					ret.HandlePkgEntry(info, false);
+					ret.HandlePkgEntry(info);
 				info.SetInvalid();
 
 				if(CheckStopSignal())
@@ -1520,7 +1515,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 				if (nStep >= 2)
 				{
 					if (info.IsUsable())
-						ret.HandlePkgEntry(info, false);
+						ret.HandlePkgEntry(info);
 					info.SetInvalid();
 					nStep = 0;
 
@@ -1591,7 +1586,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 						info.sFileName = vsMetrics[0].substr(pos + 1);
 						info.sDirectory = sCurFilesReferenceDirRel + vsMetrics[0].substr(0, pos + 1);
 					}
-					ret.HandlePkgEntry(info, false);
+					ret.HandlePkgEntry(info);
 					info.SetInvalid();
 				}
 			}
@@ -1613,7 +1608,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 				LOG("index basename: " << tok);
 				info.sFileName = tok;
 				info.sDirectory = sCurFilesReferenceDirRel;
-				ret.HandlePkgEntry(info, false);
+				ret.HandlePkgEntry(info);
 				info.SetInvalid();
 			}
 		}
@@ -1636,7 +1631,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 					LOG("RPM basename: " << tok);
 					info.sFileName = tok;
 					info.sDirectory = sCurFilesReferenceDirRel;
-					ret.HandlePkgEntry(info, false);
+					ret.HandlePkgEntry(info);
 					info.SetInvalid();
 				}
 			}
@@ -1652,6 +1647,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 	*/
 	case EIDX_DIFFIDX:
 		info.fpr.csType = CSTYPE_SHA1;
+		info.bInflateForCs = true;
 		sStartMark = "SHA1-Patches:";
 		idxType = EIDX_RFC822WITHLISTS;
 		goto REDO_AS_TYPE;
@@ -1720,17 +1716,17 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 					{
 					case EIDX_SOURCES:
 						info.sDirectory = sPkgBaseDir + sDirHeader;
-						ret.HandlePkgEntry(info, false);
+						ret.HandlePkgEntry(info);
 						break;
 					case EIDX_TRANSIDX: // csum refers to the files as-is
 						info.sDirectory = sCurFilesReferenceDirRel + sDirHeader;
-						ret.HandlePkgEntry(info, false);
+						ret.HandlePkgEntry(info);
 						break;
 					case EIDX_DIFFIDX:
 						info.sDirectory = sCurFilesReferenceDirRel + sDirHeader;
-						ret.HandlePkgEntry(info, false);
+						ret.HandlePkgEntry(info);
 						info.sFileName+=".gz";
-						ret.HandlePkgEntry(info, true);
+						ret.HandlePkgEntry(info);
 						break;
 					case EIDX_RELEASE:
 						info.sDirectory = sCurFilesReferenceDirRel + sDirHeader;
@@ -1741,7 +1737,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 							info.sDirectory += info.sFileName.substr(0, pos+1);
 							info.sFileName.erase(0, pos+1);
 						}
-						ret.HandlePkgEntry(info, false);
+						ret.HandlePkgEntry(info);
 						break;
 					default:
 						ASSERT(!"Originally determined type cannot reach this case!");
@@ -1783,9 +1779,6 @@ void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 		if(att.parseignore || (!att.vfile_ondisk && !att.uptodate))
 			continue;
 
-		m_bNeedsStrictPathsHere=(m_bByPath ||
-				m_bByChecksum || (it->first.find("/installer-") != stmiss));
-
 		/*
 		 * Actually, all that information is available earlier when analyzing index classes.
 		 * Could be implemented there as well and without using .bros pointer etc...
@@ -1795,7 +1788,7 @@ void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 		 *
 		 */
 
-		if(!m_bNeedsStrictPathsHere && att.alreadyparsed)
+		if(!m_bByPath && att.alreadyparsed)
 		{
 			SendChunk(string("Skipping in ")+it->first+" (equivalent checks done before)<br>\n");
 			continue;
@@ -1816,7 +1809,7 @@ void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 			}
 			continue;
 		}
-		else if(!m_bNeedsStrictPathsHere && att.bros)
+		else if(!m_bByPath && att.bros)
 		{
 			for(tStrDeq::const_iterator broIt=att.bros->begin(); broIt!=att.bros->end(); broIt++)
 			{
@@ -1850,8 +1843,8 @@ void tCacheOperation::TellCount(uint nCount, off_t nSize)
 void tCacheOperation::SetCommonUserFlags(cmstring &cmd)
 {
 	m_bErrAbort=(cmd.find("abortOnErrors=aOe")!=stmiss);
-	m_bByPath=(cmd.find("byPath")!=stmiss);
 	m_bByChecksum=(cmd.find("byChecksum")!=stmiss);
+	m_bByPath=(StrHas(cmd, "byPath") || m_bByChecksum);
 	m_bVerbose=(cmd.find("beVerbose")!=stmiss);
 	m_bForceDownload=(cmd.find("forceRedownload")!=stmiss);
 	m_bSkipHeaderChecks=(cmd.find("skipHeadChecks")!=stmiss);
@@ -1900,14 +1893,12 @@ int parseidx_demo(LPCSTR file)
 		{
 			return !ParseAndProcessIndexFile(*this, file, GuessIndexTypeFromURL(file));
 		}
-		virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressForChecksum)
+		virtual void HandlePkgEntry(const tRemoteFileInfo &entry)
 		{
 			cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
 					<< "Checksum-" << entry.fpr.GetCsName() << ": " << entry.fpr.GetCsAsString()
-					<< endl << "ChecksumUncompressed: " << bUncompressForChecksum << endl <<endl;
+					<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
 		}
-		virtual void UpdateFingerprint(const mstring &sPathRel, off_t nOverrideSize,
-				uint8_t *pOverrideSha1, uint8_t *pOverrideMd5) {};
 		virtual bool ProcessRegular(const mstring &sPath, const struct stat &) {return true;}
 		virtual bool ProcessOthers(const mstring &sPath, const struct stat &) {return true;}
 		virtual bool ProcessDirAfter(const mstring &sPath, const struct stat &) {return true;}

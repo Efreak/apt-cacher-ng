@@ -119,12 +119,14 @@ struct tFingerprint {
 struct tRemoteFileInfo
 {
 	tFingerprint fpr;
+	bool bInflateForCs = false;
 	mstring sDirectory, sFileName;
 	inline void SetInvalid() {
 		sFileName.clear();
 		sDirectory.clear();
 		fpr.csType=CSTYPE_INVALID;
 		fpr.size=-1;
+		bInflateForCs = false;
 	}
 	inline bool IsUsable() {
 		return (!sFileName.empty() && fpr.csType!=CSTYPE_INVALID && fpr.size>0);

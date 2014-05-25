@@ -59,7 +59,7 @@ class job {
       
       tSS m_sendbuf;
       mstring m_sFileLoc; // local_relative_path_to_file
-      tSpecialRequest::eMaintWorkType m_eMaintWorkType;
+      tSpecialRequest::eMaintWorkType m_eMaintWorkType = tSpecialRequest::workNotSpecial;
       mstring m_sOrigUrl; // local SAFE copy of the originating source
       
       header *m_pReqHead; // copy of users requests header

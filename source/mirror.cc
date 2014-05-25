@@ -155,7 +155,7 @@ void pkgmirror::Action(const string &cmd)
 					break;
 				}
 		}
-		void HandlePkgEntry(const tRemoteFileInfo &entry, bool)
+		void HandlePkgEntry(const tRemoteFileInfo &entry)
 		{
 			TryAdd(entry.sDirectory+entry.sFileName);
 		}
@@ -323,30 +323,13 @@ inline bool pkgmirror::ConfigDelta(cmstring &sPathRel)
 	return m_pDeltaSrc;
 }
 
-void pkgmirror::UpdateFingerprint(const mstring &sPathRel, off_t nOverrideSize,
-			uint8_t *pOverrideSha1, uint8_t *pOverrideMd5)
-{
-
-}
-
-/*
-struct CompDebVerLessThan
-{
-	bool operator()(cmstring &s1, cmstring s2) const
-	{
-		int r=::system(string("dpkg --compare-versions "+s1+" lt "+s2).c_str());
-		return 0==r;
-	}
-};
-*/
-
 bool CompDebVerLessThan(cmstring &s1, cmstring s2)
 {
 	int r=::system(string("dpkg --compare-versions "+s1+" lt "+s2).c_str());
 	return 0==r;
 };
 
-void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressForChecksum)
+void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
 	if (m_bAsNeeded)
 	{
@@ -480,7 +463,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 							}
 						}
 
-						bhaveit = Inject(TEMPRESULT, tgtRel, false, false, &h, true);
+						bhaveit = Inject(TEMPRESULT, tgtRel, false, &h, true);
 
 						if(bhaveit)
 						{

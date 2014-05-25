@@ -302,7 +302,7 @@ void pkgimport::Action(const string &cmd)
 		<< offttosH(remaining) << ") left behind";
 }
 
-void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry, bool)
+void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
 	//typedef MYMAP<tFingerprint, tImpFileInfo, ltfingerprint> tImportMap;
 	tImportMap::iterator hit = m_importMap.find(entry.fpr);

@@ -20,51 +20,6 @@ struct foo;
 
 #define FAKEDATEMARK "Sat, 26 Apr 1986 01:23:39 GMT+3"
 
-// caching all relevant file identity data and helper flags in such entries
-struct tDiskFileInfo
-{
-	time_t nLostAt;
-	tFingerprint fpr;
-	bool bHeaderTestDone :1;
-	bool bForceContentOK :1;
-
-	tDiskFileInfo() :
-		nLostAt(0), bHeaderTestDone(false), bForceContentOK(false)
-	{
-	}
-
-};
-
-struct tFileNdir
-{
-	mstring file, dirRel;
-	bool operator<(const tFileNdir &other) const
-	{
-		int nRel = file.compare(other.file);
-		if (nRel)
-			return nRel < 0;
-		return dirRel.compare(other.dirRel) < 0;
-	}
-	inline tFileNdir(const mstring &f, const mstring &d) :
-		file(f)
-	{
-		// help STL save some memory
-		static mstring prev;
-		if (prev == d)
-			dirRel = prev;
-		else
-			prev = dirRel = d;
-	}
-	inline tFileNdir(cmstring &sPathRel)
-	{
-		tStrPos nSlashPos=sPathRel.rfind(CPATHSEP);
-		file = sPathRel.substr(nSlashPos+1);
-		dirRel = sPathRel.substr(0, nSlashPos+1);
-	}
-};
-
-typedef MYMAP<tFileNdir, tDiskFileInfo> tS2DAT;
-
 struct tPatchEntry
 {
 	string patchName;
@@ -165,7 +120,7 @@ protected:
 	// internal helper variables
 	bool m_bErrAbort, m_bVerbose, m_bForceDownload;
 	bool m_bScanInternals, m_bByPath, m_bByChecksum, m_bSkipHeaderChecks;
-	bool m_bNeedsStrictPathsHere, m_bTruncateDamaged;
+	bool m_bTruncateDamaged;
 	int m_nErrorCount;
 
 	enumIndexType GuessIndexTypeFromURL(const mstring &sPath);
@@ -181,8 +136,7 @@ protected:
 
 	bool GetAndCheckHead(cmstring & sHeadfile, cmstring &sFilePathRel, off_t nWantedSize);
 	bool Inject(cmstring &fromRel, cmstring &toRel,
-			bool bSetIfileFlags=true, bool bUpdateRefdata=true,
-			const header *pForcedHeader=NULL, bool bTryLink=false);
+			bool bSetIfileFlags=true, const header *pForcedHeader=NULL, bool bTryLink=false);
 
 	void PrintStats(cmstring &title);
 	mstring m_processedIfile;
@@ -199,8 +153,6 @@ protected:
 	void AddDelCbox(cmstring &sFileRel);
 
 private:
-	virtual void UpdateFingerprint(const mstring &sPathRel, off_t nOverrideSize,
-			uint8_t *pOverrideSha1, uint8_t *pOverrideMd5) =0;
 	bool Propagate(const string &donorRel, tContId2eqClass::iterator eqClassIter,
 			cmstring *psTmpUnpackedAbs=NULL);
 	void InstallBz2edPatchResult(tContId2eqClass::iterator eqClassIter);

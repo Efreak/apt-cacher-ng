@@ -2,6 +2,17 @@
 #define EXPIRATION_H_
 
 #include "cacheman.h"
+#include <list>
+#include <unordered_map>
+
+// caching all relevant file identity data and helper flags in such entries
+struct tDiskFileInfo
+{
+	time_t nLostAt =0;
+	off_t filesize=0;
+	bool bNoHeaderCheck=false;
+};
+
 
 class expiration : public tCacheOperation, ifileprocessor
 {
@@ -10,8 +21,10 @@ public:
 
 protected:
 
-	tS2DAT m_trashCandSet;
-	set<tFileNdir> m_trashCandHeadSet; // just collect the list of seen head files
+	MYSTD::map<mstring,MYSTD::map<mstring,tDiskFileInfo>> m_trashFile2dir2Info;
+
+	//tS2DAT m_trashCandSet;
+	//set<tFileNdir> m_trashCandHeadSet; // just collect the list of seen head files
 
 	void RemoveAndStoreStatus(bool bPurgeNow);
 	void LoadPreviousData(bool bForceInsert);
@@ -22,10 +35,7 @@ protected:
 	virtual bool ProcessRegular(const mstring &sPath, const struct stat &) override;
 
 	// for ifileprocessor
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUnpackForCsumming) override;
-
-	virtual void UpdateFingerprint(const mstring &sPathRel, off_t nOverrideSize,
-				uint8_t *pOverrideSha1, uint8_t *pOverrideMd5) override;
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override;
 
 	void LoadHints();
 
@@ -35,6 +45,8 @@ protected:
 
 	MYSTD::ofstream m_damageList;
 	bool m_bIncompleteIsDamaged = false;
+
+	MYSTD::unordered_map<uintptr_t,tFingerprint> m_fprCache;
 
 private:
 	int m_nPrevFailCount =0;

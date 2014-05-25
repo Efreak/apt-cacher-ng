@@ -19,13 +19,8 @@ public:
 protected:
 	// FileHandler
 	bool ProcessRegular(const mstring &sPath, const struct stat &);
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUnpackForCsumming);
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry);
 	void _LoadKeyCache(const mstring & sFileName);
-
-	// NOOP, our files are not changed
-	void UpdateFingerprint(cmstring &s, off_t n, uint8_t *p, uint8_t *p2)
-	{
-	}
 
 private:
 

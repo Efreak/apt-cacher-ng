@@ -69,7 +69,7 @@ struct tRemoteFileInfo;
 class ifileprocessor
 {
 public:
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressForChecksum) = 0;
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) = 0;
 	virtual ~ifileprocessor() {};
 };
 
