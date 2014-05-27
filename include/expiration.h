@@ -9,10 +9,11 @@
 struct tDiskFileInfo
 {
 	time_t nLostAt =0;
-	off_t filesize=0;
 	bool bNoHeaderCheck=false;
+	// this adds a couple of procent overhead so it's neglible considering
+	// hashing or traversing overhead of a detached solution
+	tFingerprint fpr;
 };
-
 
 class expiration : public tCacheOperation, ifileprocessor
 {
@@ -22,9 +23,6 @@ public:
 protected:
 
 	MYSTD::unordered_map<mstring,MYSTD::map<mstring,tDiskFileInfo>> m_trashFile2dir2Info;
-
-	//tS2DAT m_trashCandSet;
-	//set<tFileNdir> m_trashCandHeadSet; // just collect the list of seen head files
 
 	void RemoveAndStoreStatus(bool bPurgeNow);
 	void LoadPreviousData(bool bForceInsert);
@@ -45,9 +43,6 @@ protected:
 
 	MYSTD::ofstream m_damageList;
 	bool m_bIncompleteIsDamaged = false;
-
-#warning vielleicht doch was cooleres überlegen, off_t als indexe in den vector missbrauchen oder pointer in eine liste hinein oder alternativ-implementierung überhaupt
-	MYSTD::unordered_map<uintptr_t,tFingerprint> m_fprCache;
 
 private:
 	int m_nPrevFailCount =0;

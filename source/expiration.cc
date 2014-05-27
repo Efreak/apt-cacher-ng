@@ -36,22 +36,6 @@ using namespace MYSTD;
 #define sFAIL_INI SABSPATH("_exfail_cnt")
 #define FAIL_INI sFAIL_INI.c_str()
 
-
-inline void dump_proc_status()
-{
-#ifdef DEBUG
-	ifstream sf("/proc/self/status");
-	while (sf)
-	{
-		string s;
-		MYSTD::getline(sf, s);
-		cerr << s << endl;
-	}
-#endif
-}
-
-
-
 void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
 #warning mit -1 size klar kommen
@@ -143,7 +127,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 
 		if(m_bByChecksum)
 		{
-			tFingerprint& fprCache = m_fprCache[uintptr_t(&descHave)];
+			tFingerprint& fprCache = descHave.fpr;
 
 			bool bSkipDataCheck=false;
 
@@ -380,7 +364,7 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 				SendChunk("<br>\n");
 
 				nCount++;
-				tagSpace += desc.filesize;
+				tagSpace += desc.fpr.size;
 				fprintf(f, "%lu\t%s\t%s\n", desc.nLostAt,
 						dir_props.first.c_str(),
 						fileGroup.first.c_str());
@@ -487,13 +471,13 @@ void expiration::Action(const string & cmd)
 	{
 		SendFmt << "<br>File: " << i.first <<"<br>\n";
 		for(auto& j: i.second)
-			 SendFmt << "Dir: " << j.first << " [ "<<j.second.filesize << " / " << j.second.nLostAt << " ]<br>\n";
+			 SendFmt << "Dir: " << j.first << " [ "<<j.second.fpr.size << " / " << j.second.nLostAt << " ]<br>\n";
 	}
 #endif
 
-	if(m_bByChecksum)
+/*	if(m_bByChecksum)
 		m_fprCache.rehash(1.25*m_trashFile2dir2Info.size());
-
+*/
 	//cout << "found package files: " << m_trashCandidates.size()<<endl;
 	//for(tS2DAT::iterator it=m_trashCandSet.begin(); it!=m_trashCandSet.end(); it++)
 	//	SendChunk(tSS()<<it->second.sDirname << "~~~" << it->first << " : " << it->second.fpr.size<<"<br>");
@@ -636,7 +620,7 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 	                                   [sPathRel.substr(0, nCutPos)];
 	finfo.nLostAt = m_gMaintTimeNow;
 	// remember the size for content data, ignore for the header file
-	finfo.filesize = stripLen ? stinfo.st_size : 0;
+	finfo.fpr.size = stripLen ? stinfo.st_size : 0;
 
 	return true;
 }
