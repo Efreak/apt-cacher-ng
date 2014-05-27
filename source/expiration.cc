@@ -40,121 +40,96 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
 #warning mit -1 size klar kommen
 	LOGSTART2("expiration::_HandlePkgEntry:",
-			"\ndir:" << entry.sDirectory <<
-			"\nname: " << entry.sFileName <<
-			"\nsize: " << entry.fpr.size <<
-			"\ncsum: " << entry.fpr.GetCsAsString());
+			"\ndir:" << entry.sDirectory << "\nname: "
+			<< entry.sFileName << "\nsize: " << entry.fpr.size << "\ncsum: " << entry.fpr.GetCsAsString());
 
-	auto rangeIt = m_trashFile2dir2Info.find(entry.sFileName);
-	if(rangeIt == m_trashFile2dir2Info.end())
-		return;
-
-	for(auto it=rangeIt->second.begin(); it!=rangeIt->second.end();
-			/* erases inside -> step forward there */ )
-	{
-		// shortcuts
-		const auto& filenameHave = rangeIt->first;
-		tDiskFileInfo &descHave = it->second;
-		//tFingerprint & fprHave=descHave.fpr;
-
-		string sPathRel(it->first + filenameHave);
-		string sPathAbs(CACHE_BASE+sPathRel);
-
-		if(ContHas(m_forceKeepInTrash,sPathRel))
-			goto keep_in_trash;
-
-		// needs to match the exact file location.
-		// And for "Index" files, they have always to be at a well defined location, this
-		// constraint is also needed to expire deprecated files
-		if(m_bByPath || entry.sFileName == sIndex)
-		{
-			// compare full paths (physical vs. remote) with their real paths
-			string sEntrPath=entry.sDirectory+entry.sFileName;
-			LOG("Checking exact path: " << sEntrPath << " vs. " << sPathRel);
-			pathTidy(sEntrPath);
-			if(sPathRel != sEntrPath)
-				goto keep_in_trash; // not for us, try another one
-		}
-
-		// Basic header checks. Skip if the file was forcibly updated/reconstructed before.
-		if (m_bSkipHeaderChecks || descHave.bNoHeaderCheck)
-		{
-			LOG("Skipped header check for " << sPathRel);
-		}
-		else if(entry.bInflateForCs)
-		{
-			LOG("Skipped header check for " << sPathRel << " needs to be uncompressed first");
-		}
-		else if(entry.fpr.size>=0)
-		{
-			LOG("Doing basic header checks");
-			header h;
-			if (0<h.LoadFromFile(sPathAbs+".head"))
+	// returns true if the file can be trashed, i.e. should stay in the list
+	auto DetectUncovered =
+			[&](cmstring& filenameHave, cmstring &sDirRel, tDiskFileInfo &descHave) -> bool
 			{
-				off_t len=atoofft(h.h[header::CONTENT_LENGTH], -2);
-				if(len<0)
+				string sPathRel(sDirRel + filenameHave);
+				if(ContHas(m_forceKeepInTrash,sPathRel)) return true;
+				string sPathAbs(CACHE_BASE+sPathRel);
+
+				// Basic header checks. Skip if the file was forcibly updated/reconstructed before.
+				if (m_bSkipHeaderChecks || descHave.bNoHeaderCheck)
 				{
-					SendFmt << "<span class=\"ERROR\">WARNING, header file of "
+					LOG("Skipped header check for " << sPathRel);
+				}
+				else if(entry.bInflateForCs)
+				{
+					LOG("Skipped header check for " << sPathRel << " needs to be uncompressed first");
+				}
+				else if(entry.fpr.size>=0)
+				{
+					LOG("Doing basic header checks");
+					header h;
+					if (0<h.LoadFromFile(sPathAbs+".head"))
+					{
+						off_t len=atoofft(h.h[header::CONTENT_LENGTH], -2);
+						if(len<0)
+						{
+							SendFmt << "<span class=\"ERROR\">WARNING, header file of "
 							<< sPathRel << " does not contain content length</span>";
-					goto keep_in_trash;
-				}
-				off_t lenInfo=GetFileSize(sPathAbs, -3);
-				if(lenInfo<0)
-				{
-					SendFmt << ": error reading attributes, ignoring" << sPathRel;
-					goto keep_in_trash;
-				}
-				if (len < lenInfo)
-				{
-					SendFmt << "<span class=\"ERROR\">WARNING, header file of " << sPathRel
+							return true;
+						}
+						off_t lenInfo=GetFileSize(sPathAbs, -3);
+						if(lenInfo<0)
+						{
+							SendFmt << ": error reading attributes, ignoring" << sPathRel;
+							return true;
+						}
+						if (len < lenInfo)
+						{
+							SendFmt << "<span class=\"ERROR\">WARNING, header file of " << sPathRel
 							<< " reported too small file size (" << len << " vs. " << lenInfo
 							<< "), invalidating and removing header</span><br>\n";
-					// kill the header ASAP, no matter which extra exception might apply later
-					ignore_value(::unlink((sPathAbs+".head").c_str()));
-					goto keep_in_trash;
-				}
-			}
-			else
-			{
-				tIfileAttribs at = GetFlags(sPathRel);
-				if(!at.parseignore && !at.forgiveDlErrors)
-				{
-					SendFmt<<"<span class=\"WARNING\">WARNING, header file missing or damaged for "
-						<<sPathRel<<"</span>\n<br>\n";
-				}
-			}
-		}
-
-		if(m_bByChecksum)
-		{
-			tFingerprint& fprCache = descHave.fpr;
-
-			bool bSkipDataCheck=false;
-
-			// can tell this ASAP if unpacking is not needed
-			if(!entry.bInflateForCs &&
-					fprCache.csType == entry.fpr.csType &&
-					fprCache.size < entry.fpr.size)
-			{
-				if(m_bIncompleteIsDamaged)
-				{
-					if(m_bTruncateDamaged)
-						goto l_tell_truncating;
+							// kill the header ASAP, no matter which extra exception might apply later
+							ignore_value(::unlink((sPathAbs+".head").c_str()));
+							return true;
+						}
+					}
 					else
-						goto l_tell_damaged;
+					{
+						tIfileAttribs at = GetFlags(sPathRel);
+						if(!at.parseignore && !at.forgiveDlErrors)
+						{
+							SendFmt<<"<span class=\"WARNING\">WARNING, header file missing or damaged for "
+							<<sPathRel<<"</span>\n<br>\n";
+						}
+					}
 				}
-				goto l_tell_incomplete;
-			}
 
-			// scan file if not done before or the checksum type differs
-			if(entry.fpr.csType != fprCache.csType
-					&& !fprCache.ScanFile(sPathAbs, entry.fpr.csType, entry.bInflateForCs))
-			{
-					// IO error? better keep it for now
-				aclog::err(tSS()<<"An error occurred while checksumming "
-						<< sPathAbs	<< ", not touching it.");
-				bSkipDataCheck=true;
-			}
+				if(m_bByChecksum)
+				{
+					tFingerprint& fprCache = descHave.fpr;
+
+					bool bSkipDataCheck=false;
+
+					// can tell this ASAP if unpacking is not needed
+					if(!entry.bInflateForCs &&
+							fprCache.csType == entry.fpr.csType &&
+							fprCache.size < entry.fpr.size)
+					{
+						if(m_bIncompleteIsDamaged)
+						{
+							if(m_bTruncateDamaged)
+							goto l_tell_truncating;
+							else
+							goto l_tell_damaged;
+						}
+						goto l_tell_incomplete;
+					}
+
+					// scan file if not done before or the checksum type differs
+					if(entry.fpr.csType != fprCache.csType
+							&& !fprCache.ScanFile(sPathAbs, entry.fpr.csType, entry.bInflateForCs))
+					{
+						// IO error? better keep it for now
+						aclog::err(tSS()<<"An error occurred while checksumming "
+								<< sPathAbs << ", not touching it.");
+						bSkipDataCheck=true;
+					}
 
 #warning fixme, total wirr, und eigentlich ist der fprcache auch schrott, sollte cstype beruecksichtigen
 
@@ -164,13 +139,13 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				{
 					l_tell_incomplete:
 					SendFmt << "<span class=\"WARNING\">INCOMPLETE: " << sPathRel
-							<< " (ignoring)</span><br>\n";
+					<< " (ignoring)</span><br>\n";
 				}
 				else if (m_bTruncateDamaged)
 				{
 					l_tell_truncating:
 					SendFmt << "<span class=\"WARNING\">BAD: " << sPathRel
-							<< " (truncating)</span><br>\n";
+					<< " (truncating)</span><br>\n";
 					ignore_value(::truncate(sPathAbs.c_str(), 0));
 				}
 				else
@@ -180,38 +155,61 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 					if(GetFlags(sPathRel).parseignore)
 					{
 						SendFmt << sPathRel << ": incorrect or obsolete contents but marked as "
-								"alternative version of another index file "
-								"<span class=\"WARNING\">(ignoring)</span>";
+						"alternative version of another index file "
+						"<span class=\"WARNING\">(ignoring)</span>";
 					}
 					else
 					{
 						if (m_damageList.is_open())
-							m_damageList << sPathRel << endl;
+						m_damageList << sPathRel << endl;
 						SendFmt << "<span class=\"ERROR\">BAD: " << sPathRel
-								<< " (adding to damage list)</span>";
+						<< " (adding to damage list)</span>";
 						AddDelCbox(sPathRel);
 					}
 					SendChunk("<br>\n");
-
-					goto keep_in_trash;
+					return true;
 				}
 			}
 		}
 
 		// ok, package matched, contents ok if checked, drop it from the removal list
 		if (m_bVerbose)
-			SendFmt << "<font color=green>OK: " << sPathRel << "</font><br>\n";
+		SendFmt << "<font color=green>OK: " << sPathRel << "</font><br>\n";
 
 		// update usage statistics
 		SetFlags(m_processedIfile).space+=entry.fpr.size;
+		return false;
+	};
 
-		rangeIt->second.erase(it++);
+	auto rangeIt = m_trashFile2dir2Info.find(entry.sFileName);
+	if (rangeIt == m_trashFile2dir2Info.end())
+		return;
 
-		continue;
+	auto loopFunc =
+			[&](map<mstring,tDiskFileInfo>::iterator& it)
+			{
+				if (DetectUncovered(rangeIt->first, it->first, it->second))
+				it++;
+				else
+				rangeIt->second.erase(it++);
+			};
 
-		keep_in_trash:
-		it++;
+	// needs to match the exact file location.
+	// And for "Index" files, they have always to be at a well defined location, this
+	// constraint is also needed to expire deprecated files
+	if(m_bByPath || entry.sFileName == sIndex)
+	{
+		// compare full paths (physical vs. remote) with their real paths
+		auto cleanPath(entry.sDirectory);
+		pathTidy(cleanPath);
+		auto itEntry = rangeIt->second.find(cleanPath);
+		if(itEntry == rangeIt->second.end()) // not found, ignore
+			return;
+		loopFunc(itEntry);
 	}
+	else for(auto it = rangeIt->second.begin(); it != rangeIt->second.end();)
+		loopFunc(it);
+
 }
 
 // this method looks for the validity of additional package files kept in cache after
