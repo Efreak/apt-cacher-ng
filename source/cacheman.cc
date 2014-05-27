@@ -1386,8 +1386,11 @@ tCacheOperation::enumIndexType tCacheOperation::GuessIndexTypeFromURL(const mstr
 	if (sPureIfileName == "Release" || sPureIfileName=="InRelease")
 		return EIDX_RELEASE;
 
-	if (sPureIfileName == "Index")
+	if (sPureIfileName == sIndex)
 		return endsWithSzAr(sPath, "i18n/Index") ? EIDX_TRANSIDX : EIDX_DIFFIDX;
+
+	if (sPureIfileName == "MD5SUMS" && StrHas(sPath, "/installer-"))
+		return EIDX_MD5DILIST;
 
 	return EIDX_UNSUPPORTED;
 }
@@ -1412,8 +1415,13 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 	if(stmiss!=pos)
 	{
 		sCurFilesReferenceDirRel.assign(sPath, 0, pos+1);
-		pos=sCurFilesReferenceDirRel.rfind("/dists/");
-		if(stmiss!=pos)
+
+		// does this look like a Debian archive structure? i.e. paths to other files have a base
+		// directory starting in dists/?
+		// The assumption doesn't however apply to the d-i checksum
+		// lists, those refer to themselves only.
+
+		if(idxType != EIDX_MD5DILIST && stmiss!=(pos=sCurFilesReferenceDirRel.rfind("/dists/")))
 			sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+1);
 		else
 			sPkgBaseDir=sCurFilesReferenceDirRel;
@@ -1637,14 +1645,32 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 			}
 		}
 		break;
-	/* not used for now, just covered by wfilepat
-	else if( (sPureIfileName == "MD5SUMS" ||
-			sPureIfileName == "SHA1SUMS" ||
-			sPureIfileName == "SHA256SUMS") && it->find("/installer-") != stmiss)
-	{
+	case EIDX_MD5DILIST:
+		LOG("Plain list of filenames and md5sums");
+		while(reader.GetOneLine(sLine))
+		{
+			if(CheckStopSignal())
+				return true;
 
-	}
-	*/
+			for(tSplitWalk split(&sLine, SPACECHARS "./"); split.Next(); )
+			{
+				info.fpr.Set(split, CSTYPE_MD5, off_t(-1));
+				info.sFileName = split;
+				info.sDirectory = sCurFilesReferenceDirRel;
+
+				pos=info.sFileName.rfind(SZPATHSEPUNIX);
+				if (stmiss!=pos)
+				{
+					info.sDirectory += info.sFileName.substr(0, pos+1);
+					info.sFileName.erase(0, pos+1);
+				}
+
+				ret.HandlePkgEntry(info);
+				info.SetInvalid();
+
+			}
+		}
+		break;
 	case EIDX_DIFFIDX:
 		info.fpr.csType = CSTYPE_SHA1;
 		info.bInflateForCs = true;

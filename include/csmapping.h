@@ -87,11 +87,15 @@ struct tFingerprint {
 	{
 		return GetCsAsString()+"_"+offttos(size);
 	}
+	inline bool csEquals(const tFingerprint& other) const
+	{
+		return 0==memcmp(csum, other.csum, csType==CSTYPE_MD5 ? 16 : 20);
+	}
 	inline bool operator==(const tFingerprint & other) const
 	{
 		if(other.csType!=csType || size!=other.size)
 			return false;
-		return 0==memcmp(csum, other.csum, csType==CSTYPE_MD5 ? 16 : 20);
+		return csEquals(other);
 	}
 	inline bool operator!=(const tFingerprint & other) const
 	{

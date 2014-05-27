@@ -9,6 +9,11 @@ apt-cacher-ng (0.7.27) BETA; urgency=low
   * Lots of refactoring on maintenance page factory code, including bugfix:
     Displaying user info page rather than admin page if the admin page site
     name was not configured in the config at all
+  * Expiration code review and rework:
+    + contents checking for Debian Installer images, no more carte blanche for
+      d-i files
+    + less memory usage
+    
 
 apt-cacher-ng (0.7.26) BETA; urgency=low
 

@@ -7,6 +7,8 @@
 #include "filereader.h"
 #include "fileio.h"
 
+#include <fstream>
+
 #include <unistd.h>
 #include <dirent.h>
 
@@ -17,7 +19,7 @@
 
 using namespace MYSTD;
 
-#define ENABLED
+#define ENABLED_
 
 #ifndef ENABLED
 #warning Unlinking parts defused
@@ -34,11 +36,25 @@ using namespace MYSTD;
 #define sFAIL_INI SABSPATH("_exfail_cnt")
 #define FAIL_INI sFAIL_INI.c_str()
 
-static cmstring sIndex("Index");
-static cmstring sslIndex("/Index");
+
+inline void dump_proc_status()
+{
+#ifdef DEBUG
+	ifstream sf("/proc/self/status");
+	while (sf)
+	{
+		string s;
+		MYSTD::getline(sf, s);
+		cerr << s << endl;
+	}
+#endif
+}
+
+
 
 void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
+#warning mit -1 size klar kommen
 	LOGSTART2("expiration::_HandlePkgEntry:",
 			"\ndir:" << entry.sDirectory <<
 			"\nname: " << entry.sFileName <<
@@ -85,7 +101,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 		{
 			LOG("Skipped header check for " << sPathRel << " needs to be uncompressed first");
 		}
-		else
+		else if(entry.fpr.size>=0)
 		{
 			LOG("Doing basic header checks");
 			header h;
@@ -127,7 +143,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 
 		if(m_bByChecksum)
 		{
-			auto& fprCache = m_fprCache[uintptr_t(&descHave)];
+			tFingerprint& fprCache = m_fprCache[uintptr_t(&descHave)];
 
 			bool bSkipDataCheck=false;
 
@@ -155,6 +171,8 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 						<< sPathAbs	<< ", not touching it.");
 				bSkipDataCheck=true;
 			}
+
+#warning fixme, total wirr, und eigentlich ist der fprcache auch schrott, sollte cstype beruecksichtigen
 
 			if ( !bSkipDataCheck && fprCache != entry.fpr)
 			{
@@ -456,7 +474,10 @@ void expiration::Action(const string & cmd)
 
 	SendChunk("<b>Locating potentially expired files in the cache...</b><br>\n");
 
+	dump_proc_status();
 	DirectoryWalk(acfg::cachedir, this);
+	dump_proc_status();
+
 	if(CheckStopSignal())
 		goto save_fail_count;
 	SendFmt<<"Found "<<m_nProgIdx<<" files.<br />\n";
@@ -579,17 +600,24 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 	tStrPos pos2, pos = sPathRel.rfind("/installer-");
 	if(pos!=stmiss && stmiss !=(pos2=sPathRel.find("/images/", pos)))
 	{
+		AddIFileCandidate(sPathRel.substr(0, pos2+8)+"MD5SUMS");
 #warning teste das mit echtem image file
-		auto idir=sPathRel.substr(0, pos2+8);
-		if(!ContHas(m_indexFilesRel, idir+"SHA256SUMS"))
-		{
-			// folder doesn't have sha256 version but that's ok. At least md5 version is there.
-			// XXX: change that when "oldstable" also has sha256 version
-			auto& idesc=m_indexFilesRel[idir+"MD5SUMS"];
-			idesc.vfile_ondisk=false;
-			idesc.uptodate=false;
-		}
-
+#if 0
+		auto idir = sPathRel.substr(0, pos2 + 8);
+		/* XXX: support sha256, do onl,y MD5SUMS for now
+		 if(!ContHas(m_indexFilesRel, idir+"SHA256SUMS"))
+		 {
+		 */
+		// folder doesn't have sha256 version but that's ok. At least md5 version is there.
+		// XXX: change that when "oldstable" also has sha256 version
+		auto& idesc = m_indexFilesRel[idir + "MD5SUMS"];
+		/* pretend that it's there but not usable so the refreshing code will try to get at
+		 * least one copy for that location if it's needed there
+		 */
+		idesc.vfile_ondisk = true;
+		idesc.uptodate = false;
+//		}
+#endif
 	}
 	UINT stripLen=0;
     if (endsWithSzAr(sPathRel, ".head"))

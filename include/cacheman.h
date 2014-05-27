@@ -20,6 +20,9 @@ struct foo;
 
 #define FAKEDATEMARK "Sat, 26 Apr 1986 01:23:39 GMT+3"
 
+static cmstring sIndex("Index");
+static cmstring sslIndex("/Index");
+
 struct tPatchEntry
 {
 	string patchName;
@@ -64,7 +67,8 @@ protected:
 		EIDX_SUSEREPO,
 		EIDX_XMLRPMLIST,
 		EIDX_RFC822WITHLISTS,
-		EIDX_TRANSIDX
+		EIDX_TRANSIDX,
+		EIDX_MD5DILIST
 	};
 	struct tIfileAttribs
 	{
