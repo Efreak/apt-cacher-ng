@@ -12,11 +12,10 @@
 
 #include <iostream>
 #include <fstream>
-#include <string>
 #include <deque>
-#include <map>
-#include <list>
 #include <algorithm>
+#include <list>
+#include <unordered_map>
 
 using namespace MYSTD;
 
@@ -131,21 +130,11 @@ MapNameToInt n2iTbl[] = {
 void ReadRewriteFile(const string & sFile, const string & sRepName);
 void ReadBackendsFile(const string & sFile, const string &sRepName);
 
-struct fct_lt_host
-{
-	bool operator()(const tHttpUrl &a, const tHttpUrl &b) const
-	{
-		cmstring& ap = a.GetPort();
-		cmstring& bp = b.GetPort();
-		if (ap != bp)
-			return ap < bp;
-		return strcasecmp(a.sHost.c_str(), b.sHost.c_str()) < 0;
-	}
-};
-typedef multimap<tHttpUrl,const string*, fct_lt_host> tMapUrl2StringPtr; 
-tMapUrl2StringPtr mapUrl2pVname;
+map<cmstring, tRepoData> repoparms;
 
-MYSTD::map<cmstring, tRepoData> repoparms;
+// maps hostname:port -> { <path,pointer>, ... }
+unordered_map<string, list<pair<cmstring,decltype(repoparms)::iterator>>> mapUrl2pVname;
+
 
 string * GetStringPtr(const string &key) {
 	for(auto &ent : n2sTbl)
@@ -250,17 +239,14 @@ bool ReadOneConfFile(const string & szFilename)
 	return true;
 }
 
-inline cmstring * GetRepoEntryNamePtr(const string & sRepName)
+inline decltype(repoparms)::iterator GetRepoEntryRef(const string & sRepName)
 {
-	// save some memory by storing only pointer to its entry in the map since the life time is guaranteed
-
 	auto it = repoparms.find(sRepName);
-	if(repoparms.end() == it)
-	{
-		repoparms[sRepName] = tRepoData();
-		it = repoparms.find(sRepName);
-	}
-	return & it->first;
+	if(repoparms.end() != it)
+		return it;
+	// strange...
+	auto rv(repoparms.insert(make_pair(sRepName,tRepoData())));
+	return rv.first;
 }
 
 inline bool ParseOptionLine(const string &sLine, string &key, string &val, bool bQuiet)
@@ -302,12 +288,8 @@ inline void AddRemapFlag(const string & token, const string &repname)
 
 	if(key=="keyfile")
 	{
-
 		if(value.empty())
 			return;
-
-		//if(!startsWithSz(value, "/"))
-		//	value.insert(0, "/");
 		if (acfg::debug&LOG_FLUSH)
 			cerr << "Fatal keyfile for " <<repname<<": "<<value <<endl;
 
@@ -315,7 +297,6 @@ inline void AddRemapFlag(const string & token, const string &repname)
 	}
 	else if(key=="deltasrc")
 	{
-
 		if(value.empty())
 			return;
 
@@ -344,9 +325,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 
 tStrDeq ExpandFileTokens(cmstring &token)
 {
-
 	tStrDeq srcs;
-
 	string sPath = token.substr(5);
 	if (sPath.empty())
 		BARF("Bad file spec for repname, file:?");
@@ -400,8 +379,8 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 		if (bAsBackend)
 			repoparms[repname].m_backends.push_back(url);
 		else
-			mapUrl2pVname.insert(pair<tHttpUrl,const string*>(
-					url, GetRepoEntryNamePtr(repname)));
+			mapUrl2pVname[url.sHost+":"+url.GetPort()].push_back(
+					make_pair(url.sPath, GetRepoEntryRef(repname)));
 	}
 	else
 	{
@@ -570,7 +549,6 @@ cmstring & GetMimeType(cmstring &path)
 
 bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 {
-
 	string key, value;
 
 	if(!ParseOptionLine(sLine, key, value, bQuiet))
@@ -734,38 +712,43 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 
 
 //const string * GetVnameForUrl(string path, string::size_type * nMatchLen)
-cmstring * GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResidual)
+bool GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResidual,
+		tBackendDataRef &beRef)
 {
 	sRetPathResidual.clear();
 	
 	// get all the URLs matching THE HOSTNAME
-	auto range=mapUrl2pVname.equal_range(in);
-	if(range.first==range.second)
+	auto rangeIt=mapUrl2pVname.find(in.sHost+":"+in.GetPort());
+	if(rangeIt == mapUrl2pVname.end())
 		return NULL;
 	
 	tStrPos bestMatchLen(0);
-	string const * psBestHit(NULL);
+	decltype(repoparms)::iterator pBestHit = repoparms.end();
 		
 	// now find the longest directory part which is the suffix of requested URL's path
-	for (auto& it=range.first; it!=range.second; it++)
+	for (auto& repo : rangeIt->second)
 	{
 		// rewrite rule path must be a real prefix
 		// it's also surrounded by /, ensured during construction
-		const string & prefix=it->first.sPath;
+		const string & prefix=repo.first; // path of the rewrite entry
 		tStrPos len=prefix.length();
 		if (in.sPath.size() > len && 0==in.sPath.compare(0, len, prefix))
 		{
 			if (len>bestMatchLen)
 			{
 				bestMatchLen=len;
-				psBestHit=it->second;
+				pBestHit=repo.second;
 			}
 		}
 	}
 		
-	if(psBestHit) sRetPathResidual=in.sPath.substr(bestMatchLen);
-	return psBestHit;
-	
+	if(pBestHit != repoparms.end())
+	{
+		sRetPathResidual=in.sPath.substr(bestMatchLen);
+		beRef=pBestHit;
+		return true;
+	}
+	return false;
 }
 
 const tRepoData * GetBackendVec(cmstring &vname)
@@ -775,7 +758,6 @@ const tRepoData * GetBackendVec(cmstring &vname)
 		return NULL;
 	return & it->second;
 }
-
 
 void ReadBackendsFile(const string & sFile, const string &sRepName)
 {
@@ -849,7 +831,6 @@ try_read_default:
 	if(debug>4)
 		cerr << "Trying to read replacement from " << sFile << ".default" <<endl;
 	ReadBackendsFile(sFile+".default", sRepName);
-
 }
 
 void ShutDown()
@@ -882,14 +863,17 @@ void ReadRewriteFile(const string & sFile, const string & sRepName)
 		if (url.SetHttpUrl(sLine))
 		{
 			_FixPostPreSlashes(url.sPath);
-			pair<tHttpUrl, const string*> info(url, GetRepoEntryNamePtr(sRepName));
-			mapUrl2pVname.insert(info);
+
+			mapUrl2pVname[url.sHost+":"+url.GetPort()].push_back(
+					make_pair(url.sPath, GetRepoEntryRef(sRepName)));
 #ifdef DEBUG
 						cerr << "Mapping: "<< url.ToURI(false)
 						<< " -> "<< sRepName <<endl;
 #endif
 			continue;
 		}
+
+		// otherwise deal with the complicated RFC-822 format for legacy reasons
 
 		if (sLine.empty()) // end of block, eof, ... -> commit it
 		{
@@ -913,8 +897,8 @@ void ReadRewriteFile(const string & sFile, const string & sRepName)
 					tHttpUrl url;
 					url.sHost=host;
 					url.sPath=path;
-					pair<tHttpUrl,const string*> info(url, GetRepoEntryNamePtr(sRepName));
-					mapUrl2pVname.insert(info);
+					mapUrl2pVname[url.sHost+":"+url.GetPort()].push_back(
+						make_pair(url.sPath, GetRepoEntryRef(sRepName)));
 
 #ifdef DEBUG
 						cerr << "Mapping: "<< host << path
@@ -964,6 +948,7 @@ tRepoData::~tRepoData()
 
 void ReadConfigDirectory(const char *szPath, bool bTestMode)
 {
+	dump_proc_status();
 	char buf[PATH_MAX];
 	g_testMode=bTestMode;
 	if(!realpath(szPath, buf))
@@ -978,6 +963,7 @@ void ReadConfigDirectory(const char *szPath, bool bTestMode)
 #else
 	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
 #endif
+	dump_proc_status();
 }
 
 void PostProcConfig(bool bDumpConfig)

@@ -487,9 +487,10 @@ void job::PrepareDownload() {
     string sReqPath, sPathResidual;
     tHttpUrl tUrl; // parsed URL
 
-    const acfg::tRepoData * pBackends(NULL); // appropriate backends
-    const string * psVname(NULL); // virtual name for storage pool, if available
-    
+	// resolve to an internal repo location and maybe backends later
+	acfg::tBackendDataRef beRef;
+	bool bUseRepo;
+
     fileitem::FiStatus fistate(fileitem::FIST_FRESH);
     bool bPtMode(false);
     bool bForceFreshnessChecks(false); // force update of the file, i.e. on dynamic index files?
@@ -598,11 +599,10 @@ void job::PrepareDownload() {
 		// got something valid, has type now, trace it
 		USRDBG("Processing new job, "<<m_pReqHead->frontLine);
 
-		// resolve to an internal location
-		psVname = acfg::GetRepNameAndPathResidual(tUrl, sPathResidual);
-		
-		if(psVname)
-			m_sFileLoc=*psVname+SZPATHSEP+sPathResidual;
+		bUseRepo = acfg::GetRepNameAndPathResidual(tUrl, sPathResidual, beRef);
+
+		if(bUseRepo)
+			m_sFileLoc=beRef->first+SZPATHSEP+sPathResidual;
 		else
 			m_sFileLoc=tUrl.sHost+tUrl.sPath;
 
@@ -665,18 +665,18 @@ void job::PrepareDownload() {
     	dbgline;
     	MYTRY
 		{
-			if(psVname && NULL != (pBackends=acfg::GetBackendVec(*psVname)))
+			if(bUseRepo && ! beRef->second.m_backends.empty())
 			{
 				LOG("Backends found, using them with " << sPathResidual
-						<< ", first backend: " <<pBackends->m_backends.front().ToURI(false));
+						<< ", first backend: " <<beRef->second.m_backends.front().ToURI(false));
 
 				if(! bPtMode && rechecks::
-						MatchUncacheableTarget(pBackends->m_backends.front().ToURI(false)+sPathResidual))
+						MatchUncacheableTarget(beRef->second.m_backends.front().ToURI(false)+sPathResidual))
 				{
 					fistate=_SwitchToPtItem(m_sFileLoc);
 				}
 
-				m_pParentCon->m_pDlClient->AddJob(m_pItem.get(), pBackends, sPathResidual);
+				m_pParentCon->m_pDlClient->AddJob(m_pItem.get(), & beRef->second, sPathResidual);
 			}
 			else
 			{

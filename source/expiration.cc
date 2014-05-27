@@ -458,9 +458,9 @@ void expiration::Action(const string & cmd)
 
 	SendChunk("<b>Locating potentially expired files in the cache...</b><br>\n");
 
-	dump_proc_status();
+	//dump_proc_status();
 	DirectoryWalk(acfg::cachedir, this);
-	dump_proc_status();
+	//dump_proc_status();
 
 	if(CheckStopSignal())
 		goto save_fail_count;

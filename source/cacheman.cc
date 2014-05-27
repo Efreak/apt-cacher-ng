@@ -281,9 +281,9 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 	}
 	if (!pBackends) // we still might want to remap it
 	{
-		cmstring * pBackendName = acfg::GetRepNameAndPathResidual(url, sPatSuffix);
-		if (pBackendName)
-			pBackends = acfg::GetBackendVec(*pBackendName);
+		acfg::tBackendDataRef beRef;
+		if(acfg::GetRepNameAndPathResidual(url, sPatSuffix, beRef))
+			pBackends = & beRef->second;
 	}
 
 	if(pBackends)
