@@ -13,7 +13,10 @@ class pkgimport : public tCacheOperation, ifileprocessor
 {
 
 public:
-	using tCacheOperation::tCacheOperation;
+	// XXX: c++11 using tCacheOperation::tCacheOperation;
+	inline pkgimport(int fd, tSpecialRequest::eMaintWorkType type)
+	: tCacheOperation(fd, type) {};
+
 	void Action(const mstring & src) override;
 	
 protected:

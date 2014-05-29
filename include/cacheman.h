@@ -115,11 +115,14 @@ protected:
 
 	void StartDlder();
 
-#define VERB_QUIET 0
-#define VERB_SHOW 1
-#define VERB_SHOW_NOERRORS 2
+	enum eDlMsgPrio
+	{
+		eMsgHideAll,
+		eMsgHideErrors,
+		eMsgShow
+	};
 	bool Download(const MYSTD::string & sFilePathRel, bool bIndexFile,
-			int nVerbosity=VERB_SHOW, tGetItemDelegate *p=NULL, const char *pForcedURL=NULL);
+			eDlMsgPrio msgLevel, tGetItemDelegate *p=NULL, const char *pForcedURL=NULL);
 
 	// internal helper variables
 	bool m_bErrAbort, m_bVerbose, m_bForceDownload;

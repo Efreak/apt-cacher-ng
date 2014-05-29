@@ -19,6 +19,7 @@ apt-cacher-ng (0.8) BETA; urgency=low
     + better readability
     + now using better tailored containers
     + stricter size format parsing on certain places
+    + fixed removal checkboxes not appearing sometimes
 
 apt-cacher-ng (0.7.26) BETA; urgency=low
 

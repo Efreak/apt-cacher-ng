@@ -18,7 +18,9 @@ struct tDiskFileInfo
 class expiration : public tCacheOperation, ifileprocessor
 {
 public:
-	using tCacheOperation::tCacheOperation;
+	// XXX: g++ 4.7 is not there yet... using tCacheOperation::tCacheOperation;
+	inline expiration(int fd, tSpecialRequest::eMaintWorkType type)
+	: tCacheOperation(fd, type) {};
 
 protected:
 

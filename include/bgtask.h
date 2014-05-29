@@ -17,7 +17,10 @@ class tSpecOpDetachable : public tSpecialRequest
 {
 public:
 	// forward all constructors, no specials here
-	using tSpecialRequest::tSpecialRequest;
+	// XXX: oh please, g++ 4.7 is not there yet... using tSpecialRequest::tSpecialRequest;
+	inline tSpecOpDetachable(int fd, tSpecialRequest::eMaintWorkType type)
+	: tSpecialRequest(fd, type)	{ };
+
 	virtual ~tSpecOpDetachable();
 
 	 /*!

@@ -159,7 +159,7 @@ bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 
 
 bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFile,
-		int nVerbosity, tGetItemDelegate *pItemDelg, const char *pForcedURL)
+		eDlMsgPrio msgVerbosityLevel, tGetItemDelegate *pItemDelg, const char *pForcedURL)
 {
 
 	LOGSTART("tCacheMan::Download");
@@ -170,10 +170,13 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 	bool nix=StrHas(sFilePathRel, "debrep/dists/experimental/non-free/debian-installer/binary-mips/Packages.gz");
 #endif
 
+#define NEEDED_VERBOSITY_ALL_BUT_ERRORS (msgVerbosityLevel >= eMsgHideErrors)
+#define NEEDED_VERBOSITY_EVERYTHING (msgVerbosityLevel >= eMsgShow)
+
 	const tIfileAttribs &flags=GetFlags(sFilePathRel);
 	if(flags.uptodate)
 	{
-		if(nVerbosity)
+		if(NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 			SendFmt<<"Checking "<<sFilePathRel<< (bIndexFile
 					? "... (fresh)<br>\n" : "... (complete)<br>\n");
 		return true;
@@ -194,7 +197,7 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 
 	if (!fi.get())
 	{
-		if (nVerbosity)
+		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 			SendFmt << "Checking " << sFilePathRel << "...\n"; // just display the name ASAP
 		GOTOREPMSG(" could not create file item handler.");
 	}
@@ -202,7 +205,7 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 	{
 		if (!fi->SetupClean())
 			GOTOREPMSG("Item busy, cannot reload");
-		if (nVerbosity)
+		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 			SendFmt << "Downloading " << sFilePathRel << "...\n";
 	}
 	else
@@ -222,7 +225,7 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 			SendFmt << "Checking " << sFilePathRel << "... (complete)<br>\n";
 			return true;
 		}
-		if (nVerbosity)
+		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 			SendFmt << (bIndexFile ? "Checking/Updating " : "Downloading ")
 			<< sFilePathRel	<< "...\n";
 	}
@@ -295,7 +298,7 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 			&& fi->GetHeaderUnlocked().getStatus() == 200)
 	{
 		bSuccess = true;
-		if (nVerbosity)
+		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 			SendFmt << "<i>(" << fi->GetTransferCount() / 1024 << "KiB)</i>\n";
 	}
 	else
@@ -303,7 +306,7 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 		format_error:
 		if (IsDeprecatedArchFile(sFilePathRel))
 		{
-			if (nVerbosity == VERB_SHOW)
+			if (NEEDED_VERBOSITY_EVERYTHING)
 				SendFmt << "<i>(no longer available)</i>\n";
 			m_forceKeepInTrash[sFilePathRel] = true;
 			bSuccess = true;
@@ -315,7 +318,7 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 		)
 		{
 			bSuccess = true;
-			if (nVerbosity == VERB_SHOW)
+			if (NEEDED_VERBOSITY_EVERYTHING)
 				SendFmt << "<i>(ignored)</i>\n";
 		}
 		else
@@ -327,23 +330,19 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 	if (bSuccess && bIndexFile)
 		SetFlags(sFilePathRel).uptodate = true;
 
-	if (m_bVerbose || !bSuccess)
+	if(!bSuccess)
 	{
-		if (!bSuccess)
+		if (sErr.empty())
+			sErr = "Download error";
+		if (NEEDED_VERBOSITY_EVERYTHING || m_bVerbose)
 		{
-			if (nVerbosity == VERB_SHOW)
-			{
-				if (sErr.empty())
-					sErr = "Download error";
-				SendFmt << "<span class=\"ERROR\">" << sErr << "</span>\n";
-			}
-		}
-#warning FIXME: why only here and not on error? bug? verbosity is bad name, too, should be error class bit field or similar
-		if (nVerbosity == VERB_SHOW)
+			SendFmt << "<span class=\"ERROR\">" << sErr << "</span>\n";
 			AddDelCbox(sFilePathRel);
+		}
 	}
 
-	if (nVerbosity != VERB_QUIET)
+	// there must have been output
+	if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 		SendChunk("\n<br>\n");
 
 	return bSuccess;
@@ -375,7 +374,6 @@ tContId BuildEquivKey(const tFingerprint &fpr, const string &sDir, const string 
 {
 	static const string dis("/binary-");
 	tStrPos pos=sDir.rfind(dis);
-	//pos=(stmiss==pos) ? sDir.size() : pos+dis.size();
 	return make_pair(fpr,
 			(stmiss==pos ? sEmptyString : sDir.substr(pos)) + sFile.substr(0, maxFnameLen));
 }
@@ -429,14 +427,6 @@ struct tCompByState : public tFingerprint
 	tCompByState(const tFingerprint &re) : tFingerprint(re) {}
 	bool operator()(const tPatchEntry &other) const { return other.fprState == *this; }
 };
-
-/*
-struct tCompByEnd : private mstring
-{
-	tCompByEnd(const mstring &x) : mstring(x) {}
-	bool operator()(const mstring &haystack) const { return endsWith(haystack, *this);}
-};
-*/
 
 tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 {
@@ -530,7 +520,7 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 	{
 		string pfile(diffIdxPathRel.substr(0, diffIdxPathRel.size()-diffIdxSfx.size()+6)
 				+pit->patchName+".gz");
-		if(!Download(pfile, false, VERB_SHOW))
+		if(!Download(pfile, false, eMsgShow))
 		{
 			m_indexFilesRel.erase(pfile); // remove the mess for sure
 			SendFmt << "Failed to download patch file " << pfile << " , stop patching...<br>";
@@ -646,7 +636,8 @@ bool tCacheOperation::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sRefere
 		off_t nWantedSize)
 {
 	fakeCon contor(sTempDataRel, sReferencePathRel);
-	return Download(sReferencePathRel, true, VERB_QUIET, &contor) && contor.nGotSize == nWantedSize;
+	return (Download(sReferencePathRel, true, eMsgHideAll, &contor)
+			&& contor.nGotSize == nWantedSize);
 }
 
 
@@ -895,7 +886,7 @@ void tCacheOperation::UpdateIndexFiles()
 		for (auto& f: m_indexFilesRel)
 		{
 			// nope... tell the fileitem to ignore file data instead ::truncate(SZABSPATH(it->first), 0);
-			if (!Download(f.first, true, VERB_SHOW))
+			if (!Download(f.first, true, eMsgShow))
 				m_nErrorCount += !m_indexFilesRel[f.first].forgiveDlErrors;
 		}
 		ERRMSGABORT;
@@ -950,7 +941,7 @@ void tCacheOperation::UpdateIndexFiles()
 			continue;
 
 		if(!Download(sPathRel, true, m_indexFilesRel[sPathRel].hideDlErrors
-				? VERB_SHOW_NOERRORS : VERB_SHOW))
+				? eMsgHideErrors : eMsgShow))
 		{
 			m_nErrorCount+=(!m_indexFilesRel[sPathRel].hideDlErrors);
 
@@ -1071,13 +1062,6 @@ void tCacheOperation::UpdateIndexFiles()
 	dbgDump("Refined (2):", 2);
 
 	DelTree(SABSPATH("_actmp")); // do one to test the permissions
-	/* wrong check but ignore for now
-	if(::access(SZABSPATH("_actmp"), F_OK))
-		SendFmt
-		<< "<span class=\"WARNING\">Warning, failed to purge temporary directory "
-		<< CACHE_BASE << "_actmp/, this could impair some additional functionality"
-				"</span><br>";
-*/
 
 	// Iterate over classes and do patch-update where possible
 	for(tContId2eqClass::iterator cid2eqcl=m_eqClasses.begin(); cid2eqcl!=m_eqClasses.end();cid2eqcl++)
@@ -1111,7 +1095,7 @@ void tCacheOperation::UpdateIndexFiles()
 		if (patchidxFileToUse.empty()) // huh, not found? Then just take the first one
 			patchidxFileToUse = itDiffIdx->second.paths.front();
 
-		if (!Download(patchidxFileToUse, true, VERB_SHOW))
+		if (!Download(patchidxFileToUse, true, eMsgShow))
 			continue;
 
 		if(CheckStopSignal())
@@ -1122,19 +1106,15 @@ void tCacheOperation::UpdateIndexFiles()
 		if(!pEndSum)
 			goto NOT_PATCHABLE;
 
-		/*
-		for(deque<tPatchEntry>::const_iterator itPinfo = patchList.begin();
-				pEndSum && itPinfo!=patchList.end(); ++itPinfo)
-		{
-			SendFmt << itPinfo->patchName<< " -- " << itPinfo->fprState
-					<<" / " << itPinfo->fprPatch<<  " <br>";
-		}
-		*/
-
-		/* ok, patches should be available, what to patch? Probe up to three of the most recent ones */
-		// XXX now ideally, it should unpack on each test into an extra file and then get the one which matched best. But it's too cumbersome, and if the code works correctly, the first hit should always the best version
+		/* ok, patches should be available, what to patch? Probe up to three of the most
+		 * recent ones
+		 *
+		 * 		 XXX now ideally, it should unpack on each test into an extra file and
+		 * 		  then get the one which matched best. But it's too cumbersome, and
+		 * 		   if the code works correctly, the first hit should always the best version
+		 * 		   */
 		for(tStrDeq::const_iterator its=cid2eqcl->second.paths.begin();
-				nProbeCnt-->0 && its!= cid2eqcl->second.paths.end(); its++)
+				nProbeCnt-- >0 && its!= cid2eqcl->second.paths.end(); its++)
 		{
 			FILE_RAII df;
 			tFingerprint probe;
@@ -1253,7 +1233,7 @@ void tCacheOperation::UpdateIndexFiles()
 			{
 				if(!endsWith(cand, ps))
 					continue;
-				if(Download(cand, true, GetFlags(cand).hideDlErrors ? VERB_SHOW_NOERRORS : VERB_SHOW))
+				if(Download(cand, true, GetFlags(cand).hideDlErrors ? eMsgHideErrors : eMsgShow))
 				{
 					if(CheckStopSignal())
 						return;
@@ -1282,7 +1262,7 @@ void tCacheOperation::UpdateIndexFiles()
 		if(it->second.uptodate || it->second.parseignore || !it->second.vfile_ondisk)
 			continue;
 		string sErr;
-		if(Download(it->first, true, it->second.hideDlErrors ? VERB_SHOW_NOERRORS : VERB_SHOW))
+		if(Download(it->first, true, it->second.hideDlErrors ? eMsgHideErrors : eMsgShow))
 			continue;
 		m_nErrorCount+=(!it->second.forgiveDlErrors);
 	}

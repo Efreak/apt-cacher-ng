@@ -100,7 +100,11 @@ void tSpecialRequest::SendChunkedPageHeader(const char *httpcode, const char *mi
 class tAuthRequest : public tSpecialRequest
 {
 public:
-	using tSpecialRequest::tSpecialRequest;
+
+	// XXX: c++11 using tSpecialRequest::tSpecialRequest;
+	inline tAuthRequest(int fd, tSpecialRequest::eMaintWorkType type)
+	: tSpecialRequest(fd, type) {};
+
 	void Run(const string &) override
 	{
 		const char authmsg[] = "HTTP/1.1 401 Not Authorized\r\nWWW-Authenticate: "
@@ -118,7 +122,12 @@ public:
 class authbounce : public tSpecialRequest
 {
 public:
-	using tSpecialRequest::tSpecialRequest;
+
+	// XXX: c++11 using tSpecialRequest::tSpecialRequest;
+	inline authbounce(int fd, tSpecialRequest::eMaintWorkType type)
+	: tSpecialRequest(fd, type) {};
+
+
 	void Run(const string &) override
 	{
 		const char authmsg[] = "HTTP/1.1 200 Not Authorized\r\n"

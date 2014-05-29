@@ -13,7 +13,10 @@
 class pkgmirror: public tCacheOperation, ifileprocessor
 {
 public:
-	using tCacheOperation::tCacheOperation;
+	// XXX: for c++11... using tCacheOperation::tCacheOperation;
+	inline pkgmirror(int fd, tSpecialRequest::eMaintWorkType type)
+	: tCacheOperation(fd, type) {};
+
 	virtual ~pkgmirror() {};
 	void Action(const mstring & src) override;
 

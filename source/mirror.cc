@@ -170,7 +170,7 @@ void pkgmirror::Action(const string &cmd)
 		if(endsWithSzAr(it->first, "Release"))
 		{
 			if(!m_bSkipIxUpdate && !GetFlags(it->first).uptodate)
-				Download(it->first, true, VERB_SHOW);
+				Download(it->first, true, eMsgShow);
 			ParseAndProcessIndexFile(picker, it->first, EIDX_RELEASE);
 		}
 		else
@@ -221,15 +221,15 @@ void pkgmirror::Action(const string &cmd)
 		}
 	}
 
-	for (tStrSet::iterator it=srcs.begin(); it!=srcs.end(); it++)
+	for (auto& src: srcs)
 	{
-		SendFmt << "File list: " << *it<< "<br>";
+		SendFmt << "File list: " << src << "<br>\n";
 
 		if(m_bSkipIxUpdate)
 			continue;
 
-		if(!GetFlags(*it).uptodate)
-			Download(*it, true);
+		if(!GetFlags(src).uptodate)
+			Download(src, true, eMsgShow);
 
 		if(CheckStopSignal())
 			return;
@@ -422,7 +422,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 				::unlink(sDeltaPathAbs.c_str());
 				::unlink((sDeltaPathAbs+".head").c_str());
 
-				if(Download(TEMPDELTA, false, VERB_QUIET, NULL, uri.c_str()))
+				if(Download(TEMPDELTA, false, eMsgHideAll, NULL, uri.c_str()))
 				{
 					::setenv("delta", SZABSPATH(TEMPDELTA), true);
 					::setenv("from", srcAbs.c_str(), true);
@@ -471,7 +471,6 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 									<< ":" << entry.fpr.size / 1024
 									<< "KiB)</i>\n<br>\n";
 						}
-
 					}
 					else
 						SendFmt << "Debpatch couldn't rebuild " << tgtRel<<"<br>\n";
@@ -482,7 +481,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 		cannot_debpatch:
 
 		if(!bhaveit)
-			Download(entry.sDirectory + entry.sFileName, false);
+			Download(entry.sDirectory + entry.sFileName, false, eMsgShow);
 
 		if (m_bVerbose && m_totalSize)
 		{
