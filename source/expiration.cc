@@ -19,7 +19,7 @@
 
 using namespace MYSTD;
 
-#define ENABLED_
+#define ENABLED
 
 #ifndef ENABLED
 #warning Unlinking parts defused
@@ -38,148 +38,190 @@ using namespace MYSTD;
 
 void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
-#warning mit -1 size klar kommen
 	LOGSTART2("expiration::_HandlePkgEntry:",
-			"\ndir:" << entry.sDirectory << "\nname: "
-			<< entry.sFileName << "\nsize: " << entry.fpr.size << "\ncsum: " << entry.fpr.GetCsAsString());
+			"\ndir:" << entry.sDirectory << "\nname: " << entry.sFileName << "\nsize: " << entry.fpr.size << "\ncsum: " << entry.fpr.GetCsAsString());
+
+#define ECLASS "<span class=\"ERROR\">ERROR: "
+#define WCLASS "<span class=\"WARNING\">WARNING: "
+#define GCLASS "<span class=\"GOOD\">OK: "
+#define CLASSEND "</span><br>\n"
+
+	off_t lenFromHeader=-1;
 
 	// returns true if the file can be trashed, i.e. should stay in the list
 	auto DetectUncovered =
-			[&](cmstring& filenameHave, cmstring &sDirRel, tDiskFileInfo &descHave) -> bool
+			[&](cmstring& filenameHave, cmstring& sDirRel, tDiskFileInfo& descHave) -> bool
 			{
 				string sPathRel(sDirRel + filenameHave);
-				if(ContHas(m_forceKeepInTrash,sPathRel)) return true;
+				if(ContHas(m_forceKeepInTrash,sPathRel))
+				return true;
 				string sPathAbs(CACHE_BASE+sPathRel);
 
-				// Basic header checks. Skip if the file was forcibly updated/reconstructed before.
-				if (m_bSkipHeaderChecks || descHave.bNoHeaderCheck)
+				off_t lenFromStat = descHave.fpr.size; // original size before uncompressing
+
+				// end line ending starting from a class and add checkbox as needed
+				auto finish_bad = [&]()->bool
 				{
-					LOG("Skipped header check for " << sPathRel);
-				}
-				else if(entry.bInflateForCs)
-				{
-					LOG("Skipped header check for " << sPathRel << " needs to be uncompressed first");
-				}
-				else if(entry.fpr.size>=0)
-				{
-					LOG("Doing basic header checks");
-					header h;
-					if (0<h.LoadFromFile(sPathAbs+".head"))
-					{
-						off_t len=atoofft(h.h[header::CONTENT_LENGTH], -2);
-						if(len<0)
-						{
-							SendFmt << "<span class=\"ERROR\">WARNING, header file of "
-							<< sPathRel << " does not contain content length</span>";
-							return true;
-						}
-						off_t lenInfo=GetFileSize(sPathAbs, -3);
-						if(lenInfo<0)
-						{
-							SendFmt << ": error reading attributes, ignoring" << sPathRel;
-							return true;
-						}
-						if (len < lenInfo)
-						{
-							SendFmt << "<span class=\"ERROR\">WARNING, header file of " << sPathRel
-							<< " reported too small file size (" << len << " vs. " << lenInfo
-							<< "), invalidating and removing header</span><br>\n";
-							// kill the header ASAP, no matter which extra exception might apply later
-							ignore_value(::unlink((sPathAbs+".head").c_str()));
-							return true;
-						}
-					}
-					else
-					{
-						tIfileAttribs at = GetFlags(sPathRel);
-						if(!at.parseignore && !at.forgiveDlErrors)
-						{
-							SendFmt<<"<span class=\"WARNING\">WARNING, header file missing or damaged for "
-							<<sPathRel<<"</span>\n<br>\n";
-						}
-					}
-				}
-
-				if(m_bByChecksum)
-				{
-					tFingerprint& fprCache = descHave.fpr;
-
-					bool bSkipDataCheck=false;
-
-					// can tell this ASAP if unpacking is not needed
-					if(!entry.bInflateForCs &&
-							fprCache.csType == entry.fpr.csType &&
-							fprCache.size < entry.fpr.size)
-					{
-						if(m_bIncompleteIsDamaged)
-						{
-							if(m_bTruncateDamaged)
-							goto l_tell_truncating;
-							else
-							goto l_tell_damaged;
-						}
-						goto l_tell_incomplete;
-					}
-
-					// scan file if not done before or the checksum type differs
-					if(entry.fpr.csType != fprCache.csType
-							&& !fprCache.ScanFile(sPathAbs, entry.fpr.csType, entry.bInflateForCs))
-					{
-						// IO error? better keep it for now
-						aclog::err(tSS()<<"An error occurred while checksumming "
-								<< sPathAbs << ", not touching it.");
-						bSkipDataCheck=true;
-					}
-
-#warning fixme, total wirr, und eigentlich ist der fprcache auch schrott, sollte cstype beruecksichtigen
-
-			if ( !bSkipDataCheck && fprCache != entry.fpr)
+					if (m_damageList.is_open()) m_damageList << sPathRel << "\n";
+					SendChunk(" (adding to damage list)");
+					AddDelCbox(sPathRel);
+					SendChunk(CLASSEND);
+					return true;
+				};
+#define ADDSPACE(x) SetFlags(m_processedIfile).space+=x
+			// finishes a line with span, not leading to invalidating
+			auto finish_good = [&](off_t size)->bool
 			{
-				if (fprCache.size < entry.fpr.size && !m_bIncompleteIsDamaged)
+				SendFmt << CLASSEND;
+				ADDSPACE(size);
+				return false;
+			};
+			auto report_good = [&](off_t size)->bool
+			{
+				// ok, package matched, contents ok if checked, drop it from the removal list
+				if (m_bVerbose) SendFmt << GCLASS << sPathRel << CLASSEND;
+				ADDSPACE(size);
+				return false;
+			};
+
+			if(lenFromStat<0)
+			{
+				SendFmt << ECLASS "file has bad attributes, invalidating " << sPathRel;
+				return finish_bad();
+			}
+
+			// those file were not updated by index handling, and are most likely not
+			// matching their parent indexes. The best way is to see them as zero-sized and
+			// handle them the same way.
+			if(GetFlags(sPathRel).parseignore)
+				goto handle_incomplete;
+
+
+			// Basic header checks. Skip if the file was forcibly updated/reconstructed before.
+			if (m_bSkipHeaderChecks || descHave.bNoHeaderCheck)
+			{
+				LOG("Skipped header check for " << sPathRel);
+			}
+			else if(entry.bInflateForCs)
+			{
+				LOG("Skipped header check for " << sPathRel << ", cannot compare sizes");
+			}
+			else if(entry.fpr.size>=0)
+			{
+				LOG("Doing basic header checks");
+				header h;
+				auto sHeadAbs(sPathAbs+".head");
+				if (0<h.LoadFromFile(sHeadAbs))
 				{
-					l_tell_incomplete:
-					SendFmt << "<span class=\"WARNING\">INCOMPLETE: " << sPathRel
-					<< " (ignoring)</span><br>\n";
-				}
-				else if (m_bTruncateDamaged)
-				{
-					l_tell_truncating:
-					SendFmt << "<span class=\"WARNING\">BAD: " << sPathRel
-					<< " (truncating)</span><br>\n";
-					ignore_value(::truncate(sPathAbs.c_str(), 0));
+					lenFromHeader=atoofft(h.h[header::CONTENT_LENGTH], -2);
+					if(lenFromHeader<0)
+					{
+						// better drop it, properly downloaded ones DO have the length
+						SendFmt << WCLASS "header file of "
+						<< sPathRel << " does not contain content length";
+						return finish_bad();
+					}
+					if (lenFromHeader < lenFromStat)
+					{
+						ignore_value(::unlink(sHeadAbs.c_str()));
+
+						SendFmt << ECLASS "header file of " << sPathRel
+						<< " reported too small file size (" << lenFromHeader <<
+						" vs. " << lenFromStat
+						<< "); invalidating file, removing header now";
+						return finish_bad();
+					}
 				}
 				else
 				{
-					l_tell_damaged:
-
-					if(GetFlags(sPathRel).parseignore)
+					tIfileAttribs at = GetFlags(sPathRel);
+					if(!at.parseignore && !at.forgiveDlErrors) // just warn
 					{
-						SendFmt << sPathRel << ": incorrect or obsolete contents but marked as "
-						"alternative version of another index file "
-						"<span class=\"WARNING\">(ignoring)</span>";
+						SendFmt<< WCLASS "header file missing or damaged for "
+						<<sPathRel << CLASSEND;
 					}
-					else
-					{
-						if (m_damageList.is_open())
-						m_damageList << sPathRel << endl;
-						SendFmt << "<span class=\"ERROR\">BAD: " << sPathRel
-						<< " (adding to damage list)</span>";
-						AddDelCbox(sPathRel);
-					}
-					SendChunk("<br>\n");
-					return true;
 				}
 			}
-		}
 
-		// ok, package matched, contents ok if checked, drop it from the removal list
-		if (m_bVerbose)
-		SendFmt << "<font color=green>OK: " << sPathRel << "</font><br>\n";
+			if(m_bByPath)
+			{
+				// can check a bit more against directory info for most cases
+				// also shortcut without scanning
 
-		// update usage statistics
-		SetFlags(m_processedIfile).space+=entry.fpr.size;
-		return false;
-	};
+				if( !entry.bInflateForCs &&
+						entry.fpr.size>=0)
+				{
+					if(lenFromStat > entry.fpr.size) goto report_oversize;
+					if(lenFromStat < entry.fpr.size) goto handle_incomplete;
+				}
+			}
+
+			if(!m_bByChecksum) return report_good(lenFromStat);
+
+			//knowing the expected and real size, try a shortcut without scanning
+			if(!entry.bInflateForCs// if we can check quickly with the file size
+					&& entry.fpr.size >= 0)
+			{
+				if(lenFromStat<0) lenFromStat=GetFileSize(sPathAbs, -123);
+				if(lenFromStat >=0 && lenFromStat < entry.fpr.size)
+				{
+					//		descHave.fpr.size=lenFromStat;
+					goto handle_incomplete;
+				}
+			}
+
+			if(entry.fpr.csType != descHave.fpr.csType &&
+					!descHave.fpr.ScanFile(sPathAbs, entry.fpr.csType, entry.bInflateForCs))
+			{
+				// IO error? better keep it for now, not sure how to deal with it
+				SendFmt << ECLASS "An error occurred while checksumming "
+				<< sPathRel << ", leaving as-is for now." CLASSEND;
+				aclog::err(tSS() << "Error reading " << sPathAbs );
+				AddDelCbox(sPathRel);
+				return false;
+			}
+
+			// ok, now fingerprint data must be consistent
+
+			if(!descHave.fpr.csEquals(entry.fpr))
+			{
+				SendFmt << ECLASS << "checksum mismatch on " << sPathRel;
+				return finish_bad();
+			}
+
+			// good, or cannot check so must be good
+			if(entry.fpr.size<0 || (descHave.fpr.size == entry.fpr.size))
+				return report_good(lenFromStat);
+
+			if(descHave.fpr.size > entry.fpr.size)
+			{
+				report_oversize:
+				SendFmt << ECLASS << "size mismatch on " << sPathRel;
+				return finish_bad();
+			}
+
+			// all remaining cases mean an incomplete download
+			handle_incomplete:
+
+			if (!m_bIncompleteIsDamaged)
+			{
+				SendFmt << WCLASS << " incomplete download, keeping "
+				<< sPathRel;
+				return finish_good(lenFromStat);
+			}
+
+			// ok... considering damaged...
+			if (m_bTruncateDamaged)
+			{
+				ignore_value(::truncate(sPathAbs.c_str(), 0));
+				SendFmt << WCLASS << " incomplete download, truncating (as requested): "
+				<< sPathRel;
+				return finish_good(0);
+			}
+
+			SendFmt << ECLASS << " incomplete download, invalidating (as requested) "<< sPathRel;
+			return finish_bad();
+		};
 
 	auto rangeIt = m_trashFile2dir2Info.find(entry.sFileName);
 	if (rangeIt == m_trashFile2dir2Info.end())
@@ -464,7 +506,7 @@ void expiration::Action(const string & cmd)
 		goto save_fail_count;
 	SendFmt<<"Found "<<m_nProgIdx<<" files.<br />\n";
 
-#ifdef DEBUG
+#if 0 //def DEBUG
 	for(auto& i: m_trashFile2dir2Info)
 	{
 		SendFmt << "<br>File: " << i.first <<"<br>\n";
@@ -583,7 +625,7 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 	if(pos!=stmiss && stmiss !=(pos2=sPathRel.find("/images/", pos)))
 	{
 		AddIFileCandidate(sPathRel.substr(0, pos2+8)+"MD5SUMS");
-#warning teste das mit echtem image file
+#warning Not enabled yet, needs more checks of index file management
 #if 0
 		auto idir = sPathRel.substr(0, pos2 + 8);
 		/* XXX: support sha256, do onl,y MD5SUMS for now
@@ -618,7 +660,8 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 	                                   [sPathRel.substr(0, nCutPos)];
 	finfo.nLostAt = m_gMaintTimeNow;
 	// remember the size for content data, ignore for the header file
-	finfo.fpr.size = stripLen ? stinfo.st_size : 0;
+	if(!stripLen)
+		finfo.fpr.size = stinfo.st_size;
 
 	return true;
 }

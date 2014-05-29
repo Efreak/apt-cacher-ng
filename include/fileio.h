@@ -85,6 +85,18 @@ private:
 
 void mkbasedir(const mstring & path);
 
-
+/*
+class tLazyStat
+{
+	LPCSTR path;
+	struct stat stbuf;
+	inline bool AccessFile() { if(path)
+public:
+	inline tLazyStat(LPCSTR p) : path(p) {};
+	operator bool() const;
+	off_t GetSize() const;
+	off_t GetSpace() const;
+};
+*/
 
 #endif /* FILEIO_H_ */
