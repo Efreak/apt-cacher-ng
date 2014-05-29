@@ -172,8 +172,6 @@ private:
 
 	const tIfileAttribs attr_dummy_pure;
 	tIfileAttribs attr_dummy;
-
-	tStrSet m_delCboxFilter;
 };
 
 

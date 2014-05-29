@@ -40,8 +40,6 @@ protected:
 
 	time_t GetTaskId();
 
-	bool m_bShowControls = false;
-
 private:
 
 	MYSTD::ofstream m_reportStream;
@@ -62,6 +60,8 @@ private:
 	typedef SMARTPTR_SPACE::shared_ptr<tProgressTracker> tProgTrackPtr;
 	static SMARTPTR_SPACE::weak_ptr<tProgressTracker> g_pTracker;
 	tProgTrackPtr m_pTracker;
+	protected:
+	tStrSet m_delCboxFilter;
 };
 
 struct tRemoteFileInfo;

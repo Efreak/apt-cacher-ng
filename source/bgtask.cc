@@ -203,7 +203,7 @@ void tSpecOpDetachable::Run(const string &cmd)
 			msg<<"<br>\n<a href=\"/"<<acfg::reportpage<<"\">Return to main page</a>"
 					"</form>";
 
-			if (m_bShowControls)
+			if (!m_delCboxFilter.empty())
 			{
 				SendChunk("<br><hr><b>Action(s):</b> "
 					"<input type=\"submit\" name=\"doDelete\""
@@ -212,9 +212,6 @@ void tSpecOpDetachable::Run(const string &cmd)
 					"<button type=\"button\" onclick=\"checkOrUncheck(false);\">Uncheck all</button><br><hr>",
 					true);
 			}
-
-
-
 			_AddFooter(msg);
 			SendChunk(msg, true);
 	}

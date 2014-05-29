@@ -246,22 +246,22 @@ void pkgmirror::Action(const string &cmd)
 		SendFmt << "<b>Counting downloadable content size..."
 				<< (m_bAsNeeded? " (filtered)" : "")  << "</b><br>";
 
-		for (tStrSet::iterator it = srcs.begin(); it != srcs.end(); it++)
+		for (auto& src : srcs)
 		{
 #ifdef DEBUG
 			if(LOG_MORE&acfg::debug)
-				SendFmt << "mirror check: " << *it;
+				SendFmt << "mirror check: " << src;
 #endif
 			off_t needBefore=(m_totalSize-m_totalHave);
 
-			ParseAndProcessIndexFile(*this, *it, GuessIndexTypeFromURL(*it));
+			ParseAndProcessIndexFile(*this, src, GuessIndexTypeFromURL(src));
 
-			SendFmt << *it << ": "
+			SendFmt << src << ": "
 					<< offttosH((m_totalSize-m_totalHave)-needBefore)
 					<< " to download<br>\n";
 
 			if(m_bUseDelta)
-				dcount+=ConfigDelta(*it);
+				dcount+=ConfigDelta(src);
 
 			if(CheckStopSignal())
 				return;
@@ -279,14 +279,12 @@ void pkgmirror::Action(const string &cmd)
 
 		m_bCalcSize=false;
 
-		for (tStrSet::iterator it=srcs.begin(); it!=srcs.end(); it++)
+		for (auto& src: srcs)
 		{
 			if(CheckStopSignal())
 				return;
-
-			ConfigDelta(*it);
-
-			ParseAndProcessIndexFile(*this, *it, GuessIndexTypeFromURL(*it));
+			ConfigDelta(src);
+			ParseAndProcessIndexFile(*this, src, GuessIndexTypeFromURL(src));
 		}
 	}
 }

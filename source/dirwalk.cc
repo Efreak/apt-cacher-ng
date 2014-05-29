@@ -51,6 +51,8 @@ private:
 
 bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymlinks)
 {
+//	bool bNix=StrHas(sPath, "somehost");
+
 	if(bFollowSymlinks)
 	{
 		if(stat(sPath.c_str(), &m_stinfo)<0)

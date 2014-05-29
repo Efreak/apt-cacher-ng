@@ -329,8 +329,6 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 
 	if (m_bVerbose || !bSuccess)
 	{
-		m_bShowControls = true;
-
 		if (!bSuccess)
 		{
 			if (nVerbosity == VERB_SHOW)
@@ -340,7 +338,7 @@ bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFi
 				SendFmt << "<span class=\"ERROR\">" << sErr << "</span>\n";
 			}
 		}
-
+#warning FIXME: why only here and not on error? bug? verbosity is bad name, too, should be error class bit field or similar
 		if (nVerbosity == VERB_SHOW)
 			AddDelCbox(sFilePathRel);
 	}
@@ -356,20 +354,19 @@ static const string relKey("/Release"), inRelKey("/InRelease");
 #define ERRMSGABORT if(m_nErrorCount && m_bErrAbort) { SendChunk(sErr); return; }
 #define ERRABORT if(m_nErrorCount && m_bErrAbort) { return; }
 
-inline tStrPos FindComPos(const string &s)
+inline tStrPos FindCompSfxPos(const string &s)
 {
-	tStrPos compos(stmiss);
-	for(const string *p=compSuffixes; p<compSuffixes+_countof(compSuffixes) && stmiss==compos; p++)
-		if(endsWith(s, *p))
-			compos=s.size()-p->size();
-	return compos;
+	for(auto &p : compSuffixes)
+		if(endsWith(s, p))
+			return(s.size()-p.size());
+	return stmiss;
 }
 static unsigned short FindCompIdx(cmstring &s)
 {
 	unsigned short i=0;
 	for(;i<_countof(compSuffixes); i++)
 		if(endsWith(s, compSuffixes[i]))
-			break;
+			return i;
 	return i;
 }
 
@@ -415,7 +412,7 @@ struct fctLessThanCompMtime
 	bool operator()(const string &s1, const string &s2) const
 	{
 		struct stat stbuf1, stbuf2;
-		tStrPos cpos1(FindComPos(s1) ), cpos2(FindComPos(s2));
+		tStrPos cpos1(FindCompSfxPos(s1) ), cpos2(FindCompSfxPos(s2));
 		if(cpos1!=cpos2)
 			return cpos1 > cpos2; // sfx found -> less than npos (=w/o sfx) -> be smaller
 		// s1 is lesser when its newer
@@ -815,9 +812,9 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 		if(!myState.vfile_ondisk || !myState.uptodate || myState.parseignore)
 			continue;
 
-		tStrPos cpos=FindComPos(*it);
+		tStrPos cpos=FindCompSfxPos(*it);
 		string sBasename=it->substr(0, cpos);
-		string sux=cpos==stmiss ? "" : it->substr(FindComPos(*it));
+		string sux=cpos==stmiss ? "" : it->substr(FindCompSfxPos(*it));
 		for(auto& compsuf : compSuffixesAndEmpty)
 		{
 			if(sux==compsuf) continue; // touch me not
@@ -864,7 +861,7 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 		string sLastRessort;
 		for (tStrDeq::const_iterator it = tgts.begin(); it != tgts.end(); it++)
 		{
-			if(stmiss!=FindComPos(*it))
+			if(stmiss!=FindCompSfxPos(*it))
 				continue;
 			// ultimate ratio... and then use the shortest path
 			if(sLastRessort.empty() || sLastRessort.size()>it->size())
@@ -934,7 +931,7 @@ void tCacheOperation::UpdateIndexFiles()
 			if(entry.bInflateForCs) // XXX: no usecase yet, ignore
 				return;
 
-			tStrPos compos=FindComPos(entry.sFileName);
+			tStrPos compos=FindCompSfxPos(entry.sFileName);
 
 			// skip some obvious junk and its gzip version
 			if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
@@ -977,12 +974,12 @@ void tCacheOperation::UpdateIndexFiles()
 
 		for(tFile2Cid::iterator it=recvr.m_file2cid.begin(); it!=recvr.m_file2cid.end(); it++)
 		{
-			string sNativeName=it->first.substr(0, FindComPos(it->first));
+			string sNativeName=it->first.substr(0, FindCompSfxPos(it->first));
 			tContId sCandId=it->second;
 			// find a better one which serves as the flag content id for the whole group
-			for(cmstring *ps=compSuffixesAndEmptyByLikelyhood; ps<compSuffixesAndEmptyByLikelyhood+_countof(compSuffixesAndEmptyByLikelyhood); ps++)
+			for(auto& ps : compSuffixesAndEmptyByLikelyhood)
 			{
-				tFile2Cid::iterator it2=recvr.m_file2cid.find(sNativeName+*ps);
+				tFile2Cid::iterator it2=recvr.m_file2cid.find(sNativeName+ps);
 				if(it2 != recvr.m_file2cid.end())
 					sCandId=it2->second;
 			}
@@ -1189,7 +1186,7 @@ void tCacheOperation::UpdateIndexFiles()
 						if (h.h[header::XORIG])
 						{
 							string s(h.h[header::XORIG]);
-							h.set(header::XORIG, s.substr(0, FindComPos(s)));
+							h.set(header::XORIG, s.substr(0, FindCompSfxPos(s)));
 						}
 
 						if(CheckStopSignal())
@@ -1366,9 +1363,6 @@ tCacheOperation::enumIndexType tCacheOperation::GuessIndexTypeFromURL(cmstring &
 {
 	tStrPos pos = sPath.rfind(SZPATHSEP);
 	string sPureIfileName = (stmiss == pos) ? sPath : sPath.substr(pos + 1);
-
-	if(pos == 0 || sPath.rfind(SZPATHSEP, pos-1)==stmiss) // there should be a valid host part
-		return EIDX_UNSUPPORTED;
 
 	stripSuffix(sPureIfileName, ".gz");
 	stripSuffix(sPureIfileName, ".bz2");
@@ -1802,7 +1796,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 {
 	LOGSTART("expiration::_ParseVolatileFilesAndHandleEntries");
-	for(tS2IDX::const_iterator it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end(); it++)
+	for(auto it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end(); it++)
 	{
 		if(CheckStopSignal())
 			return;
@@ -1848,7 +1842,7 @@ void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 		}
 		else if(!m_bByPath && att.bros)
 		{
-			for(tStrDeq::const_iterator broIt=att.bros->begin(); broIt!=att.bros->end(); broIt++)
+			for(auto broIt=att.bros->begin(); broIt!=att.bros->end(); broIt++)
 			{
 				MTLOGDEBUG("Marking " << *broIt << " as processed");
 				SetFlags(*broIt).alreadyparsed=true;
@@ -1865,7 +1859,6 @@ void tCacheOperation::AddDelCbox(cmstring &sFileRel)
 	if(! ck.second)
 		return;
 
-	m_bShowControls=true;
 	SendFmtRemote <<  "<label><input type=\"checkbox\" name=\"kf" << (nKillLfd++)
 			<< "\" value=\"" << sFileRel << "\">Tag</label>";
 
