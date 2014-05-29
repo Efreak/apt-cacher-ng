@@ -91,7 +91,7 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 
 const tCacheOperation::tIfileAttribs & tCacheOperation::GetFlags(cmstring &sPathRel) const
 {
-	tS2IDX::const_iterator it=m_indexFilesRel.find(sPathRel);
+	auto it=m_indexFilesRel.find(sPathRel);
 	if(m_indexFilesRel.end()==it)
 		return attr_dummy_pure;
 	return it->second;
@@ -369,8 +369,8 @@ static unsigned short FindCompIdx(cmstring &s)
 	return i;
 }
 
-tContId BuildEquivKey(const tFingerprint &fpr, const string &sDir, const string &sFile,
-		tStrPos maxFnameLen)
+tCacheOperation::tContId BuildEquivKey(const tFingerprint &fpr, const string &sDir,
+		const string &sFile, tStrPos maxFnameLen)
 {
 	static const string dis("/binary-");
 	tStrPos pos=sDir.rfind(dis);
@@ -810,7 +810,7 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 		{
 			if(sux==compsuf) continue; // touch me not
 			mstring sBro = sBasename+compsuf;
-			tS2IDX::iterator kv=m_indexFilesRel.find(sBro);
+			auto kv=m_indexFilesRel.find(sBro);
 			if(kv!=m_indexFilesRel.end() && kv->second.vfile_ondisk)
 			{
 				kv->second.parseignore=true; // gotcha
@@ -850,13 +850,13 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 		 * some appropriate location.
 		 * */
 		string sLastRessort;
-		for (tStrDeq::const_iterator it = tgts.begin(); it != tgts.end(); it++)
+		for (auto& tgt : tgts)
 		{
-			if(stmiss!=FindCompSfxPos(*it))
+			if(stmiss!=FindCompSfxPos(tgt))
 				continue;
 			// ultimate ratio... and then use the shortest path
-			if(sLastRessort.empty() || sLastRessort.size()>it->size())
-				sLastRessort=*it;
+			if(sLastRessort.empty() || sLastRessort.size() > tgt.size())
+				sLastRessort=tgt;
 		}
 		Inject(donorRel, sLastRessort);
 	}
@@ -933,9 +933,9 @@ void tCacheOperation::UpdateIndexFiles()
 		}
 	};
 
-	for(tS2IDX::const_iterator it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end(); it++)
+	for(auto& iref : m_indexFilesRel)
 	{
-		const string &sPathRel=it->first;
+		const string &sPathRel=iref.first;
 
 		if(!endsWith(sPathRel, relKey) && !endsWith(sPathRel, inRelKey))
 			continue;
@@ -963,23 +963,23 @@ void tCacheOperation::UpdateIndexFiles()
 		if(recvr.m_file2cid.empty())
 			continue;
 
-		for(tFile2Cid::iterator it=recvr.m_file2cid.begin(); it!=recvr.m_file2cid.end(); it++)
+		for(auto& if2cid : recvr.m_file2cid)
 		{
-			string sNativeName=it->first.substr(0, FindCompSfxPos(it->first));
-			tContId sCandId=it->second;
+			string sNativeName=if2cid.first.substr(0, FindCompSfxPos(if2cid.first));
+			tContId sCandId=if2cid.second;
 			// find a better one which serves as the flag content id for the whole group
 			for(auto& ps : compSuffixesAndEmptyByLikelyhood)
 			{
-				tFile2Cid::iterator it2=recvr.m_file2cid.find(sNativeName+ps);
+				auto it2=recvr.m_file2cid.find(sNativeName+ps);
 				if(it2 != recvr.m_file2cid.end())
 					sCandId=it2->second;
 			}
 			tClassDesc &tgt=m_eqClasses[sCandId];
-			tgt.paths.push_back(it->first);
+			tgt.paths.push_back(if2cid.first);
 
 			// pick up the id for bz2 verification later
-			if(tgt.bz2VersContId.second.empty() && endsWithSzAr(it->first, ".bz2"))
-				tgt.bz2VersContId=it->second;
+			if(tgt.bz2VersContId.second.empty() && endsWithSzAr(if2cid.first, ".bz2"))
+				tgt.bz2VersContId=if2cid.second;
 
 			// also the index file id
 			if(tgt.diffIdxId.second.empty()) // XXX if there is no index at all, avoid repeated lookups somehow?
@@ -989,11 +989,12 @@ void tCacheOperation::UpdateIndexFiles()
 					tgt.diffIdxId=j->second;
 			}
 
-			// and while we are at it, check the checksum of small files in order to reduce server requests
-			if(it->second.first.size<10000 && ContHas(m_indexFilesRel, it->first))
+			// and while we are at it, check the checksum of small files in order
+			// to reduce server request count
+			if(if2cid.second.first.size<10000 && ContHas(m_indexFilesRel, if2cid.first))
 			{
-				if(it->second.first.CheckFile(CACHE_BASE+it->first))
-					m_indexFilesRel[it->first].uptodate=true;
+				if(if2cid.second.first.CheckFile(SABSPATH(if2cid.first)))
+					m_indexFilesRel[if2cid.first].uptodate=true;
 			}
 		}
 	}
@@ -1257,14 +1258,14 @@ void tCacheOperation::UpdateIndexFiles()
 	MTLOGDEBUG("<br><br><b>NOW GET THE REST</b><br><br>");
 
 	// fetch all remaining stuff
-	for(auto it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end(); it++)
+	for(auto& idx2att : m_indexFilesRel)
 	{
-		if(it->second.uptodate || it->second.parseignore || !it->second.vfile_ondisk)
+		if(idx2att.second.uptodate || idx2att.second.parseignore || !idx2att.second.vfile_ondisk)
 			continue;
 		string sErr;
-		if(Download(it->first, true, it->second.hideDlErrors ? eMsgHideErrors : eMsgShow))
+		if(Download(idx2att.first, true, idx2att.second.hideDlErrors ? eMsgHideErrors : eMsgShow))
 			continue;
-		m_nErrorCount+=(!it->second.forgiveDlErrors);
+		m_nErrorCount+=(!idx2att.second.forgiveDlErrors);
 	}
 
 }
@@ -1776,15 +1777,15 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 {
 	LOGSTART("expiration::_ParseVolatileFilesAndHandleEntries");
-	for(auto it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end(); it++)
+	for(auto& path2att: m_indexFilesRel)
 	{
 		if(CheckStopSignal())
 			return;
 
-		const tIfileAttribs &att=it->second;
+		const tIfileAttribs &att=path2att.second;
 		enumIndexType itype = att.eIdxType;
 		if(!itype)
-			itype=GuessIndexTypeFromURL(it->first);
+			itype=GuessIndexTypeFromURL(path2att.first);
 		if(!itype) // still unknown. Where does it come from? Just ignore.
 			continue;
 		if(att.parseignore || (!att.vfile_ondisk && !att.uptodate))
@@ -1801,35 +1802,33 @@ void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 
 		if(!m_bByPath && att.alreadyparsed)
 		{
-			SendChunk(string("Skipping in ")+it->first+" (equivalent checks done before)<br>\n");
+			SendChunk(string("Skipping in ")+path2att.first+" (equivalent checks done before)<br>\n");
 			continue;
 		}
 
 		//bool bNix=(it->first.find("experimental/non-free/binary-amd64/Packages.xz") != stmiss);
 
-		SendChunk(string("Parsing metadata in ")+it->first+"<br>\n");
+		SendChunk(string("Parsing metadata in ")+path2att.first+"<br>\n");
 
-		if( ! ParseAndProcessIndexFile(pkgHandler, it->first, itype))
+		if( ! ParseAndProcessIndexFile(pkgHandler, path2att.first, itype))
 		{
-			if(!m_indexFilesRel[it->first].forgiveDlErrors)
+			if(!m_indexFilesRel[path2att.first].forgiveDlErrors)
 			{
 				m_nErrorCount++;
 				SendChunk("<span class=\"ERROR\">An error occured while reading this file, some contents may have been ignored.</span>\n");
-				AddDelCbox(it->first);
+				AddDelCbox(path2att.first);
 				SendChunk("<br>\n");
 			}
 			continue;
 		}
 		else if(!m_bByPath && att.bros)
 		{
-			for(auto broIt=att.bros->begin(); broIt!=att.bros->end(); broIt++)
+			for(auto& bro: *att.bros)
 			{
-				MTLOGDEBUG("Marking " << *broIt << " as processed");
-				SetFlags(*broIt).alreadyparsed=true;
+				MTLOGDEBUG("Marking " << bro << " as processed");
+				SetFlags(bro).alreadyparsed=true;
 			}
 		}
-
-		//		cout << "found package files: "<< m_trashCandidates.size()<<endl;
 	}
 }
 

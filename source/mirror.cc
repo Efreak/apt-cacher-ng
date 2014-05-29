@@ -165,16 +165,16 @@ void pkgmirror::Action(const string &cmd)
 
 	SendChunk("<b>Identifying relevant index files...</b><br>");
 	// ok, now go through all release files and pickup all appropriate index files
-	for(tS2IDX::iterator it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end();it++)
+	for(auto& path2x: m_indexFilesRel)
 	{
-		if(endsWithSzAr(it->first, "Release"))
+		if(endsWithSzAr(path2x.first, "Release"))
 		{
-			if(!m_bSkipIxUpdate && !GetFlags(it->first).uptodate)
-				Download(it->first, true, eMsgShow);
-			ParseAndProcessIndexFile(picker, it->first, EIDX_RELEASE);
+			if(!m_bSkipIxUpdate && !GetFlags(path2x.first).uptodate)
+				Download(path2x.first, true, eMsgShow);
+			ParseAndProcessIndexFile(picker, path2x.first, EIDX_RELEASE);
 		}
 		else
-			picker.TryAdd(it->first);
+			picker.TryAdd(path2x.first);
 	}
 
 	SendChunk("<b>Identifying more index files in cache...</b><br>");

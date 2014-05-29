@@ -10,7 +10,7 @@
 #include "csmapping.h"
 #include "bgtask.h"
 #include "fileitem.h"
-#include <set>
+#include <unordered_map>
 
 // #define USEDUPEFILTER
 
@@ -29,11 +29,6 @@ struct tPatchEntry
 	tFingerprint fprState, fprPatch;
 };
 typedef deque<tPatchEntry>::const_iterator tPListConstIt;
-
-typedef MYSTD::pair<tFingerprint,mstring> tContId;
-struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
-typedef MYMAP<tContId, tClassDesc> tContId2eqClass;
-typedef MYMAP<tContId, tClassDesc>::iterator tClassMapIter;
 
 void DelTree(const string &what);
 
@@ -56,8 +51,9 @@ public:
 
 protected:
 	enum enumIndexType
-	{
-		EIDX_UNSUPPORTED =0,
+		: uint_least8_t
+		{
+			EIDX_UNSUPPORTED = 0,
 		EIDX_RELEASE,
 		EIDX_PACKAGES,
 		EIDX_SOURCES,
@@ -72,19 +68,14 @@ protected:
 	};
 	struct tIfileAttribs
 	{
-		bool vfile_ondisk:1, uptodate:1, parseignore:1, hideDlErrors:1, forgiveDlErrors:1,
-		alreadyparsed:1;
-		enumIndexType eIdxType:8;
-		const tStrDeq *bros;
-		off_t space;
-		inline tIfileAttribs() : vfile_ondisk(false), uptodate(false), parseignore(false),
-				hideDlErrors(false), forgiveDlErrors(false), alreadyparsed(false),
-				eIdxType(EIDX_UNSUPPORTED), bros(NULL), space(0)
-		{};
+		bool vfile_ondisk=false, uptodate=false, parseignore=false, hideDlErrors=false,
+				forgiveDlErrors=false, alreadyparsed=false;
+		enumIndexType eIdxType = EIDX_UNSUPPORTED;
+		const tStrDeq *bros = nullptr;
+		off_t space = 0;
 	};
 
-	typedef MYMAP<mstring,tIfileAttribs> tS2IDX;
-	tS2IDX m_indexFilesRel;
+	MYSTD::unordered_map<mstring,tIfileAttribs> m_indexFilesRel;
 	// helpers to keep the code cleaner and more readable
 	const tIfileAttribs &GetFlags(cmstring &sPathRel) const;
 	tIfileAttribs &SetFlags(cmstring &sPathRel);
@@ -139,7 +130,7 @@ protected:
 	bool ParseAndProcessIndexFile(ifileprocessor &output_receiver,
 			const mstring &sPath, enumIndexType idxType);
 
-	MYMAP<mstring,bool> m_forceKeepInTrash;
+	MYSTD::unordered_map<mstring,bool> m_forceKeepInTrash;
 
 	bool GetAndCheckHead(cmstring & sHeadfile, cmstring &sFilePathRel, off_t nWantedSize);
 	bool Inject(cmstring &fromRel, cmstring &toRel,
@@ -159,7 +150,16 @@ protected:
 	}
 	void AddDelCbox(cmstring &sFileRel);
 
+public:
+#warning still crap, make readable
+	typedef MYSTD::pair<tFingerprint,mstring> tContId;
+	struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
+	typedef MYMAP<tContId, tClassDesc> tContId2eqClass;
+
 private:
+
+	tContId2eqClass m_eqClasses;
+
 	bool Propagate(const string &donorRel, tContId2eqClass::iterator eqClassIter,
 			cmstring *psTmpUnpackedAbs=NULL);
 	void InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter);
@@ -169,7 +169,6 @@ private:
 			tPListConstIt pit, tPListConstIt itEnd,
 			const tFingerprint *verifData);
 	dlcon *m_pDlcon;
-	tContId2eqClass m_eqClasses;
 
 	bool IsDeprecatedArchFile(cmstring &sFilePathRel);
 
