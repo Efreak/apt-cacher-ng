@@ -606,7 +606,7 @@ void job::PrepareDownload() {
 		else
 			m_sFileLoc=tUrl.sHost+tUrl.sPath;
 
-		bForceFreshnessChecks = ( ! acfg::offlinemode && m_type == FILE_INDEX);
+		bForceFreshnessChecks = ( ! acfg::offlinemode && m_type == FILE_VOLATILE);
 
     	m_pItem=fileItemMgmt::GetRegisteredFileItem(m_sFileLoc, bForceFreshnessChecks);
 
@@ -1019,7 +1019,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 			const char *pLastMo = respHead.h[header::LAST_MODIFIED];
 
 			// consider contents "fresh" for non-volatile data, or when "our" special client is there, or the client simply doesn't care
-			bool bFreshnessForced = (m_type != rechecks::FILE_INDEX
+			bool bFreshnessForced = (m_type != rechecks::FILE_VOLATILE
 				|| m_pReqHead->h[header::ACNGFSMARK] || !pIfmo);
 
 			auto tm1=tm(), tm2=tm();

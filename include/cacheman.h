@@ -159,7 +159,7 @@ protected:
 private:
 	bool Propagate(const string &donorRel, tContId2eqClass::iterator eqClassIter,
 			cmstring *psTmpUnpackedAbs=NULL);
-	void InstallBz2edPatchResult(tContId2eqClass::iterator eqClassIter);
+	void InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter);
 	tCacheOperation(const tCacheOperation&);
 	tCacheOperation& operator=(const tCacheOperation&);
 	bool PatchFile(const mstring &srcRel, const mstring &patchIdxLocation,

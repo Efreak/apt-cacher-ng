@@ -93,7 +93,7 @@ namespace rechecks
 {
 enum eMatchType
 {
-	FILE_INVALID = -1, FILE_PKG = 0, FILE_INDEX = 1, WHITELIST = 2, NASTY_PATH = 3, PASSTHROUGH = 4,
+	FILE_INVALID = -1, FILE_SOLID = 0, FILE_VOLATILE = 1, WHITELIST = 2, NASTY_PATH = 3, PASSTHROUGH = 4,
 	ematchtype_max
 };
 bool Match(cmstring &in, eMatchType type);

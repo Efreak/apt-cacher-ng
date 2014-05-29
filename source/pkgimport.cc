@@ -405,12 +405,13 @@ void pkgimport::_LoadKeyCache(const string & sFileName)
 
 		in>>sz;
 		MYSTD::getline(in, cs); // newline
+		fpr.size=sz;
 
 		in>>csType;
 		MYSTD::getline(in, cs); // newline
 
 		MYSTD::getline(in, cs); // checksum line
-		fpr.Set(cs, (CSTYPES)csType, sz);
+		fpr.SetCs(cs, (CSTYPES)csType);
 
 		MYSTD::getline(in, info.sPath);
 		info.sPath.insert(0, m_sSrcPath+SZPATHSEP);

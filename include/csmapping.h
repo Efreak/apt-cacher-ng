@@ -38,15 +38,14 @@ struct tFingerprint {
 		memcpy(csum, a.csum, 20);
 	};
 	
-	bool Set(const mstring & hexString, CSTYPES eCstype, off_t newsize)
+	bool SetCs(const mstring & hexString, CSTYPES eCstype)
 	{
-		if(newsize<0 || hexString.empty()
+		if(hexString.empty()
 				|| (eCstype!=CSTYPE_MD5 && eCstype!=CSTYPE_SHA1)
 				|| (eCstype==CSTYPE_MD5 && 32 != hexString.length())
 				|| (eCstype==CSTYPE_SHA1 && 40 != hexString.length()))
 			return false;
 
-		size=newsize;
 		csType=eCstype;
 		return CsAsciiToBin(hexString.c_str(), csum, CSTYPE_MD5==csType?16:20);
 	}

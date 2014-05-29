@@ -26,6 +26,8 @@
 
 #include <unistd.h>
 
+//#define DEBUGIDX
+
 using namespace MYSTD;
 
 static cmstring oldStylei18nIdx("/i18n/Index");
@@ -73,7 +75,7 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 		return false;
 
 	enumIndexType t;
-	if ( (rechecks::FILE_INDEX == rechecks::GetFiletype(sPathRel)
+	if ( (rechecks::FILE_VOLATILE == rechecks::GetFiletype(sPathRel)
 	// SUSE stuff, not volatile but also contains file index data
 	|| endsWithSzAr(sPathRel, ".xml.gz") )
 	&& (t=GuessIndexTypeFromURL(sPathRel)) != EIDX_UNSUPPORTED)
@@ -101,6 +103,7 @@ tCacheOperation::tIfileAttribs &tCacheOperation::SetFlags(cmstring &sPathRel)
 	return sPathRel.empty() ? attr_dummy : m_indexFilesRel[sPathRel];
 }
 
+// detects when an architecture has been removed entirely from the Debian archive
 bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 {
 	tStrPos pos = sFilePathRel.rfind("/dists/");
@@ -137,10 +140,6 @@ bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 			return false; // heh?
 
 		mstring sLine;
-#ifdef DEBUG
-		sLine=sFilePathRel.substr(pos, posend-pos);
-#endif
-
 		while(reader.GetOneLine(sLine))
 		{
 			tSplitWalk w(&sLine, SPACECHARS);
@@ -461,17 +460,25 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 	// This code should be tolerant to minor changes in the format
 
 	tStrVec tmp;
+	off_t otmp;
 	while(reader.GetOneLine(sLine))
 	{
 		int nTokens=Tokenize(sLine, SPACECHARS, tmp);
 		if(3==nTokens)
 		{
 			if(tmp[0] == "SHA1-Current:")
-				ret.Set(tmp[1], CSTYPE_SHA1, atoofft(tmp[2].c_str()));
+			{
+				otmp=atoofft(tmp[2].c_str(), -2);
+				if(otmp<0 || !ret.SetCs(tmp[1], CSTYPE_SHA1))
+					return NULL;
+				ret.size=otmp;
+			}
 			else
 			{
 				tFingerprint fpr;
-				fpr.Set(tmp[0], CSTYPE_SHA1, atoofft(tmp[1].c_str()));
+				otmp=atoofft(tmp[1].c_str(),-2);
+				if(otmp<0 || !fpr.SetCs(tmp[0], CSTYPE_SHA1))
+					return NULL;
 
 				if(peAnz && retList[peAnz%retList.size()].patchName == tmp[2])
 					// oh great, this is also our target
@@ -888,15 +895,27 @@ void tCacheOperation::UpdateIndexFiles()
 	// just reget them as-is and we are done
 	if (m_bForceDownload)
 	{
-		for (tS2IDX::const_iterator it = m_indexFilesRel.begin(); it != m_indexFilesRel.end(); it++)
+		for (auto& f: m_indexFilesRel)
 		{
 			// nope... tell the fileitem to ignore file data instead ::truncate(SZABSPATH(it->first), 0);
-			if (!Download(it->first, true, VERB_SHOW))
-				m_nErrorCount+=!m_indexFilesRel[it->first].forgiveDlErrors;
+			if (!Download(f.first, true, VERB_SHOW))
+				m_nErrorCount += !m_indexFilesRel[f.first].forgiveDlErrors;
 		}
 		ERRMSGABORT;
 		return;
 	}
+
+#ifdef DEBUGIDX
+	for (auto& f: m_indexFilesRel)
+		SendFmt << f.first << ": "
+		<< f.second.alreadyparsed << "<br>\n"
+		<< f.second.forgiveDlErrors << "<br>\n"
+		<< f.second.hideDlErrors<< "<br>\n"
+		<< f.second.parseignore << "<br>\n"
+		<< f.second.space << "<br>\n"
+		<< f.second.uptodate <<"<br>\n"
+		<< f.second.vfile_ondisk << "<br>\n" "<br>\n";
+#endif
 
 	typedef map<string, tContId> tFile2Cid;
 
@@ -991,30 +1010,31 @@ void tCacheOperation::UpdateIndexFiles()
 		}
 	}
 
-	auto dbgDump = [&](const char *msg) {
-#ifdef DEBUG
+	auto dbgDump = [&](const char *msg, int pfx) {
+#ifdef DEBUGIDX
 		tSS printBuf;
 		printBuf << "#########################################################################<br>\n"
 			<< "## " <<  msg  << "<br>\n"
 			<< "#########################################################################<br>\n";
 		for(const auto& cp : m_eqClasses)
 		{
-			printBuf <<"TID: " 
-				<< cp.first.first<<cp.first.second<<"<br>\n"
+			printBuf << pfx << ": TID: "
+				<<  cp.first.first<<cp.first.second<<"<br>\n" << pfx << ": "
 				<< "bz2TID:" << cp.second.bz2VersContId.first
-				<< cp.second.bz2VersContId.second<<"<br>\n"
+				<< cp.second.bz2VersContId.second<<"<br>\n" << pfx << ": "
 				<< "idxTID:"<<cp.second.diffIdxId.first 
-                                << cp.second.diffIdxId.second <<"<br>\n"
+                                << cp.second.diffIdxId.second <<"<br>\n" << pfx << ": "
 				<< "Paths:<br>\n";
 			for(const auto& path : cp.second.paths)
-				printBuf <<"&nbsp;&nbsp;&nbsp;" << path <<"<br>\n";
+				printBuf << pfx << ":&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << path <<"<br>\n";
 		}
 		SendChunk(printBuf);
 #else
 		(void) msg;
+		(void) pfx;
 #endif
 	};
-	dbgDump("After class building:");
+	dbgDump("After class building:", 0);
 
 	if(CheckStopSignal())
 		return;
@@ -1026,38 +1046,32 @@ void tCacheOperation::UpdateIndexFiles()
 	 * First, strip the list down to those which are at least partially present in the cache
 	 */
 
-	for(tContId2eqClass::iterator it=m_eqClasses.begin(); it!=m_eqClasses.end();)
+	for(auto it=m_eqClasses.begin(); it!=m_eqClasses.end();)
 	{
-		bool bFound=false;
-		for(tStrDeq::const_iterator its=it->second.paths.begin();
-				its!= it->second.paths.end(); its++)
+		for(auto& path: it->second.paths)
 		{
-			if(GetFlags(*its).vfile_ondisk)
-			{
-				bFound=true;
-				break;
-			}
+			if(!GetFlags(path).vfile_ondisk)
+				continue;
+			goto strip_next_class;
 		}
-		if(bFound)
-			++it;
-		else
-			m_eqClasses.erase(it++);
+		m_eqClasses.erase(it++);
+		continue;
+		strip_next_class:
+		++it;
 	}
 	ERRMSGABORT;
-	dbgDump("Refined (1):");
+	dbgDump("Refined (1):", 1);
 
 	// Let the most recent files be in the front of the list, but the uncompressed ones have priority
-	for(tContId2eqClass::iterator it=m_eqClasses.begin(); it!=m_eqClasses.end();it++)
+	for(auto& it: m_eqClasses)
 	{
-		sort(it->second.paths.begin(), it->second.paths.end(), fctLessThanCompMtime(CACHE_BASE));
+		sort(it.second.paths.begin(), it.second.paths.end(),
+				fctLessThanCompMtime(CACHE_BASE));
 		// and while we are at it, give them pointers back to the eq-classes
-		for(tStrDeq::const_iterator its=it->second.paths.begin();
-						its!= it->second.paths.end(); its++)
-		{
-			SetFlags(*its).bros=&(it->second.paths);
-		}
+		for(auto &path : it.second.paths)
+			SetFlags(path).bros=&it.second.paths;
 	}
-	dbgDump("Refined (2):");
+	dbgDump("Refined (2):", 2);
 
 	DelTree(SABSPATH("_actmp")); // do one to test the permissions
 	/* wrong check but ignore for now
@@ -1236,13 +1250,11 @@ void tCacheOperation::UpdateIndexFiles()
 		// prefer to download them in that order, no uncompressed versions because
 		// mirrors usually don't have them
 		static const string preComp[] = { ".lzma", ".xz", ".bz2", ".gz"};
-		for (const string *ps = preComp; ps < preComp + _countof(preComp); ps++)
+		for (auto& ps : preComp)
 		{
-			for (tStrDeq::const_iterator its = cid2eqcl->second.paths.begin(); its
-					!= cid2eqcl->second.paths.end(); its++)
+			for (auto& cand: cid2eqcl->second.paths)
 			{
-				cmstring &cand=*its;
-				if(!endsWith(cand, *ps))
+				if(!endsWith(cand, ps))
 					continue;
 				if(Download(cand, true, GetFlags(cand).hideDlErrors ? VERB_SHOW_NOERRORS : VERB_SHOW))
 				{
@@ -1263,12 +1275,12 @@ void tCacheOperation::UpdateIndexFiles()
 			return;
 	}
 
-	dbgDump("Refined (3):");
+	dbgDump("Refined (3):", 3);
 
 	MTLOGDEBUG("<br><br><b>NOW GET THE REST</b><br><br>");
 
 	// fetch all remaining stuff
-	for(tS2IDX::citer it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end(); it++)
+	for(auto it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end(); it++)
 	{
 		if(it->second.uptodate || it->second.parseignore || !it->second.vfile_ondisk)
 			continue;
@@ -1280,7 +1292,7 @@ void tCacheOperation::UpdateIndexFiles()
 
 }
 
-void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator eqClassIter)
+void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter)
 {
 #ifndef HAVE_LIBBZ2
 	return;
@@ -1292,29 +1304,27 @@ void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator eqClassI
 	tFingerprint &bz2fpr=eqClassIter->second.bz2VersContId.first;
 	string sRefBz2Rel;
 
-	for (tStrDeq::const_iterator it = eqClassIter->second.paths.begin(); it
-			!= eqClassIter->second.paths.end(); it++)
+	for (const auto& tgt : eqClassIter->second.paths)
 	{
-		if (endsWithSzAr(*it, ".bz2"))
+		if (endsWithSzAr(tgt, ".bz2"))
 		{
-			const tIfileAttribs &fl = GetFlags(*it);
+			auto &fl = GetFlags(tgt);
 			if (fl.vfile_ondisk)
 			{
 				// needs a reference location to get the HTTP headers for, pickup something
 				if(sRefBz2Rel.empty())
-					sRefBz2Rel=*it;
+					sRefBz2Rel=tgt;
 
 				if (fl.uptodate)
 				{
-					sFreshBz2Rel = *it;
+					sFreshBz2Rel = tgt;
 					goto inject_bz2s;
 				}
-				else
-				{
-					if(sFreshBz2Rel.empty())
-						sFreshBz2Rel = sPatchResRel+".bz2";
-					// continue searching, there might be a working version
-				}
+
+				if(sFreshBz2Rel.empty())
+					sFreshBz2Rel = sPatchResRel+".bz2";
+
+				// continue searching, there might be a working version
 			}
 		}
 	}
@@ -1352,7 +1362,7 @@ void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator eqClassI
 #endif
 }
 
-tCacheOperation::enumIndexType tCacheOperation::GuessIndexTypeFromURL(const mstring &sPath)
+tCacheOperation::enumIndexType tCacheOperation::GuessIndexTypeFromURL(cmstring &sPath)
 {
 	tStrPos pos = sPath.rfind(SZPATHSEP);
 	string sPureIfileName = (stmiss == pos) ? sPath : sPath.substr(pos + 1);
@@ -1488,7 +1498,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 			{
 				// not looking for data we already have
 				if(key==sMD5sum)
-					info.fpr.Set(val, CSTYPE_MD5, info.fpr.size);
+					info.fpr.SetCs(val, CSTYPE_MD5);
 				else if(key==sSize)
 					info.fpr.size=atoofft(val.c_str());
 				else if(key==sFilename)
@@ -1548,7 +1558,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 						nStep = 0;
 						break;
 					case _csum:
-						info.fpr.Set(sLine, CSTYPE_MD5, info.fpr.size);
+						info.fpr.SetCs(sLine, CSTYPE_MD5);
 						nStep++;
 						break;
 					case _csize:
@@ -1580,8 +1590,8 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 				if(!startsWith(sLine, cygkeys[i]))
 					continue;
 				if (3 == Tokenize(sLine, "\t ", vsMetrics, false, cygkeys[i].length())
-						&& info.fpr.Set(vsMetrics[2], CSTYPE_MD5, atoofft(
-								vsMetrics[1].c_str())))
+						&& info.fpr.SetCs(vsMetrics[2], CSTYPE_MD5)
+						&& 0>= (info.fpr.size=atoofft(vsMetrics[1].c_str(), -2)))
 				{
 					tStrPos pos = vsMetrics[0].rfind(SZPATHSEPUNIX);
 					if (pos == stmiss)
@@ -1652,11 +1662,16 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 			if(CheckStopSignal())
 				return true;
 
-			for(tSplitWalk split(&sLine, SPACECHARS "./"); split.Next(); )
+			tSplitWalk split(&sLine, SPACECHARS);
+			info.fpr.size=-1;
+			if( split.Next() && info.fpr.SetCs(split, CSTYPE_MD5)
+					&& split.Next() && (info.sFileName = split).size()>0)
 			{
-				info.fpr.Set(split, CSTYPE_MD5, off_t(-1));
-				info.sFileName = split;
 				info.sDirectory = sCurFilesReferenceDirRel;
+
+				pos=info.sFileName.find_first_not_of("./");
+				if(pos!=stmiss)
+					info.sFileName.erase(0, pos);
 
 				pos=info.sFileName.rfind(SZPATHSEPUNIX);
 				if (stmiss!=pos)
@@ -1664,10 +1679,8 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 					info.sDirectory += info.sFileName.substr(0, pos+1);
 					info.sFileName.erase(0, pos+1);
 				}
-
 				ret.HandlePkgEntry(info);
 				info.SetInvalid();
-
 			}
 		}
 		break;
@@ -1723,20 +1736,18 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 				fileList.push_back(sLine);
 			else if(sLine.empty()) // ok, time to commit the list
 			{
-				for(tStrDeq::iterator it=fileList.begin(); it!=fileList.end(); ++it)
+				for(auto& fline : fileList)
 				{
-				// ok, read "checksum size filename" into info and check the word count
-
-				tSplitWalk split(&*it);
-				info.sFileName.clear();
-				if(!split.Next()
-						|| (key = split, !split.Next())
-						|| (val = split, !split.Next())
-						|| (UrlUnescapeAppend(split, info.sFileName) && split.Next())
-						|| !info.fpr.Set(key, info.fpr.csType, atoofft(val.c_str())))
-				{
+					info.sFileName.clear();
+					// ok, read "checksum size filename" into info and check the word count
+				tSplitWalk split(&fline);
+				if(!split.Next() || !info.fpr.SetCs(split, info.fpr.csType) || !split.Next())
 					continue;
-				}
+				val = split;
+				info.fpr.size=atoofft(val.c_str(), -2);
+				if(info.fpr.size <0 || !split.Next())
+					continue;
+				UrlUnescapeAppend(split, info.sFileName);
 
 				switch(origIdxType)
 					{
@@ -1883,23 +1894,24 @@ void tCacheOperation::PrintStats(cmstring &title)
 	multimap<off_t, cmstring*> sorted;
 	off_t total=0;
 	const UINT nMax = m_bVerbose ? (UINT_MAX-1) : 10;
-	for(tS2IDX::const_iterator it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end(); ++it)
+	UINT hidden=0;
+	for(auto &f: m_indexFilesRel)
 	{
-		if(it->second.space)
-		{
-			sorted.insert(make_pair(it->second.space, &(it->first)));
-			total += it->second.space;
-		}
+		total += f.second.space;
+		if(f.second.space)
+			sorted.insert(make_pair(f.second.space, &f.first));
 		if(sorted.size()>nMax)
+		{
 			sorted.erase(sorted.begin());
+			hidden++;
+		}
 	}
 	if(!total)
 		return;
-	SendFmt << "<br>\n<table><tr><td colspan=2><u>" << title;
-	if(!m_bVerbose)
-		SendFmt << " (Top " << sorted.size() << ")";
-	SendFmt << "</u></td></tr>\n";
-	for(multimap<off_t, cmstring*>::reverse_iterator it=sorted.rbegin(); it!=sorted.rend(); ++it)
+	SendFmt << "<br>\n<table><tr><td colspan=2><u>" << title
+			<< " (Top " << sorted.size() << ", " << hidden <<  " more not displayed)"
+			<< "</u></td></tr>\n";
+	for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
 	{
 		SendFmt << "<tr><td><b>" << offttosH(it->first) << "</b></td><td>"
 				<< *(it->second) << "</td></tr>\n";

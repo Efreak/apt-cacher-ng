@@ -1241,10 +1241,10 @@ bool Match(cmstring &in, eMatchType type)
 }
 
 eMatchType GetFiletype(const string & in) {
-	if (Match(in, FILE_INDEX))
-		return FILE_INDEX;
-	if (Match(in, FILE_PKG))
-		return FILE_PKG;
+	if (Match(in, FILE_VOLATILE))
+		return FILE_VOLATILE;
+	if (Match(in, FILE_SOLID))
+		return FILE_SOLID;
 	return FILE_INVALID;
 }
 
