@@ -49,14 +49,12 @@ string vfilepat(INFOLDER
 //string wfilepat(vfilepat);
 string wfilepat(INFOLDER
 		"(Release|InRelease|Release\\.gpg|custom\\.gpg"
-		"|(Packages|Sources)" COMPRLIST "?"
+		"|(Packages|Sources)" COMPRLIST "?" // hm... private repos without Release file :-(
 		"|Translation[^/]*" COMPRLIST "?" // to be checked, but they should never really go anywhere
-		"|MD5SUMS|SHA1SUMS"
 		"|.*\\.xml" // SUSE
 		"|" ALXPATTERN // Arch Linux
 		"|[a-z]+32.exe"
-		")$"
-		"|/dists/.*/installer-.*/images/.*");
+		")$");
 
 
 int offlinemode(false), verboselog(true), stupidfs(false), forcemanaged(false),

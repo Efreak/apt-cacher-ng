@@ -38,15 +38,14 @@ struct tFingerprint {
 		memcpy(csum, a.csum, 20);
 	};
 	
-	bool Set(const mstring & hexString, CSTYPES eCstype, off_t newsize)
+	bool SetCs(const mstring & hexString, CSTYPES eCstype)
 	{
-		if(newsize<0 || hexString.empty()
+		if(hexString.empty()
 				|| (eCstype!=CSTYPE_MD5 && eCstype!=CSTYPE_SHA1)
 				|| (eCstype==CSTYPE_MD5 && 32 != hexString.length())
 				|| (eCstype==CSTYPE_SHA1 && 40 != hexString.length()))
 			return false;
 
-		size=newsize;
 		csType=eCstype;
 		return CsAsciiToBin(hexString.c_str(), csum, CSTYPE_MD5==csType?16:20);
 	}
@@ -87,11 +86,15 @@ struct tFingerprint {
 	{
 		return GetCsAsString()+"_"+offttos(size);
 	}
+	inline bool csEquals(const tFingerprint& other) const
+	{
+		return 0==memcmp(csum, other.csum, csType==CSTYPE_MD5 ? 16 : 20);
+	}
 	inline bool operator==(const tFingerprint & other) const
 	{
 		if(other.csType!=csType || size!=other.size)
 			return false;
-		return 0==memcmp(csum, other.csum, csType==CSTYPE_MD5 ? 16 : 20);
+		return csEquals(other);
 	}
 	inline bool operator!=(const tFingerprint & other) const
 	{
@@ -119,12 +122,14 @@ struct tFingerprint {
 struct tRemoteFileInfo
 {
 	tFingerprint fpr;
+	bool bInflateForCs = false;
 	mstring sDirectory, sFileName;
 	inline void SetInvalid() {
 		sFileName.clear();
 		sDirectory.clear();
 		fpr.csType=CSTYPE_INVALID;
 		fpr.size=-1;
+		bInflateForCs = false;
 	}
 	inline bool IsUsable() {
 		return (!sFileName.empty() && fpr.csType!=CSTYPE_INVALID && fpr.size>0);

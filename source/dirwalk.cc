@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <string.h>
+//#include "aclogger.h"
 
 #include <set>
 
@@ -50,6 +51,8 @@ private:
 
 bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymlinks)
 {
+//	bool bNix=StrHas(sPath, "somehost");
+
 	if(bFollowSymlinks)
 	{
 		if(stat(sPath.c_str(), &m_stinfo)<0)
@@ -57,8 +60,15 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 	}
 	else
 	{
-		if(lstat(sPath.c_str(), &m_stinfo)<0)
+		auto r=lstat(sPath.c_str(), &m_stinfo);
+		if(r)
+		{
+	/*		errnoFmter f;
+				aclog::err(tSS() << sPath <<
+						" IO error [" << f<<"]");
+						*/
 			return true; // slight risk of missing information here... bug ignoring is safer
+		}
 		if(S_ISLNK(m_stinfo.st_mode))
 			return true;
 	}

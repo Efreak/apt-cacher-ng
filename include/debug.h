@@ -25,8 +25,12 @@
 #define LOGSTART2(x,y)
 #define LOGSTART2s(x,y)
 #define DBGQLOG(x)
+inline void dump_proc_status(){}; // strip away
 
 #else
+
+#include <fstream>
+#include <iostream>
 
 #define LOGLVL(n, x) if(acfg::debug&n){ __logobj.GetFmter() << x; __logobj.Write(__FILE__,__LINE__); }
 #define LOG(x) LOGLVL(LOG_DEBUG, x)
@@ -40,6 +44,19 @@
 
 #define dbgline ldbg("mark")
 #define DBGQLOG(x) {aclog::err(tSS()<< x);}
+
+
+inline void dump_proc_status()
+{
+	using namespace MYSTD;
+	ifstream sf("/proc/self/status");
+	while (sf)
+	{
+		string s;
+		getline(sf, s);
+		cerr << s << endl;
+	}
+};
 
 #endif
 

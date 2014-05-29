@@ -13,18 +13,18 @@
 class pkgmirror: public tCacheOperation, ifileprocessor
 {
 public:
-	using tCacheOperation::tCacheOperation;
+	// XXX: for c++11... using tCacheOperation::tCacheOperation;
+	inline pkgmirror(int fd, tSpecialRequest::eMaintWorkType type)
+	: tCacheOperation(fd, type) {};
+
 	virtual ~pkgmirror() {};
 	void Action(const mstring & src) override;
 
 protected:
 	// FileHandler
 	bool ProcessRegular(const mstring &sPath, const struct stat &);
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUnpackForCsumming);
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry);
 	void _LoadKeyCache(const mstring & sFileName);
-
-	virtual void UpdateFingerprint(const mstring &sPathRel, off_t nOverrideSize,
-				uint8_t *pOverrideSha1, uint8_t *pOverrideMd5);
 
 	bool m_bCalcSize=false, m_bSkipIxUpdate =false,
 			m_bDoDownload=false, m_bAsNeeded=false, m_bUseDelta=false;

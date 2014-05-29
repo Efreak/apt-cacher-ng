@@ -50,8 +50,6 @@ void PostProcConfig(bool bDumpConfig);
 // TODO: document me
 // throw away the rewritten part of the path, foo/debian/bla.deb -> bla.deb,
 // no slash needed with backends...
-				
-const mstring * GetRepNameAndPathResidual(const tHttpUrl & in, mstring & sRetPathResidual);
 
 struct tRepoData
 {
@@ -72,6 +70,10 @@ struct tRepoData
 	virtual ~tRepoData();
 };
 
+typedef MYSTD::map<cmstring, tRepoData>::const_iterator tBackendDataRef;
+
+bool GetRepNameAndPathResidual(const tHttpUrl & in, mstring & sRetPathResidual, tBackendDataRef &beRef);
+
 const tRepoData * GetBackendVec(cmstring &vname);
 
 time_t BackgroundCleanup();
@@ -91,7 +93,7 @@ namespace rechecks
 {
 enum eMatchType
 {
-	FILE_INVALID = -1, FILE_PKG = 0, FILE_INDEX = 1, WHITELIST = 2, NASTY_PATH = 3, PASSTHROUGH = 4,
+	FILE_INVALID = -1, FILE_SOLID = 0, FILE_VOLATILE = 1, WHITELIST = 2, NASTY_PATH = 3, PASSTHROUGH = 4,
 	ematchtype_max
 };
 bool Match(cmstring &in, eMatchType type);

@@ -17,7 +17,10 @@ class tSpecOpDetachable : public tSpecialRequest
 {
 public:
 	// forward all constructors, no specials here
-	using tSpecialRequest::tSpecialRequest;
+	// XXX: oh please, g++ 4.7 is not there yet... using tSpecialRequest::tSpecialRequest;
+	inline tSpecOpDetachable(int fd, tSpecialRequest::eMaintWorkType type)
+	: tSpecialRequest(fd, type)	{ };
+
 	virtual ~tSpecOpDetachable();
 
 	 /*!
@@ -40,8 +43,6 @@ protected:
 
 	time_t GetTaskId();
 
-	bool m_bShowControls = false;
-
 private:
 
 	MYSTD::ofstream m_reportStream;
@@ -62,6 +63,8 @@ private:
 	typedef SMARTPTR_SPACE::shared_ptr<tProgressTracker> tProgTrackPtr;
 	static SMARTPTR_SPACE::weak_ptr<tProgressTracker> g_pTracker;
 	tProgTrackPtr m_pTracker;
+	protected:
+	tStrSet m_delCboxFilter;
 };
 
 struct tRemoteFileInfo;
@@ -69,7 +72,7 @@ struct tRemoteFileInfo;
 class ifileprocessor
 {
 public:
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressForChecksum) = 0;
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) = 0;
 	virtual ~ifileprocessor() {};
 };
 

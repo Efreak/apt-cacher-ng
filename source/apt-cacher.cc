@@ -78,25 +78,21 @@ inline bool fork_away()
 }
 #endif
 
-int main(int argc, char **argv)
+#ifdef DEBUG
+
+
+void runDemo()
 {
 
-#ifdef HAVE_SSL
-	SSL_load_error_strings();
-	ERR_load_BIO_strings();
-	ERR_load_crypto_strings();
-	ERR_load_SSL_strings();
-	OpenSSL_add_all_algorithms();
-	SSL_library_init();
-#endif
+	//cerr << "Pandora: " << sizeof(tIfileAttribs) << endl;
 
 
 	// PLAYGROUND
 
 	/*
-	   cerr << sizeof(job) << endl;
-	   exit(1);
-	   */
+	 cerr << sizeof(job) << endl;
+	 exit(1);
+	 */
 
 	/*
 	 * Let's be another csum tool...
@@ -117,34 +113,59 @@ int main(int argc, char **argv)
 	 exit(0);
 	 */
 
-#ifdef DEBUG
 	if (getenv("GETSUM"))
 	{
 		uint8_t csum[20];
 		string s(getenv("GETSUM"));
 		off_t resSize;
-		bool ok=filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize, stdout);
+		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize, stdout);
 		for (UINT i = 0; i < sizeof(csum); i++)
 			printf("%02x", csum[i]);
 		printf("\n");
 		if (ok && getenv("REFSUM"))
 		{
-			printf(CsEqual(getenv("REFSUM"), csum, sizeof(csum))
-					? "IsOK\n" : "Diff\n");
+			printf(CsEqual(getenv("REFSUM"), csum, sizeof(csum)) ? "IsOK\n" : "Diff\n");
 		}
 		exit(0);
 	}
 
 	/*
-	   bool Bz2compressFile(const char *, const char*);
-	   return ! Bz2compressFile(argv[1], argv[2]);
+	 bool Bz2compressFile(const char *, const char*);
+	 return ! Bz2compressFile(argv[1], argv[2]);
 
 
-	   char tbuf[40];
-	   FormatCurrentTime(tbuf);
-	   MYSTD::cerr << tbuf << MYSTD::endl;
-	   exit(1);
-	   */
+	 char tbuf[40];
+	 FormatCurrentTime(tbuf);
+	 MYSTD::cerr << tbuf << MYSTD::endl;
+	 exit(1);
+	 */
+
+	LPCSTR envvar = getenv("PARSEIDX");
+	if (envvar)
+	{
+		int parseidx_demo(LPCSTR);
+		exit(parseidx_demo(envvar));
+	}
+
+}
+
+#endif
+
+
+int main(int argc, char **argv)
+{
+
+#ifdef HAVE_SSL
+	SSL_load_error_strings();
+	ERR_load_BIO_strings();
+	ERR_load_crypto_strings();
+	ERR_load_SSL_strings();
+	OpenSSL_add_all_algorithms();
+	SSL_library_init();
+#endif
+
+#ifdef DEBUG
+	runDemo();
 #endif
 
 	const char *envvar=getenv("TOBASE64");
@@ -156,15 +177,6 @@ int main(int argc, char **argv)
 	envvar=getenv("BECURL");
 	if(envvar)
 		return wcat(envvar, getenv("http_proxy"));
-
-#ifdef DEBUG
-	envvar=getenv("PARSEIDX");
-	if(envvar)
-	{
-		int parseidx_demo(LPCSTR);
-		return parseidx_demo(envvar);
-	}
-#endif
 
 	check_algos();
 	tSigAct act = tSigAct();

@@ -364,7 +364,7 @@ t_logger::t_logger(const char *szFuncName,  const void * ptr)
 		m_nLevel = stackDepths[m_id]++;
 	}
 	// writing to the level of parent since it's being "created there"
-	GetFmter() << ">> " << szFuncName << " ["<<m_id<<" | "<<callobj <<"]";
+	GetFmter() << ">> " << szFuncName << " ["<<m_id<<" | 0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	Write();
 	m_nLevel++;
 }
@@ -372,7 +372,7 @@ t_logger::t_logger(const char *szFuncName,  const void * ptr)
 t_logger::~t_logger()
 {
 	m_nLevel--;
-	GetFmter() << "<< " << m_szName << " ["<<m_id<<" | "<<callobj <<"]";
+	GetFmter() << "<< " << m_szName << " ["<<m_id<<" | 0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	Write();
 	lockguard __lockguard(stackDepths);
 	stackDepths[m_id]--;
@@ -395,7 +395,8 @@ void t_logger::Write(const char *pFile, unsigned int nLine)
 	{
 		const char *p=strrchr(pFile, CPATHSEP);
 		pFile=p?(p+1):pFile;
-		m_strm << " [" << m_id << "@" << pFile << ":" << nLine <<"|"<<callobj <<"]";
+		m_strm << " [" << m_id << "@" << pFile << ":" << nLine
+				<<"| 0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	}
 	aclog::err(m_strm.c_str());
 }

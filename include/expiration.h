@@ -2,16 +2,29 @@
 #define EXPIRATION_H_
 
 #include "cacheman.h"
+#include <list>
+#include <unordered_map>
+
+// caching all relevant file identity data and helper flags in such entries
+struct tDiskFileInfo
+{
+	time_t nLostAt =0;
+	bool bNoHeaderCheck=false;
+	// this adds a couple of procent overhead so it's neglible considering
+	// hashing or traversing overhead of a detached solution
+	tFingerprint fpr;
+};
 
 class expiration : public tCacheOperation, ifileprocessor
 {
 public:
-	using tCacheOperation::tCacheOperation;
+	// XXX: g++ 4.7 is not there yet... using tCacheOperation::tCacheOperation;
+	inline expiration(int fd, tSpecialRequest::eMaintWorkType type)
+	: tCacheOperation(fd, type) {};
 
 protected:
 
-	tS2DAT m_trashCandSet;
-	set<tFileNdir> m_trashCandHeadSet; // just collect the list of seen head files
+	MYSTD::unordered_map<mstring,MYSTD::map<mstring,tDiskFileInfo>> m_trashFile2dir2Info;
 
 	void RemoveAndStoreStatus(bool bPurgeNow);
 	void LoadPreviousData(bool bForceInsert);
@@ -22,10 +35,7 @@ protected:
 	virtual bool ProcessRegular(const mstring &sPath, const struct stat &) override;
 
 	// for ifileprocessor
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUnpackForCsumming) override;
-
-	virtual void UpdateFingerprint(const mstring &sPathRel, off_t nOverrideSize,
-				uint8_t *pOverrideSha1, uint8_t *pOverrideMd5) override;
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override;
 
 	void LoadHints();
 

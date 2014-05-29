@@ -155,7 +155,7 @@ void pkgmirror::Action(const string &cmd)
 					break;
 				}
 		}
-		void HandlePkgEntry(const tRemoteFileInfo &entry, bool)
+		void HandlePkgEntry(const tRemoteFileInfo &entry)
 		{
 			TryAdd(entry.sDirectory+entry.sFileName);
 		}
@@ -165,16 +165,16 @@ void pkgmirror::Action(const string &cmd)
 
 	SendChunk("<b>Identifying relevant index files...</b><br>");
 	// ok, now go through all release files and pickup all appropriate index files
-	for(tS2IDX::iterator it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end();it++)
+	for(auto& path2x: m_indexFilesRel)
 	{
-		if(endsWithSzAr(it->first, "Release"))
+		if(endsWithSzAr(path2x.first, "Release"))
 		{
-			if(!m_bSkipIxUpdate && !GetFlags(it->first).uptodate)
-				Download(it->first, true, VERB_SHOW);
-			ParseAndProcessIndexFile(picker, it->first, EIDX_RELEASE);
+			if(!m_bSkipIxUpdate && !GetFlags(path2x.first).uptodate)
+				Download(path2x.first, true, eMsgShow);
+			ParseAndProcessIndexFile(picker, path2x.first, EIDX_RELEASE);
 		}
 		else
-			picker.TryAdd(it->first);
+			picker.TryAdd(path2x.first);
 	}
 
 	SendChunk("<b>Identifying more index files in cache...</b><br>");
@@ -221,15 +221,15 @@ void pkgmirror::Action(const string &cmd)
 		}
 	}
 
-	for (tStrSet::iterator it=srcs.begin(); it!=srcs.end(); it++)
+	for (auto& src: srcs)
 	{
-		SendFmt << "File list: " << *it<< "<br>";
+		SendFmt << "File list: " << src << "<br>\n";
 
 		if(m_bSkipIxUpdate)
 			continue;
 
-		if(!GetFlags(*it).uptodate)
-			Download(*it, true);
+		if(!GetFlags(src).uptodate)
+			Download(src, true, eMsgShow);
 
 		if(CheckStopSignal())
 			return;
@@ -246,22 +246,22 @@ void pkgmirror::Action(const string &cmd)
 		SendFmt << "<b>Counting downloadable content size..."
 				<< (m_bAsNeeded? " (filtered)" : "")  << "</b><br>";
 
-		for (tStrSet::iterator it = srcs.begin(); it != srcs.end(); it++)
+		for (auto& src : srcs)
 		{
 #ifdef DEBUG
 			if(LOG_MORE&acfg::debug)
-				SendFmt << "mirror check: " << *it;
+				SendFmt << "mirror check: " << src;
 #endif
 			off_t needBefore=(m_totalSize-m_totalHave);
 
-			ParseAndProcessIndexFile(*this, *it, GuessIndexTypeFromURL(*it));
+			ParseAndProcessIndexFile(*this, src, GuessIndexTypeFromURL(src));
 
-			SendFmt << *it << ": "
+			SendFmt << src << ": "
 					<< offttosH((m_totalSize-m_totalHave)-needBefore)
 					<< " to download<br>\n";
 
 			if(m_bUseDelta)
-				dcount+=ConfigDelta(*it);
+				dcount+=ConfigDelta(src);
 
 			if(CheckStopSignal())
 				return;
@@ -279,14 +279,12 @@ void pkgmirror::Action(const string &cmd)
 
 		m_bCalcSize=false;
 
-		for (tStrSet::iterator it=srcs.begin(); it!=srcs.end(); it++)
+		for (auto& src: srcs)
 		{
 			if(CheckStopSignal())
 				return;
-
-			ConfigDelta(*it);
-
-			ParseAndProcessIndexFile(*this, *it, GuessIndexTypeFromURL(*it));
+			ConfigDelta(src);
+			ParseAndProcessIndexFile(*this, src, GuessIndexTypeFromURL(src));
 		}
 	}
 }
@@ -323,30 +321,13 @@ inline bool pkgmirror::ConfigDelta(cmstring &sPathRel)
 	return m_pDeltaSrc;
 }
 
-void pkgmirror::UpdateFingerprint(const mstring &sPathRel, off_t nOverrideSize,
-			uint8_t *pOverrideSha1, uint8_t *pOverrideMd5)
-{
-
-}
-
-/*
-struct CompDebVerLessThan
-{
-	bool operator()(cmstring &s1, cmstring s2) const
-	{
-		int r=::system(string("dpkg --compare-versions "+s1+" lt "+s2).c_str());
-		return 0==r;
-	}
-};
-*/
-
 bool CompDebVerLessThan(cmstring &s1, cmstring s2)
 {
 	int r=::system(string("dpkg --compare-versions "+s1+" lt "+s2).c_str());
 	return 0==r;
 };
 
-void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressForChecksum)
+void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
 	if (m_bAsNeeded)
 	{
@@ -441,7 +422,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 				::unlink(sDeltaPathAbs.c_str());
 				::unlink((sDeltaPathAbs+".head").c_str());
 
-				if(Download(TEMPDELTA, false, VERB_QUIET, NULL, uri.c_str()))
+				if(Download(TEMPDELTA, false, eMsgHideAll, NULL, uri.c_str()))
 				{
 					::setenv("delta", SZABSPATH(TEMPDELTA), true);
 					::setenv("from", srcAbs.c_str(), true);
@@ -480,7 +461,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 							}
 						}
 
-						bhaveit = Inject(TEMPRESULT, tgtRel, false, false, &h, true);
+						bhaveit = Inject(TEMPRESULT, tgtRel, false, &h, true);
 
 						if(bhaveit)
 						{
@@ -490,7 +471,6 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 									<< ":" << entry.fpr.size / 1024
 									<< "KiB)</i>\n<br>\n";
 						}
-
 					}
 					else
 						SendFmt << "Debpatch couldn't rebuild " << tgtRel<<"<br>\n";
@@ -501,7 +481,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 		cannot_debpatch:
 
 		if(!bhaveit)
-			Download(entry.sDirectory + entry.sFileName, false);
+			Download(entry.sDirectory + entry.sFileName, false, eMsgShow);
 
 		if (m_bVerbose && m_totalSize)
 		{

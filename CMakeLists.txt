@@ -16,13 +16,9 @@ INCLUDE(CheckCXXSourceCompiles)
 INCLUDE(CheckCXXSourceRuns)
 INCLUDE(CheckIncludeFiles)
 
-# I don't need -rdynamic, thanks!
-SET(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
-SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
-
-# common required flags to be used later for CMAKE_REQUIRED_FLAGS, CXXFLAGS
-# (via initial CMAKE_REQUIRED_FLAGS) can override them
-SET(FLAGS_MIN " -pthread -g -O3 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_REQUIRED_FLAGS}")
+# common required flags to be used later for CMAKE_REQUIRED_FLAGS and the build,
+# CXXFLAGS (via initial CMAKE_CXX_FLAGS) can override them
+SET(FLAGS_MIN " -pthread -g -O3 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
 # not so for linker flags, get them from environment if available
 SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS} $ENV{LDFLAGS}")
 
@@ -281,6 +277,11 @@ CHECK_CXX_SOURCE_RUNS("#include \"${CMAKE_SOURCE_DIR}/include/testpthread.h\"" P
 
 SET(CMAKE_REQUIRED_LIBRARIES "")
 SET(CMAKE_REQUIRED_FLAGS ${FLAGS_MIN})
+
+# I don't need -rdynamic, thanks!
+SET(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
+SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
+
 
 FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
 ADD_EXECUTABLE(apt-cacher-ng ${SRCS})

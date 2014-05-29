@@ -1,14 +1,25 @@
-apt-cacher-ng (0.7.27) BETA; urgency=low
+apt-cacher-ng (0.8) BETA; urgency=low
 
+  * Source tree cleanup
   * code review and refactoring with C++11 features, now requiring language
-    feature support of GCC 4.7 or newer
+    feature support of GCC 4.7 or newer or equivalent Clang
   * enabled Link Time Optimization with modern GCC/binutils
   * better checks for compiler and linker features
   * Portability fixes for systems w/o zlib of libbz2
-  * Source tree cleanup
   * Lots of refactoring on maintenance page factory code, including bugfix:
     Displaying user info page rather than admin page if the admin page site
     name was not configured in the config at all
+  * On expiration code, review and partial rewrite:
+    + better readability and performance
+    + less memory usage
+    + contents checking for Debian Installer image indexes, no more carte
+      blanche for d-i files unless one adds them manually to the whitelist
+    + better checking file sizes inconsistencies without checksumming
+  * Review of repository management
+    + better readability
+    + now using better tailored containers
+    + stricter size format parsing on certain places
+    + fixed removal checkboxes not appearing sometimes
 
 apt-cacher-ng (0.7.26) BETA; urgency=low
 
