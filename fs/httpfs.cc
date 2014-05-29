@@ -314,7 +314,7 @@ public:
 		bIsFirst=false;
 
 
-		if (m_ftype == rechecks::FILE_PKG && fidOrig != fid)
+		if (m_ftype == rechecks::FILE_SOLID && fidOrig != fid)
 		{
 			lockguard g(remote_info_cache);
 			remote_info_cache[m_path] = fid;
@@ -391,7 +391,7 @@ public:
 			return -EIO;
 		else if (nHttpCode == 200)
 		{
-			if (m_ftype == rechecks::FILE_PKG) // not caching volatile stuff
+			if (m_ftype == rechecks::FILE_SOLID) // not caching volatile stuff
 			{
 				lockguard g(remote_info_cache);
 				remote_info_cache[m_path] =
@@ -580,7 +580,7 @@ static int acngfs_getattr(const char *path, struct stat *stbuf)
 
 	rechecks::eMatchType type = rechecks::GetFiletype(path);
 	_cerr( "type: " << type);
-	if (type == rechecks::FILE_PKG || type == rechecks::FILE_INDEX)
+	if (type == rechecks::FILE_SOLID || type == rechecks::FILE_VOLATILE)
 	{
 		if(0 == tDlDescLocal(path, type).Stat(*stbuf))
 			return 0;
@@ -709,7 +709,7 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 	MYTRY
 	{
 		// ok... if that is a remote object, can we still use local access instead?
-		if(!altPath.empty() && rechecks::FILE_PKG == ftype)
+		if(!altPath.empty() && rechecks::FILE_SOLID == ftype)
 		{
 				p = new tDlDescLocal(path, ftype);
 				if(p)

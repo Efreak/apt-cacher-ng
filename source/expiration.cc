@@ -205,9 +205,14 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 
 			if (!m_bIncompleteIsDamaged)
 			{
-				SendFmt << WCLASS << " incomplete download, keeping "
-				<< sPathRel;
-				return finish_good(lenFromStat);
+				if(m_bVerbose)
+				{
+					SendFmt << WCLASS << " incomplete download, keeping "
+					<< sPathRel;
+					return finish_good(lenFromStat);
+				}
+				// just continue silently
+				return report_good(lenFromStat);
 			}
 
 			// ok... considering damaged...
@@ -433,7 +438,6 @@ void expiration::Action(const string & cmd)
 		{
 			for (auto& j : i.second)
 			{
-				//const tFileNdir &k=it->first;
 				auto rel = (j.first + i.first);
 				auto abspath = SABSPATH(rel);
 				off_t sz = GetFileSize(abspath, -2);
@@ -539,6 +543,7 @@ void expiration::Action(const string & cmd)
 	// update timestamps of pending removals
 	LoadPreviousData(false);
 
+	SendChunk("<b>Reviewing candidates for removal...</b><br>\n");
 	RemoveAndStoreStatus(cmd.find("purgeNow")!=stmiss);
 	PurgeMaintLogs();
 
@@ -614,7 +619,7 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 	DBGQLOG(sPathRel);
 
 	// detect strings which are only useful for shell or js attacks
-	if(sPathRel.find_first_of("\r\n'\"<>")!=stmiss)
+	if(sPathRel.find_first_of("\r\n'\"<>{}")!=stmiss)
 		return true;
 
 	if(sPathRel[0] == '_' && !m_bScanInternals)
@@ -625,10 +630,8 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 	if(pos!=stmiss && stmiss !=(pos2=sPathRel.find("/images/", pos)))
 	{
 		AddIFileCandidate(sPathRel.substr(0, pos2+8)+"MD5SUMS");
-#warning Not enabled yet, needs more checks of index file management
-#if 0
 		auto idir = sPathRel.substr(0, pos2 + 8);
-		/* XXX: support sha256, do onl,y MD5SUMS for now
+		/* XXX: support of sha256 is required. Do only MD5SUMS for now.
 		 if(!ContHas(m_indexFilesRel, idir+"SHA256SUMS"))
 		 {
 		 */
@@ -641,7 +644,6 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		idesc.vfile_ondisk = true;
 		idesc.uptodate = false;
 //		}
-#endif
 	}
 	UINT stripLen=0;
     if (endsWithSzAr(sPathRel, ".head"))
@@ -652,6 +654,9 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		attr.space += stinfo.st_size;
 		attr.forgiveDlErrors = endsWith(sPathRel, sslIndex);
 	}
+	else if (rechecks::Match(sPathRel, rechecks::FILE_VOLATILE))
+		return true; // cannot check volatile files properly so don't care
+
 	// ok, split to dir/file and add to the list
 	tStrPos nCutPos = sPathRel.rfind(CPATHSEP);
 	nCutPos = (nCutPos == stmiss) ? 0 : nCutPos+1;

@@ -1,4 +1,4 @@
-apt-cacher-ng (0.7.27) BETA; urgency=low
+apt-cacher-ng (0.8) BETA; urgency=low
 
   * code review and refactoring with C++11 features, now requiring language
     feature support of GCC 4.7 or newer
@@ -15,8 +15,10 @@ apt-cacher-ng (0.7.27) BETA; urgency=low
     + contents checking for Debian Installer image indexes, no more carte
       blanche for d-i files unless one adds them manually to the whitelist
     + better checking file sizes inconsistencies without checksumming
-  * Review of repository management, now using better tailored containers
-    
+  * Review of repository management
+    + better readability
+    + now using better tailored containers
+    + stricter size format parsing on certain places
 
 apt-cacher-ng (0.7.26) BETA; urgency=low
 
