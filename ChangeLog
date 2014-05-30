@@ -1,10 +1,12 @@
 apt-cacher-ng (0.8) BETA; urgency=low
 
   * Source tree cleanup
+  * better checks for compiler and linker features
+  * CXXFLAGS and LDFLAGS variable passing (for optimizations, see INSTALL)
+  might be used to enable Link Time
+    Optimization with -flto 
   * code review and refactoring with C++11 features, now requiring language
     feature support of GCC 4.7 or newer or equivalent Clang
-  * enabled Link Time Optimization with modern GCC/binutils
-  * better checks for compiler and linker features
   * Portability fixes for systems w/o zlib of libbz2
   * Lots of refactoring on maintenance page factory code, including bugfix:
     Displaying user info page rather than admin page if the admin page site

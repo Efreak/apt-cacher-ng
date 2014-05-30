@@ -49,3 +49,11 @@ environment variables to customize the build.
  - CXX : overrides the default compiler (for example, CXX=clang++-3.0)
  - CXXFLAGS : parameters passed to the compiler after the default ones
  - LDFLAGS : parameters passed to the linker call (compiler call for linking)
+
+Experimental flags:
+
+CXXFLAGS=-flto -O3
+(enables Link Time Optimization for smaller and more efficient code,
+speed optimization or alternatively -Os for binary size optimization)
+LDFLAGS=-fto
+(must be enabled to use Link Time Optimization)
