@@ -151,7 +151,6 @@ protected:
 	void AddDelCbox(cmstring &sFileRel);
 
 public:
-#warning still crap, make readable
 	typedef MYSTD::pair<tFingerprint,mstring> tContId;
 	struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
 	typedef MYMAP<tContId, tClassDesc> tContId2eqClass;
