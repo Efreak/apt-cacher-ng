@@ -19,8 +19,11 @@ INCLUDE(CheckIncludeFiles)
 # common required flags to be used later for CMAKE_REQUIRED_FLAGS and the build,
 # CXXFLAGS (via initial CMAKE_CXX_FLAGS) can override them
 SET(FLAGS_MIN " -pthread -g -O3 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
-# not so for linker flags, get them from environment if available
-SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS} $ENV{LDFLAGS}")
+# same for linker flags, imported from LDFLAGS environment var
+SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
+
+message("Initial CXX flags: ${FLAGS_MIN}")
+message("Initial linker flags: ${LDFLAGS_MIN}")
 
 IF(CMAKE_SYSTEM MATCHES "Darwin")
    SET(FLAGS_MIN " ${FLAGS_MIN} -D_DARWIN_C_SOURCE ")
@@ -62,17 +65,17 @@ else(SET_CXX11_FLAGS)
 endif(SET_CXX11_FLAGS)
 
 
-#if(NOT ADDDEBUGSRC)
-#SET(CMAKE_REQUIRED_FLAGS "${FLAGS_MIN} -flto")
-#SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN} -flto ")
-#CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_LTO)
-#if(USE_LTO)
-#   SET(FLAGS_MIN ${CMAKE_REQUIRED_FLAGS})
-#   SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
-#else(USE_LTO)
-#   SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
-#endif(USE_LTO)
-#endif(NOT ADDDEBUGSRC)
+if(NOT ADDDEBUGSRC)
+SET(CMAKE_REQUIRED_FLAGS "${FLAGS_MIN} -flto")
+SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN} -flto ")
+CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_LTO)
+if(USE_LTO)
+   SET(FLAGS_MIN ${CMAKE_REQUIRED_FLAGS})
+   SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
+else(USE_LTO)
+   SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
+endif(USE_LTO)
+endif(NOT ADDDEBUGSRC)
 
 
 SET(CMAKE_REQUIRED_FLAGS ${FLAGS_MIN})

@@ -3,8 +3,6 @@ apt-cacher-ng (0.8) BETA; urgency=low
   * Source tree cleanup
   * better checks for compiler and linker features
   * CXXFLAGS and LDFLAGS variable passing (for optimizations, see INSTALL)
-  might be used to enable Link Time
-    Optimization with -flto 
   * code review and refactoring with C++11 features, now requiring language
     feature support of GCC 4.7 or newer or equivalent Clang
   * Portability fixes for systems w/o zlib of libbz2
