@@ -369,14 +369,7 @@ static unsigned short FindCompIdx(cmstring &s)
 	return i;
 }
 
-tCacheOperation::tContId BuildEquivKey(const tFingerprint &fpr, const string &sDir,
-		const string &sFile, tStrPos maxFnameLen)
-{
-	static const string dis("/binary-");
-	tStrPos pos=sDir.rfind(dis);
-	return make_pair(fpr,
-			(stmiss==pos ? sEmptyString : sDir.substr(pos)) + sFile.substr(0, maxFnameLen));
-}
+static const string dis("/binary-");
 
 void DelTree(const string &what)
 {
@@ -880,6 +873,8 @@ void tCacheOperation::UpdateIndexFiles()
 	const string sPatchBaseAbs=CACHE_BASE+sPatchBaseRel;
 	mkbasedir(sPatchBaseAbs);
 
+	tContId2eqClass eqClasses;
+
 	// just reget them as-is and we are done
 	if (m_bForceDownload)
 	{
@@ -905,7 +900,7 @@ void tCacheOperation::UpdateIndexFiles()
 		<< f.second.vfile_ondisk << "<br>\n" "<br>\n";
 #endif
 
-	typedef map<string, tContId> tFile2Cid;
+	typedef unordered_map<string, tContId> tFile2Cid;
 
 	MTLOGDEBUG("<br><br><b>STARTING ULTIMATE INTELLIGENCE</b><br><br>");
 
@@ -928,8 +923,15 @@ void tCacheOperation::UpdateIndexFiles()
 			if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
 				return;
 
-			m_file2cid[entry.sDirectory+entry.sFileName] = BuildEquivKey(entry.fpr,
-					entry.sDirectory, entry.sFileName, compos);
+			auto& cid = m_file2cid[entry.sDirectory+entry.sFileName];
+			cid.first=entry.fpr;
+			tStrPos pos=entry.sDirectory.rfind(dis);
+			// if looking like Debian archive, keep just the part after binary-...
+			if(stmiss != pos)
+				cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
+			else
+				cid.second=entry.sFileName;
+
 		}
 	};
 
@@ -974,7 +976,7 @@ void tCacheOperation::UpdateIndexFiles()
 				if(it2 != recvr.m_file2cid.end())
 					sCandId=it2->second;
 			}
-			tClassDesc &tgt=m_eqClasses[sCandId];
+			tClassDesc &tgt=eqClasses[sCandId];
 			tgt.paths.push_back(if2cid.first);
 
 			// pick up the id for bz2 verification later
@@ -984,7 +986,7 @@ void tCacheOperation::UpdateIndexFiles()
 			// also the index file id
 			if(tgt.diffIdxId.second.empty()) // XXX if there is no index at all, avoid repeated lookups somehow?
 			{
-				tFile2Cid::iterator j = recvr.m_file2cid.find(sNativeName+diffIdxSfx);
+				auto j = recvr.m_file2cid.find(sNativeName+diffIdxSfx);
 				if(j!=recvr.m_file2cid.end())
 					tgt.diffIdxId=j->second;
 			}
@@ -999,13 +1001,13 @@ void tCacheOperation::UpdateIndexFiles()
 		}
 	}
 
-	auto dbgDump = [&](const char *msg, int pfx) {
 #ifdef DEBUGIDX
+	auto dbgDump = [&](const char *msg, int pfx) {
 		tSS printBuf;
 		printBuf << "#########################################################################<br>\n"
 			<< "## " <<  msg  << "<br>\n"
 			<< "#########################################################################<br>\n";
-		for(const auto& cp : m_eqClasses)
+		for(const auto& cp : eqClasses)
 		{
 			printBuf << pfx << ": TID: "
 				<<  cp.first.first<<cp.first.second<<"<br>\n" << pfx << ": "
@@ -1018,11 +1020,11 @@ void tCacheOperation::UpdateIndexFiles()
 				printBuf << pfx << ":&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << path <<"<br>\n";
 		}
 		SendChunk(printBuf);
-#else
-		(void) msg;
-		(void) pfx;
-#endif
 	};
+#else
+#define dbgDump(x,y)
+#endif
+
 	dbgDump("After class building:", 0);
 
 	if(CheckStopSignal())
@@ -1035,7 +1037,7 @@ void tCacheOperation::UpdateIndexFiles()
 	 * First, strip the list down to those which are at least partially present in the cache
 	 */
 
-	for(auto it=m_eqClasses.begin(); it!=m_eqClasses.end();)
+	for(auto it=eqClasses.begin(); it!=eqClasses.end();)
 	{
 		for(auto& path: it->second.paths)
 		{
@@ -1043,7 +1045,7 @@ void tCacheOperation::UpdateIndexFiles()
 				continue;
 			goto strip_next_class;
 		}
-		m_eqClasses.erase(it++);
+		eqClasses.erase(it++);
 		continue;
 		strip_next_class:
 		++it;
@@ -1052,7 +1054,7 @@ void tCacheOperation::UpdateIndexFiles()
 	dbgDump("Refined (1):", 1);
 
 	// Let the most recent files be in the front of the list, but the uncompressed ones have priority
-	for(auto& it: m_eqClasses)
+	for(auto& it: eqClasses)
 	{
 		sort(it.second.paths.begin(), it.second.paths.end(),
 				fctLessThanCompMtime(CACHE_BASE));
@@ -1065,9 +1067,9 @@ void tCacheOperation::UpdateIndexFiles()
 	DelTree(SABSPATH("_actmp")); // do one to test the permissions
 
 	// Iterate over classes and do patch-update where possible
-	for(tContId2eqClass::iterator cid2eqcl=m_eqClasses.begin(); cid2eqcl!=m_eqClasses.end();cid2eqcl++)
+	for(auto cid2eqcl=eqClasses.begin(); cid2eqcl!=eqClasses.end();cid2eqcl++)
 	{
-		tContId2eqClass::iterator itDiffIdx; // iterator pointing to the patch index descriptor
+		decltype(cid2eqcl) itDiffIdx; // iterator pointing to the patch index descriptor
 		int nProbeCnt(3);
 		string patchidxFileToUse;
 		deque<tPatchEntry> patchList;
@@ -1079,17 +1081,16 @@ void tCacheOperation::UpdateIndexFiles()
 
 		DelTree(SABSPATH("_actmp"));
 
-		if (cid2eqcl->second.diffIdxId.second.empty() || m_eqClasses.end() == (itDiffIdx
-				= m_eqClasses.find(cid2eqcl->second.diffIdxId)) || itDiffIdx->second.paths.empty())
+		if (cid2eqcl->second.diffIdxId.second.empty() || eqClasses.end() == (itDiffIdx
+				= eqClasses.find(cid2eqcl->second.diffIdxId)) || itDiffIdx->second.paths.empty())
 			goto NOT_PATCHABLE; // no patches available
 
 		// iterate over patch paths and fine a present one which is most likely the most recent one
-		for (tStrDeq::const_iterator ppit = itDiffIdx->second.paths.begin(); ppit
-				!= itDiffIdx->second.paths.end(); ppit++)
+		for (const auto& pp : itDiffIdx->second.paths)
 		{
-			if (m_indexFilesRel[*ppit].vfile_ondisk)
+			if (m_indexFilesRel[pp].vfile_ondisk)
 			{
-				patchidxFileToUse = *ppit;
+				patchidxFileToUse = pp;
 				break;
 			}
 		}
@@ -1227,7 +1228,7 @@ void tCacheOperation::UpdateIndexFiles()
 */
 		// prefer to download them in that order, no uncompressed versions because
 		// mirrors usually don't have them
-		static const string preComp[] = { ".lzma", ".xz", ".bz2", ".gz"};
+		static const string preComp[] = { ".xz", ".lzma", ".bz2", ".gz"};
 		for (auto& ps : preComp)
 		{
 			for (auto& cand: cid2eqcl->second.paths)
@@ -1313,16 +1314,16 @@ void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator &eqClass
 
 	// ok, it points to the temp file then, create it
 
-	if (Bz2compressFile(SZABSPATH(sPatchResRel), SZABSPATH(sFreshBz2Rel))
-			&& bz2fpr.CheckFile(SABSPATH(sFreshBz2Rel))
+	if (!Bz2compressFile(SZABSPATH(sPatchResRel), SZABSPATH(sFreshBz2Rel))
+			|| !bz2fpr.CheckFile(SABSPATH(sFreshBz2Rel))
 	// fileitem implementation may nuke the data on errors... doesn't matter here
-			&& GetAndCheckHead(sFreshBz2Rel, sRefBz2Rel, bz2fpr.size))
+			|| !GetAndCheckHead(sFreshBz2Rel, sRefBz2Rel, bz2fpr.size))
 	{
-		if (m_bVerbose)
-			SendFmt << "Compressed into " << sFreshBz2Rel << "<br>\n";
-	}
-	else
 		return;
+	}
+
+	if (m_bVerbose)
+		SendFmt << "Compressed into " << sFreshBz2Rel << "<br>\n";
 
 	inject_bz2s:
 	// use a recursive call to distribute bz2 versions
@@ -1919,3 +1920,14 @@ int parseidx_demo(LPCSTR file)
 	return mgr.demo(file);
 }
 #endif
+
+
+void tCacheOperation::ProgTell()
+{
+	if (++m_nProgIdx == m_nProgTell)
+	{
+		SendFmt<<"Scanning, found "<<m_nProgIdx<<" file"
+				<< (m_nProgIdx>1?"s":"") << "...<br />\n";
+		m_nProgTell*=2;
+	}
+}

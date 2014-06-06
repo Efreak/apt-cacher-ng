@@ -18,7 +18,7 @@ INCLUDE(CheckIncludeFiles)
 
 # common required flags to be used later for CMAKE_REQUIRED_FLAGS and the build,
 # CXXFLAGS (via initial CMAKE_CXX_FLAGS) can override them
-SET(FLAGS_MIN " -pthread -g -O3 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
+SET(FLAGS_MIN " -pthread -g -O2 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
 # same for linker flags, imported from LDFLAGS environment var
 SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
 

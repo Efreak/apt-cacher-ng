@@ -139,15 +139,7 @@ protected:
 	void PrintStats(cmstring &title);
 	mstring m_processedIfile;
 
-	inline void ProgTell()
-	{
-		if (++m_nProgIdx == m_nProgTell)
-		{
-			SendFmt<<"Scanning, found "<<m_nProgIdx<<" file"
-					<< (m_nProgIdx>1?"s":"") << "...<br />\n";
-			m_nProgTell*=2;
-		}
-	}
+	void ProgTell();
 	void AddDelCbox(cmstring &sFileRel);
 
 public:
@@ -157,14 +149,12 @@ public:
 
 private:
 
-	tContId2eqClass m_eqClasses;
-
-	bool Propagate(const string &donorRel, tContId2eqClass::iterator eqClassIter,
+	bool Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
 			cmstring *psTmpUnpackedAbs=NULL);
 	void InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter);
 	tCacheOperation(const tCacheOperation&);
 	tCacheOperation& operator=(const tCacheOperation&);
-	bool PatchFile(const mstring &srcRel, const mstring &patchIdxLocation,
+	bool PatchFile(cmstring &srcRel, cmstring &patchIdxLocation,
 			tPListConstIt pit, tPListConstIt itEnd,
 			const tFingerprint *verifData);
 	dlcon *m_pDlcon;
@@ -176,10 +166,10 @@ private:
 };
 
 
-static const string compSuffixes[] = { ".bz2", ".gz", ".lzma", ".xz"};
-static const string compSuffixesAndEmpty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
-static const string compSuffixesAndEmptyByLikelyhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
-static const string compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
+static cmstring compSuffixes[] = { ".bz2", ".gz", ".lzma", ".xz"};
+static cmstring compSuffixesAndEmpty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
+static cmstring compSuffixesAndEmptyByLikelyhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
+static cmstring compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
 
 bool CompDebVerLessThan(cmstring &s1, cmstring s2);
 extern time_t m_gMaintTimeNow;
