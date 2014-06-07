@@ -20,6 +20,8 @@ apt-cacher-ng (0.8) BETA; urgency=low
     + now using better tailored containers
     + stricter size format parsing on certain places
     + fixed removal checkboxes not appearing sometimes
+  * Better reporting of error messages in config file reader (Alioth
+    task 314684)
 
 apt-cacher-ng (0.7.26) BETA; urgency=low
 

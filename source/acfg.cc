@@ -179,12 +179,13 @@ struct tCfgIter
 {
 	filereader reader;
 	string sLine;
-	tCfgIter(cmstring &fn)
+	string sFilename;
+	tCfgIter(cmstring &fn) : sFilename(fn)
 	{
 		reader.OpenFile(fn);
 		reader.AddEofLines();
 	}
-	inline operator bool() const { return reader.CheckGoodState(false); }
+	inline operator bool() const { return reader.CheckGoodState(false, &sFilename); }
 	inline bool Next()
 	{
 		while(reader.GetOneLine(sLine))
@@ -219,7 +220,7 @@ inline void _FixPostPreSlashes(string &val)
 bool ReadOneConfFile(const string & szFilename)
 {
 	tCfgIter itor(szFilename);
-	itor.reader.CheckGoodState(true);
+	itor.reader.CheckGoodState(true, &szFilename);
 
 	NoCaseStringMap dupeCheck;
 
@@ -839,14 +840,14 @@ void ShutDown()
 	repoparms.clear();
 }
 
-void ReadRewriteFile(const string & sFile, const string & sRepName)
+void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 {
 
 	filereader reader;
 	if(debug>4)
 		cerr << "Reading rewrite file: " << sFile <<endl;
 	reader.OpenFile(sFile);
-	reader.CheckGoodState(true);
+	reader.CheckGoodState(true, &sFile);
 	reader.AddEofLines();
 
 	tStrVec hosts, paths;

@@ -329,7 +329,7 @@ string GetStatReport()
 
 
 
-errnoFmter::errnoFmter(const char *prefix)
+tErrnoFmter::tErrnoFmter(const char *prefix)
 {
 	char buf[32];
 	buf[0]=buf[31]=0x0;

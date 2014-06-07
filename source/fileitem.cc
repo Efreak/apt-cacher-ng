@@ -279,7 +279,7 @@ fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)
 
 inline void _LogWithErrno(const char *msg, const string & sFile)
 {
-	errnoFmter f;
+	tErrnoFmter f;
 	aclog::err(tSS() << sFile <<
 			" storage error [" << msg << "], last errno: " << f);
 }
@@ -537,7 +537,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		
 		if (m_filefd<0)
 		{
-			errnoFmter efmt("503 Cache storage error - ");
+			tErrnoFmter efmt("503 Cache storage error - ");
 #ifdef DEBUG
 			BOUNCE((efmt+sPathAbs).c_str());
 #else
@@ -660,7 +660,7 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 				{
 					if(EINTR==errno || EAGAIN==errno)
 						continue;
-					errnoFmter efmt("HTTP/1.1 503 ");
+					tErrnoFmter efmt("HTTP/1.1 503 ");
 					m_head.frontLine = efmt;
 					m_status=FIST_DLERROR;
 					// message will be set by the caller

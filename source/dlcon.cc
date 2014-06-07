@@ -747,7 +747,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 #ifdef MINIBUILD
 			string fer("select failed");
 #else
-			errnoFmter fer("FAILURE: select, ");
+			tErrnoFmter fer("FAILURE: select, ");
 			LOG(fer);
 #endif
 			sErrorMsg = string("500 Internal malfunction, ") + fer;
@@ -861,7 +861,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 				sErrorMsg = "502 EPIC FAIL";
 #else
 				// pickup the error code for later and kill current connection ASAP
-				sErrorMsg = errnoFmter("502 ");
+				sErrorMsg = tErrnoFmter("502 ");
 #endif
 				return EFLAG_LOST_CON;
 			}

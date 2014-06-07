@@ -1426,7 +1426,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 	{
 		if(! GetFlags(sPath).forgiveDlErrors) // that would be ok (added by ignorelist), don't bother
 		{
-			errnoFmter err;
+			tErrnoFmter err;
 			SendFmt<<"<span class=\"WARNING\">WARNING: unable to open "<<sPath
 					<<"(" << err << ")</span>\n<br>\n";
 		}

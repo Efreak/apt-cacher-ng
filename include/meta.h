@@ -485,9 +485,9 @@ struct extended_bool
 
 void DelTree(cmstring &what);
 
-struct errnoFmter: public mstring
+struct tErrnoFmter: public mstring
 {
-	errnoFmter(LPCSTR prefix = NULL);
+	tErrnoFmter(LPCSTR prefix = NULL);
 };
 
 mstring EncodeBase64Auth(cmstring & s);

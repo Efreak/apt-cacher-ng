@@ -171,7 +171,7 @@ void SetupConAndGo(int fd, const char *szClientName=NULL)
 	
 	if (!SpawnThreadsAsNeeded())
 	{
-		errnoFmter fer("Cannot start threads, cleaning up. Reason: ");
+		tErrnoFmter fer("Cannot start threads, cleaning up. Reason: ");
 		USRDBG(fer);
 		lockguard g(g_ThreadPoolCondition);
 		while(!g_freshConQueue.empty())

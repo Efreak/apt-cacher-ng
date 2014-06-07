@@ -41,10 +41,11 @@ using namespace MYSTD;
 class IDecompressor
 {
 public:
-	bool inited, eof;
-	IDecompressor() : inited(false), eof(false) {};
+	bool eof=false;
+	mstring *psError = NULL;
 	virtual ~IDecompressor() {};
 	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) =0;
+	virtual bool Init() =0;
 };
 
 #ifdef HAVE_LIBBZ2
@@ -53,14 +54,19 @@ class tBzDec : public IDecompressor
 {
 	bz_stream strm = bz_stream();
 public:
-	tBzDec()
+	bool Init() override
 	{
-		inited = (BZ_OK == BZ2_bzDecompressInit(&strm, 1, EXTREME_MEMORY_SAVING));
+		if (BZ_OK == BZ2_bzDecompressInit(&strm, 1, EXTREME_MEMORY_SAVING))
+			return true;
+		// crap, no proper sanity checks in BZ2_bzerror
+		if(psError)
+			psError->assign("BZIP2 initialization error");
+		return false;
+
 	}
 	~tBzDec()
 	{
 		BZ2_bzDecompressEnd(&strm);
-		inited = false;
 	}
 	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) override
 	{
@@ -80,6 +86,9 @@ public:
 		}
 		// or corrupted data?
 		eof = true;
+		// eeeeks bz2, no robust error getter, no prepared error message :-(
+		if(psError)
+			*psError = mstring("BZIP2 error ")+to_string(ret);
 		return false;
 	}
 };
@@ -93,14 +102,17 @@ class tGzDec : public IDecompressor
 {
 	z_stream strm = z_stream();
 public:
-	tGzDec()
+	bool Init() override
 	{
-		inited = (Z_OK == inflateInit2(&strm, 47));
+		if (Z_OK == inflateInit2(&strm, 47))
+			return true;
+		if (psError)
+			psError->assign("ZLIB initialization error");
+		return false;
 	}
 	~tGzDec()
 	{
 		deflateEnd(&strm);
-		inited = false;
 	}
 	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) override
 	{
@@ -120,6 +132,8 @@ public:
 		}
 		// or corrupted data?
 		eof = true;
+		if(psError)
+			*psError = mstring("ZLIB error: ") + (strm.msg ? mstring(strm.msg) : to_string(ret));
 		return false;
 	}
 };
@@ -133,21 +147,26 @@ static const uint8_t gzMagic[] =
 class tXzDec : public IDecompressor
 {
 	lzma_stream strm = lzma_stream();
+	bool lzmaFormat;
 public:
-	tXzDec(bool lzmaFormat=false)
+	tXzDec(bool bLzma) : lzmaFormat(bLzma) {};
+
+	bool Init() override
 	{
-		if(lzmaFormat)
-			inited = (LZMA_OK == lzma_alone_decoder(&strm,
-					EXTREME_MEMORY_SAVING ? 32000000 : MAX_VAL(uint64_t)));
-		else
-			inited = (LZMA_OK == lzma_stream_decoder(&strm,
+		auto x = (lzmaFormat ? lzma_alone_decoder(&strm,
+					EXTREME_MEMORY_SAVING ? 32000000 : MAX_VAL(uint64_t))
+				: lzma_stream_decoder(&strm,
 				EXTREME_MEMORY_SAVING ? 32000000 : MAX_VAL(uint64_t),
 						LZMA_TELL_UNSUPPORTED_CHECK | LZMA_CONCATENATED));
+		if(LZMA_OK == x)
+			return true;
+		if(psError)
+			psError->assign("LZMA initialization error");
+		return false;
 	}
 	~tXzDec()
 	{
 		lzma_end(&strm);
-		inited = false;
 	}
 	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) override
 	{
@@ -167,6 +186,8 @@ public:
 		}
 		// or corrupted data?
 		eof = true;
+		if(psError)
+			*psError = mstring("LZMA error ")+to_string(ret);
 		return false;
 	}
 };
@@ -195,7 +216,10 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 	m_fd = open(sFilename.c_str(), O_RDONLY);
 
 	if (m_fd < 0)
+	{
+		m_sErrorString=tErrnoFmter();
 		return false;
+	}
 
 	if (bNoMagic)
 		m_Dec.reset();
@@ -229,7 +253,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 #endif
 #ifdef HAVE_LZMA
 			else if (0 == memcmp(xzMagic, fh.GetBuffer(), _countof(xzMagic)))
-				m_Dec.reset(new tXzDec);
+				m_Dec.reset(new tXzDec(false));
 			else if (0 == memcmp(lzmaMagic, fh.GetBuffer(), _countof(lzmaMagic)))
 				m_Dec.reset(new tXzDec(true));
 #endif
@@ -238,23 +262,27 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 
 	if (m_Dec.get())
 	{
-		if(!m_Dec->inited)
-		{
-			//aclog::err("Unable to uncompress file, algo not available");
+		m_Dec->psError = &m_sErrorString;
+		if(!m_Dec->Init())
 			return false;
-		}
 		m_UncompBuf.clear();
 		m_UncompBuf.setsize(BUFSIZEMIN);
 	}
 
+	tErrnoFmter fmt;
+
 	struct stat statbuf;
 	if(0!=fstat(m_fd, &statbuf))
+	{
+		m_sErrorString=tErrnoFmter();
 		return false;
+	}
 
 	// LFS on 32bit? That's not good for mmap. Don't risk incorrect behaviour.
 	if(uint64_t(statbuf.st_size) >  MAX_VAL(size_t))
     {
         errno=EFBIG;
+        m_sErrorString=tErrnoFmter();
         return false;
     }
 	
@@ -262,12 +290,16 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 	{
 		m_szFileBuf = (char*) mmap(0, statbuf.st_size, PROT_READ, MAP_SHARED, m_fd, 0);
 		if(m_szFileBuf==MAP_FAILED)
-			return false;
+		{
+				m_sErrorString=tErrnoFmter();
+				return false;
+		}
 		m_nBufSize = statbuf.st_size;
 	}
 	else if(m_Dec.get())
 	{
 		// compressed file but empty -> error
+		m_sErrorString="Truncated compressed file";
 		return false;
 	}
 	else
@@ -296,7 +328,7 @@ bool filereader::CheckGoodState(bool bErrorsConsiderFatal, cmstring *reportFileP
 	cerr << "Error opening file";
 	if (reportFilePath)
 		cerr << " " << *reportFilePath;
-	cerr << ", terminating." << endl;
+	cerr << " (" << m_sErrorString << "), terminating." << endl;
 	exit(EXIT_FAILURE);
 
 }
@@ -317,6 +349,7 @@ void filereader::Close()
 	m_nBufSize=0;
 
 	m_bError = m_bEof = true; // will be cleared in Open()
+	m_sErrorString=cmstring("Not initialized");
 }
 
 filereader::~filereader() {
@@ -346,13 +379,14 @@ bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
 		{
 			m_UncompBuf.move(); // make free as much as possible
 
-			// must uncompress but the buffer is full. Resize if, it not possible, fail only then.
+			// must uncompress but the buffer is full. Resize it, if not possible, fail only then.
 			if(bForceUncompress && 0==m_UncompBuf.freecapa())
 			{
 				if (m_UncompBuf.totalcapa() >= BUFSIZEMAX
 						|| !m_UncompBuf.setsize(m_UncompBuf.totalcapa() * 2))
 				{
 					m_bError = true;
+					m_sErrorString=mstring("Failed to allocate decompression buffer memory");
 					return false;
 				}
 			}
@@ -463,7 +497,6 @@ bool filereader::GetChecksum(const mstring & sFileName, int csType, uint8_t out[
 }
 
 bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *fDump)
-//bool filereader::GetSha1Sum(uint8_t out[], off_t &scannedSize, FILE *fDump)
 {
 	unique_ptr<csumBase> summer(csumBase::GetChecker(CSTYPES(csType)));
 	scannedSize=0;

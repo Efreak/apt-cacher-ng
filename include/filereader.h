@@ -52,6 +52,9 @@ public:
 private:
 
 	bool m_bError, m_bEof;
+	// XXX: not totally happy, this could be a simple const char* for most usecases
+	mstring m_sErrorString;
+
 	char *m_szFileBuf;
 	size_t m_nBufSize, m_nBufPos;
 	

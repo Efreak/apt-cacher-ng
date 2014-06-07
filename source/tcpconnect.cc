@@ -212,7 +212,7 @@ inline bool tcpconnect::Connect(string & sErrorMsg, int timeout)
 	sErrorMsg = "500 Connection failure";
 #else
 	// format the last available error message for the user
-	sErrorMsg=errnoFmter("500 Connection failure: ");
+	sErrorMsg=tErrnoFmter("500 Connection failure: ");
 #endif
 	ldbg("Force reconnect, con. failure");
 	Disconnect();

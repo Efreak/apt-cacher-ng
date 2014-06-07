@@ -282,7 +282,7 @@ int main(int argc, char **argv)
 
 	if (!fork_away())
 	{
-		errnoFmter ef("Failed to change to daemon mode");
+		tErrnoFmter ef("Failed to change to daemon mode");
 		cerr << ef << endl;
 		exit(43);
 	}
