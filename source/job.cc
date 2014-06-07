@@ -557,7 +557,7 @@ void job::PrepareDownload() {
 		for(tStrPos pos; stmiss != (pos = tUrl.sPath.find("//")); )
 			tUrl.sPath.erase(pos, 1);
 
-		bPtMode=rechecks::MatchUncacheableRequest(tUrl.ToURI(false));
+		bPtMode=rechecks::MatchUncacheable(tUrl.ToURI(false), rechecks::NOCACHE_REQ);
 
 		LOG("input uri: "<<tUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode);
 
@@ -670,8 +670,10 @@ void job::PrepareDownload() {
 				LOG("Backends found, using them with " << sPathResidual
 						<< ", first backend: " <<beRef->second.m_backends.front().ToURI(false));
 
-				if(! bPtMode && rechecks::
-						MatchUncacheableTarget(beRef->second.m_backends.front().ToURI(false)+sPathResidual))
+				if(! bPtMode
+						&& rechecks::MatchUncacheable(
+								beRef->second.m_backends.front().ToURI(false)+sPathResidual,
+								rechecks::NOCACHE_TGT))
 				{
 					fistate=_SwitchToPtItem(m_sFileLoc);
 				}
@@ -684,7 +686,7 @@ void job::PrepareDownload() {
 			    	goto report_notallowed;
 			    LOG("Passing new job for " << tUrl.ToURI(false) << " to " << m_pParentCon->m_dlerthr);
 
-				if(! bPtMode && rechecks::MatchUncacheableTarget(tUrl.ToURI(false)))
+				if(! bPtMode && rechecks::MatchUncacheable(tUrl.ToURI(false), rechecks::NOCACHE_TGT))
 					fistate=_SwitchToPtItem(m_sFileLoc);
 
 			    m_pParentCon->m_pDlClient->AddJob(m_pItem.get(), tUrl);

@@ -208,13 +208,14 @@ public:
 #endif
 	{};
 
-	inline cmstring& GetPort() const { return !sPort.empty() ? sPort :
+	inline cmstring& GetDefaultPortForProto() const { return
 #ifdef HAVE_SSL
-			(bSSL ? sDefPortHTTPS : sDefPortHTTP);
+			bSSL ? sDefPortHTTPS : sDefPortHTTP;
 #else
 	sDefPortHTTP;
 #endif
 	}
+	inline cmstring& GetPort() const { return !sPort.empty() ? sPort : GetDefaultPortForProto(); }
 private:
 	mstring sPort;
 };

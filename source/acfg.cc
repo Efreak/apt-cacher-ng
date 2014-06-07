@@ -33,7 +33,7 @@ mstring PTHOSTS_PATTERN;
 namespace rechecks
 {
 bool CompileExpressions();
-bool CompileUncExpressions(const string & req, const string & tgt);
+//bool CompileUncExpressions(const string & req, const string & tgt);
 }
 
 
@@ -43,12 +43,12 @@ namespace acfg {
 // internal stuff:
 string sPopularPath("/debian/");
 
-string tmpDontcache, tmpDontcacherq, tmpDontcacheResolved;
+string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt;
 
 tStrMap localdirs;
 static class : public lockable, public NoCaseStringMap {} mimemap;
 
-MYSTD::bitset<65536> *pUserPorts = NULL;
+MYSTD::bitset<TCP_PORT_MAX> *pUserPorts = NULL;
 
 typedef struct
 {
@@ -81,8 +81,8 @@ MapNameToString n2sTbl[] = {
 		,{ "BindAddress", &bindaddr, 0}
 		,{ "UserAgent", &agentname, 0}
 		,{ "DontCache",	&tmpDontcache, 0}
-		,{ "DontCacheRequested",	&tmpDontcacherq, 0}
-		,{ "DontCacheResolved",	&tmpDontcacheResolved, 0}
+		,{ "DontCacheRequested",	&tmpDontcacheReq, 0}
+		,{ "DontCacheResolved",	&tmpDontcacheTgt, 0}
 		,{ "PrecacheFor", &mirrorsrcs, 0}
 		,{ "RequestAppendix", &requestapx, 0}
 		,{ "PassThroughPattern", &PTHOSTS_PATTERN, 0}
@@ -1057,15 +1057,16 @@ void PostProcConfig(bool bDumpConfig)
 	numcores = (int) sysconf(_SC_NPROC_ONLN);
 #endif
 
-   if(!rechecks::CompileUncExpressions(
-		   tmpDontcacherq.empty() ? tmpDontcache : tmpDontcacherq,
-		   tmpDontcacheResolved.empty() ? tmpDontcache : tmpDontcacheResolved))
+   if(!rechecks::CompileUncExpressions(rechecks::NOCACHE_REQ,
+		   tmpDontcacheReq.empty() ? tmpDontcache : tmpDontcacheReq)
+   || !rechecks::CompileUncExpressions(rechecks::NOCACHE_TGT,
+		   tmpDontcacheTgt.empty() ? tmpDontcache : tmpDontcacheTgt))
    {
 	   BARF("An error occurred while compiling regular expression for non-cached paths!");
    }
    tmpDontcache.clear();
-   tmpDontcacheResolved.clear();
-   tmpDontcacherq.clear();
+   tmpDontcacheTgt.clear();
+   tmpDontcacheReq.clear();
 
    if(usewrap == RESERVED_DEFVAL)
    {
@@ -1202,13 +1203,17 @@ time_t BackgroundCleanup()
 
 namespace rechecks
 {
+// this has the exact order of the "regular" types in the enum
 	MYSTD::pair<regex_t, bool> rex[ematchtype_max];
 
 bool CompileExpressions()
 {
 	const char *pszExpStrings[] = {
-			acfg::pfilepat.c_str(), acfg::vfilepat.c_str(), acfg::wfilepat.c_str(),
-			BADSTUFF_PATTERN, PTHOSTS_PATTERN.c_str()
+			acfg::pfilepat.c_str(),
+			acfg::vfilepat.c_str(),
+			acfg::wfilepat.c_str(),
+			BADSTUFF_PATTERN,
+			PTHOSTS_PATTERN.c_str()
 	};
 	for(UINT i=0; i<_countof(pszExpStrings); i++)
 	{
@@ -1252,9 +1257,9 @@ eMatchType GetFiletype(const string & in) {
 deque<regex_t> vecReqPatters, vecTgtPatterns;
 
 #ifndef MINIBUILD
-inline bool CompileUncachedRex(const string & token, bool bIsTgtPattern, bool bRecursiveCall)
+inline bool CompileUncachedRex(const string & token, eMatchType type, bool bRecursiveCall)
 {
-	deque<regex_t> & patvec = bIsTgtPattern ? vecTgtPatterns : vecReqPatters;
+	deque<regex_t> & patvec = (NOCACHE_TGT == type) ? vecTgtPatterns : vecReqPatters;
 
 	if (0!=token.compare(0, 5, "file:")) // pure pattern
 	{
@@ -1265,17 +1270,17 @@ inline bool CompileUncachedRex(const string & token, bool bIsTgtPattern, bool bR
 	else if(!bRecursiveCall) // don't go further than one level
 	{
 		tStrDeq srcs = acfg::ExpandFileTokens(token);
-		for(tStrDeq::const_iterator it=srcs.begin(); it!=srcs.end(); it++)
+		for(auto& src: srcs)
 		{
-			acfg::tCfgIter itor(*it);
+			acfg::tCfgIter itor(src);
 			if(!itor)
 			{
-				cerr << "Error opening pattern file: " << *it <<endl;
+				cerr << "Error opening pattern file: " << src <<endl;
 				return false;
 			}
 			while(itor.Next())
 			{
-				if(!CompileUncachedRex(itor.sLine, bIsTgtPattern, true))
+				if(!CompileUncachedRex(itor.sLine, type, true))
 					return false;
 			}
 		}
@@ -1288,35 +1293,20 @@ inline bool CompileUncachedRex(const string & token, bool bIsTgtPattern, bool bR
 }
 
 
-bool CompileUncExpressions(const string & req, const string & resolved)
+bool CompileUncExpressions(eMatchType type, cmstring& pat)
 {
-	for(int i=0; i<2; ++i) // req, tgt, stop
-		for(tSplitWalk split(i? &req : &resolved); split.Next(); )
-			if (!CompileUncachedRex(split, i, false))
-				return false;
+	for(tSplitWalk split(&pat); split.Next(); )
+		if (!CompileUncachedRex(split, type, false))
+			return false;
 	return true;
 }
 
-bool MatchUncacheableRequest(const string & in)
+bool MatchUncacheable(const string & in, eMatchType type)
 {
-	LOGSTART2s("MatchUncacheableRequest", in << " against " << vecReqPatters.size() << " patterns");
-	for(deque<regex_t>::const_iterator it=vecReqPatters.begin();
-			it!=vecReqPatters.end(); it++)
-	{
-		if(!regexec(& (*it), in.c_str(), 0, NULL, 0))
+	//LOGSTART2s("MatchUncacheable", in << " against " << vecUncPatters.size() << " patterns");
+	for(auto& patre: (type == NOCACHE_REQ) ? vecReqPatters : vecTgtPatterns)
+		if(!regexec(&patre, in.c_str(), 0, NULL, 0))
 			return true;
-	}
-	return false;
-}
-
-bool MatchUncacheableTarget(const string &in)
-{
-	for(deque<regex_t>::const_iterator it=vecTgtPatterns.begin();
-			it!=vecTgtPatterns.end(); it++)
-	{
-		if(!regexec(& (*it), in.c_str(), 0, NULL, 0))
-			return true;
-	}
 	return false;
 }
 

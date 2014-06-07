@@ -26,7 +26,7 @@ namespace acfg
 
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
 reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, bindaddr, port, sUmask,
-tmpDontcacherq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
+tmpDontcacheReq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
 cafile, capath;
 
 extern int debug, numcores, offlinemode, foreground, verbose, stupidfs, forcemanaged, keepnver,
@@ -94,13 +94,17 @@ namespace rechecks
 enum eMatchType
 {
 	FILE_INVALID = -1, FILE_SOLID = 0, FILE_VOLATILE = 1, WHITELIST = 2, NASTY_PATH = 3, PASSTHROUGH = 4,
-	ematchtype_max
+	ematchtype_max,
+
+	// extra types handled by their own regex sets
+	NOCACHE_REQ,
+	NOCACHE_TGT
 };
 bool Match(cmstring &in, eMatchType type);
 
 eMatchType GetFiletype(const mstring &);
-bool MatchUncacheableRequest(const mstring &);
-bool MatchUncacheableTarget(const mstring &);
+bool MatchUncacheable(const mstring &, eMatchType);
+bool CompileUncExpressions(eMatchType type, cmstring& pat);
 bool CompileExpressions();
 }
 
