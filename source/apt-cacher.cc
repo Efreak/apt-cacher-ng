@@ -111,6 +111,27 @@ void runDemo()
 	 printf("%02x", csum[i]);
 	 printf("\n");
 	 exit(0);
+
+
+
+	if(argc<2)
+		return -1;
+
+	acfg::tHostInfo hi;
+	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1])<<endl;
+	cout << "Host: " << hi.sHost <<", Port: " << hi.sPort << ", Path: " << hi.sPath<<endl;
+	return 0;
+
+
+	 bool Bz2compressFile(const char *, const char*);
+	 return ! Bz2compressFile(argv[1], argv[2]);
+
+
+	 char tbuf[40];
+	 FormatCurrentTime(tbuf);
+	 MYSTD::cerr << tbuf << MYSTD::endl;
+	 exit(1);
+
 	 */
 
 	if (getenv("GETSUM"))
@@ -129,16 +150,6 @@ void runDemo()
 		exit(0);
 	}
 
-	/*
-	 bool Bz2compressFile(const char *, const char*);
-	 return ! Bz2compressFile(argv[1], argv[2]);
-
-
-	 char tbuf[40];
-	 FormatCurrentTime(tbuf);
-	 MYSTD::cerr << tbuf << MYSTD::endl;
-	 exit(1);
-	 */
 
 	LPCSTR envvar = getenv("PARSEIDX");
 	if (envvar)

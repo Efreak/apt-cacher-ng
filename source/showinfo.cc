@@ -112,11 +112,11 @@ void tDeleter::ModContents(mstring & contents, cmstring &cmd)
 
 	// do stricter path checks and prepare the query page data
 
-	unsigned int lfd(1);
-	for(tStrVecIterConst it=files.begin(); it!=files.end(); it++)
+	UINT lfd(1);
+	for(const auto path : files)
 	{
-		if(it->find_first_of(BADCHARS)!=stmiss  // what the f..., XSS attempt?
-		 || rechecks::Match(*it, rechecks::NASTY_PATH))
+		if(path.find_first_of(BADCHARS)!=stmiss  // what the f..., XSS attempt?
+		 || rechecks::Match(path, rechecks::NASTY_PATH))
 		{
 			contents.clear();
 			return;
@@ -124,13 +124,13 @@ void tDeleter::ModContents(mstring & contents, cmstring &cmd)
 		if(m_mode == workDELETECONFIRM)
 		{
 			sHidParms << "<input type=\"hidden\" name=\"kf" << ++lfd << "\" value=\""
-					<< *it <<"\">\n";
+					<< path <<"\">\n";
 		}
 		else
 		{
-			sHidParms<<"Deleting " << *it<<"<br>\n";
-			::unlink((acfg::cacheDirSlash+*it).c_str());
-			::unlink((acfg::cacheDirSlash+*it+".head").c_str());
+			sHidParms<<"Deleting " << path<<"<br>\n";
+			::unlink((acfg::cacheDirSlash+path).c_str());
+			::unlink((acfg::cacheDirSlash+path+".head").c_str());
 		}
 
 	}

@@ -19,10 +19,6 @@
 
 using namespace MYSTD;
 
-
-#define _iterPos(it, start) (it-start.begin())/sizeof(it)
-#define sProblemLoc szPath<< ':'<< _iterPos(it, lines)
-
 // hint to use the main configuration excluding the complex directives
 bool g_testMode=false;
 
@@ -361,8 +357,8 @@ tStrDeq ExpandFileTokens(cmstring &token)
 					<< " found in config or support directories." << endl;
 		}
 		srcs.clear();
-		for (tStrMap::const_iterator it = bname2path.begin(); it != bname2path.end(); ++it)
-			srcs.push_back(it->second);
+		for (auto& b2p : bname2path)
+			srcs.push_back(b2p.second);
 	}
 	return srcs;
 }
@@ -385,14 +381,12 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 	}
 	else
 	{
-		tStrDeq srcs = ExpandFileTokens(token);
-		
-		for(tStrDeq::const_iterator it=srcs.begin(); it!=srcs.end(); it++)
+		for(auto& src : ExpandFileTokens(token))
 		{
 			if (bAsBackend)
-				ReadBackendsFile(*it, repname);
+				ReadBackendsFile(src, repname);
 			else
-				ReadRewriteFile(*it, repname);
+				ReadRewriteFile(src, repname);
 		}
 	}
 }
@@ -635,30 +629,36 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 	else if(0==strncasecmp(key.c_str(), "Remap-", 6) && !g_testMode)
 	{
 		string vname=key.substr(6, key.npos);
-		tStrVec tokens;
-		Tokenize(value, SPACECHARS, tokens);
-		if(tokens.empty() || vname.empty())
+		if(vname.empty())
 		{
 			if(!bQuiet)
-				cerr << "Found invalid entry, ignoring " << key << ": " << value <<endl;
+				cerr << "Bad repository name in " << key << endl;
 			return false;
 		}
-		int type(0); // prefixes ; backends ; flags
-		for(tStrVecIterConst it=tokens.begin(); it!=tokens.end(); ++it)
+		int type(-1); // nothing =-1; prefixes =0 ; backends =1; flags =2
+		for(tSplitWalk split(&value); split.Next();)
 		{
-			if(it->empty())
+			cmstring s(split);
+			if(s.empty())
 				continue;
-			if(it->at(0)=='#')
+			if(s.at(0)=='#')
 				break;
-
-			if(it->at(0)==';')
+			if(type<0)
+				type=0;
+			if(s.at(0)==';')
 				++type;
 			else if(0 == type)
-				AddRemapInfo(false, *it, vname);
+				AddRemapInfo(false, s, vname);
 			else if(1 == type)
-				AddRemapInfo(true, *it, vname);
+				AddRemapInfo(true, s, vname);
 			else if(2 == type)
-				AddRemapFlag(*it, vname);
+				AddRemapFlag(s, vname);
+		}
+		if(type<0)
+		{
+			if(!bQuiet)
+				cerr << "Invalid entry, no configuration: " << key << ": " << value <<endl;
+			return false;
 		}
 		_AddHooksFile(vname);
 	}
@@ -958,9 +958,8 @@ void ReadConfigDirectory(const char *szPath, bool bTestMode)
 	confdir=buf; // pickup the last config directory
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
-	tStrDeq srcs=ExpandFilePattern(confdir+SZPATHSEP"*.conf", true);
-	for(tStrDeq::const_iterator it=srcs.begin(); it!=srcs.end(); it++)
-		ReadOneConfFile(*it);
+	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP"*.conf", true))
+		ReadOneConfFile(src);
 #else
 	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
 #endif
@@ -1270,7 +1269,7 @@ inline bool CompileUncachedRex(const string & token, eMatchType type, bool bRecu
 	else if(!bRecursiveCall) // don't go further than one level
 	{
 		tStrDeq srcs = acfg::ExpandFileTokens(token);
-		for(auto& src: srcs)
+		for(const auto& src: srcs)
 		{
 			acfg::tCfgIter itor(src);
 			if(!itor)
@@ -1304,7 +1303,7 @@ bool CompileUncExpressions(eMatchType type, cmstring& pat)
 bool MatchUncacheable(const string & in, eMatchType type)
 {
 	//LOGSTART2s("MatchUncacheable", in << " against " << vecUncPatters.size() << " patterns");
-	for(auto& patre: (type == NOCACHE_REQ) ? vecReqPatters : vecTgtPatterns)
+	for(const auto& patre: (type == NOCACHE_REQ) ? vecReqPatters : vecTgtPatterns)
 		if(!regexec(&patre, in.c_str(), 0, NULL, 0))
 			return true;
 	return false;
@@ -1344,19 +1343,4 @@ void mkbasedir(const string & path)
             mkdir(path.substr(0,pos).c_str(), acfg::dirperms);
     }
 }
-
-
-
-/*
-int main(int argc, char **argv)
-{
-	if(argc<2)
-		return -1;
-	
-	acfg::tHostInfo hi;
-	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1])<<endl;
-	cout << "Host: " << hi.sHost <<", Port: " << hi.sPort << ", Path: " << hi.sPath<<endl;
-	return 0;
-}
-*/
 

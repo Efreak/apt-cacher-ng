@@ -770,9 +770,8 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 	}
 
 	int nInjCount=0;
-	for (tStrDeq::const_iterator it = tgts.begin(); it != tgts.end(); it++)
+	for (const auto& tgtCand : tgts)
 	{
-		const string &tgtCand=*it;
 		if(donorRel == tgtCand)
 			continue;
 		const tIfileAttribs &flags=GetFlags(tgtCand);
@@ -790,15 +789,15 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 	}
 
 	// defuse some stuff located in the same directory, like .gz variants of .bz2 files
-	for (tStrDeq::const_iterator it = tgts.begin(); it != tgts.end(); it++)
+	for (const auto& tgt: tgts)
 	{
-		const tIfileAttribs &myState = GetFlags(*it);
+		auto& myState = GetFlags(tgt);
 		if(!myState.vfile_ondisk || !myState.uptodate || myState.parseignore)
 			continue;
 
-		tStrPos cpos=FindCompSfxPos(*it);
-		string sBasename=it->substr(0, cpos);
-		string sux=cpos==stmiss ? "" : it->substr(FindCompSfxPos(*it));
+		tStrPos cpos=FindCompSfxPos(tgt);
+		string sBasename=tgt.substr(0, cpos);
+		string sux=cpos==stmiss ? "" : tgt.substr(FindCompSfxPos(tgt));
 		for(auto& compsuf : compSuffixesAndEmpty)
 		{
 			if(sux==compsuf) continue; // touch me not
@@ -807,7 +806,7 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 			if(kv!=m_indexFilesRel.end() && kv->second.vfile_ondisk)
 			{
 				kv->second.parseignore=true; // gotcha
-				MTLOGDEBUG("Defused bro of " << *it << ": " << sBro);
+				MTLOGDEBUG("Defused bro of " << tgt << ": " << sBro);
 
 				// also, we don't care if the pdiff index vanished for some reason
 				kv = m_indexFilesRel.find(sBasename+".diff/Index");
@@ -1115,11 +1114,15 @@ void tCacheOperation::UpdateIndexFiles()
 		 * 		  then get the one which matched best. But it's too cumbersome, and
 		 * 		   if the code works correctly, the first hit should always the best version
 		 * 		   */
-		for(tStrDeq::const_iterator its=cid2eqcl->second.paths.begin();
-				nProbeCnt-- >0 && its!= cid2eqcl->second.paths.end(); its++)
+
+		for(const auto& pathRel: cid2eqcl->second.paths)
 		{
+			if(--nProbeCnt<0)
+				break;
+
 			FILE_RAII df;
 			tFingerprint probe;
+			auto absPath(SABSPATH(pathRel));
 			::mkbasedir(sPatchBaseAbs);
 			df.p = fopen(sPatchBaseAbs.c_str(), "w");
 			if(!df.p)
@@ -1127,17 +1130,17 @@ void tCacheOperation::UpdateIndexFiles()
 				SendFmt << "Cannot write temporary patch data to " << sPatchBaseAbs << "<br>";
 				break;
 			}
-			if (GetFlags(*its).vfile_ondisk)
+			if (GetFlags(pathRel).vfile_ondisk)
 			{
 				header h;
-				if(h.LoadFromFile(SABSPATH(*its)+ ".head")<=0  || GetFileSize(SABSPATH(*its), -2)
+				if(h.LoadFromFile(absPath+ ".head")<=0  || GetFileSize(absPath, -2)
 						!= atoofft(h.h[header::CONTENT_LENGTH], -3))
 				{
 					MTLOGDEBUG("########### Header looks suspicious");
 					continue;
 				}
-				MTLOGDEBUG("########### Testing file: " << *its << " as patch base candidate");
-				if (probe.ScanFile(CACHE_BASE + *its, CSTYPE_SHA1, true, df.p))
+				MTLOGDEBUG("########### Testing file: " << pathRel << " as patch base candidate");
+				if (probe.ScanFile(absPath, CSTYPE_SHA1, true, df.p))
 				{
 					df.close(); // write the whole file to disk ASAP!
 
@@ -1148,11 +1151,11 @@ void tCacheOperation::UpdateIndexFiles()
 					if(probe == *pEndSum)
 					{
 						// since we know the stuff is fresh, no need to refetch it later
-						m_indexFilesRel[*its].uptodate=true;
+						m_indexFilesRel[pathRel].uptodate=true;
 						if(m_bVerbose)
-							SendFmt << "Found fresh version in " << *its << "<br>";
+							SendFmt << "Found fresh version in " << pathRel << "<br>";
 
-						Propagate(*its, cid2eqcl, &sPatchBaseAbs);
+						Propagate(pathRel, cid2eqcl, &sPatchBaseAbs);
 
 						if(CheckStopSignal())
 							return;
@@ -1691,9 +1694,6 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 
 		while(reader.GetOneLine(sLine))
 		{
-			//if(sLine.find("unp_")!=stmiss)
-			//	int nWtf=1;
-			//cout << "file: " << *it << " line: "  << sLine<<endl;
 			if(startsWith(sLine, sStartMark))
 				bUse=true;
 			else if(!startsWithSz(sLine, " ")) // list header block ended for sure

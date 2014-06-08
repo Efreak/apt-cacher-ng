@@ -149,18 +149,6 @@ void StrSubst(string &contents, const string &from, const string &to)
 	}
 }
 
-
-void Join(MYSTD::string &out, const MYSTD::string & sep, const tStrVec & tokens)
-{
-	out.clear();
-	if(tokens.empty())
-		return;
-	
-	for(tStrVec::const_iterator it=tokens.begin(); it!=tokens.end(); it++)
-		out+=(sep + *it);
-			
-}
-
 bool ParseKeyValLine(const string & sIn, string & sOutKey, string & sOutVal)
 {
 	// reuse the output string as buffer
@@ -548,13 +536,13 @@ inline bool is_safe_url_char(char c)
 
 void UrlEscapeAppend(cmstring &s, mstring &sTarget)
 {
-	for(auto it=s.begin(); it!=s.end();++it)
+	for(const auto& c: s)
 	{
-		if(is_safe_url_char(*it))
-			sTarget+=*it;
+		if(is_safe_url_char(c))
+			sTarget+=c;
 		else
 		{
-			char buf[4] = { '%', h2t_map[uint8_t(*it) >> 4], h2t_map[uint8_t(*it) & 0x0f],'\0'};
+			char buf[4] = { '%', h2t_map[uint8_t(c) >> 4], h2t_map[uint8_t(c) & 0x0f],'\0'};
 			sTarget+=buf;
 		}
 	}
@@ -569,15 +557,15 @@ mstring UrlEscape(cmstring &s)
 mstring DosEscape(cmstring &s)
 {
 	mstring ret;
-	for(cmstring::const_iterator it=s.begin(); it!=s.end();++it)
+	for(const auto& c: s)
 	{
-		if('/' == *it)
+		if('/' == c)
 			ret+=SZPATHSEP;
-		else if(is_safe_url_char(*it))
-			ret+=*it;
+		else if(is_safe_url_char(c))
+			ret+=c;
 		else
 		{
-			char buf[4] = { '%', h2t_map[uint8_t(*it) >> 4], h2t_map[uint8_t(*it) & 0x0f],'\0'};
+			char buf[4] = { '%', h2t_map[uint8_t(c) >> 4], h2t_map[uint8_t(c) & 0x0f],'\0'};
 			ret += buf;
 		}
 	}

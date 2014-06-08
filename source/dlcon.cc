@@ -428,10 +428,9 @@ struct tDlJob
 				// explicitly blacklist mirror if key file is missing
 				if (st >= 400 && m_pBEdata)
 				{
-					for (tStrVecIterConst it = m_pBEdata->m_keyfiles.begin();
-							it != m_pBEdata->m_keyfiles.end(); ++it)
+					for (const auto& kfile : m_pBEdata->m_keyfiles)
 					{
-						if (endsWith(m_fileUri.sPath, *it))
+						if (endsWith(m_fileUri.sPath, kfile))
 						{
 							sErrorMsg = "500 Keyfile missing, mirror blacklisted";
 							return HINT_DISCON | EFLAG_MIRROR_BROKEN;
@@ -594,29 +593,28 @@ inline bool dlcon::SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg)
 
 	// using backends? Find one which is not blacklisted
 
-	MYMAP<MYSTD::pair<cmstring,cmstring>, mstring>::const_iterator bliter;
-
 	if (job->m_pBEdata)
 	{
 		// keep the existing one if possible
 		if (job->m_pCurBackend)
 		{
 			LOG("Checking [" << job->m_pCurBackend->sHost << "]:" << job->m_pCurBackend->GetPort());
-			bliter = m_blacklist.find(make_pair(job->m_pCurBackend->sHost, job->m_pCurBackend->GetPort()));
+			const auto bliter = m_blacklist.find(make_pair(job->m_pCurBackend->sHost,
+					job->m_pCurBackend->GetPort()));
 			if(bliter == m_blacklist.end())
 				return true;
 		}
 
-		for (auto it=job->m_pBEdata->m_backends.begin();
-				it!=job->m_pBEdata->m_backends.end(); ++it)
+		for (const auto& bend : job->m_pBEdata->m_backends)
 		{
-			bliter = m_blacklist.find(make_pair(it->sHost, it->GetPort()));
+			const auto bliter = m_blacklist.find(make_pair(bend.sHost, bend.GetPort()));
 			if(bliter == m_blacklist.end())
 			{
-				job->m_pCurBackend = &(*it);
+				job->m_pCurBackend = &bend;
 				return true;
 			}
 
+			// uh, blacklisted, remember the last reason
 			if(pReasonMsg)
 				*pReasonMsg = bliter->second;
 		}
@@ -624,15 +622,13 @@ inline bool dlcon::SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg)
 	}
 
 	// ok, look for the mirror data itself
-	bliter = m_blacklist.find(make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort()));
+	auto bliter = m_blacklist.find(make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort()));
 	if(bliter == m_blacklist.end())
 		return true;
-	else
-	{
-		if(pReasonMsg)
-			*pReasonMsg = bliter->second;
-		return false;
-	}
+
+	if(pReasonMsg)
+		*pReasonMsg = bliter->second;
+	return false;
 }
 
 inline void dlcon::EnqJob(tDlJob *todo)

@@ -148,8 +148,8 @@ void pkgmirror::Action(const string &cmd)
 		};
 		void TryAdd(cmstring &s)
 		{
-			for(tStrVecIterConst it=matchList.begin(); it!=matchList.end(); it++)
-				if(0==fnmatch(it->c_str(), s.c_str(), FNM_PATHNAME))
+			for(const auto& match : matchList)
+				if(0==fnmatch(match.c_str(), s.c_str(), FNM_PATHNAME))
 				{
 					pSrcs->insert(s);
 					break;
@@ -179,12 +179,9 @@ void pkgmirror::Action(const string &cmd)
 
 	SendChunk("<b>Identifying more index files in cache...</b><br>");
 	// unless found in release files, get the from the local system
-	for (tStrVecIterConst it = picker.matchList.begin(); it != picker.matchList.end(); it++)
-	{
-		tStrDeq paths(ExpandFilePattern(CACHE_BASE+it->c_str(), false));
-		for(tStrDeq::iterator j=paths.begin(); j!=paths.end(); j++)
-			picker.TryAdd(*j);
-	}
+	for (const auto& match: picker.matchList)
+		for(const auto& path : ExpandFilePattern(CACHE_BASE+match, false))
+			picker.TryAdd(path);
 
 	restart_clean: // start over if the set changed while having a hot iterator
 	for(tStrSet::iterator it=srcs.begin(); it!=srcs.end(); it++)

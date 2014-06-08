@@ -148,12 +148,11 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
 typedef MYSTD::vector<mstring> tStrVec;
 typedef MYSTD::set<mstring> tStrSet;
 typedef MYSTD::deque<mstring> tStrDeq;
-typedef MYSTD::vector<mstring>::iterator tStrVecIter;
-typedef MYSTD::vector<mstring>::const_iterator tStrVecIterConst;
 
 // Sometimes I miss Perl...
 tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
-void Join(mstring &out, const mstring & sep, const tStrVec & tokens);
+inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
+{out.clear(); for(const auto& tok: tokens)out+=(sep + tok);}
 
 // TODO: __attribute__((externally_visible))
 bool ParseKeyValLine(const mstring & sIn, mstring & sOutKey, mstring & sOutVal);
