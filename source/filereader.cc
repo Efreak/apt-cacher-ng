@@ -88,7 +88,7 @@ public:
 		eof = true;
 		// eeeeks bz2, no robust error getter, no prepared error message :-(
 		if(psError)
-			*psError = mstring("BZIP2 error ")+to_string(ret);
+			*psError = mstring("BZIP2 error ")+ltos(ret);
 		return false;
 	}
 };
@@ -133,7 +133,7 @@ public:
 		// or corrupted data?
 		eof = true;
 		if(psError)
-			*psError = mstring("ZLIB error: ") + (strm.msg ? mstring(strm.msg) : to_string(ret));
+			*psError = mstring("ZLIB error: ") + (strm.msg ? mstring(strm.msg) : ltos(ret));
 		return false;
 	}
 };
@@ -187,7 +187,7 @@ public:
 		// or corrupted data?
 		eof = true;
 		if(psError)
-			*psError = mstring("LZMA error ")+to_string(ret);
+			*psError = mstring("LZMA error ")+ltos(ret);
 		return false;
 	}
 };
