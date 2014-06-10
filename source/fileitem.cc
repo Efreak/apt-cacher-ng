@@ -249,7 +249,7 @@ bool fileitem::SetupClean(bool bForce)
 			return false;
 		m_status=FIST_INITED;
 	}
-	cmstring sPathAbs(CACHE_BASE+m_sPathRel);
+	cmstring sPathAbs(SABSPATH(m_sPathRel));
 	if(::truncate(sPathAbs.c_str(), 0) || ::truncate((sPathAbs+".head").c_str(), 0))
 		return false;
 
@@ -286,25 +286,23 @@ inline void _LogWithErrno(const char *msg, const string & sFile)
 
 #ifndef MINIBUILD
 
-/*
-#ifdef DEBUG
-#define SET_FRONTLINE(ret, x) tSS __fbuf; __fbuf << "HTTP/1.1 " << x << " @@ " << __FILE__ ":" \
-	<< __LINE__ << " /" << __FUNCTION__; ret=__fbuf;
-#else
-#endif
-*/
-
-#define SET_FRONTLINE(ret, x) ret="HTTP/1.1 "; ret+=x;
-#define SETERROR(x) { m_bAllowStoreData=false; SET_FRONTLINE(m_head.frontLine, x); \
-	m_head.set(header::XORIG, h.h[header::XORIG]); \
-    m_status=FIST_DLERROR; m_nTimeDlDone=GetTime(); _LogWithErrno(x, m_sPathRel); }
-#define SETERRORKILLFILE(x) { SETERROR(x); goto kill_file; }
-#define BOUNCE(x) { SETERROR(x); return false; }
-
 bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const char *pNextData,
 		bool bForcedRestart, bool &bDoCleanRetry)
 {
 	LOGSTART("fileitem::DownloadStartedStoreHeader");
+
+	auto SETERROR = [&](LPCSTR x) {
+		m_bAllowStoreData=false;
+		m_head.frontLine=mstring("HTTP/1.1 ")+x;
+		m_head.set(header::XORIG, h.h[header::XORIG]);
+	    m_status=FIST_DLERROR; m_nTimeDlDone=GetTime();
+		_LogWithErrno(x, m_sPathRel);
+	};
+
+	auto withError = [&](LPCSTR x) {
+		SETERROR(x);
+		return false;
+	};
 
 	setLockGuard;
 
@@ -328,11 +326,31 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 	// optional optimization: hints for the filesystem resp. kernel
 	off_t hint_start(0), hint_length(0);
 	
-	// status will change, most likely... ie. BOUNCE action
+	// status will change, most likely... ie. return withError action
 	notifyAll();
 
 	cmstring sPathAbs(CACHE_BASE+m_sPathRel);
 	string sHeadPath=sPathAbs + ".head";
+
+	auto withErrorAndKillFile = [&](LPCSTR x)
+	{
+		SETERROR(x);
+		if(m_filefd>=0)
+		{
+#if _POSIX_SYNCHRONIZED_IO > 0
+			fsync(m_filefd);
+#endif
+			forceclose(m_filefd);
+		}
+
+		LOG("Deleting " << sPathAbs);
+		::unlink(sPathAbs.c_str());
+		::unlink(sHeadPath.c_str());
+
+		m_status=FIST_DLERROR;
+		m_nTimeDlDone=GetTime();
+		return false;
+	};
 
 	int serverStatus = h.getStatus();
 #if 0
@@ -358,12 +376,12 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 				 * Most likely the remote file was modified after the download started.
 				 */
 				//USRDBG( "state: " << m_status << ", m_nsc: " << m_nSizeChecked);
-				BOUNCE("500 Failed to resume remote download");
+				return withError("500 Failed to resume remote download");
 			}
 			if(h.h[header::CONTENT_LENGTH] && atoofft(h.h[header::CONTENT_LENGTH])
 					!= atoofft(h.h[header::CONTENT_LENGTH], -2))
 			{
-				BOUNCE("500 Failed to resume remote download, bad length");
+				return withError("500 Failed to resume remote download, bad length");
 			}
 			m_head.set(header::XORIG, h.h[header::XORIG]);
 		}
@@ -381,7 +399,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		if(m_nSizeSeen<=0 && m_nRangeLimit<0)
 		{
 			// wtf? Cannot have requested partial content
-			BOUNCE("500 Unexpected Partial Response");
+			return withError("500 Unexpected Partial Response");
 		}
 		/*
 		 * Range: bytes=453291-
@@ -391,7 +409,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		 */
 		const char *p=h.h[header::CONTENT_RANGE];
 		if(!p)
-			BOUNCE("500 Missing Content-Range in Partial Response");
+			return withError("500 Missing Content-Range in Partial Response");
 		off_t myfrom, myto, mylen;
 		int n=sscanf(p, "bytes " OFF_T_FMT "-" OFF_T_FMT "/" OFF_T_FMT, &myfrom, &myto, &mylen);
 		if(n<=0)
@@ -405,7 +423,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 				|| myfrom<0 || mylen<0
 		)
 		{
-			BOUNCE("500 Server reports unexpected range");
+			return withError("500 Server reports unexpected range");
 		}
 
 		m_nSizeChecked=myfrom;
@@ -462,7 +480,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		// -> kill cached file ASAP
 			m_bAllowStoreData=false;
 			m_head.copy(h, header::XORIG);
-			SETERRORKILLFILE("503 Server disagrees on file size, cleaning up");
+			return withErrorAndKillFile("503 Server disagrees on file size, cleaning up");
 		}
 		break;
 	default:
@@ -474,7 +492,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 			// got an error from the replacement mirror? cannot handle it properly
 			// because some job might already have started returning the data
 			USRDBG( "Cannot restart, HTTP code: " << serverStatus);
-			BOUNCE(h.getCodeMessage());
+			return withError(h.getCodeMessage());
 		}
 
 		m_bAllowStoreData=false;
@@ -514,17 +532,17 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 				if(FileCopy(sPathAbs, temp) && 0==unlink(sPathAbs.c_str()) )
 				{
 					if(0!=rename(temp.c_str(), sPathAbs.c_str()))
-						BOUNCE("503 Cannot rename files");
+						return withError("503 Cannot rename files");
 					
 					// be sure about that
 					if(0!=stat(sPathAbs.c_str(), &stbuf) || stbuf.st_size!=m_nSizeSeen)
-						BOUNCE("503 Cannot copy file parts, filesystem full?");
+						return withError("503 Cannot copy file parts, filesystem full?");
 					
 					m_filefd=open(sPathAbs.c_str(), flags, acfg::fileperms);
 					ldbg("file opened after copying around: ");
 				}
 				else
-					BOUNCE((tSS()<<"503 Cannot store or remove files in "
+					return withError((tSS()<<"503 Cannot store or remove files in "
 							<< GetDirPart(sPathAbs)).c_str());
 			}
 			else
@@ -539,14 +557,14 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		{
 			tErrnoFmter efmt("503 Cache storage error - ");
 #ifdef DEBUG
-			BOUNCE((efmt+sPathAbs).c_str());
+			return withError((efmt+sPathAbs).c_str());
 #else
-			BOUNCE(efmt.c_str());
+			return withError(efmt.c_str());
 #endif
 		}
 		
 		if(0!=fstat(m_filefd, &stbuf) || !S_ISREG(stbuf.st_mode))
-			SETERRORKILLFILE("503 Not a regular file");
+			return withErrorAndKillFile("503 Not a regular file");
 		
 		// crop, but only if the new size is smaller. MUST NEVER become larger (would fill with zeros)
 		if(m_nSizeChecked <= m_nSizeSeen)
@@ -558,10 +576,10 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 #endif
       }
 			else
-				SETERRORKILLFILE("503 Cannot change file size");
+				return withErrorAndKillFile("503 Cannot change file size");
 		}
 		else if(m_nSizeChecked>m_nSizeSeen) // should never happen and caught by the checks above
-			SETERRORKILLFILE("503 Internal error on size checking");
+			return withErrorAndKillFile("503 Internal error on size checking");
 		// else... nothing to fix since the expectation==reality
 
 		falloc_helper(m_filefd, hint_start, hint_length);
@@ -572,40 +590,22 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		posix_fadvise(m_filefd, hint_start, hint_length, POSIX_FADV_SEQUENTIAL);
 #endif
 */
-		
 		ldbg("Storing header as "+sHeadPath);
 		int count=m_head.StoreToFile(sHeadPath);
 
 		if(count<0)
-			SETERRORKILLFILE( (-count!=ENOSPC ? "503 Cache storage error" : "503 OUT OF DISK SPACE"));
+			return withErrorAndKillFile( (-count!=ENOSPC ? "503 Cache storage error" : "503 OUT OF DISK SPACE"));
 			
 		// double-check the sane state
 		if(0!=fstat(m_filefd, &stbuf) || stbuf.st_size!=m_nSizeChecked)
-			SETERRORKILLFILE("503 Inconsistent file state");
+			return withErrorAndKillFile("503 Inconsistent file state");
 			
 		if(m_nSizeChecked!=lseek(m_filefd, m_nSizeChecked, SEEK_SET))
-			SETERRORKILLFILE("503 IO error, positioning");
+			return withErrorAndKillFile("503 IO error, positioning");
 	}
 	
 	m_status=FIST_DLGOTHEAD;
 	return true;
-
-	kill_file:
-	if(m_filefd>=0)
-	{
-#if _POSIX_SYNCHRONIZED_IO > 0
-		fsync(m_filefd);
-#endif
-		forceclose(m_filefd);
-	}
-
-	LOG("Deleting " << sPathAbs);
-	unlink(sPathAbs.c_str());
-	unlink(sHeadPath.c_str());
-	
-	m_status=FIST_DLERROR;
-	m_nTimeDlDone=GetTime();
-	return false;
 }
 
 bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
@@ -843,7 +843,7 @@ time_t fileItemMgmt::BackgroundCleanup()
 		// find and ignore (but remember) the candidate(s) for the next cycle
 		if (here->second->m_nTimeDlStarted > expBefore)
 		{
-			oldestGet = MYSTD::min(here->second->m_nTimeDlStarted, oldestGet);
+			oldestGet = MYSTD::min(time_t(here->second->m_nTimeDlStarted), oldestGet);
 			continue;
 		}
 
@@ -886,25 +886,25 @@ void fileItemMgmt::dump_status()
 {
 	tSS fmt;
 	aclog::err("File descriptor table:\n");
-	for(tFiGlobMap::iterator it=mapItems.begin(); it!=mapItems.end(); ++it)
+	for(const auto& item : mapItems)
 	{
 		fmt.clear();
-		fmt << "FREF: " << it->first << " [" << it->second->usercount << "]:\n";
-		if(! it->second)
+		fmt << "FREF: " << item.first << " [" << item.second->usercount << "]:\n";
+		if(! item.second)
 		{
 			fmt << "\tBAD REF!\n";
 			continue;
 		}
 		else
 		{
-			fmt << "\t" << it->second->m_sPathRel
-					<< "\n\tDlRefCount: " << it->second->m_nDlRefsCount
-					<< "\n\tState: " << it->second->m_status
-					<< "\n\tFilePos: " << it->second->m_nIncommingCount << " , "
-					<< it->second->m_nRangeLimit << " , "
-					<< it->second->m_nSizeChecked << " , "
-					<< it->second->m_nSizeSeen
-					<< "\n\tGotAt: " << it->second->m_nTimeDlStarted << "\n\n";
+			fmt << "\t" << item.second->m_sPathRel
+					<< "\n\tDlRefCount: " << item.second->m_nDlRefsCount
+					<< "\n\tState: " << item.second->m_status
+					<< "\n\tFilePos: " << item.second->m_nIncommingCount << " , "
+					<< item.second->m_nRangeLimit << " , "
+					<< item.second->m_nSizeChecked << " , "
+					<< item.second->m_nSizeSeen
+					<< "\n\tGotAt: " << item.second->m_nTimeDlStarted << "\n\n";
 		}
 		aclog::err(fmt.c_str(), NULL);
 	}
@@ -916,7 +916,7 @@ fileitem_with_storage::~fileitem_with_storage()
 	if(startsWith(m_sPathRel, sReplDir))
 	{
 		::unlink(SZABSPATH(m_sPathRel));
-		unlink((SABSPATH(m_sPathRel)+".head").c_str());
+		::unlink((SABSPATH(m_sPathRel)+".head").c_str());
 	}
 }
 
