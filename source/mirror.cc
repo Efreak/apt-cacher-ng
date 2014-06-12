@@ -17,6 +17,7 @@
 
 #include <fnmatch.h>
 #include <algorithm>
+#include <list>
 
 using namespace MYSTD;
 
@@ -59,21 +60,21 @@ bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &stinfo)
 	return ! CheckStopSignal();
 }
 
-tStrDeq GetVariants(cmstring &mine)
+list<string> GetVariants(cmstring &mine)
 {
-	tStrDeq ret;
+	list<string> ret;
 	string base;
-	for(cmstring *p=compSuffixesAndEmpty; p<compSuffixesAndEmpty+_countof(compSuffixesAndEmpty); p++)
+	for(const auto& suf: compSuffixesAndEmpty)
 	{
-		if(endsWith(mine, *p))
+		if(endsWith(mine, suf))
 		{
-			base=mine.substr(0, mine.size()-p->size());
+			base=mine.substr(0, mine.length()-suf.length());
 			break;
 		}
 	}
-	for(cmstring *p=compSuffixesAndEmpty; p<compSuffixesAndEmpty+_countof(compSuffixesAndEmpty); p++)
+	for(const auto& suf : compSuffixesAndEmpty)
 	{
-		string cand=base+*p;
+		string cand=base+suf;
 		if(cand!=mine)
 			ret.push_back(cand);
 	}
@@ -169,12 +170,12 @@ void pkgmirror::Action(const string &cmd)
 	{
 		if(endsWithSzAr(path2x.first, "Release"))
 		{
-			if(!m_bSkipIxUpdate && !GetFlags(path2x.first).uptodate)
-				Download(path2x.first, true, eMsgShow);
-			ParseAndProcessIndexFile(picker, path2x.first, EIDX_RELEASE);
+			if(!m_bSkipIxUpdate && !GetFlags((cmstring)path2x.first).uptodate)
+				Download((cmstring)path2x.first, true, eMsgShow);
+			ParseAndProcessIndexFile(picker, (cmstring) path2x.first, EIDX_RELEASE);
 		}
 		else
-			picker.TryAdd(path2x.first);
+			picker.TryAdd((cmstring)path2x.first);
 	}
 
 	SendChunk("<b>Identifying more index files in cache...</b><br>");
@@ -184,36 +185,35 @@ void pkgmirror::Action(const string &cmd)
 			picker.TryAdd(path);
 
 	restart_clean: // start over if the set changed while having a hot iterator
-	for(tStrSet::iterator it=srcs.begin(); it!=srcs.end(); it++)
+	for(const auto& src : srcs)
 	{
-		if(GetFlags(*it).uptodate) // this is the one
+		if (GetFlags(src).uptodate) // this is the one
 		{
-		tStrDeq bros(GetVariants(*it));
-		int nDeleted=0;
-		for(tStrDeq::iterator b=bros.begin(); b!=bros.end(); b++)
-			nDeleted+=srcs.erase(*b);
-		if(nDeleted)
-			goto restart_clean;
+			auto bros(GetVariants(src));
+			int nDeleted = 0;
+			for (const auto& bro: bros)
+				nDeleted += srcs.erase(bro);
+			if (nDeleted)
+				goto restart_clean;
 		}
 	}
 
 	// now there may still be something like Sources and Sources.bz2 if they
-	// were added by Release file scan. Choose the prefered simply by extension.
+	// were added by Release file scan. Choose the preferred simply by extension.
 
 	restart_clean2: // start over if the set changed while having a hot iterator
-	for (const string *p = compSuffixesAndEmptyByRatio; p < compSuffixesAndEmptyByRatio
-	+ _countof(compSuffixesAndEmptyByRatio); p++)
+	for (const auto& s: compSuffixesAndEmptyByRatio)
 	{
-		for (tStrSet::iterator it = srcs.begin(); it != srcs.end(); it++)
+		for (const auto& src : srcs)
 		{
-			if(endsWith(*it, *p))
+			if (endsWith(src, s))
 			{
-				tStrDeq bros(GetVariants(*it));
-			int nDeleted=0;
-			for(tStrDeq::iterator b=bros.begin(); b!=bros.end(); b++)
-				nDeleted+=srcs.erase(*b);
-			if(nDeleted)
-				goto restart_clean2;
+				auto bros(GetVariants(src));
+				int nDeleted = 0;
+				for (const auto& bro: bros)
+					nDeleted += srcs.erase(bro);
+				if (nDeleted)
+					goto restart_clean2;
 			}
 		}
 	}
@@ -367,12 +367,13 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 				goto cannot_debpatch;
 
 			// pick only the same architecture
-			oldebs = ExpandFilePattern(CACHE_BASE + entry.sDirectory + parts[0] + "_*_" + parts[2], false);
+			oldebs = ExpandFilePattern(CACHE_BASE +
+					entry.sDirectory + parts[0] + "_*_" + parts[2], false);
 
 			// filter dangerous strings, invalid version strings, higher/same version
-			for(UINT i=0; i<oldebs.size();++i)
+			for(const auto& oldeb: oldebs)
 			{
-				tSplitWalk split(&oldebs[i], "_");
+				tSplitWalk split(&oldeb, "_");
 				if(split.Next() && split.Next())
 				{
 					mstring s(split);
@@ -426,8 +427,8 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 					::setenv("to", SZABSPATH(TEMPRESULT), true);
 
 				SendFmt << "Fetched: " << uri << "<br>\n";
-				cerr << "debpatch " << getenv("delta") << " " << getenv("from")
-						<< " " << getenv("to");
+				USRDBG("debpatch " << getenv("delta") << " " << getenv("from")
+						<< " " << getenv("to"));
 
 					if (0 == ::system("debpatch \"$delta\" \"$from\" \"$to\""))
 					{

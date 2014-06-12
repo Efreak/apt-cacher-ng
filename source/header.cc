@@ -86,8 +86,8 @@ header& header::operator=(const header& s)
 
 header::~header()
 {
-	for(UINT i=0; i<HEADPOS_MAX; i++)
-		free(h[i]);
+	for(auto& p:h)
+		free(p);
 }
 
 void header::clear()
@@ -129,7 +129,6 @@ inline int header::Load(const char * const in, UINT maxlen)
 
 	while (true)
 	{
-
 		const char *szBegin=posNext;
 		UINT pos=szBegin-in;
 		const char *end=(const char*) memchr(szBegin, '\r', maxlen-pos);
@@ -172,16 +171,15 @@ inline int header::Load(const char * const in, UINT maxlen)
 		while (sep<end && isspace((UINT)*sep))
 			sep++;
 		
-		for(const eHeadPos2label *pMap=mapId2Headname;
-				pMap<mapId2Headname+_countof(mapId2Headname); ++pMap)
+		for(const auto& id2key : mapId2Headname)
 		{
-			if (strncasecmp(pMap->str, key, keyLen))
+			if (strncasecmp(id2key.str, key, keyLen))
 				continue;
 			UINT l=end-sep;
-			if( ! (h[pMap->pos] = (char*) realloc(h[pMap->pos], l+1)))
+			if( ! (h[id2key.pos] = (char*) realloc(h[id2key.pos], l+1)))
 				continue;
-			memcpy(h[pMap->pos], sep, l);
-			h[pMap->pos][l]='\0';
+			memcpy(h[id2key.pos], sep, l);
+			h[id2key.pos][l]='\0';
 			break;
 		}
 	}
@@ -208,7 +206,6 @@ int header::LoadFromFile(const string &sPath)
 	if(!buf.initFromFile(sPath.c_str()))
 		return -1;
 	return LoadFromBuf(buf.rptr(), buf.size());
-//#endif
 }
 
 
@@ -256,24 +253,14 @@ void header::set(eHeadPos key, off_t nValue)
 
 #ifndef MINIBUILD
 
-mstring header::ToString() const
+tSS header::ToString() const
 {
-	string s = frontLine;
-	s+="\r\n";
-	for(const eHeadPos2label *pMap=mapId2Headname;
-			pMap<mapId2Headname+_countof(mapId2Headname); ++pMap)
-	{
-		if (h[pMap->pos])
-		{
-			s += pMap->str;
-			s += ": ";
-			s += h[pMap->pos];
-			s += "\r\n";
-		}
-	}
-	s+= "Date: ";
-	s+= tCurrentTime();
-	s+= "\r\n\r\n";
+	tSS s;
+	s<<frontLine << "\r\n";
+	for(const auto& pos2key : mapId2Headname)
+		if (h[pos2key.pos])
+			s << pos2key.str << ": " << h[pos2key.pos] << "\r\n";
+	s<< "Date: " << tCurrentTime() << "\r\n\r\n";
 	return s;
 }
 
@@ -294,8 +281,8 @@ int header::StoreToFile(cmstring &sPath) const
 			return -errno;
 	}
 	
-	string hstr=ToString();
-	const char *p=hstr.c_str();
+	auto hstr=ToString();
+	const char *p=hstr.rptr();
 	nByteCount=hstr.length();
 	
 	for(string::size_type pos=0; pos<(UINT)nByteCount;)
@@ -345,8 +332,8 @@ bool header::ParseDate(const char *s, struct tm *tm)
 {
 	if(!s || !tm)
 		return false;
-	for(const char **p=fmts; p<fmts+_countof(fmts); ++p)
-		if(::strptime(s, *p, tm))
+	for(const auto& fmt : fmts)
+		if(::strptime(s, fmt, tm))
 			return true;
 
 	return false;

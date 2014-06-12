@@ -197,10 +197,18 @@ void CreateUnixSocket() {
 	int jo=1;
 	size_t size = sPath.length()+1+offsetof(struct sockaddr_un, sun_path);
 	
+	auto die=[]() {
+		cerr << "Error creating Unix Domain Socket, ";
+		cerr.flush();
+		perror(acfg::fifopath.c_str());
+		cerr << "Check socket file and directory permissions" <<endl;
+		exit(EXIT_FAILURE);
+	};
+
 	if(sPath.length()>sizeof(addr_unx.sun_path))
 	{
 		errno=ENAMETOOLONG;
-		goto unx_err;
+		die();
 	}
 	
 	addr_unx.sun_family = AF_UNIX;
@@ -213,23 +221,17 @@ void CreateUnixSocket() {
 	setsockopt(g_sockunix, SOL_SOCKET, SO_REUSEADDR, &jo, sizeof(jo));
 
 	if (g_sockunix<0)
-		goto unx_err;
+		die();
 	
 	if (::bind(g_sockunix, (struct sockaddr *)&addr_unx, size) < 0)
-		goto unx_err;
+		die();
 	
 	if (0==listen(g_sockunix, SO_MAXCONN))
 	{
 		g_vecSocks.push_back(g_sockunix);
 		return;
 	}
-	
-	unx_err:
-	cerr << "Error creating Unix Domain Socket, ";
-	cerr.flush();
-	perror(acfg::fifopath.c_str());
-	cerr << "Check socket file and directory permissions" <<endl;
-	exit(EXIT_FAILURE);
+
 
 }
 
@@ -257,12 +259,12 @@ void Setup()
 			sAdds.push_back(""); // one dummy entry to get one NULL later
 		else
 			Tokenize(bindaddr, SPACECHARS, sAdds);
-		for(tStrVec::iterator it=sAdds.begin(); it!=sAdds.end(); it++)
+		for(auto& sad : sAdds)
 		{
-			trimString(*it);
+			trimString(sad);
 		    struct addrinfo *res, *p;
 		    
-		    if(0!=getaddrinfo(bindaddr.empty() ? NULL : it->c_str(),
+		    if(0!=getaddrinfo(bindaddr.empty() ? NULL : sad.c_str(),
 				   port.c_str(), &hints, &res))
 			   goto error_getaddrinfo;
 		    
@@ -354,8 +356,7 @@ int Run()
 
 		FD_ZERO(&rfds);
 		FD_ZERO(&wfds);
-		for(vector<int>::iterator it=g_vecSocks.begin(); it!=g_vecSocks.end(); it++)
-			FD_SET(*it, &rfds);
+		for(auto soc: g_vecSocks) FD_SET(soc, &rfds);
 		
 		//cerr << "Polling..." <<endl;
 		int nReady=select(maxfd, &rfds, &wfds, NULL, NULL);
@@ -369,11 +370,11 @@ int Run()
 			exit(EXIT_FAILURE);
 		}
 		
-		for(vector<int>::iterator it=g_vecSocks.begin(); it!=g_vecSocks.end(); it++)
+		for(const auto soc: g_vecSocks)
 		{
-			if(!FD_ISSET(*it, &rfds)) 	continue;
+			if(!FD_ISSET(soc, &rfds)) 	continue;
 
-			if(g_sockunix == *it)
+			if(g_sockunix == soc)
 			{
 				int fd = accept(g_sockunix, NULL, NULL);
 				if (fd>=0)
@@ -393,7 +394,7 @@ int Run()
 				struct sockaddr_storage addr;
 
 				socklen_t addrlen = sizeof(addr);
-				int fd=accept(*it,(struct sockaddr *)&addr, &addrlen);
+				int fd=accept(soc,(struct sockaddr *)&addr, &addrlen);
 //fd_accepted:
 				if (fd>=0)
 				{
@@ -458,8 +459,7 @@ void Shutdown()
 	g_ThreadPoolCondition.notifyAll();
 	
 	printf("Closing listening sockets\n");
-	for(vector<int>::iterator it=g_vecSocks.begin(); it!=g_vecSocks.end(); it++)
-		termsocket_quick(*it);
+	for(auto soc: g_vecSocks) termsocket_quick(soc);
 }
 
 }

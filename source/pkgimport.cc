@@ -259,37 +259,35 @@ void pkgimport::Action(const string &cmd)
 	
 	off_t remaining=0;
 
-	for(tImportMap::const_iterator it=m_importMap.begin();
-	it!=m_importMap.end();it++)
+	for(const auto& fpr2info: m_importMap)
 	{
 		// delete imported stuff, and cache the fingerprint only when file was deleted
 		
-		if(it->second.bFileUsed && 0==unlink(it->second.sPath.c_str()))
+		if(fpr2info.second.bFileUsed && 0==unlink(fpr2info.second.sPath.c_str()))
 			continue;
 		if(!fList.is_open())
 			continue;
 
 #define ENDL "\n" // don't flush all the time
-		fList << it->first.size << ENDL
-				<< (int)it->first.csType << ENDL
-				<< it->first.GetCsAsString() << ENDL
-				<< it->second.sPath.substr(m_sSrcPath.size()+1) <<ENDL
-				<< it->second.mtime	<<ENDL;
+		fList << fpr2info.first.size << ENDL
+				<< (int)fpr2info.first.csType << ENDL
+				<< fpr2info.first.GetCsAsString() << ENDL
+				<< fpr2info.second.sPath.substr(m_sSrcPath.size()+1) <<ENDL
+				<< fpr2info.second.mtime	<<ENDL;
 
-		remaining+=it->first.size;
+		remaining+=fpr2info.first.size;
 	}
 
 	// deal with the rest, never double-examine that stuff
 	// copy&paste FTW
-	for(tImportList::const_iterator it=m_importRest.begin();
-	it!=m_importRest.end();it++)
+	for(const auto& fpr2info : m_importRest)
 	{
-		fList << it->first.size << ENDL
-				<< (int)it->first.csType << ENDL
-				<< it->first.GetCsAsString() << ENDL
-				<< it->second.sPath.substr(m_sSrcPath.size()+1) <<ENDL
-				<< it->second.mtime	<<ENDL;
-		remaining+=it->first.size;
+		fList << fpr2info.first.size << ENDL
+				<< (int)fpr2info.first.csType << ENDL
+				<< fpr2info.first.GetCsAsString() << ENDL
+				<< fpr2info.second.sPath.substr(m_sSrcPath.size()+1) <<ENDL
+				<< fpr2info.second.mtime	<<ENDL;
+		remaining+=fpr2info.first.size;
 	}
 	fList.flush();
 	fList.close();
@@ -305,7 +303,7 @@ void pkgimport::Action(const string &cmd)
 void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
 	//typedef MYMAP<tFingerprint, tImpFileInfo, ltfingerprint> tImportMap;
-	tImportMap::iterator hit = m_importMap.find(entry.fpr);
+	auto hit = m_importMap.find(entry.fpr);
 	if (hit==m_importMap.end())
 		return;
 	
@@ -316,7 +314,7 @@ void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 		sDestAbs+=(entry.sDirectory+entry.sFileName);
 
 	string sDestHeadAbs=sDestAbs+".head";
-	const string &sFromAbs=hit->second.sPath;
+	cmstring& sFromAbs=hit->second.sPath;
 
 	SendChunk(string("<font color=green>HIT: ")+sFromAbs
 			+ "<br>\nDESTINATION: "+sDestAbs+"</font><br>\n");

@@ -8,7 +8,6 @@
 #include <cstring>
 #include "csmapping.h"
 
-
 class pkgimport : public tCacheOperation, ifileprocessor
 {
 
@@ -34,8 +33,8 @@ private:
 	 	-	when reusing old fingerprints, a file info description is mapped
 	 		to stored fingerprint (cacheMap from tCacheProcessor)
 	*/
-	tImportMap m_importMap;
-	tImportList m_importRest;
+	MYMAP<tFingerprint, tImpFileInfo> m_importMap;
+	MYSTD::deque<MYSTD::pair<tFingerprint, tImpFileInfo> > m_importRest;
 	MYSTD::set<mstring> m_precachedList;
 	/* tFprCacheMap m_cacheMap;*/
 	

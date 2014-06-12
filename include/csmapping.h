@@ -166,8 +166,6 @@ struct ltCacheKeyComp
   }
 };
 
-typedef MYMAP<tFingerprint, tImpFileInfo> tImportMap;
-typedef MYSTD::deque<MYSTD::pair<tFingerprint, tImpFileInfo> > tImportList;
 typedef MYMAP<tImpFileInfo, tFingerprint, ltCacheKeyComp> tFprCacheMap;
 
 

@@ -78,7 +78,7 @@ class header {
       inline int getStatus() const { int r=atoi(getCodeMessage()); return r ? r : 500; }
       void clear();
       
-      mstring ToString() const;
+      tSS ToString() const;
 
    private:
 	   int Load(const char *src, UINT length);
