@@ -34,7 +34,7 @@ string vfilepat(INFOLDER
 		"(Index|Packages" COMPOPT "|InRelease|Release|Release\\.gpg|custom\\.gpg|mirrors.txt|"
 		"Sources" COMPOPT "|release|index\\.db-.*\\.gz|Contents-[^/]*" COMPOPT
 		"|pkglist[^/]*\\.bz2|rclist[^/]*\\.bz2|meta-release[^/]*|Translation[^/]*" COMPOPT
-		"|MD5SUMS|SHA1SUMS" // d-i stuff
+		"|MD5SUMS|SHA256SUMS|SHA1SUMS" // d-i stuff
 		"|((setup|setup-legacy)(\\.ini|\\.bz2|\\.hint)(\\.sig)?)|mirrors\\.lst" // cygwin
 		"|repo(index|md)\\.xml(\\.asc|\\.key)?|directory\\.yast" // opensuse
 		"|products|content(\\.asc|\\.key)?|media" // opensuse 2, are they important?
