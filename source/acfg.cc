@@ -60,70 +60,72 @@ typedef struct
 }
 MapNameToInt;
 
+
 #ifndef MINIBUILD
 
 MapNameToString n2sTbl[] = {
-		{  "Port", 			&port , 0}
-		,{ "CacheDir", 	&cachedir, 0 }
-		,{ "LogDir", 	&logdir , 0}
-		,{ "SupportDir", 	&suppdir, 0}
-		,{ "SocketPath", 	&fifopath, 0}
-		,{ "PidFile", 	&pidfile, 0}
-		,{ "ReportPage",&reportpage, 0}
-		,{ "VfilePattern", &vfilepat, 0}
-		,{ "PfilePattern", &pfilepat, 0}
-		,{ "WfilePattern", &wfilepat, 0}
-		,{ "VfilePatternEx", &vfilepatEx, 0}
-		,{ "PfilePatternEx", &pfilepatEx, 0}
-		,{ "WfilePatternEx", &wfilepatEx, 0}
-		,{ "AdminAuth",  &adminauth, 0}
-		,{ "BindAddress", &bindaddr, 0}
-		,{ "UserAgent", &agentname, 0}
-		,{ "DontCache",	&tmpDontcache, 0}
-		,{ "DontCacheRequested",	&tmpDontcacheReq, 0}
-		,{ "DontCacheResolved",	&tmpDontcacheTgt, 0}
-		,{ "PrecacheFor", &mirrorsrcs, 0}
-		,{ "RequestAppendix", &requestapx, 0}
-		,{ "PassThroughPattern", &PTHOSTS_PATTERN, 0}
-		,{ "CApath", &capath, 0}
-		,{ "CAfile", &cafile, 0}
+		{   "Port",                    &port,             0}
+		,{  "CacheDir",                &cachedir,         0}
+		,{  "LogDir",                  &logdir,           0}
+		,{  "SupportDir",              &suppdir,          0}
+		,{  "SocketPath",              &fifopath,         0}
+		,{  "PidFile",                 &pidfile,          0}
+		,{  "ReportPage",&reportpage,  0}
+		,{  "VfilePattern",            &vfilepat,         0}
+		,{  "PfilePattern",            &pfilepat,         0}
+		,{  "WfilePattern",            &wfilepat,         0}
+		,{  "VfilePatternEx",          &vfilepatEx,       0}
+		,{  "PfilePatternEx",          &pfilepatEx,       0}
+		,{  "WfilePatternEx",          &wfilepatEx,       0}
+		,{  "AdminAuth",               &adminauth,        0}
+		,{  "BindAddress",             &bindaddr,         0}
+		,{  "UserAgent",               &agentname,        0}
+		,{  "DontCache",               &tmpDontcache,     0}
+		,{  "DontCacheRequested",      &tmpDontcacheReq,  0}
+		,{  "DontCacheResolved",       &tmpDontcacheTgt,  0}
+		,{  "PrecacheFor",             &mirrorsrcs,       0}
+		,{  "RequestAppendix",         &requestapx,       0}
+		,{  "PassThroughPattern",      &PTHOSTS_PATTERN,  0}
+		,{  "CApath",                  &capath,           0}
+		,{  "CAfile",                  &cafile,           0}
 };
 
 MapNameToInt n2iTbl[] = {
-		{ "Debug", 		&debug, 0 , 10}
-		,{ "OfflineMode", 	&offlinemode , NULL, 10}
-		,{ "ForeGround", 	&foreground , NULL, 10}
-		,{ "Verbose", 		NULL, "Option is deprecated, ignoring the value." , 10}
-		,{ "ForceManaged", 	&forcemanaged , NULL, 10}
-		,{ "StupidFs", 		&stupidfs , NULL, 10}
-		,{ "VerboseLog",	&verboselog , NULL, 10}
-		,{ "ExTreshold",	&extreshhold, NULL, 10}
-		,{ "MaxSpareThreadSets",	&tpstandbymax, "Deprecated option name, mapped to MaxStandbyConThreads", 10}
-		,{ "MaxStandbyConThreads",	&tpstandbymax, NULL, 10}
-		,{ "MaxConThreads",	&tpthreadmax, NULL, 10}
-		,{ "DnsCacheSeconds", &dnscachetime, NULL, 10}
-		,{ "UnbufferLogs", &debug , NULL, 10}
-		,{ "ExAbortOnProblems", &exfailabort, NULL, 10}
-		,{ "ExposeOrigin", &exporigin, NULL, 10}
-		,{ "LogSubmittedOrigin", &logxff, NULL, 10}
-		,{ "OldIndexUpdater", &oldupdate, "Option is deprecated, ignoring the value." , 10}
-		,{ "RecompBz2", &recompbz2, NULL, 10}
-		,{ "NetworkTimeout", &nettimeout, NULL, 10}
-		,{ "MinUpdateInterval", &updinterval, NULL, 10}
-		,{ "ForwardBtsSoap", &forwardsoap, NULL, 10}
-		,{ "KeepExtraVersions", &keepnver, NULL, 10}
-		,{ "UseWrap", &usewrap, NULL, 10}
-		,{ "FreshIndexMaxAge", &maxtempdelay, NULL, 10}
-		,{ "RedirMax", &redirmax, NULL, 10}
-		,{ "VfileUseRangeOps", &vrangeops, NULL, 10}
-		,{ "ResponseFreezeDetectTime", &stucksecs, NULL, 10}
-		,{ "ReuseConnections", &persistoutgoing, NULL, 10}
-		,{ "PipelineDepth", &pipelinelen, NULL, 10}
-		,{ "ExSuppressAdminNotification", &exsupcount, NULL, 10}
-		,{ "OptProxyTimeout", &optproxytimeout, NULL, 10}
+		{   "Debug",                             &debug,            NULL,    10}
+		,{  "OfflineMode",                       &offlinemode,      NULL,    10}
+		,{  "ForeGround",                        &foreground,       NULL,    10}
+		,{  "ForceManaged",                      &forcemanaged,     NULL,    10}
+		,{  "StupidFs",                          &stupidfs,         NULL,    10}
+		,{  "VerboseLog",                        &verboselog,       NULL,    10}
+		,{  "ExTreshold",                        &extreshhold,      NULL,    10}
+		,{  "MaxStandbyConThreads",              &tpstandbymax,     NULL,    10}
+		,{  "MaxConThreads",                     &tpthreadmax,      NULL,    10}
+		,{  "DnsCacheSeconds",                   &dnscachetime,     NULL,    10}
+		,{  "UnbufferLogs",                      &debug,            NULL,    10}
+		,{  "ExAbortOnProblems",                 &exfailabort,      NULL,    10}
+		,{  "ExposeOrigin",                      &exporigin,        NULL,    10}
+		,{  "LogSubmittedOrigin",                &logxff,           NULL,    10}
+		,{  "RecompBz2",                         &recompbz2,        NULL,    10}
+		,{  "NetworkTimeout",                    &nettimeout,       NULL,    10}
+		,{  "MinUpdateInterval",                 &updinterval,      NULL,    10}
+		,{  "ForwardBtsSoap",                    &forwardsoap,      NULL,    10}
+		,{  "KeepExtraVersions",                 &keepnver,         NULL,    10}
+		,{  "UseWrap",                           &usewrap,          NULL,    10}
+		,{  "FreshIndexMaxAge",                  &maxtempdelay,     NULL,    10}
+		,{  "RedirMax",                          &redirmax,         NULL,    10}
+		,{  "VfileUseRangeOps",                  &vrangeops,        NULL,    10}
+		,{  "ResponseFreezeDetectTime",          &stucksecs,        NULL,    10}
+		,{  "ReuseConnections",                  &persistoutgoing,  NULL,    10}
+		,{  "PipelineDepth",                     &pipelinelen,      NULL,    10}
+		,{  "ExSuppressAdminNotification",       &exsupcount,       NULL,    10}
+		,{  "OptProxyTimeout",                   &optproxytimeout,  NULL,    10}
 
-		,{ "DirPerms", &dirperms, NULL, 8}
-		,{ "FilePerms", &fileperms, NULL, 8}
+		,{  "DirPerms",                          &dirperms,         NULL,    8}
+		,{  "FilePerms",                         &fileperms,        NULL,    8}
+
+		,{ "Verbose", 			NULL,			"Option is deprecated, ignoring the value." , 10}
+		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10}
+		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
 };
 
 void ReadRewriteFile(const string & sFile, const string & sRepName);
