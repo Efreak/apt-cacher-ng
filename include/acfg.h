@@ -29,6 +29,8 @@ reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, bindaddr, port, 
 tmpDontcacheReq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
 cafile, capath;
 
+extern mstring pfilepatEx, vfilepatEx, wfilepatEx; // for customization by user
+
 extern int debug, numcores, offlinemode, foreground, verbose, stupidfs, forcemanaged, keepnver,
 verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, dlbufsize, usewrap,
 exporigin, logxff, oldupdate, recompbz2, nettimeout, updinterval, forwardsoap, dirperms, fileperms,
@@ -86,25 +88,29 @@ extern MYSTD::bitset<TCP_PORT_MAX> *pUserPorts;
 extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 
 void printVar(cmstring &varname);
-//bool ReadOneConfFile(cmstring&);
 } // namespace acfg
 
 namespace rechecks
 {
-enum eMatchType
-{
-	FILE_INVALID = -1, FILE_SOLID = 0, FILE_VOLATILE = 1, WHITELIST = 2, NASTY_PATH = 3, PASSTHROUGH = 4,
-	ematchtype_max,
 
-	// extra types handled by their own regex sets
+enum NOCACHE_PATTYPE : bool
+{
 	NOCACHE_REQ,
 	NOCACHE_TGT
 };
-bool Match(cmstring &in, eMatchType type);
+
+enum eMatchType
+{
+	FILE_INVALID = -1,
+	FILE_SOLID = 0, FILE_VOLATILE, FILE_WHITELIST,
+	NASTY_PATH, PASSTHROUGH,
+	ematchtype_max
+};
+uint_fast8_t Match(cmstring &in, eMatchType type);
 
 eMatchType GetFiletype(const mstring &);
-bool MatchUncacheable(const mstring &, eMatchType);
-bool CompileUncExpressions(eMatchType type, cmstring& pat);
+bool MatchUncacheable(const mstring &, NOCACHE_PATTYPE);
+bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat);
 bool CompileExpressions();
 }
 

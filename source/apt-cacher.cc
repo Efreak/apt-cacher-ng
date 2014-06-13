@@ -33,6 +33,7 @@ using namespace MYSTD;
 #ifdef DEBUG
 #include "filereader.h"
 #include "csmapping.h"
+#include <regex.h>
 #endif
 
 #include "maintenance.h"
@@ -84,7 +85,7 @@ inline bool fork_away()
 void runDemo()
 {
 
-	//cerr << "Pandora: " << sizeof(tIfileAttribs) << endl;
+	cerr << "Pandora: " << sizeof(regex_t) << endl;
 
 
 	// PLAYGROUND

@@ -56,7 +56,7 @@ string wfilepat(INFOLDER
 		"|[a-z]+32.exe"
 		")$");
 
-
+string pfilepatEx, vfilepatEx, wfilepatEx; // for customization by user
 int offlinemode(false), verboselog(true), stupidfs(false), forcemanaged(false),
 extreshhold(20), tpstandbymax(8), tpthreadmax(-1), dirperms(00755), fileperms(00664),
 keepnver(0), maxtempdelay(27), vrangeops(1);

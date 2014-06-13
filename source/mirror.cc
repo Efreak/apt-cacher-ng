@@ -60,27 +60,6 @@ bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &stinfo)
 	return ! CheckStopSignal();
 }
 
-list<string> GetVariants(cmstring &mine)
-{
-	list<string> ret;
-	string base;
-	for(const auto& suf: compSuffixesAndEmpty)
-	{
-		if(endsWith(mine, suf))
-		{
-			base=mine.substr(0, mine.length()-suf.length());
-			break;
-		}
-	}
-	for(const auto& suf : compSuffixesAndEmpty)
-	{
-		string cand=base+suf;
-		if(cand!=mine)
-			ret.push_back(cand);
-	}
-	return ret;
-}
-
 void pkgmirror::Action(const string &cmd)
 {
 	if(acfg::mirrorsrcs.empty())
@@ -184,39 +163,46 @@ void pkgmirror::Action(const string &cmd)
 		for(const auto& path : ExpandFilePattern(CACHE_BASE+match, false))
 			picker.TryAdd(path);
 
-	restart_clean: // start over if the set changed while having a hot iterator
-	for(const auto& src : srcs)
+	auto delBros = [&srcs](cmstring& mine)
 	{
-		if (GetFlags(src).uptodate) // this is the one
+		string base;
+		int nDeleted = 0;
+		cmstring* pMySuf=nullptr;
+		for(const auto& suf: compSuffixesAndEmpty)
 		{
-			auto bros(GetVariants(src));
-			int nDeleted = 0;
-			for (const auto& bro: bros)
-				nDeleted += srcs.erase(bro);
-			if (nDeleted)
-				goto restart_clean;
-		}
-	}
-
-	// now there may still be something like Sources and Sources.bz2 if they
-	// were added by Release file scan. Choose the preferred simply by extension.
-
-	restart_clean2: // start over if the set changed while having a hot iterator
-	for (const auto& s: compSuffixesAndEmptyByRatio)
-	{
-		for (const auto& src : srcs)
-		{
-			if (endsWith(src, s))
+			if(endsWith(mine, suf))
 			{
-				auto bros(GetVariants(src));
-				int nDeleted = 0;
-				for (const auto& bro: bros)
-					nDeleted += srcs.erase(bro);
-				if (nDeleted)
-					goto restart_clean2;
+				base=mine.substr(0, mine.length()-suf.length());
+				pMySuf=&suf;
+				break;
 			}
 		}
-	}
+		for(const auto& suf : compSuffixesAndEmpty)
+		{
+			if(&suf == pMySuf)
+				continue;
+			nDeleted += srcs.erase(base+suf);
+		}
+		return nDeleted;
+	};
+
+	// ok, if there are still multiple variants of certain files, strip the
+	// ones which are equivalent to some file which we have on disk
+
+	// start over if the set changed while having a hot iterator
+	// XXX: this is still O(n^2) but good enough for now
+	restart_clean:
+	for(const auto& src : srcs)
+		if (GetFlags(src).uptodate && delBros(src)) // this is the one
+			goto restart_clean;
+
+	// now there may still be something like Sources and Sources.bz2 if they
+	// were added by Release file scan. Choose the preferred one simply by extension.
+	restart_clean2: // start over if the set changed while having a hot iterator
+	for (const auto& s: compSuffixesAndEmptyByRatio)
+		for (const auto& src : srcs)
+			if (endsWith(src, s)&& delBros(src)) // this is the one
+				goto restart_clean2;
 
 	for (auto& src: srcs)
 	{
@@ -427,8 +413,9 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 					::setenv("to", SZABSPATH(TEMPRESULT), true);
 
 				SendFmt << "Fetched: " << uri << "<br>\n";
-				USRDBG("debpatch " << getenv("delta") << " " << getenv("from")
-						<< " " << getenv("to"));
+				if(m_bVerbose)
+				SendFmt << "debpatch " << getenv("delta") << " " << getenv("from")
+						<< " " << getenv("to");
 
 					if (0 == ::system("debpatch \"$delta\" \"$from\" \"$to\""))
 					{

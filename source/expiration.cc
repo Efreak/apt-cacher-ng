@@ -379,7 +379,7 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 			}
 			else
 			{
-				if (Match(fileGroup.first, WHITELIST) || Match(sPathRel, WHITELIST))
+				if (Match(fileGroup.first, FILE_WHITELIST) || Match(sPathRel, FILE_WHITELIST))
 				{
 					LOG("Protected file, not to be removed");
 					continue;

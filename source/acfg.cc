@@ -56,7 +56,7 @@ MapNameToString;
 typedef struct
 {
 	const char *name; int *ptr;
-	const char *warn; int base;
+	const char *warn; uint8_t base;
 }
 MapNameToInt;
 
@@ -73,6 +73,9 @@ MapNameToString n2sTbl[] = {
 		,{ "VfilePattern", &vfilepat, 0}
 		,{ "PfilePattern", &pfilepat, 0}
 		,{ "WfilePattern", &wfilepat, 0}
+		,{ "VfilePatternEx", &vfilepatEx, 0}
+		,{ "PfilePatternEx", &pfilepatEx, 0}
+		,{ "WfilePatternEx", &wfilepatEx, 0}
 		,{ "AdminAuth",  &adminauth, 0}
 		,{ "BindAddress", &bindaddr, 0}
 		,{ "UserAgent", &agentname, 0}
@@ -1203,46 +1206,47 @@ time_t BackgroundCleanup()
 namespace rechecks
 {
 // this has the exact order of the "regular" types in the enum
-	MYSTD::pair<regex_t, bool> rex[ematchtype_max];
+	struct { regex_t *pat=nullptr, *extra=nullptr; } rex[ematchtype_max];
+	// regex_t* rex[ematchtype_max];
+	vector<regex_t> vecReqPatters, vecTgtPatterns;
 
 bool CompileExpressions()
 {
-	const char *pszExpStrings[] = {
-			acfg::pfilepat.c_str(),
-			acfg::vfilepat.c_str(),
-			acfg::wfilepat.c_str(),
-			BADSTUFF_PATTERN,
-			PTHOSTS_PATTERN.c_str()
-	};
-	for(UINT i=0; i<_countof(pszExpStrings); i++)
+	auto compat = [](regex_t* &re, LPCSTR ps)
 	{
-		if(! pszExpStrings[i] || ! pszExpStrings[i][0] )
-			continue;
+		if(!ps ||! *ps )
+		return true;
+		re=new regex_t;
+		int nErr=regcomp(re, ps, REG_EXTENDED);
+		if(!nErr)
+		return true;
 
-		int nErr=regcomp(&rex[i].first, pszExpStrings[i], REG_EXTENDED);
-		if(nErr)
-		{
-			char buf[1024];
-			regerror(nErr,  &rex[i].first, buf, sizeof(buf));
-			buf[_countof(buf)-1]=0; // better be safe...
-			MYSTD::cerr << buf << ": " << pszExpStrings[i] << MYSTD::endl;
+		char buf[1024];
+		regerror(nErr, re, buf, sizeof(buf));
+		delete re;
+		re=nullptr;
+		buf[_countof(buf)-1]=0; // better be safe...
+			MYSTD::cerr << buf << ": " << ps << MYSTD::endl;
 			return false;
-		}
-		rex[i].second=true;
-	}
-	return true;
+		};
+	using namespace acfg;
+	return compat(rex[FILE_SOLID].pat, pfilepat.c_str())
+			&& compat(rex[FILE_VOLATILE].pat, vfilepat.c_str())
+			&& compat(rex[FILE_WHITELIST].pat, wfilepat.c_str())
+			&& compat(rex[FILE_SOLID].extra, pfilepatEx.c_str())
+			&& compat(rex[FILE_VOLATILE].extra, vfilepatEx.c_str())
+			&& compat(rex[FILE_WHITELIST].extra, wfilepatEx.c_str())
+			&& compat(rex[NASTY_PATH].pat, BADSTUFF_PATTERN)
+			&& compat(rex[PASSTHROUGH].pat, PTHOSTS_PATTERN.c_str());
 }
 
-bool Match(cmstring &in, eMatchType type)
+uint_fast8_t Match(cmstring &in, eMatchType type)
 {
-//	LOGSTARTs("MatchPattern");
-//	LOG("type: " << type << in);
-	if(!rex[type].second)
-		return false;
-
-	bool bRes = !regexec(&rex[type].first, in.c_str(), 0, NULL, 0);
-//	LOG("result: " << (bRes ? "true" : "false"));
-	return bRes;
+	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, NULL, 0))
+		return 1;
+	if(rex[type].extra && !regexec(rex[type].extra, in.c_str(), 0, NULL, 0))
+		return -1;
+	return 0;
 }
 
 eMatchType GetFiletype(const string & in) {
@@ -1253,12 +1257,10 @@ eMatchType GetFiletype(const string & in) {
 	return FILE_INVALID;
 }
 
-deque<regex_t> vecReqPatters, vecTgtPatterns;
-
 #ifndef MINIBUILD
-inline bool CompileUncachedRex(const string & token, eMatchType type, bool bRecursiveCall)
+inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool bRecursiveCall)
 {
-	deque<regex_t> & patvec = (NOCACHE_TGT == type) ? vecTgtPatterns : vecReqPatters;
+	auto & patvec = (NOCACHE_TGT == type) ? vecTgtPatterns : vecReqPatters;
 
 	if (0!=token.compare(0, 5, "file:")) // pure pattern
 	{
@@ -1292,7 +1294,7 @@ inline bool CompileUncachedRex(const string & token, eMatchType type, bool bRecu
 }
 
 
-bool CompileUncExpressions(eMatchType type, cmstring& pat)
+bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat)
 {
 	for(tSplitWalk split(&pat); split.Next(); )
 		if (!CompileUncachedRex(split, type, false))
@@ -1300,9 +1302,8 @@ bool CompileUncExpressions(eMatchType type, cmstring& pat)
 	return true;
 }
 
-bool MatchUncacheable(const string & in, eMatchType type)
+bool MatchUncacheable(const string & in, NOCACHE_PATTYPE type)
 {
-	//LOGSTART2s("MatchUncacheable", in << " against " << vecUncPatters.size() << " patterns");
 	for(const auto& patre: (type == NOCACHE_REQ) ? vecReqPatters : vecTgtPatterns)
 		if(!regexec(&patre, in.c_str(), 0, NULL, 0))
 			return true;
