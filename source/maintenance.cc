@@ -185,6 +185,8 @@ LPCSTR tSpecialRequest::GetTaskName()
 	//case workRAWDUMP: /*fall-through*/
 	//case workBGTEST: return "42";
 	case workUSERINFO: return "General Configuration Information";
+	case workTraceStart:
+	case workTraceEnd:
 	case workMAINTREPORT: return "Status Report and Maintenance Tasks Overview";
 	case workAUTHREQUEST: return "Authentication Required";
 	case workAUTHREJECT: return "Authentication Denied";
@@ -253,7 +255,9 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 			"doMirror=", workMIRROR,
 			"doDelete=", workDELETE,
 			"doDeleteYes=", workDELETE,
-			"doCount=", workCOUNTSTATS
+			"doCount=", workCOUNTSTATS,
+			"doTraceStart=", workTraceStart,
+			"doTraceEnd=", workTraceEnd
 	};
 	for(auto& match: matches)
 		if(StrHasFrom(cmd, match.trigger, parmpos))
@@ -280,6 +284,8 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(int conFD, eMaintWorkType type
 		return new tStaticFileSend(conFD, type, "userinfo.html", "text/html", "404 Usage Information");
 	case workMAINTREPORT:
 	case workCOUNTSTATS:
+	case workTraceStart:
+	case workTraceEnd:
 		return new tStaticFileSend(conFD, type, "report.html", "text/html", "200 OK");
 	case workAUTHREQUEST:
 		return new tAuthRequest(conFD, type);

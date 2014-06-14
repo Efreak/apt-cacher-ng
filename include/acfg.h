@@ -35,7 +35,7 @@ extern int debug, numcores, offlinemode, foreground, verbose, stupidfs, forceman
 verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, dlbufsize, usewrap,
 exporigin, logxff, oldupdate, recompbz2, nettimeout, updinterval, forwardsoap, dirperms, fileperms,
 maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsupcount,
-optproxytimeout;
+optproxytimeout, patrace;
 
 // processed config settings
 extern tHttpUrl proxy_info;
@@ -88,6 +88,7 @@ extern MYSTD::bitset<TCP_PORT_MAX> *pUserPorts;
 extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 
 void printVar(cmstring &varname);
+void dump_trace();
 } // namespace acfg
 
 namespace rechecks

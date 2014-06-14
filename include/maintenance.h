@@ -42,8 +42,9 @@ public:
 		workDELETE,
 		workDELETECONFIRM,
 		workCOUNTSTATS,
-		workSTYLESHEET
-		//, workRAWDUMP
+		workSTYLESHEET,
+		workTraceStart,
+		workTraceEnd
 	};
 	/*!
 	 *  @brief Main execution method for maintenance tasks.

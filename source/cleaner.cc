@@ -165,5 +165,6 @@ void dump_handler(int) {
 	fileItemMgmt::dump_status();
 	g_victor.dump_status();
 	tcpconnect::dump_status();
+	acfg::dump_trace();
 }
 

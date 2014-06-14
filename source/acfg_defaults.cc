@@ -65,7 +65,7 @@ int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
 logxff(false), oldupdate(false), recompbz2(false), nettimeout(60), updinterval(0),
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(255), exsupcount(RESERVED_DEFVAL),
-optproxytimeout(-1);
+optproxytimeout(-1), patrace(false);
 
 #ifdef DEBUG
 int dnscachetime(30);

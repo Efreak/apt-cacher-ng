@@ -32,6 +32,7 @@ mstring sHttp11("HTTP/1.1");
 #define SPECIAL_FD -42
 inline bool IsValidFD(int fd) { return fd>=0 || SPECIAL_FD == fd; }
 
+class : public tStrSet, public lockable {} traceOverrides;
 
 /*
  * Unlike the regular store-and-forward file item handler, this ones does not store anything to
@@ -594,7 +595,15 @@ void job::PrepareDownload() {
 		m_type = GetFiletype(tUrl.sPath);
 
 		if ( m_type == FILE_INVALID )
-			goto report_notallowed;
+		{
+			if(!acfg::patrace)
+				goto report_notallowed;
+
+			// ok, collect some information helpful to the user
+			m_type = FILE_VOLATILE;
+			lockguard g(traceOverrides);
+			traceOverrides.insert(tUrl.sPath);
+		}
 		
 		// got something valid, has type now, trace it
 		USRDBG("Processing new job, "<<m_pReqHead->frontLine);
@@ -1155,7 +1164,14 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation)
 
 	erroritem *p = new erroritem("noid", errorLine);
 	p->HeadRef().set(header::LOCATION, szLocation);
-	m_pItem.ReplaceWithLocal(p);;
+	m_pItem.ReplaceWithLocal(p);
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
 	m_state=STATE_SEND_MAIN_HEAD;
+}
+
+void acfg::dump_trace()
+{
+	aclog::err("Paths with uncertain content types:");
+	for(const auto& s: traceOverrides)
+		aclog::err(s);
 }
