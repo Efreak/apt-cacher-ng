@@ -252,19 +252,19 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 
 	struct { LPCSTR trigger; tSpecialRequest::eMaintWorkType type; } matches [] =
 	{
-			"doExpire=", workExExpire,
-			"justShow=", workExList,
-			"justRemove=", workExPurge,
-			"justShowDamaged=", workExListDamaged,
-			"justRemoveDamaged=", workExPurgeDamaged,
-			"justTruncDamaged=", workExTruncDamaged,
-			"doImport=", workIMPORT,
-			"doMirror=", workMIRROR,
-			"doDelete=", workDELETECONFIRM,
-			"doDeleteYes=", workDELETE,
-			"doCount=", workCOUNTSTATS,
-			"doTraceStart=", workTraceStart,
-			"doTraceEnd=", workTraceEnd
+			{"doExpire=", workExExpire},
+			{"justShow=", workExList},
+			{"justRemove=", workExPurge},
+			{"justShowDamaged=", workExListDamaged},
+			{"justRemoveDamaged=", workExPurgeDamaged},
+			{"justTruncDamaged=", workExTruncDamaged},
+			{"doImport=", workIMPORT},
+			{"doMirror=", workMIRROR},
+			{"doDelete=", workDELETECONFIRM},
+			{"doDeleteYes=", workDELETE},
+			{"doCount=", workCOUNTSTATS},
+			{"doTraceStart=", workTraceStart},
+			{"doTraceEnd=", workTraceEnd}
 	};
 	for(auto& needle: matches)
 		if(StrHasFrom(cmd, needle.trigger, epos))

@@ -738,7 +738,7 @@ bool GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResidual,
 	// get all the URLs matching THE HOSTNAME
 	auto rangeIt=mapUrl2pVname.find(in.sHost+":"+in.GetPort());
 	if(rangeIt == mapUrl2pVname.end())
-		return NULL;
+		return false;
 	
 	tStrPos bestMatchLen(0);
 	decltype(repoparms)::iterator pBestHit = repoparms.end();
