@@ -710,7 +710,8 @@ report_overload:
     return ;
 
 report_notallowed:
-	SetErrorResponse((tSS() << "403 Forbidden file type or location: " << sReqPath).c_str());
+	SetErrorResponse((tSS() << "403 Forbidden file type or location: " << sReqPath).c_str(),
+			NULL, "403 Forbidden file type or location");
 //    USRDBG( sRawUriPath + " -- ACCESS FORBIDDEN");
     return ;
 
@@ -1137,26 +1138,28 @@ fileitem::FiStatus job::_SwitchToPtItem(const MYSTD::string &fileLoc)
 }
 
 
-void job::SetErrorResponse(const char * errorLine, const char *szLocation)
+void job::SetErrorResponse(const char * errorLine, const char *szLocation, const char *bodytext)
 {
 	LOGSTART2("job::SetErrorResponse", errorLine << " ; for " << m_sOrigUrl);
 	class erroritem: public tGeneratedFitemBase
 	{
 	public:
-		erroritem(const string &sId, const char *szError) : tGeneratedFitemBase(sId, szError)
+		erroritem(const string &sId, const char *szError, const char *bodytext)
+			: tGeneratedFitemBase(sId, szError)
 		{
 			if(BODYFREECODE(m_head.getStatus()))
 				return;
 			// otherwise do something meaningful
 			m_data << "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n"
-				"<html><head><title>" << szError << "</title>\n</head>\n<body><h1>"
-				<< szError << "</h1></body></html>";
+				"<html><head><title>" << (bodytext ? bodytext : szError)
+				<< "</title>\n</head>\n<body><h1>"
+				<< (bodytext ? bodytext : szError) << "</h1></body></html>";
 			m_head.set(header::CONTENT_TYPE, "text/html");
 			seal();
 		}
 	};
 
-	erroritem *p = new erroritem("noid", errorLine);
+	erroritem *p = new erroritem("noid", errorLine, bodytext);
 	p->HeadRef().set(header::LOCATION, szLocation);
 	m_pItem.ReplaceWithLocal(p);;
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
