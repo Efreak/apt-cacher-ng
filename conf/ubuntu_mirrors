@@ -1,4 +1,3 @@
-http://76.73.4.58/ubuntu/
 http://ac.archive.ubuntu.com/ubuntu/
 http://ad.archive.ubuntu.com/ubuntu/
 http://ae.archive.ubuntu.com/ubuntu/
@@ -18,7 +17,6 @@ http://archive.ubuntu.com/ubuntu/
 http://archive.ubuntu.csg.uzh.ch/ubuntu/
 http://archive.ubuntu.mirror.dkm.cz/
 http://archive.ubuntu.nautile.nc/ubuntu/
-http://archive.ubuntu.schoolnet.lk/ubuntu/
 http://archive.ubuntu.totaal.net/
 http://archive.ubuntu.webxcreen.org/
 http://archive.ubuntumirror.dei.uc.pt/ubuntu/
@@ -178,7 +176,6 @@ http://ftp.usf.edu/pub/ubuntu/
 http://ftp.ussg.iu.edu/linux/ubuntu/
 http://ftp.utexas.edu/ubuntu/
 http://ftp.vectranet.pl/ubuntu/
-http://ftp.wa.co.za/pub/ubuntu/ubuntu/
 http://ftp.wcss.pl/ubuntu/
 http://ftp.yz.yamagata-u.ac.jp/pub/linux/ubuntu/archives/
 http://ftp5.gwdg.de/pub/linux/debian/ubuntu/
@@ -246,7 +243,6 @@ http://li.archive.ubuntu.com/ubuntu/
 http://linux.nsu.ru/ubuntu/
 http://linux.psu.ru/ubuntu/
 http://linux.vlz.su/ubuntu/
-http://linux.xjtuns.cn/ubuntu/
 http://lk.archive.ubuntu.com/ubuntu/
 http://lr.archive.ubuntu.com/ubuntu/
 http://ls.archive.ubuntu.com/ubuntu/
@@ -333,6 +329,7 @@ http://mirror.nhanhoa.com/Ubuntu/archive/
 http://mirror.nl.leaseweb.net/ubuntu/
 http://mirror.nus.edu.sg/ubuntu/
 http://mirror.optus.net/ubuntu/
+http://mirror.os6.org/ubuntu/
 http://mirror.oscc.org.my/ubuntu/
 http://mirror.overthewire.com.au/ubuntu/
 http://mirror.ox.ac.uk/sites/archive.ubuntu.com/ubuntu/
@@ -357,7 +354,6 @@ http://mirror.thelinuxfix.com/ubuntu/
 http://mirror.timeweb.ru/ubuntu/
 http://mirror.tocici.com/ubuntu/
 http://mirror.ubuntu.ikoula.com/ubuntu/
-http://mirror.uchile.cl/ubuntu/
 http://mirror.umd.edu/ubuntu/
 http://mirror.unej.ac.id/ubuntu/
 http://mirror.unesp.br/ubuntu/
@@ -374,6 +370,7 @@ http://mirror.zol.co.zw/ubuntu/
 http://mirror1.ku.ac.th/ubuntu/
 http://mirror2.corbina.ru/ubuntu/
 http://mirror2.tuxinator.org/ubuntu/
+http://mirrordenver.fdcservers.net/ubuntu/
 http://mirrors.163.com/ubuntu/
 http://mirrors.accretive-networks.net/ubuntu/
 http://mirrors.acm.jhu.edu/ubuntu/
@@ -411,6 +408,7 @@ http://mirrors.sfo1.digitalocean.com/ubuntu/
 http://mirrors.sohu.com/ubuntu/
 http://mirrors.syringanetworks.net/ubuntu-archive/
 http://mirrors.telianet.dk/ubuntu/
+http://mirrors.tuna.tsinghua.edu.cn/ubuntu/
 http://mirrors.uaip.org/ubuntu/
 http://mirrors.us.kernel.org/ubuntu/
 http://mirrors.usinternet.com/ubuntu/archive/
@@ -420,7 +418,6 @@ http://mirrors.zju.edu.cn/ubuntu/
 http://mk.archive.ubuntu.com/ubuntu/
 http://ml.archive.ubuntu.com/ubuntu/
 http://mm.archive.ubuntu.com/ubuntu/
-http://mn.archive.ubuntu.com/ubuntu/
 http://mo.archive.ubuntu.com/ubuntu/
 http://mp.archive.ubuntu.com/ubuntu/
 http://mq.archive.ubuntu.com/ubuntu/
@@ -545,8 +542,8 @@ http://ubuntu.datahop.net/ubuntu/
 http://ubuntu.dcc.fc.up.pt/
 http://ubuntu.dormforce.net/ubuntu/
 http://ubuntu.dts.mg/ubuntu/
+http://ubuntu.etf.bg.ac.rs/ubuntu/
 http://ubuntu.excellmedia.net/archive/
-http://ubuntu.fastbull.org/ubuntu/
 http://ubuntu.gnu.gen.tr/ubuntu/
 http://ubuntu.grena.ge/ubuntu/
 http://ubuntu.grn.cat/ubuntu/
@@ -578,7 +575,6 @@ http://ubuntu.mirror.tn/
 http://ubuntu.mirror.tudos.de/ubuntu/
 http://ubuntu.mirror.uber.com.au/archive/
 http://ubuntu.mirror.vu.lt/ubuntu/
-http://ubuntu.mirrors.isu.net.sa/ubuntu/
 http://ubuntu.mirrors.linux.ro/archive/
 http://ubuntu.mirrors.ovh.net/ftp.ubuntu.com/ubuntu/
 http://ubuntu.mirrors.pair.com/archive/
@@ -599,6 +595,7 @@ http://ubuntu.skarta.net/ubuntu/
 http://ubuntu.skybroadband.com.ph/ubuntu/
 http://ubuntu.snet.uz/ubuntu/
 http://ubuntu.sth.sze.hu/ubuntu/
+http://ubuntu.stjschools.org/
 http://ubuntu.stu.edu.tw/ubuntu/
 http://ubuntu.task.gda.pl/ubuntu/
 http://ubuntu.tiscali.nl/
