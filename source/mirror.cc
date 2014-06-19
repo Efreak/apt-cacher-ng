@@ -19,7 +19,7 @@
 #include <algorithm>
 #include <list>
 
-using namespace MYSTD;
+using namespace std;
 
 bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &stinfo)
 {
@@ -60,7 +60,7 @@ bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &stinfo)
 	return ! CheckStopSignal();
 }
 
-void pkgmirror::Action(const string &cmd)
+void pkgmirror::Action()
 {
 	if(acfg::mirrorsrcs.empty())
 	{
@@ -70,14 +70,14 @@ void pkgmirror::Action(const string &cmd)
 
 	SendChunk("<b>Locating index files, scanning...</b><br>\n");
 
-	SetCommonUserFlags(cmd);
+	SetCommonUserFlags(m_parms.cmd);
 	m_bErrAbort=false; // does not f...ing matter, do what we can
 
-	m_bCalcSize=(cmd.find("calcSize=cs")!=stmiss);
-	m_bDoDownload=(cmd.find("doDownload=dd")!=stmiss);
-	m_bSkipIxUpdate=(cmd.find("skipIxUp=si")!=stmiss);
-	m_bAsNeeded=(cmd.find("asNeeded=an")!=stmiss);
-	m_bUseDelta=(cmd.find("useDebDelta=ud")!=stmiss);
+	m_bCalcSize=(m_parms.cmd.find("calcSize=cs")!=stmiss);
+	m_bDoDownload=(m_parms.cmd.find("doDownload=dd")!=stmiss);
+	m_bSkipIxUpdate=(m_parms.cmd.find("skipIxUp=si")!=stmiss);
+	m_bAsNeeded=(m_parms.cmd.find("asNeeded=an")!=stmiss);
+	m_bUseDelta=(m_parms.cmd.find("useDebDelta=ud")!=stmiss);
 
 	if(m_bUseDelta)
 	{
@@ -345,7 +345,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 		{
 			tStrDeq oldebs, sorted;
 
-			//MYSTD::set<mstring, CompDebVerLessThan> sortedVersions;
+			//std::set<mstring, CompDebVerLessThan> sortedVersions;
 
 			tStrVec parts;
 			Tokenize(entry.sFileName, "_", parts);

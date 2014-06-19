@@ -28,8 +28,8 @@
 
 #define EXTREME_MEMORY_SAVING false
 
-typedef MYSTD::string mstring;
-typedef const MYSTD::string cmstring;
+typedef std::string mstring;
+typedef const std::string cmstring;
 
 typedef mstring::size_type tStrPos;
 const static tStrPos stmiss(cmstring::npos);
@@ -86,7 +86,7 @@ int getUUID();
 
 #define SPACECHARS " \f\n\r\t\v"
 
-typedef MYMAP<mstring, mstring> tStrMap;
+typedef std::map<mstring, mstring> tStrMap;
 
 inline void trimFront(mstring &s, LPCSTR junk=SPACECHARS)
 {
@@ -145,14 +145,15 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
    return NULL;
 }
 
-typedef MYSTD::vector<mstring> tStrVec;
-typedef MYSTD::set<mstring> tStrSet;
-typedef MYSTD::deque<mstring> tStrDeq;
+typedef std::vector<mstring> tStrVec;
+typedef std::set<mstring> tStrSet;
+typedef std::deque<mstring> tStrDeq;
 
 // Sometimes I miss Perl...
 tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
-inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
-{out.clear(); for(const auto& tok: tokens)out+=(sep + tok);}
+/*inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
+{out.clear(); if(tokens.empty()) return; for(const auto& tok: tokens)out+=(sep + tok);}
+*/
 
 // TODO: __attribute__((externally_visible))
 bool ParseKeyValLine(const mstring & sIn, mstring & sOutKey, mstring & sOutVal);
@@ -221,8 +222,8 @@ private:
 
 #define POKE(x) for(;;) { ssize_t n=write(x, "", 1); if(n>0 || (EAGAIN!=errno && EINTR!=errno)) break;  }
 
-#define MIN_VAL(x) (MYSTD::numeric_limits<x>::min()) 
-#define MAX_VAL(x) (MYSTD::numeric_limits<x>::max()) 
+#define MIN_VAL(x) (std::numeric_limits<x>::min()) 
+#define MAX_VAL(x) (std::numeric_limits<x>::max()) 
 
 void appendLong(mstring &s, long val);
 
@@ -436,7 +437,7 @@ inline mstring unEscape(cmstring &s)
 	return ret;
 }
 
-MYSTD::string BytesToHexString(const uint8_t sum[], unsigned short lengthBin);
+std::string BytesToHexString(const uint8_t sum[], unsigned short lengthBin);
 
 // STFU helpers, (void) casts are not effective for certain functions
 static inline void ignore_value (int i) { (void) i; }

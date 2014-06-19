@@ -48,7 +48,7 @@ inline void dump_proc_status(){}; // strip away
 
 inline void dump_proc_status()
 {
-	using namespace MYSTD;
+	using namespace std;
 	ifstream sf("/proc/self/status");
 	while (sf)
 	{

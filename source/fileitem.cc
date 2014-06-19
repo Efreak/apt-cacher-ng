@@ -13,7 +13,7 @@
 #include <errno.h>
 #include <algorithm>
 
-using namespace MYSTD;
+using namespace std;
 
 #define MAXTEMPDELAY acfg::maxtempdelay // 27
 mstring sReplDir("_altStore" SZPATHSEP);
@@ -792,7 +792,7 @@ fileItemMgmt fileItemMgmt::GetRegisteredFileItem(cmstring &sPathUnescaped, bool 
 		ret.m_ptr = sp;
 		return ret;
 	}
-	MYCATCH(MYSTD::bad_alloc&)
+	MYCATCH(std::bad_alloc&)
 	{
 	}
 	return fileItemMgmt();
@@ -843,7 +843,7 @@ time_t fileItemMgmt::BackgroundCleanup()
 		// find and ignore (but remember) the candidate(s) for the next cycle
 		if (here->second->m_nTimeDlStarted > expBefore)
 		{
-			oldestGet = MYSTD::min(time_t(here->second->m_nTimeDlStarted), oldestGet);
+			oldestGet = std::min(time_t(here->second->m_nTimeDlStarted), oldestGet);
 			continue;
 		}
 
@@ -865,7 +865,7 @@ time_t fileItemMgmt::BackgroundCleanup()
 	ldbg(oldestGet);
 
 	// preserving a few seconds to catch more of them in the subsequent run
-	return MYSTD::max(oldestGet + MAXTEMPDELAY, GetTime()+8);
+	return std::max(oldestGet + MAXTEMPDELAY, GetTime()+8);
 }
 
 ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, size_t count)

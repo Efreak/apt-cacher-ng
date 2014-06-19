@@ -81,7 +81,6 @@ class tSS : public acbuf
 {
 public:
 // map char array to buffer pointer and size
-#define _SZ2PS(x) x, (sizeof(x)-1)
 	inline tSS & operator<<(const char *val) { return add(val); }
 	inline tSS & operator<<(const mstring& val) { return add(val); };
 	inline tSS & operator<<(const acbuf& val) { return add(val.rptr(), val.size()); };
@@ -115,8 +114,8 @@ protected:
     char fmtbuf[22];
 	fmtflags m_fmtmode;
 	inline void reserve(size_t minCapa) { minCapa+=(r+1); if(m_nCapacity>=minCapa) return;
-	char *p=(char*)realloc(m_buf, MYSTD::max(m_nCapacity, minCapa*2));
-	if(!p) throw MYSTD::bad_alloc(); m_nCapacity=minCapa*2; m_buf=p; }
+	char *p=(char*)realloc(m_buf, std::max(m_nCapacity, minCapa*2));
+	if(!p) throw std::bad_alloc(); m_nCapacity=minCapa*2; m_buf=p; }
 
 	inline tSS & add(const mstring& val) { return add(val.data(), val.size());}
 	inline tSS & appDosNL() { return add("\r\n", 2);}
@@ -127,6 +126,6 @@ protected:
 
 };
 
-void _AddFooter(tSS &msg);
+cmstring& GetFooter();
 
 #endif

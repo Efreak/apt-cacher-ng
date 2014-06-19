@@ -26,7 +26,7 @@
 
 #include "debug.h"
 
-using namespace MYSTD;
+using namespace std;
 
 // for cygwin, incomplete ipv6 support
 #ifndef AF_INET6
@@ -162,7 +162,7 @@ void SetupConAndGo(int fd, const char *szClientName=NULL)
 			LOG("Connection to backlog, total count: " << g_freshConQueue.size());
 
 
-		} catch (MYSTD::bad_alloc&)
+		} catch (std::bad_alloc&)
 		{
 			USRDBG( "Out of memory");
 			goto local_con_failure;

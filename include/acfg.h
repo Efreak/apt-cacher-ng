@@ -19,7 +19,7 @@ struct ltstring
   }
 };
 
-typedef MYMAP<mstring, mstring, ltstring> NoCaseStringMap;
+typedef std::map<mstring, mstring, ltstring> NoCaseStringMap;
 
 namespace acfg
 {
@@ -55,7 +55,7 @@ void PostProcConfig(bool bDumpConfig);
 
 struct tRepoData
 {
-	MYSTD::vector<tHttpUrl> m_backends;
+	std::vector<tHttpUrl> m_backends;
 
 	// dirty little helper to execute custom actions when a jobs associates or forgets this data set
 	struct IHookHandler
@@ -72,7 +72,7 @@ struct tRepoData
 	virtual ~tRepoData();
 };
 
-typedef MYSTD::map<cmstring, tRepoData>::const_iterator tBackendDataRef;
+typedef std::map<cmstring, tRepoData>::const_iterator tBackendDataRef;
 
 bool GetRepNameAndPathResidual(const tHttpUrl & in, mstring & sRetPathResidual, tBackendDataRef &beRef);
 
@@ -83,11 +83,11 @@ time_t BackgroundCleanup();
 extern tStrMap localdirs;
 cmstring & GetMimeType(cmstring &path);
 #define TCP_PORT_MAX 65536
-extern MYSTD::bitset<TCP_PORT_MAX> *pUserPorts;
+extern std::bitset<TCP_PORT_MAX> *pUserPorts;
 
 extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 
-void printVar(cmstring &varname);
+bool appendVar(LPCSTR varname, mstring& ret);
 void dump_trace();
 } // namespace acfg
 

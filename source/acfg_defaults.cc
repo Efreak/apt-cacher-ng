@@ -6,7 +6,7 @@
 #include "meta.h"
 #include "acfg.h"
 
-using namespace MYSTD;
+using namespace std;
 
 namespace acfg
 {

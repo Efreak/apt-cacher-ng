@@ -9,7 +9,7 @@
 
 #include <unordered_map>
 
-using namespace MYSTD;
+using namespace std;
 
 static class : public unordered_map<string, CAddrInfo::SPtr>, public lockable {} mapDnsCache;
 

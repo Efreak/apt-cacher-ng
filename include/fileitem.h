@@ -11,7 +11,7 @@
 
 class fileitem;
 typedef SHARED_PTR<fileitem> tFileItemPtr;
-class tFiGlobMap : public lockable, public MYSTD::unordered_multimap<mstring, tFileItemPtr> {};
+class tFiGlobMap : public lockable, public std::unordered_multimap<mstring, tFileItemPtr> {};
 
 //! Base class containing all required data and methods for communication with the download sources
 class fileitem : public condition

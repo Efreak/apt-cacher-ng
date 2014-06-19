@@ -46,20 +46,27 @@ public:
 		workTraceStart,
 		workTraceEnd
 	};
+	struct tRunParms
+	{
+		int fd;
+		tSpecialRequest::eMaintWorkType type;
+		cmstring cmd;
+	};
 	/*!
 	 *  @brief Main execution method for maintenance tasks.
 	 */
-	virtual void Run(const mstring &cmd)=0;
+	virtual void Run() =0;
 
-	tSpecialRequest(int fd, tSpecialRequest::eMaintWorkType type);
+	tSpecialRequest(const tRunParms& parms);
 	virtual ~tSpecialRequest();
 
 protected:
 	inline void SendChunk(const mstring &x) { SendChunk(x.data(), x.size()); }
 
-	inline void SendChunk(const tSS &x, bool b=false){ SendChunk(x.data(), x.length(), b); }
-	void SendChunk(const char *data, size_t size, bool bRemoteOnly=false);
-	inline void SendChunk(const char *x, bool b=false) { SendChunk(x, x?strlen(x):0, b); }
+	void SendChunk(const char *data, size_t size);
+	void SendChunkRemoteOnly(const char *data, size_t size);
+	inline void SendChunk(const char *x) { SendChunk(x, x?strlen(x):0); }
+	inline void SendChunk(const tSS &x){ SendChunk(x.data(), x.length()); }
 	// for customization in base classes
 	virtual void AfterSendChunk(const char* /*data*/, size_t /*size*/) {};
 
@@ -67,10 +74,11 @@ protected:
 	virtual void EndTransfer();
 	mstring & GetHostname();
 	//void SendDecoration(bool bBegin, const char *szDecoFile=NULL);
-	void SendChunkedPageHeader(const char *httpcode=NULL, const char *mimetype=NULL);
-	int m_reportFD;
-	LPCSTR m_szDecoFile;
+	void SendChunkedPageHeader(const char *httpstatus, const char *mimetype);
+	LPCSTR m_szDecoFile = nullptr;
 	LPCSTR GetTaskName();
+	tRunParms m_parms;
+
 private:
 	tSpecialRequest(const tSpecialRequest&);
 	tSpecialRequest& operator=(const tSpecialRequest&);
@@ -88,7 +96,10 @@ public:
 		{
 			if (!m_parent.m_fmtHelper.empty())
 			{
-				m_parent.SendChunk(m_parent.m_fmtHelper, m_bRemoteOnly);
+				if(m_bRemoteOnly)
+					m_parent.SendChunkRemoteOnly(m_parent.m_fmtHelper.data(), m_parent.m_fmtHelper.size());
+				else
+					m_parent.SendChunk(m_parent.m_fmtHelper);
 				m_parent.m_fmtHelper.clear();
 			}
 		}
@@ -104,12 +115,10 @@ public:
 	tSS m_fmtHelper;
 
 	static eMaintWorkType DispatchMaintWork(cmstring &cmd, const char *auth);
-	static void RunMaintWork(eMaintWorkType jobType, cmstring &cmd, int fd);
+	static void RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd);
 
 protected:
-	eMaintWorkType m_mode;
-
-	static tSpecialRequest* MakeMaintWorker(int fd, eMaintWorkType type);
+	static tSpecialRequest* MakeMaintWorker(const tRunParms& parms);
 };
 
 #endif /*MAINTENANCE_H_*/

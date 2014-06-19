@@ -18,8 +18,8 @@ class tSpecOpDetachable : public tSpecialRequest
 public:
 	// forward all constructors, no specials here
 	// XXX: oh please, g++ 4.7 is not there yet... using tSpecialRequest::tSpecialRequest;
-	inline tSpecOpDetachable(int fd, tSpecialRequest::eMaintWorkType type)
-	: tSpecialRequest(fd, type)	{ };
+	inline tSpecOpDetachable(const tSpecialRequest::tRunParms& parms)
+	: tSpecialRequest(parms)	{ };
 
 	virtual ~tSpecOpDetachable();
 
@@ -29,13 +29,13 @@ public:
 	  *
 	  * Work is to be done the Action() method implemented by the subclasses.
 	  */
-	virtual void Run(const mstring &cmd) override;
+	virtual void Run() override;
 
 protected:
 	bool CheckStopSignal();
 
 	// to be implemented by subclasses
-	virtual void Action(const mstring &) =0;
+	virtual void Action() =0;
 
 	void AfterSendChunk(const char *data, size_t size) override;
 
@@ -45,7 +45,7 @@ protected:
 
 private:
 
-	MYSTD::ofstream m_reportStream;
+	std::ofstream m_reportStream;
 
 	// XXX: this code sucks and needs a full review. It abuses shared_ptr as stupid reference
 	// counter. Originally written with some uber-protective considerations in mind like
@@ -83,12 +83,12 @@ extern bool bSigTaskAbort;
 class tBgTester : public tSpecOpDetachable
 {
 public:
-	inline tBgTester(int fd, tSpecialRequest::eMaintWorkType mode)
-	: tSpecOpDetachable(fd, mode)
+	inline tBgTester(const tSpecialRequest::tRunParms& parms)
+	: tSpecOpDetachable(parms)
 	{
 		m_szDecoFile="maint.html";
 	}
-	void Action(cmstring &) override;
+	void Action() override;
 };
 #endif // DEBUG
 

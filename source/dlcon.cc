@@ -9,12 +9,12 @@
 #include "fileio.h"
 #include "sockio.h"
 
-using namespace MYSTD;
+using namespace std;
 
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
 
-typedef MYSTD::pair<const tHttpUrl*,bool> tHostIsproxy;
+typedef std::pair<const tHttpUrl*,bool> tHostIsproxy;
 
 static const cmstring sGenericError("567 Unknown download error occured");
 
@@ -100,7 +100,7 @@ struct tDlJob
 	}
 
 	inline tDlJob(dlcon *p, tFileItemPtr pFi, const acfg::tRepoData * pBackends,
-			const MYSTD::string & sPath, int redirmax) :
+			const std::string & sPath, int redirmax) :
 			m_pStorage(pFi), m_parent(*p), m_pBEdata(pBackends),
 			m_nRedirRemaining(redirmax)
 	{
@@ -387,7 +387,7 @@ struct tDlJob
 					return EFLAG_MIRROR_BROKEN | HINT_DISCON | HINT_KILL_LAST_FILE;
 				}
 
-				ldbg("contents: " << MYSTD::string(inBuf.rptr(), l));
+				ldbg("contents: " << std::string(inBuf.rptr(), l));
 				inBuf.drop(l);
 				if (h.type != header::ANSWER)
 				{
@@ -647,7 +647,7 @@ inline void dlcon::EnqJob(tDlJob *todo)
 }
 
 void dlcon::AddJob(tFileItemPtr m_pItem, 
-		const acfg::tRepoData *pBackends, const MYSTD::string & sPatSuffix)
+		const acfg::tRepoData *pBackends, const std::string & sPatSuffix)
 {
 	EnqJob(new tDlJob(this, m_pItem, pBackends, sPatSuffix,
 			m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax));
@@ -707,7 +707,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 		if (fd>=0)
 		{
 			FD_SET(fd, &rfds);
-			nMaxFd = MYSTD::max(fd, nMaxFd);
+			nMaxFd = std::max(fd, nMaxFd);
 
 			if (!m_sendBuf.empty())
 			{

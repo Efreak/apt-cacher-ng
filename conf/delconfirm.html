@@ -18,18 +18,19 @@
                <form action="#top">
                   <div style="text-align:left;">
                      <div class="visarea" id="logArea">
-                        $STUFF <!-- remember the file set -->
+                        ${stuff} <!-- remember the file set -->
                         <!-- the question/execution variants are switched by the rendering class -->
-                        <div style="visibility:$VISQUESTION">
-                           Do you really wish to remove $COUNT file(s) from your cache?
+                        <div style="display:${noneIfConfirmed}">
+                           Do you really wish to remove ${count} file(s) from your cache?
                            <p>
                            <input type="submit" name="doDeleteYes" value="Delete now"> <input type="submit" name="doNothing" value="Return to main page">
                         </div>
-                        <div style="visibility:$VISACTION">
-                           Deleted $COUNT files.
+                        <div style="display:${blockIfConfirmed}">
+                           Deleted ${count} files.
                            <p>
                            <input type="submit" name="doNothing" value="Return to main page">
                         </div>
+               ${footer}
                      </div>
                   </div>
                </form>

@@ -35,7 +35,7 @@
 
 #endif
 
-using namespace MYSTD;
+using namespace std;
 
 
 class IDecompressor
@@ -413,7 +413,7 @@ bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
 	//const char *newline=mempbrk(rbuf, "\r\n", nRest);
   //const char *crptr=(const char*) memchr(rbuf, '\r', nRest);
   //const char *lfptr=(const char*) memchr(rbuf, '\n', nRest);
-  //const char *newline = (crptr&&lfptr) ? MYSTD::min(crptr,lfptr) : MYSTD::max(crptr,lfptr);
+  //const char *newline = (crptr&&lfptr) ? std::min(crptr,lfptr) : std::max(crptr,lfptr);
 	const char *newline=0;
 	for(const char *x=rbuf; x<rbuf+nRest; ++x)
 	{

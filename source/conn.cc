@@ -17,7 +17,7 @@
 #include <errno.h>
 #include <iostream>
 
-using namespace MYSTD;
+using namespace std;
 
 
 con::con(int fdId, const char *c) :
@@ -45,7 +45,7 @@ con::~con() {
 	// our user's connection is released but the downloader task created here may still be serving others
 	// tell it to stop when it gets the chance and delete it then
 
-	MYSTD::list<job*>::iterator jit;
+	std::list<job*>::iterator jit;
 	for (jit=m_jobs2send.begin(); jit!=m_jobs2send.end(); jit++)
 		delete *jit;
 
@@ -122,7 +122,7 @@ public:
 		int ofd = m_spOutCon->GetFD();
 		acbuf &serverBufOut = clientBufIn, &serverBufIn = clientBufOut;
 
-		int maxfd=1+MYSTD::max(fdClient, ofd);
+		int maxfd=1+std::max(fdClient, ofd);
 
 		while (true)
 		{
@@ -432,7 +432,7 @@ void con::__tlogstuff::write()
 		aclog::transfer(bFileIsError ? 'E' : 'O', sumOut, client.c_str(), file.c_str());
 }
 
-void con::LogDataCounts(const MYSTD::string & sFile, const char *xff, off_t nNewIn,
+void con::LogDataCounts(const std::string & sFile, const char *xff, off_t nNewIn,
 		off_t nNewOut, bool bFileIsError)
 {
 	LOGSTART("con::LogDataCounts");
@@ -458,7 +458,7 @@ void con::LogDataCounts(const MYSTD::string & sFile, const char *xff, off_t nNew
 
 }
 
-void con::__tlogstuff::reset(const MYSTD::string &pNewFile, const MYSTD::string &pNewClient, bool bIsError)
+void con::__tlogstuff::reset(const std::string &pNewFile, const std::string &pNewClient, bool bIsError)
 {
 	bFileIsError=bIsError;
 	file=pNewFile;

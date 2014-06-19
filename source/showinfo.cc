@@ -5,98 +5,112 @@
 #include "acfg.h"
 #include "filereader.h"
 #include "fileio.h"
+#include "job.h"
 
-using namespace MYSTD;
+using namespace std;
 
-const char szReportButton[] =
-"<tr><td class=\"colcont\"><form action=\"\" method=\"get\">"
+static cmstring sReportButton("<tr><td class=\"colcont\"><form action=\"#stats\" method=\"get\">"
 					"<input type=\"submit\" name=\"doCount\" value=\"Count Data\"></form>"
 					"</td><td class=\"colcont\" colspan=8 valign=top><font size=-2>"
-					"<i>Not calculated, click \"Count data\"</i></font></td></tr>";
+					"<i>Not calculated, click \"Count data\"</i></font></td></tr>");
+static cmstring sDisabled("disabled");
+static cmstring block("block"), none("none"), sInline("inline");
 
 // some NOOPs
-tStaticFileSend::tStaticFileSend(int fd,
-		tSpecialRequest::eMaintWorkType type,
+tMarkupFileSend::tMarkupFileSend(const tSpecialRequest::tRunParms& parms,
 		const char *s,
 		const char *m, const char *c)
 :
-	tSpecialRequest(fd, type),
+	tSpecialRequest(parms),
 	m_sFileName(s), m_sMimeType(m), m_sHttpCode(c)
 {
 }
 
-tStaticFileSend::~tStaticFileSend()
+static cmstring errstring("Information about APT configuration not available, "
+		"please contact the system administrator.");
+
+void tMarkupFileSend::Run()
 {
-}
+	LOGSTART2("tStaticFileSend::Run", m_parms.cmd);
 
-void tStaticFileSend::ModContents(mstring & contents, cmstring &cmd)
-{
-	StrSubst(contents, "$SERVERIP", GetHostname());
-	StrSubst(contents, "$SERVERPORT", acfg::port.c_str());
-	StrSubst(contents, "$REPAGE",  acfg::reportpage);
-
-	tSS footer;
-	_AddFooter(footer);
-	StrSubst(contents, "$FOOTER", footer);
-
-	if (contents.find("@") != stmiss)
+	filereader fr;
+	const char *pr(nullptr), *pend(nullptr);
+	if(!m_bFatalError)
 	{
-		char buf[1024];
-		// ok, needs a set of advanced variables
-		gethostname(buf, _countof(buf));
-		StrSubst(contents, "@H", buf);
-		if (acfg::exfailabort)
-			StrSubst(contents, "@A", "checked");
-		if (contents.find("@T") != stmiss)
+		m_bFatalError = ! ( fr.OpenFile(acfg::confdir+SZPATHSEP+m_sFileName, true) ||
+			(!acfg::suppdir.empty() && fr.OpenFile(acfg::suppdir+SZPATHSEP+m_sFileName, true)));
+	}
+	if(m_bFatalError)
+	{
+		m_sHttpCode="500 Template Not Found";
+		m_sMimeType="text/plain";
+		return SendRaw(errstring.c_str(), errstring.size());
+	}
+
+	pr = fr.GetBuffer();
+	pend = pr + fr.GetSize();
+
+	SendChunkedPageHeader(m_sHttpCode, m_sMimeType);
+
+	auto lastchar=pend-1;
+	while(pr<pend)
+	{
+		auto restlen=pend-pr;
+		auto propStart=(LPCSTR) memchr(pr, (UINT) '$', restlen);
+		if (propStart) {
+			if (propStart < lastchar && propStart[1] == '{') {
+				SendChunk(pr, propStart-pr);
+				pr=propStart;
+				// found begin of a new property key
+				auto propEnd = (LPCSTR) memchr(propStart+2, (UINT) '}', pend-propStart+2);
+				if(!propEnd)// unclosed, seriously? Just dump the rest at the user
+					goto no_more_props;
+				string key(propStart+2, propEnd-propStart-2);
+				SendChunk(GetProp(key, sEmptyString));
+				pr=propEnd+1;
+			} else {
+				// not a property string, send as-is
+				propStart++;
+				SendChunk(pr, propStart-pr);
+				pr=propStart;
+			}
+		} else // no more props
 		{
-			StrSubst(contents, "@T", cmd.find("doCount") != stmiss
-					? aclog::GetStatReport()
-					: szReportButton);
+			no_more_props:
+			SendChunk(pr, restlen);
+			break;
 		}
 	}
-
 }
 
-void tStaticFileSend::Run(const string &cmd)
+cmstring& tDeleter::GetProp(cmstring &key, cmstring& altValue)
 {
-	LOGSTART2("tStaticFileSend::Run", cmd);
+	if(key=="count")
+		return KeepCopy(ltos(files.size()));
+	if(key == "stuff")
+		return KeepCopy(sHidParms);
+	if(key == "blockIfConfirmed")
+		return m_parms.type == workDELETE ? block : none;
+	if(key == "noneIfConfirmed")
+		return m_parms.type == workDELETE ? none : block;
 
-	string contents;
-	filereader fr;
-	if(fr.OpenFile(acfg::confdir+SZPATHSEP+m_sFileName) ||
-			(!acfg::suppdir.empty() && fr.OpenFile(acfg::suppdir+SZPATHSEP+m_sFileName)))
-	{
-		contents.assign(fr.GetBuffer(), fr.GetSize());
-		ModContents(contents, cmd);
-	}
-	else
-	{
-		contents="Information about APT configuration not available, "
-				"please contact the system administrator.";
-	}
-	tSS buf(1023);
-	buf << "HTTP/1.1 " << (m_sHttpCode ? m_sHttpCode : "200 OK")
-			<< "\r\nConnection: close\r\nContent-Type: "
-			<< (m_sMimeType?m_sMimeType:"text/html")
-			<< "\r\nContent-Length: " << contents.length() << "\r\n\r\n";
-	SendRawData(buf.rptr(), buf.size(), MSG_MORE);
-	SendRawData(contents.data(), contents.length(), 0);
+	return tMarkupFileSend::GetProp(key, altValue);
 }
 
-void tDeleter::ModContents(mstring & contents, cmstring &cmd)
+tDeleter::tDeleter(const tRunParms& parms)
+: tMarkupFileSend(parms, "delconfirm.html", "text/html", "200 OK")
 {
 #define BADCHARS "<>\"'|\t"
-	tStrPos qpos=cmd.find("?");
+	tStrPos qpos=m_parms.cmd.find("?");
 
-	if(cmd.find_first_of(BADCHARS)!=stmiss // what the f..., XSS attempt?
+	if(m_parms.cmd.find_first_of(BADCHARS) not_eq stmiss // what the f..., XSS attempt?
 			|| qpos==stmiss)
 	{
-		contents.clear();
+		m_bFatalError=true;
 		return;
 	}
-	tStrVec files;
-	tSS sHidParms;
-	mstring params(cmd, qpos+1);
+
+	mstring params(m_parms.cmd, qpos+1);
 
 	for(tSplitWalk split(&params, "&"); split.Next();)
 	{
@@ -118,10 +132,10 @@ void tDeleter::ModContents(mstring & contents, cmstring &cmd)
 		if(path.find_first_of(BADCHARS)!=stmiss  // what the f..., XSS attempt?
 		 || rechecks::Match(path, rechecks::NASTY_PATH))
 		{
-			contents.clear();
+			m_bFatalError=true;
 			return;
 		}
-		if(m_mode == workDELETECONFIRM)
+		if(m_parms.type  == workDELETECONFIRM)
 		{
 			sHidParms << "<input type=\"hidden\" name=\"kf" << ++lfd << "\" value=\""
 					<< path <<"\">\n";
@@ -132,20 +146,109 @@ void tDeleter::ModContents(mstring & contents, cmstring &cmd)
 			::unlink((acfg::cacheDirSlash+path).c_str());
 			::unlink((acfg::cacheDirSlash+path+".head").c_str());
 		}
-
-	}
-	StrSubst(contents, "$COUNT", ltos(files.size()));
-	StrSubst(contents, "$STUFF", sHidParms);
-
-	if(m_mode == workDELETE)
-	{
-		StrSubst(contents, "$VISACTION", "visible");
-		StrSubst(contents, "$VISQUESTION", "hidden;height:0px;");
-	}
-	else // just confirm
-	{
-		StrSubst(contents, "$VISACTION", "hidden;height:0px;");
-		StrSubst(contents, "$VISQUESTION", "visible");
 	}
 }
 
+tMaintPage::tMaintPage(const tRunParms& parms)
+:tMarkupFileSend(parms, "report.html", "text/html", "200 OK")
+{
+
+	if(StrHas(parms.cmd, "doTraceStart"))
+		acfg::patrace=true;
+	else if(StrHas(parms.cmd, "doTraceStop"))
+		acfg::patrace=false;
+	else if(StrHas(parms.cmd, "doTraceClear"))
+	{
+		auto& tr(tTraceData::getInstance());
+		lockguard g(tr);
+		tr.clear();
+	}
+
+}
+
+cmstring& tMaintPage::GetProp(cmstring &key, cmstring& altValue)
+{
+	if(key=="statsRow")
+	{
+		if(!StrHas(m_parms.cmd, "doCount"))
+			return sReportButton;
+		scratch.push_back(aclog::GetStatReport());
+		return scratch.back();
+	}
+	static cmstring defStringChecked("checked");
+	if(key == "aOeDefaultChecked")
+		return acfg::exfailabort ? defStringChecked : sEmptyString;
+	if(key == "curPatTraceCol")
+	{
+		scratch.push_back(sEmptyString);
+		auto& tr(tTraceData::getInstance());
+		lockguard g(tr);
+		int bcount=0;
+		for(auto& x: tr)
+		{
+			if(x.find_first_of(BADCHARS) not_eq stmiss)
+			{
+				bcount++;
+				continue;
+			}
+			scratch.back().append(x);
+			if(&x != &(*tr.rbegin()))
+				scratch.back().append("<br>");
+		}
+		if(bcount)
+			scratch.back().append("some strings not considered due to security restrictions<br>");
+		return scratch.back();
+	}
+	// XXX: could add more generic way, like =cfgvar?value:otherwisevalue
+	// but there is not enough need for this yet
+	if(key=="inlineIfPatrace")
+		return acfg::patrace ? sInline : none;
+	if(key=="noneIfPatrace")
+		return !acfg::patrace ? sInline : none;
+
+	if(key == "ifNotTracingDisabled")
+		return acfg::patrace ? sEmptyString : sDisabled;
+	if(key == "ifTracingDisabled")
+			return acfg::patrace ? sDisabled : sEmptyString;
+
+	return tMarkupFileSend::GetProp(key, altValue);
+}
+
+void tMarkupFileSend::SendRaw(const char* pBuf, size_t len)
+{
+	tSS buf(10230);
+	// go the easy way if nothing to replace there
+	buf << "HTTP/1.1 " << (m_sHttpCode ? m_sHttpCode : "200 OK")
+			<< "\r\nConnection: close\r\nContent-Type: "
+			<< (m_sMimeType ? m_sMimeType : "text/html")
+			<< "\r\nContent-Length: " << len
+			<< "\r\n\r\n";
+	SendRawData(buf.rptr(), buf.size(), MSG_MORE);
+	SendRawData(pBuf, len, 0);
+}
+
+cmstring& tMarkupFileSend::GetProp(cmstring &key, cmstring& altValue)
+{
+	if (startsWithSz(key, "cfg:"))
+	{
+		scratch.push_back(sEmptyString);
+		acfg::appendVar(key.c_str() + 4, scratch.back());
+		return scratch.back();
+	}
+	if (key == "serverip")
+		return GetHostname();
+	tSS buf(1024);
+	if (key == "footer")
+		return GetFooter();
+	if (key == "hostname")
+	{
+		buf.clear();
+		auto n = gethostname(buf.wptr(), buf.freecapa());
+		if (!n)
+			return KeepCopy(buf.wptr());
+	}
+	if(key=="random")
+		return KeepCopy(ltos(rand()));
+
+	return altValue;
+}

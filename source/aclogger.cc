@@ -20,7 +20,7 @@
 #include <iostream>
 #include <fstream>
 
-using namespace MYSTD;
+using namespace std;
 
 namespace aclog
 {
@@ -351,7 +351,7 @@ tErrnoFmter::tErrnoFmter(const char *prefix)
 
 #ifdef DEBUG
 
-static class : public lockable, public MYMAP<pthread_t, int>
+static class : public lockable, public std::map<pthread_t, int>
 {} stackDepths;
 
 t_logger::t_logger(const char *szFuncName,  const void * ptr)

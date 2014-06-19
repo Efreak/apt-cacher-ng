@@ -10,19 +10,12 @@
 #include <inttypes.h>
 #include <climits>
 
-// keep this consistently, for experiments with other STL implementations
-#define MYSTD std
-//#define MYSTD ustl
-//#include <ustl.h>
-
-#define MYMAP MYSTD::map
-
 #ifdef HAVE_MEMORY_SPTR
 #include <memory>
-#define SMARTPTR_SPACE MYSTD
+#define SMARTPTR_SPACE std
 #elif defined HAVE_TR1_MEMORY
 #include <tr1/memory>
-#define SMARTPTR_SPACE MYSTD::tr1
+#define SMARTPTR_SPACE std::tr1
 #elif defined HAVE_BOOST_SMARTPTR
 #include <boost/smart_ptr.hpp>
 #define SMARTPTR_SPACE boost
@@ -36,7 +29,7 @@
 #define SHARED_PTR SMARTPTR_SPACE::shared_ptr
 #define INTRUSIVE_PTR SMARTPTR_SPACE::intrusive_ptr
 #define WEAK_PTR SMARTPTR_SPACE::weak_ptr
-#define SCOPED_PTR MYSTD::auto_ptr
+#define SCOPED_PTR std::auto_ptr
 
 #ifdef NO_EXCEPTIONS
 #define MYTRY

@@ -17,7 +17,7 @@
 #include <iostream>
 #include <algorithm>
 
-using namespace MYSTD;
+using namespace std;
 
 #define ENABLED
 
@@ -421,15 +421,15 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 }
 
 
-void expiration::Action(const string & cmd)
+void expiration::Action()
 {
-	if (m_mode==workExPurge)
+	if (m_parms.type==workExPurge)
 	{
 		LoadPreviousData(true);
 		RemoveAndStoreStatus(true);
 		return;
 	}
-	if (m_mode==workExList)
+	if (m_parms.type==workExList)
 	{
 		LoadPreviousData(true);
 		off_t nSpace(0);
@@ -458,14 +458,14 @@ void expiration::Action(const string & cmd)
 		}
 		TellCount(cnt, nSpace);
 
-		mstring delURL(cmd);
+		mstring delURL(m_parms.cmd);
 		StrSubst(delURL, "justShow", "justRemove");
 		SendFmtRemote << "<a href=\""<<delURL<<"\">Delete all listed files</a> "
 				"(no further confirmation)<br>\n";
 		return;
 	}
 
-	if(m_mode==workExPurgeDamaged || m_mode==workExListDamaged || m_mode==workExTruncDamaged)
+	if(m_parms.type==workExPurgeDamaged || m_parms.type==workExListDamaged || m_parms.type==workExTruncDamaged)
 	{
 		filereader f;
 		if(!f.OpenFile(SABSPATH(FNAME_DAMAGED)))
@@ -479,13 +479,13 @@ void expiration::Action(const string & cmd)
 			if(s.empty())
 				continue;
 
-			if(m_mode == workExPurgeDamaged)
+			if(m_parms.type == workExPurgeDamaged)
 			{
 				SendFmt << "Removing " << s << "<br>\n";
 				::unlink(SZABSPATH(s));
 				::unlink(SZABSPATH(s+".head"));
 			}
-			else if(m_mode == workExTruncDamaged)
+			else if(m_parms.type == workExTruncDamaged)
 			{
 				SendFmt << "Truncating " << s << "<br>\n";
 				ignore_value(::truncate(SZABSPATH(s), 0));
@@ -496,9 +496,9 @@ void expiration::Action(const string & cmd)
 		return;
 	}
 
-	SetCommonUserFlags(cmd);
+	SetCommonUserFlags(m_parms.cmd);
 
-	m_bIncompleteIsDamaged=(cmd.find("incomAsDamaged")!=stmiss);
+	m_bIncompleteIsDamaged=(m_parms.cmd.find("incomAsDamaged")!=stmiss);
 
 	SendChunk("<b>Locating potentially expired files in the cache...</b><br>\n");
 
@@ -544,7 +544,7 @@ void expiration::Action(const string & cmd)
 	LoadPreviousData(false);
 
 	SendChunk("<b>Reviewing candidates for removal...</b><br>\n");
-	RemoveAndStoreStatus(cmd.find("purgeNow")!=stmiss);
+	RemoveAndStoreStatus(m_parms.cmd.find("purgeNow")!=stmiss);
 	PurgeMaintLogs();
 
 	DelTree(CACHE_BASE+"_actmp");
@@ -763,8 +763,7 @@ inline bool expiration::CheckAndReportError()
 {
 	if (m_nErrorCount > 0 && m_bErrAbort)
 	{
-		SendChunk("<span class=\"ERROR\">Found errors during processing, "
-				"aborting as requested.</span>");
+		SendChunk(sAbortMsg);
 		SendChunk(m_nPrevFailCount+(m_nErrorCount>0) > acfg::exsupcount
 				? "<!-- TELL:THE:ADMIN -->"
 						: "<!-- NOT:TELLING:THE:ADMIN:YET -->");

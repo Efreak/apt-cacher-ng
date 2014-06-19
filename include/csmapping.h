@@ -22,7 +22,7 @@ public:
 	virtual ~csumBase() {};
 	virtual void add(const char *data, size_t size) = 0;
 	virtual void finish(uint8_t* ret) = 0;
-	static MYSTD::auto_ptr<csumBase> GetChecker(CSTYPES);
+	static std::auto_ptr<csumBase> GetChecker(CSTYPES);
 };
 
 // kind of file identity, compares by file size and checksum (MD5 or SHA1)
@@ -166,7 +166,7 @@ struct ltCacheKeyComp
   }
 };
 
-typedef MYMAP<tImpFileInfo, tFingerprint, ltCacheKeyComp> tFprCacheMap;
+typedef std::map<tImpFileInfo, tFingerprint, ltCacheKeyComp> tFprCacheMap;
 
 
 #endif /*CSMAPPING_H_*/

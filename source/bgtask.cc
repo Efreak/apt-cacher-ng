@@ -16,7 +16,7 @@
 #include <limits.h>
 #include <errno.h>
 
-using namespace MYSTD;
+using namespace std;
 using namespace SMARTPTR_SPACE;
 
 #define LOG_DECO_START "<html><head><style type=\"text/css\">" \
@@ -42,37 +42,42 @@ tSpecOpDetachable::~tSpecOpDetachable()
 // the obligatory definition of static members :-(
 SMARTPTR_SPACE::weak_ptr<tSpecOpDetachable::tProgressTracker> tSpecOpDetachable::g_pTracker;
 
-void _AddFooter(tSS &msg)
+cmstring& GetFooter()
 {
-	msg << "<hr><address>Server: " << acfg::agentname
-			<<" | <a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">"
+	static mstring footer;
+	if(footer.empty())
+	{
+		footer = string("<hr><address>Server: ") + acfg::agentname +
+		" | <a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">"
 			"Flattr it!</a> | <a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">"
 			"Apt-Cacher NG homepage</a></address>";
+	}
+	return footer;
 }
 
 /*
  *  TODO: this is kept in expiration class for historical reasons. Should be moved to some shared upper
  * class, like "detachedtask" or something like that
  */
-void tSpecOpDetachable::Run(const string &cmd)
+void tSpecOpDetachable::Run()
 {
 
-	if (cmd.find("&sigabort")!=stmiss)
+	if (m_parms.cmd.find("&sigabort")!=stmiss)
 	{
 		lockguard g(&abortMx);
 		bSigTaskAbort=true;
-		tStrPos nQuest=cmd.find("?");
+		tStrPos nQuest=m_parms.cmd.find("?");
 		if(nQuest!=stmiss)
 		{
 			tSS buf(255);
 			buf << "HTTP/1.1 302 Redirect\r\nLocation: "
-				<< cmd.substr(0,nQuest)<< "\r\nConnection: close\r\n\r\n";
+				<< m_parms.cmd.substr(0,nQuest)<< "\r\nConnection: close\r\n\r\n";
 			SendRawData(buf.data(), buf.size(), 0);
 		}
 		return;
 	}
 
-	SendChunkedPageHeader("200");
+	SendChunkedPageHeader("200 OK", "text/html");
 
 	tSS deco;
 	const char *mark(NULL);
@@ -85,13 +90,13 @@ void tSpecOpDetachable::Run(const string &cmd)
 		if(mark)
 		{
 			// send fancy header only to the remote caller
-			SendChunk(deco.rptr(), mark-deco.rptr(), true);
+			SendChunkRemoteOnly(deco.rptr(), mark-deco.rptr());
 			deco.drop((mark-deco.rptr())+1);
 		}
 		else
 		{
 			// send fancy header only to the remote caller
-			SendChunk(deco, true);
+			SendChunkRemoteOnly(deco.c_str(), deco.size());
 			deco.clear();
 		}
 	}
@@ -191,35 +196,33 @@ void tSpecOpDetachable::Run(const string &cmd)
 
 			SendFmt << "Maintenance task <b>" << GetTaskName()
 					<< "</b>, apt-cacher-ng version: " ACVERSION;
-			SendFmtRemote << " (<a href=" << cmd <<
-					"&sigabort>Cancel</a>)";
-			SendFmt << "<br>";
-			SendFmtRemote << "<form id=\"mainForm\" action=\"#top\">\n";
+			SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
+					<< "\">Cancel</a>)";
+			SendFmt << "<br>\n";
+			SendChunkRemoteOnly(NAMEWLEN("<form id=\"mainForm\" action=\"#top\">\n"));
 
-			Action(cmd);
-
-			// format the footer for the Web rendering only
-			msg.clear();
-			msg<<"<br>\n<a href=\"/"<<acfg::reportpage<<"\">Return to main page</a>"
-					"</form>";
+			Action();
 
 			if (!m_delCboxFilter.empty())
-			{
-				SendChunk("<br><hr><b>Action(s):</b> "
+				SendChunkRemoteOnly(NAMEWLEN(
+				"<br><b>Action(s):</b> "
 					"<input type=\"submit\" name=\"doDelete\""
 					" value=\"Delete selected files\">"
 					"|<button type=\"button\" onclick=\"checkOrUncheck(true);\">Check all</button>"
-					"<button type=\"button\" onclick=\"checkOrUncheck(false);\">Uncheck all</button><br><hr>",
-					true);
-			}
-			_AddFooter(msg);
-			SendChunk(msg, true);
+					"<button type=\"button\" onclick=\"checkOrUncheck(false);\">Uncheck all</button><br>"));
+
+
+			SendFmtRemote << "<br>\n<a href=\"/"<< acfg::reportpage<<"\">Return to main page</a>"
+					"</form>";
+			auto& f(GetFooter());
+						SendChunkRemoteOnly(f.data(), f.size());
+
 	}
 
 	finish_action:
 
 	if(!deco.empty())
-		SendChunk(deco, true);
+		SendChunkRemoteOnly(deco.c_str(), deco.size());
 
 	EndTransfer();
 
@@ -252,9 +255,9 @@ void tSpecOpDetachable::DumpLog(time_t id)
 	tSS path(acfg::logdir.length()+24);
 	path<<acfg::logdir<<CPATHSEP<<MAINT_PFX << id << ".log.html";
 	if (!reader.OpenFile(path))
-		SendChunk(_SZ2PS("Log not available"), true);
+		SendChunkRemoteOnly(NAMEWLEN("Log not available"));
 	else
-		SendChunk(reader.GetBuffer(), reader.GetSize(), true);
+		SendChunkRemoteOnly(reader.GetBuffer(), reader.GetSize());
 }
 
 void tSpecOpDetachable::AfterSendChunk(const char *data, size_t len)
@@ -276,7 +279,7 @@ time_t tSpecOpDetachable::GetTaskId()
 }
 
 #ifdef DEBUG
-void tBgTester::Action(cmstring &)
+void tBgTester::Action()
 {
 	for (int i = 0; i < 10 && !CheckStopSignal(); i++, sleep(1))
 	{

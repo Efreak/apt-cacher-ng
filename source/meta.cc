@@ -16,7 +16,7 @@
 #include <glob.h>
 #endif
 
-using namespace MYSTD;
+using namespace std;
 
 cmstring sPathSep(SZPATHSEP);
 cmstring sPathSepUnix(SZPATHSEPUNIX);
@@ -47,7 +47,7 @@ void set_block(int fd) {
 
 
 /*
-inline tStrPos findHostStart(const MYSTD::string & sUri)
+inline tStrPos findHostStart(const std::string & sUri)
 {
 	tStrPos p=0, l=sUri.size();
 	if (0==sUri.compare(0, 7, "http://"))
@@ -56,7 +56,7 @@ inline tStrPos findHostStart(const MYSTD::string & sUri)
 	return p;
 }
 
-void trimProto(MYSTD::string & sUri)
+void trimProto(std::string & sUri)
 {
 	sUri.erase(findHostStart(sUri));
 }
@@ -117,7 +117,7 @@ void find_base_name(const char *in, const char * &pos, UINT &len)
  * \brief Simple split function, outputs resulting tokens into a string vector, with or without purging the previous contents
  */
 tStrVec::size_type Tokenize(const string & in, const char *sep,
-		tStrVec & out, bool bAppend, MYSTD::string::size_type nStartOffset)
+		tStrVec & out, bool bAppend, std::string::size_type nStartOffset)
 {
 	if(!bAppend)
 		out.clear();
@@ -334,7 +334,7 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted)
 			srcs.push_back(*s);
 		wordfree(&p);
 	}
-	if(bSorted) MYSTD::sort(srcs.begin(), srcs.end());
+	if(bSorted) std::sort(srcs.begin(), srcs.end());
 #elif defined(HAVE_GLOB)
 	auto p=glob_t();
 	if(0==glob(pattern.c_str(), GLOB_DOOFFS | (bSorted ? 0 : GLOB_NOSORT),
@@ -369,7 +369,7 @@ bool IsAbsolute(cmstring &dirToFix)
 }
 
 /*
-void MakeAbsolutePath(MYSTD::string &dirToFix, const MYSTD::string &reldir)
+void MakeAbsolutePath(std::string &dirToFix, const std::string &reldir)
 {
 	if(!IsAbsolute(dirToFix))
 		dirToFix=reldir+CPATHSEP+dirToFix;

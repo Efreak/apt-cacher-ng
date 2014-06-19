@@ -18,7 +18,7 @@
 #include <cstdio>
 #include <errno.h>
 
-using namespace MYSTD;
+using namespace std;
 
 #define SCACHEFILE (CACHE_BASE+"_impkeycache")
 #define FMTSIG "FMT5"
@@ -122,7 +122,7 @@ bool pkgimport::ProcessRegular(cmstring &sPath, const struct stat &stinfo)
 	return true;
 }
 
-bool LinkOrCopy(const MYSTD::string &from, const MYSTD::string &to)
+bool LinkOrCopy(const std::string &from, const std::string &to)
 {
 	mkbasedir(to);
 	
@@ -174,14 +174,14 @@ bool LinkOrCopy(const MYSTD::string &from, const MYSTD::string &to)
 }
 
 			
-void pkgimport::Action(const string &cmd) 
+void pkgimport::Action()
 {
 // TODO: import path from cmd?
 	m_sSrcPath=CACHE_BASE+"_import";
 	
 	SendFmt << "Importing from " << m_sSrcPath << " directory.<br>Scanning local files...<br>";
 	
-	SetCommonUserFlags(cmd);
+	SetCommonUserFlags(m_parms.cmd);
 	m_bErrAbort=false; // does not f...ing matter, do what we can
 	m_bByPath=true; // should act on all locations
 
@@ -217,7 +217,7 @@ void pkgimport::Action(const string &cmd)
 	
 	if(m_bErrAbort && m_nErrorCount>0)
 	{
-		SendChunk("Found errors during processing, aborting as requested.");
+		SendChunk(sAbortMsg);
 		return;
 	}
 	
@@ -302,7 +302,7 @@ void pkgimport::Action(const string &cmd)
 
 void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
-	//typedef MYMAP<tFingerprint, tImpFileInfo, ltfingerprint> tImportMap;
+	//typedef std::map<tFingerprint, tImpFileInfo, ltfingerprint> tImportMap;
 	auto hit = m_importMap.find(entry.fpr);
 	if (hit==m_importMap.end())
 		return;
@@ -377,7 +377,7 @@ void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 
 void pkgimport::_LoadKeyCache(const string & sFileName)
 {
-	MYSTD::ifstream in;
+	std::ifstream in;
 
 	tImpFileInfo info;
 	tFingerprint fpr;
@@ -387,7 +387,7 @@ void pkgimport::_LoadKeyCache(const string & sFileName)
 	if(!in.is_open())
 		return;
 
-	MYSTD::getline(in, cs);
+	std::getline(in, cs);
 	if(cs!=FMTSIG)
 		return;
 
@@ -402,20 +402,20 @@ void pkgimport::_LoadKeyCache(const string & sFileName)
 		info.bFileUsed=false;
 
 		in>>sz;
-		MYSTD::getline(in, cs); // newline
+		std::getline(in, cs); // newline
 		fpr.size=sz;
 
 		in>>csType;
-		MYSTD::getline(in, cs); // newline
+		std::getline(in, cs); // newline
 
-		MYSTD::getline(in, cs); // checksum line
+		std::getline(in, cs); // checksum line
 		fpr.SetCs(cs, (CSTYPES)csType);
 
-		MYSTD::getline(in, info.sPath);
+		std::getline(in, info.sPath);
 		info.sPath.insert(0, m_sSrcPath+SZPATHSEP);
 
 		in>>info.mtime;
-		MYSTD::getline(in, cs); // newline
+		std::getline(in, cs); // newline
 
 #ifdef DEBUG_FLAGS
 		bool bNix=(stmiss != info.sPath.find("cabextract"));

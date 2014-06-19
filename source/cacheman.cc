@@ -28,7 +28,7 @@
 
 //#define DEBUGIDX
 
-using namespace MYSTD;
+using namespace std;
 
 static cmstring oldStylei18nIdx("/i18n/Index");
 static cmstring diffIdxSfx(".diff/Index");
@@ -37,8 +37,8 @@ static cmstring sPatchResRel("_actmp/patch.result");
 static unsigned int nKillLfd=1;
 time_t m_gMaintTimeNow=0;
 
-tCacheOperation::tCacheOperation(int fd, tSpecialRequest::eMaintWorkType type) :
-	tSpecOpDetachable(fd, type),
+tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
+	tSpecOpDetachable(parms),
 	m_bErrAbort(false), m_bVerbose(false), m_bForceDownload(false),
 	m_bScanInternals(false), m_bByPath(false), m_bByChecksum(false), m_bSkipHeaderChecks(false),
 	m_bTruncateDamaged(false),
@@ -158,7 +158,7 @@ bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 }
 
 
-bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFile,
+bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile,
 		eDlMsgPrio msgVerbosityLevel, tGetItemDelegate *pItemDelg, const char *pForcedURL)
 {
 
@@ -1384,7 +1384,7 @@ tCacheOperation::enumIndexType tCacheOperation::GuessIndexTypeFromURL(cmstring &
 	return EIDX_UNSUPPORTED;
 }
 
-bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD::string &sPath,
+bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::string &sPath,
 		enumIndexType idxType)
 {
 
@@ -1835,7 +1835,7 @@ void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 
 void tCacheOperation::AddDelCbox(cmstring &sFileRel)
 {
-	MYSTD::pair<tStrSet::iterator,bool> ck = m_delCboxFilter.insert(sFileRel);
+	std::pair<tStrSet::iterator,bool> ck = m_delCboxFilter.insert(sFileRel);
 	if(! ck.second)
 		return;
 
@@ -1899,7 +1899,7 @@ int parseidx_demo(LPCSTR file)
 	class tParser : public tCacheOperation, ifileprocessor
 	{
 	public:
-		tParser() : tCacheOperation(2, tSpecialRequest::workIMPORT) {};
+		tParser() : tCacheOperation({2, tSpecialRequest::workIMPORT, "doImport="}) {};
 		inline int demo(LPCSTR file)
 		{
 			return !ParseAndProcessIndexFile(*this, file, GuessIndexTypeFromURL(file));
@@ -1913,7 +1913,7 @@ int parseidx_demo(LPCSTR file)
 		virtual bool ProcessRegular(const mstring &sPath, const struct stat &) {return true;}
 		virtual bool ProcessOthers(const mstring &sPath, const struct stat &) {return true;}
 		virtual bool ProcessDirAfter(const mstring &sPath, const struct stat &) {return true;}
-		virtual void Action(const mstring &) override {};
+		virtual void Action() override {};
 	}
 	mgr;
 

@@ -18,7 +18,7 @@
 #include "fileitem.h"
 #include "cleaner.h"
 
-using namespace MYSTD;
+using namespace std;
 
 //#warning FIXME, hack
 //#define NOCONCACHE
@@ -242,7 +242,7 @@ void tcpconnect::Disconnect()
 	termsocket_quick(m_conFd);
 }
 
-using namespace MYSTD;
+using namespace std;
 struct tHostHint // could derive from pair but prefer to save some bytes with references
 {
 	cmstring pHost, pPort;
@@ -270,7 +270,7 @@ struct tHostHint // could derive from pair but prefer to save some bytes with re
 #endif
 
 };
-class : public lockable, public multimap<tHostHint, MYSTD::pair<tTcpHandlePtr, time_t> >
+class : public lockable, public multimap<tHostHint, std::pair<tTcpHandlePtr, time_t> >
 {} spareConPool;
 
 tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,

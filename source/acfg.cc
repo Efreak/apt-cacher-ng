@@ -17,7 +17,7 @@
 #include <list>
 #include <unordered_map>
 
-using namespace MYSTD;
+using namespace std;
 
 // hint to use the main configuration excluding the complex directives
 bool g_testMode=false;
@@ -44,7 +44,7 @@ string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt;
 tStrMap localdirs;
 static class : public lockable, public NoCaseStringMap {} mimemap;
 
-MYSTD::bitset<TCP_PORT_MAX> *pUserPorts = NULL;
+std::bitset<TCP_PORT_MAX> *pUserPorts = NULL;
 
 typedef struct
 {
@@ -126,9 +126,9 @@ MapNameToInt n2iTbl[] = {
 		,{ "Verbose", 			NULL,			"Option is deprecated, ignoring the value." , 10}
 		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10}
 		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
-#ifdef DEBUG
+
 		,{ "patrace",	&patrace, 		"Developer shortcut" , 10}
-#endif
+
 };
 
 void ReadRewriteFile(const string & sFile, const string & sRepName);
@@ -140,10 +140,10 @@ map<cmstring, tRepoData> repoparms;
 unordered_map<string, list<pair<cmstring,decltype(repoparms)::iterator>>> mapUrl2pVname;
 
 
-string * GetStringPtr(const string &key) {
+string * GetStringPtr(LPCSTR key) {
 	for(auto &ent : n2sTbl)
 	{
-		if(0==strcasecmp(key.c_str(), ent.name))
+		if(0==strcasecmp(key, ent.name))
 		{
 			if(ent.warn)
 				cerr << "Warning, " << key << ": " << ent.warn << endl;
@@ -153,10 +153,10 @@ string * GetStringPtr(const string &key) {
 	return NULL;
 }
 
-int * GetIntPtr(const string &key, int &base) {
+int * GetIntPtr(LPCSTR key, int &base) {
 	for(auto &ent : n2iTbl)
 	{
-		if(0==strcasecmp(key.c_str(), ent.name))
+		if(0==strcasecmp(key, ent.name))
 		{
 			if(ent.warn)
 				cerr << "Warning, " << key << ": " << ent.warn << endl;
@@ -167,14 +167,23 @@ int * GetIntPtr(const string &key, int &base) {
 	return NULL;
 }
 
-void printVar(cmstring &key)
+bool appendVar(LPCSTR key, mstring& ret)
 {
 	string *ps=GetStringPtr(key);
 	if(ps)
-		cout << *ps << endl;
-	int base, *pn=GetIntPtr(key, base);
-	if(pn)
-		cout << *pn <<endl;
+	{
+		ret.append(*ps);
+		return true;
+	}
+	int base, *pn = GetIntPtr(key, base);
+	if (pn)
+	{
+		char buf[11];
+		int len=snprintf(buf, sizeof(buf), "%d", *pn);
+		ret.append(buf, len);
+		return true;
+	}
+	return false;
 }
 
 // shortcut for frequently needed code, opens the config file, reads step-by-step
@@ -313,7 +322,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 	}
 	else if(key=="proxy")
 	{
-		static MYSTD::list<tHttpUrl> alt_proxies;
+		static std::list<tHttpUrl> alt_proxies;
 		tHttpUrl cand;
 		if(value.empty() || cand.SetHttpUrl(value))
 		{
@@ -539,7 +548,7 @@ cmstring & GetMimeType(cmstring &path)
 	filereader f;
 	if(f.OpenFile(path, true))
 	{
-		size_t maxLen = MYSTD::min(size_t(255), f.GetSize());
+		size_t maxLen = std::min(size_t(255), f.GetSize());
 		for(UINT i=0; i< maxLen; ++i)
 		{
 			if(!isascii((UINT) *(f.GetBuffer()+i)))
@@ -561,7 +570,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 	int * pnTarget;
 	int nNumBase(10);
 
-	if ( NULL != (psTarget = GetStringPtr(key)))
+	if ( NULL != (psTarget = GetStringPtr(key.c_str())))
 	{
 
 		if(pDupeCheck && !bQuiet)
@@ -575,7 +584,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 
 		*psTarget=value;
 	}
-	else if ( NULL != (pnTarget = GetIntPtr(key, nNumBase)))
+	else if ( NULL != (pnTarget = GetIntPtr(key.c_str(), nNumBase)))
 	{
 
 		if(pDupeCheck && !bQuiet)
@@ -850,7 +859,6 @@ void ShutDown()
 
 void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 {
-
 	filereader reader;
 	if(debug>4)
 		cerr << "Reading rewrite file: " << sFile <<endl;
@@ -1231,7 +1239,7 @@ bool CompileExpressions()
 		delete re;
 		re=nullptr;
 		buf[_countof(buf)-1]=0; // better be safe...
-			MYSTD::cerr << buf << ": " << ps << MYSTD::endl;
+			std::cerr << buf << ": " << ps << std::endl;
 			return false;
 		};
 	using namespace acfg;

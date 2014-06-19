@@ -17,7 +17,7 @@
 
 #include <limits>
 #include <cstring>
-using namespace MYSTD;
+using namespace std;
 
 #define TERM_VAL (time_t(-1))
 

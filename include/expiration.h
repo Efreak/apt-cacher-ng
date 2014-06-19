@@ -19,18 +19,17 @@ class expiration : public tCacheOperation, ifileprocessor
 {
 public:
 	// XXX: g++ 4.7 is not there yet... using tCacheOperation::tCacheOperation;
-	inline expiration(int fd, tSpecialRequest::eMaintWorkType type)
-	: tCacheOperation(fd, type) {};
+	inline expiration(const tRunParms& parms) : tCacheOperation(parms) {};
 
 protected:
 
-	MYSTD::unordered_map<mstring,MYSTD::map<mstring,tDiskFileInfo>> m_trashFile2dir2Info;
+	std::unordered_map<mstring,std::map<mstring,tDiskFileInfo>> m_trashFile2dir2Info;
 
 	void RemoveAndStoreStatus(bool bPurgeNow);
 	void LoadPreviousData(bool bForceInsert);
 
 	// callback implementations
-	virtual void Action(const mstring &) override;
+	virtual void Action() override;
 	// for FileHandler
 	virtual bool ProcessRegular(const mstring &sPath, const struct stat &) override;
 
@@ -43,7 +42,7 @@ protected:
 
 	void DropExceptionalVersions();
 
-	MYSTD::ofstream m_damageList;
+	std::ofstream m_damageList;
 	bool m_bIncompleteIsDamaged = false;
 
 private:

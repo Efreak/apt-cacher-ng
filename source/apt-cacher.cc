@@ -11,7 +11,7 @@
 #include "cleaner.h"
 
 #include <iostream>
-using namespace MYSTD;
+using namespace std;
 
 #include <cstdio>
 #include <cstring>
@@ -130,7 +130,7 @@ void runDemo()
 
 	 char tbuf[40];
 	 FormatCurrentTime(tbuf);
-	 MYSTD::cerr << tbuf << MYSTD::endl;
+	 std::cerr << tbuf << std::endl;
 	 exit(1);
 
 	 */
@@ -183,7 +183,7 @@ int main(int argc, char **argv)
 	const char *envvar=getenv("TOBASE64");
 	if(envvar)
 	{
-		MYSTD::cout << EncodeBase64Auth(envvar);
+		std::cout << EncodeBase64Auth(envvar);
 		return 0;
 	}
 	envvar=getenv("BECURL");
@@ -258,8 +258,11 @@ int main(int argc, char **argv)
 
 	if(PRINTCFGVAR)
 	{
-		acfg::printVar(PRINTCFGVAR);
-		return 0;
+		string var;
+		if(!acfg::appendVar(PRINTCFGVAR, var))
+			return EXIT_FAILURE;
+		cout << var << endl;
+		return EXIT_SUCCESS;
 	}
 
 	if(!aclog::open())

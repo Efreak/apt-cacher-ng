@@ -18,7 +18,7 @@
 
 #include <map>
 
-using namespace MYSTD;
+using namespace std;
 
 #if 1
 struct eHeadPos2label
@@ -313,7 +313,7 @@ int header::StoreToFile(cmstring &sPath) const
 
 #endif // MINIBUILD
 
-MYSTD::string header::GenInfoHeaders()
+std::string header::GenInfoHeaders()
 {
 	    string ret="Date: ";
 	    ret+=tCurrentTime();
