@@ -60,6 +60,8 @@
 
 using namespace std;
 
+const string sEmptyString;
+
 #ifdef SPAM
 #define _cerr(x) cerr << x
 #warning printing spam all around
@@ -236,9 +238,7 @@ public:
 					return true; // EOF
 
 				if(bRestarted) // throw the head away, the data should be ok
-				{
 					return true; // XXX, add more checks?
-				}
 
 				if(st != 200 && st != 206)
 				{
@@ -360,7 +360,7 @@ public:
 			{
 				return 0;
 			} // nothing to send
-			bool StoreFileData(const char*, unsigned int)
+			bool StoreFileData(const char*, unsigned int) override
 			{
 				return false;
 			}
@@ -368,7 +368,8 @@ public:
 			{
 				m_bHeadOnly = true;
 			}
-			bool DownloadStartedStoreHeader(const header &head, const char*, bool bRestart, bool&)
+			bool DownloadStartedStoreHeader(const header &head, const char*,
+					bool bRestart, bool&) override
 			{
 				if(bRestart)
 					return true;
@@ -404,170 +405,6 @@ public:
 		}
 		return -ENOENT;
 	}
-
-	bool Act(const char *path, off_t pos, off_t len)
-	{
-		/*
-		_cerr( path << ", from: " << pos << " , " << len << "bytes\n");
-		databuf.clear();
-		h.clear();
-		int nRetries=10;
-		
-		if(bJustProbe)
-			len=100; // fake something more sensible for now
-		
-		mstring sErr;
-		bool bSecondHand=false;
-
-		tTcpHandlePtr con = tcpconnect::CreateConnected(proxyUrl.sHost, proxyUrl.sPort, sErr,
-				&bSecondHand);
-		if(!con)
-			return false;
-		
-		tSS req;
-		req << (bJustProbe?"HEAD ":"GET ");
-		
-		req << baseUrl.ToURI() << path <<
-				" HTTP/1.1\r\n"
-				"Connection: Keep-Alive\r\n"
-				"User-Agent: ACNGFS\r\n"
-				"X-Original-Source: 42\r\n";
-
-		if(!bJustProbe && len>0)
-		{
-			req << "Range: bytes=" << (long unsigned)pos << "-"
-					<< (long unsigned) (pos+len-1) << "\r\n";
-		}
-		req<<"\r\n";
-		_cerr( "requesting: " << req.rptr() );
-		
-		for(bool bRetried=false;!req.empty();)
-		{
-			int n=::send(con->GetFD(), req.c_str(), req.size(), MSG_NOSIGNAL);
-			if(n<0)
-			{
-				if(EAGAIN==errno)
-					continue;
-				return false;
-			}
-			if(n==0)
-			{
-				if(EINTR==errno)
-					continue;
-				
-				// old connection timed out? reconnect, but only once
-				
-				if(bRetried)
-					return false;
-				
-				bRetried=true;
-				
-				// restart the connection once
-				con->Disconnect();
-				if(!con->Connect(proxyUrl.sHost, proxyUrl.sPort, sErr))
-					return false;
-				
-				continue;
-			}
-			req.drop(n);
-		}
-		
-		//_cerr( "init buf for bytes: " << len);
-		databuf.init(len+HEADSZ);
-		_cerr( "capa: " << databuf.freecapa());
-		int64_t remaining(len+HEADSZ); // to be adapted when head arrived
-		while(true)
-		{
-			_cerr( "remaining: " << remaining <<endl);
-			if(remaining<=0)
-				goto com_done_con_idle;
-			
-			int sr=WaitForResponse(con->GetFD());
-			if(sr<0)
-				return false;
-			if(sr==0)
-			{
-				if(--nRetries<0)
-					return false;
-				continue;
-			}
-
-			// drop all stuff read during precaching
-			if(bJustProbe && h.type!=h.INVALID)
-				databuf.clear();
-			
-			int nToRead=MIN(remaining,databuf.freecapa());
-      //assert(nToRead>0);
-			int n=::recv(con->GetFD(), databuf.wptr(), nToRead, 0);
-			_cerr( "got: " << n << " errno: " << errno);
-
-			if(0 == n) // remote host is disconnecting :-(
-				return false;
-
-			if(n<0)
-			{ // no other tolerable errors should appear here
-				if(EINTR==errno || EAGAIN==errno)
-					continue;
-				//perror("ERROR: got <=0 from read: ");
-				con.reset();
-				return false;
-			}
-
-			databuf.got(n);
-			remaining-=n;
-			
-			if(h.type==h.INVALID)
-			{
-				_cerr( "parsing head, free? " << databuf.freecapa()<<endl );
-				
-				int r=h.LoadFromBuf(databuf.rptr(), databuf.size());
-				_cerr( "bufptr: " << (size_t) databuf.rptr() << " result: " << r <<endl);
-				cerr.flush();
-
-#ifdef DEBUG
-				if(r>0)
-					write(fileno(stderr), databuf.rptr(), r);
-#endif
-				
-				if(r>0)
-					databuf.drop(r);
-				
-				if(0==r)
-				{
-					if(databuf.freecapa()<=0)
-						return false; // monster head?
-					continue; // read more
-				}
-				// catch bad or weird stuff
-				if(r<0 || r>=HEADSZ || h.type==h.INVALID)
-					return false;
-				
-				_cerr( "skipped head, " << r << " bytes,  now size: " << databuf.size() <<" rptr: " << size_t(databuf.rptr()) );
-				// got head so far, process data
-				
-				if(! h.h[header::CONTENT_LENGTH] || ! *h.h[header::CONTENT_LENGTH])
-					return false;
-				long contlen=atol(h.h[header::CONTENT_LENGTH]);
-				remaining = contlen - databuf.size();
-				
-				seen_status=h.getStatus();
-				_cerr("HTTP status: " << seen_status <<endl);
-				if(200==seen_status)
-					seen_length=contlen;
-				
-				if(bJustProbe) // just HEAD
-					goto com_done_con_idle;
-			}
-			
-		}
-		com_done_con_idle:
-		tcpconnect::RecycleIdleConnection(con);
-
-		return true;
-		*/
-		return false;
-
-	};
 };
 
 
@@ -702,7 +539,7 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 	if (fi->flags & (O_WRONLY|O_RDWR|O_TRUNC|O_CREAT))
 			return -EROFS;
 
-	tDlDesc *p(NULL);
+	tDlDesc *p(nullptr);
 	struct stat stbuf;
 	rechecks::eMatchType ftype = rechecks::GetFiletype(path);
 
@@ -746,11 +583,7 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 static int acngfs_read(const char *path, char *buf, size_t size, off_t offset,
       struct fuse_file_info *fi)
 {
-	tDlDesc *p=(tDlDesc*) fi->fh;
-	//_cerr( offset << ":"<<size<<":"<<p->seen_length);
-	//if( off_t(offset+size) > p->seen_length)
-	//	size=p->seen_length-offset;
-		
+	auto p=(tDlDesc*) fi->fh;
 	return p->Read(buf, path, offset, size);
 }
 
@@ -782,7 +615,7 @@ static int acngfs_fsync(const char *path, int isdatasync,
 
 struct fuse_operations_compat25 acngfs_oper;
 
-int my_fuse_main(int argc, char **argv)
+int my_fuse_main(int argc, char const * const * argv)
 {
 #ifdef HAVE_DLOPEN
    void *pLib = dlopen("libfuse.so.2", RTLD_LAZY);
@@ -791,7 +624,7 @@ int my_fuse_main(int argc, char **argv)
       cerr << "Couldn't find libfuse.so.2" <<endl;
       return -1;
    }
-   int (*myFuseMain) (int, char **, const struct fuse_operations_compat25 *, size_t);
+   int (*myFuseMain) (int, char const * const *, const struct fuse_operations_compat25 *, size_t);
    *(void **) (&myFuseMain) = dlsym(pLib, "fuse_main_real_compat25");
 
    if(!myFuseMain)
@@ -812,7 +645,7 @@ void _ExitUsage() {
    << "\t  acngfs http://ftp.uni-kl.de/debian localhost:3142 /var/cache/apt-cacher-ng/debrep /var/local/aptfs\n\n"
         << "FUSE mount options summary:\n\n";
     const char *argv[] = {"...", "-h"};
-    my_fuse_main( 2, const_cast<char**>(argv));
+    my_fuse_main( _countof(argv), argv);
     exit(EXIT_FAILURE);
 }
 

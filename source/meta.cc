@@ -66,7 +66,7 @@ void trimProto(std::string & sUri)
 mstring GetBaseName(const string &in)
 {
 	if(in.empty())
-		return "";
+		return sEmptyString;
 
 	tStrPos end = in.find_last_not_of(CPATHSEP); // must be the last char of basename
 	if(end == stmiss) // empty, or just a slash?
