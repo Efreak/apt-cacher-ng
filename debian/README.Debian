@@ -41,6 +41,12 @@ To change the mirrors used by apt-cacher-ng, user needs to add/remove/reorder
 the lists in this backends files. To execute or enable automatic configuration,
 run "dpkg-reconfigure apt-cacher-ng".
 
+It's also possible to update the remote mirror lists using the same generator
+scripts as for the files shipped with the package. The related scripts are
+in the archive /usr/share/doc/apt-cacher-ng/examples/dbgenerator.tgz
+(make and wget packages are also required). Just run "make" and look into conf/
+subdirectory after 5-10 minutes.
+
 INETD USAGE
 -----------
 
@@ -55,4 +61,4 @@ be adapted as needed, also see the package documentation for more details.
 NOTE: this inetd bridge is not required in order to set ACLs via /etc/host.*
 files. Recent versions of apt-cacher-ng support these access filters natively.
 
- -- Eduard Bloch <blade@debian.org>  Sat, 15 Feb 2014 11:04:05 +0100
+ -- Eduard Bloch <blade@debian.org>  Thu, 19 Jun 2014 15:50:34 +0200
