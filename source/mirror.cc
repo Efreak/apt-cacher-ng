@@ -17,8 +17,9 @@
 
 #include <fnmatch.h>
 #include <algorithm>
+#include <list>
 
-using namespace MYSTD;
+using namespace std;
 
 bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &stinfo)
 {
@@ -59,28 +60,7 @@ bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &stinfo)
 	return ! CheckStopSignal();
 }
 
-tStrDeq GetVariants(cmstring &mine)
-{
-	tStrDeq ret;
-	string base;
-	for(cmstring *p=compSuffixesAndEmpty; p<compSuffixesAndEmpty+_countof(compSuffixesAndEmpty); p++)
-	{
-		if(endsWith(mine, *p))
-		{
-			base=mine.substr(0, mine.size()-p->size());
-			break;
-		}
-	}
-	for(cmstring *p=compSuffixesAndEmpty; p<compSuffixesAndEmpty+_countof(compSuffixesAndEmpty); p++)
-	{
-		string cand=base+*p;
-		if(cand!=mine)
-			ret.push_back(cand);
-	}
-	return ret;
-}
-
-void pkgmirror::Action(const string &cmd)
+void pkgmirror::Action()
 {
 	if(acfg::mirrorsrcs.empty())
 	{
@@ -90,14 +70,14 @@ void pkgmirror::Action(const string &cmd)
 
 	SendChunk("<b>Locating index files, scanning...</b><br>\n");
 
-	SetCommonUserFlags(cmd);
+	SetCommonUserFlags(m_parms.cmd);
 	m_bErrAbort=false; // does not f...ing matter, do what we can
 
-	m_bCalcSize=(cmd.find("calcSize=cs")!=stmiss);
-	m_bDoDownload=(cmd.find("doDownload=dd")!=stmiss);
-	m_bSkipIxUpdate=(cmd.find("skipIxUp=si")!=stmiss);
-	m_bAsNeeded=(cmd.find("asNeeded=an")!=stmiss);
-	m_bUseDelta=(cmd.find("useDebDelta=ud")!=stmiss);
+	m_bCalcSize=(m_parms.cmd.find("calcSize=cs")!=stmiss);
+	m_bDoDownload=(m_parms.cmd.find("doDownload=dd")!=stmiss);
+	m_bSkipIxUpdate=(m_parms.cmd.find("skipIxUp=si")!=stmiss);
+	m_bAsNeeded=(m_parms.cmd.find("asNeeded=an")!=stmiss);
+	m_bUseDelta=(m_parms.cmd.find("useDebDelta=ud")!=stmiss);
 
 	if(m_bUseDelta)
 	{
@@ -148,8 +128,8 @@ void pkgmirror::Action(const string &cmd)
 		};
 		void TryAdd(cmstring &s)
 		{
-			for(tStrVecIterConst it=matchList.begin(); it!=matchList.end(); it++)
-				if(0==fnmatch(it->c_str(), s.c_str(), FNM_PATHNAME))
+			for(const auto& match : matchList)
+				if(0==fnmatch(match.c_str(), s.c_str(), FNM_PATHNAME))
 				{
 					pSrcs->insert(s);
 					break;
@@ -169,57 +149,60 @@ void pkgmirror::Action(const string &cmd)
 	{
 		if(endsWithSzAr(path2x.first, "Release"))
 		{
-			if(!m_bSkipIxUpdate && !GetFlags(path2x.first).uptodate)
-				Download(path2x.first, true, eMsgShow);
-			ParseAndProcessIndexFile(picker, path2x.first, EIDX_RELEASE);
+			if(!m_bSkipIxUpdate && !GetFlags((cmstring)path2x.first).uptodate)
+				Download((cmstring)path2x.first, true, eMsgShow);
+			ParseAndProcessIndexFile(picker, (cmstring) path2x.first, EIDX_RELEASE);
 		}
 		else
-			picker.TryAdd(path2x.first);
+			picker.TryAdd((cmstring)path2x.first);
 	}
 
 	SendChunk("<b>Identifying more index files in cache...</b><br>");
 	// unless found in release files, get the from the local system
-	for (tStrVecIterConst it = picker.matchList.begin(); it != picker.matchList.end(); it++)
-	{
-		tStrDeq paths(ExpandFilePattern(CACHE_BASE+it->c_str(), false));
-		for(tStrDeq::iterator j=paths.begin(); j!=paths.end(); j++)
-			picker.TryAdd(*j);
-	}
+	for (const auto& match: picker.matchList)
+		for(const auto& path : ExpandFilePattern(CACHE_BASE+match, false))
+			picker.TryAdd(path);
 
-	restart_clean: // start over if the set changed while having a hot iterator
-	for(tStrSet::iterator it=srcs.begin(); it!=srcs.end(); it++)
+	auto delBros = [&srcs](cmstring& mine)
 	{
-		if(GetFlags(*it).uptodate) // this is the one
+		string base;
+		int nDeleted = 0;
+		cmstring* pMySuf=nullptr;
+		for(const auto& suf: compSuffixesAndEmpty)
 		{
-		tStrDeq bros(GetVariants(*it));
-		int nDeleted=0;
-		for(tStrDeq::iterator b=bros.begin(); b!=bros.end(); b++)
-			nDeleted+=srcs.erase(*b);
-		if(nDeleted)
-			goto restart_clean;
-		}
-	}
-
-	// now there may still be something like Sources and Sources.bz2 if they
-	// were added by Release file scan. Choose the prefered simply by extension.
-
-	restart_clean2: // start over if the set changed while having a hot iterator
-	for (const string *p = compSuffixesAndEmptyByRatio; p < compSuffixesAndEmptyByRatio
-	+ _countof(compSuffixesAndEmptyByRatio); p++)
-	{
-		for (tStrSet::iterator it = srcs.begin(); it != srcs.end(); it++)
-		{
-			if(endsWith(*it, *p))
+			if(endsWith(mine, suf))
 			{
-				tStrDeq bros(GetVariants(*it));
-			int nDeleted=0;
-			for(tStrDeq::iterator b=bros.begin(); b!=bros.end(); b++)
-				nDeleted+=srcs.erase(*b);
-			if(nDeleted)
-				goto restart_clean2;
+				base=mine.substr(0, mine.length()-suf.length());
+				pMySuf=&suf;
+				break;
 			}
 		}
-	}
+		for(const auto& suf : compSuffixesAndEmpty)
+		{
+			if(&suf == pMySuf)
+				continue;
+			nDeleted += srcs.erase(base+suf);
+		}
+		return nDeleted;
+	};
+
+	// ok, if there are still multiple variants of certain files, strip the
+	// ones which are equivalent to some file which we have on disk
+
+	// start over if the set changed while having a hot iterator
+	// XXX: this is still O(n^2) but good enough for now
+	restart_clean:
+	for(const auto& src : srcs)
+		if (GetFlags(src).uptodate && delBros(src)) // this is the one
+			goto restart_clean;
+
+	// now there may still be something like Sources and Sources.bz2 if they
+	// were added by Release file scan. Choose the preferred one simply by extension.
+	restart_clean2: // start over if the set changed while having a hot iterator
+	for (const auto& s: compSuffixesAndEmptyByRatio)
+		for (const auto& src : srcs)
+			if (endsWith(src, s)&& delBros(src)) // this is the one
+				goto restart_clean2;
 
 	for (auto& src: srcs)
 	{
@@ -362,7 +345,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 		{
 			tStrDeq oldebs, sorted;
 
-			//MYSTD::set<mstring, CompDebVerLessThan> sortedVersions;
+			//std::set<mstring, CompDebVerLessThan> sortedVersions;
 
 			tStrVec parts;
 			Tokenize(entry.sFileName, "_", parts);
@@ -370,12 +353,13 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 				goto cannot_debpatch;
 
 			// pick only the same architecture
-			oldebs = ExpandFilePattern(CACHE_BASE + entry.sDirectory + parts[0] + "_*_" + parts[2], false);
+			oldebs = ExpandFilePattern(CACHE_BASE +
+					entry.sDirectory + parts[0] + "_*_" + parts[2], false);
 
 			// filter dangerous strings, invalid version strings, higher/same version
-			for(UINT i=0; i<oldebs.size();++i)
+			for(const auto& oldeb: oldebs)
 			{
-				tSplitWalk split(&oldebs[i], "_");
+				tSplitWalk split(&oldeb, "_");
 				if(split.Next() && split.Next())
 				{
 					mstring s(split);
@@ -429,7 +413,8 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 					::setenv("to", SZABSPATH(TEMPRESULT), true);
 
 				SendFmt << "Fetched: " << uri << "<br>\n";
-				cerr << "debpatch " << getenv("delta") << " " << getenv("from")
+				if(m_bVerbose)
+				SendFmt << "debpatch " << getenv("delta") << " " << getenv("from")
 						<< " " << getenv("to");
 
 					if (0 == ::system("debpatch \"$delta\" \"$from\" \"$to\""))

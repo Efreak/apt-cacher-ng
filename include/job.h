@@ -85,4 +85,10 @@ class job {
       off_t m_nReqRangeFrom, m_nReqRangeTo;
 };
 
+
+class tTraceData: public tStrSet, public lockable {
+public:
+	static tTraceData& getInstance();
+};
+
 #endif

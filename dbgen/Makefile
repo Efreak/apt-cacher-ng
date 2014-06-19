@@ -1,22 +1,26 @@
 
 DBTMP=tmp
-CONFDIR=../conf
-
+CONFDIR=conf
 
 # Main rule to be called to update all databases. Does two things, first get
 # and pre-filter raw data, second: check the sources and generate final lists,
 # skipping dead mirrors.
-gendbs: clean_db_tmp get_deb_input get_ubu_input get_fedora_input get_sl_input
+gendbs: $(CONFDIR) clean_db_tmp get_deb_input get_ubu_input get_fedora_input get_sl_input
 	$(MAKE) $(CONFDIR)/deb_mirrors.gz $(CONFDIR)/debvol_mirrors.gz $(CONFDIR)/gentoo_mirrors.gz
 	$(MAKE) $(CONFDIR)/ubuntu_mirrors $(CONFDIR)/cygwin_mirrors $(CONFDIR)/archlx_mirrors $(CONFDIR)/fedora_mirrors $(CONFDIR)/epel_mirrors $(CONFDIR)/sl_mirrors
 
 clean_db_tmp:
 	rm -rf "$(DBTMP)"
 
+$(CONFDIR):
+	mkdir -p $(CONFDIR)
+
+$(DBTMP):
+	mkdir -p $(DBTMP)
+
 # the get_* targets are intended to fetch data, but only change the key file (prerequisite for other rules) if the data has really changed
 # this is the first stage of the gendbs target. 
-get_deb_input:
-	mkdir -p $(DBTMP)
+get_deb_input: $(DBTMP)
 # they block checkout mode for some reason but we don't care
 #	wget -q -O $(DBTMP)/dsnap 'http://anonscm.debian.org/viewvc/webwml/webwml/english/mirror/Mirrors.masterlist?view=co'
 	wget -q -O- 'http://anonscm.debian.org/viewvc/webwml/webwml/english/mirror/Mirrors.masterlist?view=markup' | grep file.line.text | sed -e 's,.*>,,' > $(DBTMP)/dsnap
@@ -25,19 +29,16 @@ get_deb_input:
 
 # some country-TLDed mirrors are not listed in the mirror list, adding them manually
 get_ubu_input:
-	mkdir -p $(DBTMP)
 	( w3m -dump http://www.iana.org/domains/root/db | perl -pe 'if(/^\.(\w\w)\s/) { $$_="http://".lc($$1).".archive.ubuntu.com/ubuntu\n";} else {undef $$_}';  wget -q -O- 'https://wiki.ubuntu.com/Mirrors?action=show&redirect=Archive' 'https://launchpad.net/ubuntu/+archivemirrors' ) | tr -d ' ' | tr -d '\t' | sed -e 's,",\n,g' | grep ^http | sort -u > $(DBTMP)/usnap
 	md5sum $(DBTMP)/usnap > $(DBTMP)/sig-ubuntu
 	cmp sig-ubuntu $(DBTMP)/sig-ubuntu 2>/dev/null || cp $(DBTMP)/sig-ubuntu sig-ubuntu 
 
 get_fedora_input:
-	mkdir -p $(DBTMP)
 	wget -O- https://mirrors.fedoraproject.org/publiclist/ | tr '"' '\n' | grep -iE '^http.*(linux|epel)/?$$' | sort -u > $(DBTMP)/fsnap
 	md5sum $(DBTMP)/fsnap > $(DBTMP)/sig-fsnap
 	cmp sig-fsnap $(DBTMP)/sig-fsnap 2>/dev/null || cp $(DBTMP)/sig-fsnap sig-fsnap
 
 get_sl_input:
-	mkdir -p $(DBTMP)
 	wget -O- http://www.scientificlinux.org/download/mirrors | tr '"' '\n' | grep -iE '^http.*(scientific|linux|scientific-linux)/?$$' |sort -u > $(DBTMP)/slsnap
 	# the mirrors list for SL does not contain the three main sites; so adding these manually
 	printf "http://ftp.scientificlinux.org/linux/scientific/\nhttp://ftp1.scientificlinux.org/linux/scientific/\nhttp://ftp2.scientificlinux.org/linux/scientific/\n" >> $(DBTMP)/slsnap
@@ -85,4 +86,5 @@ $(CONFDIR)/debvol_mirrors.gz: sig-debian deburlgen.pl
 $(CONFDIR)/gentoo_mirrors.gz:
 	cd conf && sh ../gentoo_mirrors.sh
 
-
+package:
+	tar c $(DBTMP)/sig-* sig-* deburlgen.pl gentoo_mirrors.sh ubuntuscan.sh | gzip -9 > $(DBGENERATOR).tgz

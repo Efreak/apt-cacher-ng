@@ -6,7 +6,7 @@
 #include <cstdio>
 #include <stdexcept>
 #include <limits>
-using namespace MYSTD;
+using namespace std;
 
 #include "conn.h"
 #include "acfg.h"
@@ -32,6 +32,19 @@ mstring sHttp11("HTTP/1.1");
 #define SPECIAL_FD -42
 inline bool IsValidFD(int fd) { return fd>=0 || SPECIAL_FD == fd; }
 
+tTraceData traceData;
+void acfg::dump_trace()
+{
+	aclog::err("Paths with uncertain content types:");
+	lockguard g(traceData);
+	for (const auto& s : traceData)
+		aclog::err(s);
+}
+tTraceData& tTraceData::getInstance()
+{
+	return traceData;
+}
+
 
 /*
  * Unlike the regular store-and-forward file item handler, this ones does not store anything to
@@ -46,7 +59,7 @@ protected:
 	size_t m_nConsumable, m_nConsumed;
 
 public:
-	tPassThroughFitem(MYSTD::string s) :
+	tPassThroughFitem(std::string s) :
 	m_pData(NULL), m_nConsumable(0), m_nConsumed(0)
 	{
 		m_sPathRel = s;
@@ -156,7 +169,7 @@ public:
 		m_head.type = header::ANSWER;
 		m_head.frontLine = "HTTP/1.1 ";
 		m_head.frontLine += (szFrontLineMsg ? szFrontLineMsg : "500 Internal Failure");
-		m_head.set(header::CONTENT_TYPE, _SZ2PS("text/html") );
+		m_head.set(header::CONTENT_TYPE, NAMEWLEN("text/html") );
 	}
 	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow)
 	{
@@ -395,9 +408,10 @@ inline void job::HandleLocalDownload(const string &visPath,
 			for(tStrMap::const_iterator it=sortMap.begin(); it!=sortMap.end(); it++)
 				page << "<tr><td valign=\"top\">" << it->second << "</td></tr>\r\n";
 		}
-		page << "<tr><td colspan=\"4\">";
-		_AddFooter(page);
-		page << "</td></tr></table></body></html>";
+		cmstring& GetFooter();
+		page << "<tr><td colspan=\"4\">"
+		<<GetFooter()
+		<< page << "</td></tr></table></body></html>";
 		p->seal();
 		return;
 	}
@@ -557,7 +571,7 @@ void job::PrepareDownload() {
 		for(tStrPos pos; stmiss != (pos = tUrl.sPath.find("//")); )
 			tUrl.sPath.erase(pos, 1);
 
-		bPtMode=rechecks::MatchUncacheableRequest(tUrl.ToURI(false));
+		bPtMode=rechecks::MatchUncacheable(tUrl.ToURI(false), rechecks::NOCACHE_REQ);
 
 		LOG("input uri: "<<tUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode);
 
@@ -594,7 +608,15 @@ void job::PrepareDownload() {
 		m_type = GetFiletype(tUrl.sPath);
 
 		if ( m_type == FILE_INVALID )
-			goto report_notallowed;
+		{
+			if(!acfg::patrace)
+				goto report_notallowed;
+
+			// ok, collect some information helpful to the user
+			m_type = FILE_VOLATILE;
+			lockguard g(traceData);
+			traceData.insert(tUrl.sPath);
+		}
 		
 		// got something valid, has type now, trace it
 		USRDBG("Processing new job, "<<m_pReqHead->frontLine);
@@ -611,7 +633,7 @@ void job::PrepareDownload() {
     	m_pItem=fileItemMgmt::GetRegisteredFileItem(m_sFileLoc, bForceFreshnessChecks);
 
 	}
-	MYCATCH(MYSTD::out_of_range&) // better safe...
+	MYCATCH(std::out_of_range&) // better safe...
 	{
     	goto report_invpath;
     }
@@ -670,8 +692,10 @@ void job::PrepareDownload() {
 				LOG("Backends found, using them with " << sPathResidual
 						<< ", first backend: " <<beRef->second.m_backends.front().ToURI(false));
 
-				if(! bPtMode && rechecks::
-						MatchUncacheableTarget(beRef->second.m_backends.front().ToURI(false)+sPathResidual))
+				if(! bPtMode
+						&& rechecks::MatchUncacheable(
+								beRef->second.m_backends.front().ToURI(false)+sPathResidual,
+								rechecks::NOCACHE_TGT))
 				{
 					fistate=_SwitchToPtItem(m_sFileLoc);
 				}
@@ -684,14 +708,14 @@ void job::PrepareDownload() {
 			    	goto report_notallowed;
 			    LOG("Passing new job for " << tUrl.ToURI(false) << " to " << m_pParentCon->m_dlerthr);
 
-				if(! bPtMode && rechecks::MatchUncacheableTarget(tUrl.ToURI(false)))
+				if(! bPtMode && rechecks::MatchUncacheable(tUrl.ToURI(false), rechecks::NOCACHE_TGT))
 					fistate=_SwitchToPtItem(m_sFileLoc);
 
 			    m_pParentCon->m_pDlClient->AddJob(m_pItem.get(), tUrl);
 			}
 			ldbg("Download job enqueued for " << m_sFileLoc);
 		}
-		MYCATCH(MYSTD::bad_alloc&) // OOM, may this ever happen here?
+		MYCATCH(std::bad_alloc&) // OOM, may this ever happen here?
 		{
 			USRDBG( "Out of memory");
 			goto report_overload;
@@ -1122,7 +1146,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 	return 0;
 }
 
-fileitem::FiStatus job::_SwitchToPtItem(const MYSTD::string &fileLoc)
+fileitem::FiStatus job::_SwitchToPtItem(const std::string &fileLoc)
 {
 	// Changing to local pass-through file item
 	LOGSTART("job::_SwitchToPtItem");
@@ -1153,7 +1177,7 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation)
 
 	erroritem *p = new erroritem("noid", errorLine);
 	p->HeadRef().set(header::LOCATION, szLocation);
-	m_pItem.ReplaceWithLocal(p);;
+	m_pItem.ReplaceWithLocal(p);
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
 	m_state=STATE_SEND_MAIN_HEAD;
 }

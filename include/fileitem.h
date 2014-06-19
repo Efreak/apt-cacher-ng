@@ -6,11 +6,12 @@
 
 #include "config.h"
 #include "lockable.h"
-#include <header.h>
+#include "header.h"
+#include <unordered_map>
 
 class fileitem;
 typedef SHARED_PTR<fileitem> tFileItemPtr;
-class tFiGlobMap : public lockable, public MYSTD::multimap<mstring, tFileItemPtr> {};
+class tFiGlobMap : public lockable, public std::unordered_multimap<mstring, tFileItemPtr> {};
 
 //! Base class containing all required data and methods for communication with the download sources
 class fileitem : public condition

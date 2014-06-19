@@ -16,7 +16,7 @@
 #include <glob.h>
 #endif
 
-using namespace MYSTD;
+using namespace std;
 
 cmstring sPathSep(SZPATHSEP);
 cmstring sPathSepUnix(SZPATHSEPUNIX);
@@ -47,7 +47,7 @@ void set_block(int fd) {
 
 
 /*
-inline tStrPos findHostStart(const MYSTD::string & sUri)
+inline tStrPos findHostStart(const std::string & sUri)
 {
 	tStrPos p=0, l=sUri.size();
 	if (0==sUri.compare(0, 7, "http://"))
@@ -56,7 +56,7 @@ inline tStrPos findHostStart(const MYSTD::string & sUri)
 	return p;
 }
 
-void trimProto(MYSTD::string & sUri)
+void trimProto(std::string & sUri)
 {
 	sUri.erase(findHostStart(sUri));
 }
@@ -117,7 +117,7 @@ void find_base_name(const char *in, const char * &pos, UINT &len)
  * \brief Simple split function, outputs resulting tokens into a string vector, with or without purging the previous contents
  */
 tStrVec::size_type Tokenize(const string & in, const char *sep,
-		tStrVec & out, bool bAppend, MYSTD::string::size_type nStartOffset)
+		tStrVec & out, bool bAppend, std::string::size_type nStartOffset)
 {
 	if(!bAppend)
 		out.clear();
@@ -147,18 +147,6 @@ void StrSubst(string &contents, const string &from, const string &to)
 		contents.replace(pos, from.length(), to);
 		pos+=to.length();
 	}
-}
-
-
-void Join(MYSTD::string &out, const MYSTD::string & sep, const tStrVec & tokens)
-{
-	out.clear();
-	if(tokens.empty())
-		return;
-	
-	for(tStrVec::const_iterator it=tokens.begin(); it!=tokens.end(); it++)
-		out+=(sep + *it);
-			
 }
 
 bool ParseKeyValLine(const string & sIn, string & sOutKey, string & sOutVal)
@@ -346,7 +334,7 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted)
 			srcs.push_back(*s);
 		wordfree(&p);
 	}
-	if(bSorted) MYSTD::sort(srcs.begin(), srcs.end());
+	if(bSorted) std::sort(srcs.begin(), srcs.end());
 #elif defined(HAVE_GLOB)
 	auto p=glob_t();
 	if(0==glob(pattern.c_str(), GLOB_DOOFFS | (bSorted ? 0 : GLOB_NOSORT),
@@ -381,7 +369,7 @@ bool IsAbsolute(cmstring &dirToFix)
 }
 
 /*
-void MakeAbsolutePath(MYSTD::string &dirToFix, const MYSTD::string &reldir)
+void MakeAbsolutePath(std::string &dirToFix, const std::string &reldir)
 {
 	if(!IsAbsolute(dirToFix))
 		dirToFix=reldir+CPATHSEP+dirToFix;
@@ -548,13 +536,13 @@ inline bool is_safe_url_char(char c)
 
 void UrlEscapeAppend(cmstring &s, mstring &sTarget)
 {
-	for(auto it=s.begin(); it!=s.end();++it)
+	for(const auto& c: s)
 	{
-		if(is_safe_url_char(*it))
-			sTarget+=*it;
+		if(is_safe_url_char(c))
+			sTarget+=c;
 		else
 		{
-			char buf[4] = { '%', h2t_map[uint8_t(*it) >> 4], h2t_map[uint8_t(*it) & 0x0f],'\0'};
+			char buf[4] = { '%', h2t_map[uint8_t(c) >> 4], h2t_map[uint8_t(c) & 0x0f],'\0'};
 			sTarget+=buf;
 		}
 	}
@@ -569,15 +557,15 @@ mstring UrlEscape(cmstring &s)
 mstring DosEscape(cmstring &s)
 {
 	mstring ret;
-	for(cmstring::const_iterator it=s.begin(); it!=s.end();++it)
+	for(const auto& c: s)
 	{
-		if('/' == *it)
+		if('/' == c)
 			ret+=SZPATHSEP;
-		else if(is_safe_url_char(*it))
-			ret+=*it;
+		else if(is_safe_url_char(c))
+			ret+=c;
 		else
 		{
-			char buf[4] = { '%', h2t_map[uint8_t(*it) >> 4], h2t_map[uint8_t(*it) & 0x0f],'\0'};
+			char buf[4] = { '%', h2t_map[uint8_t(c) >> 4], h2t_map[uint8_t(c) & 0x0f],'\0'};
 			ret += buf;
 		}
 	}

@@ -10,7 +10,7 @@
 #include "meta.h"
 #include "dirwalk.h"
 
-using namespace MYSTD;
+using namespace std;
 namespace acfg
 {
 extern int stupidfs;
@@ -36,7 +36,7 @@ struct dnode
 	dnode(dnode *parent) : m_parent(parent) {};
 	bool Walk(IFileHandler *, tDupeFilter*, bool bFollowSymlinks);
 
-	MYSTD::string sPath;
+	std::string sPath;
 	dnode *m_parent;
 	struct stat m_stinfo;
 

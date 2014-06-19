@@ -9,12 +9,12 @@
 #include "fileio.h"
 #include "sockio.h"
 
-using namespace MYSTD;
+using namespace std;
 
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
 
-typedef MYSTD::pair<const tHttpUrl*,bool> tHostIsproxy;
+typedef std::pair<const tHttpUrl*,bool> tHostIsproxy;
 
 static const cmstring sGenericError("567 Unknown download error occured");
 
@@ -100,7 +100,7 @@ struct tDlJob
 	}
 
 	inline tDlJob(dlcon *p, tFileItemPtr pFi, const acfg::tRepoData * pBackends,
-			const MYSTD::string & sPath, int redirmax) :
+			const std::string & sPath, int redirmax) :
 			m_pStorage(pFi), m_parent(*p), m_pBEdata(pBackends),
 			m_nRedirRemaining(redirmax)
 	{
@@ -387,7 +387,7 @@ struct tDlJob
 					return EFLAG_MIRROR_BROKEN | HINT_DISCON | HINT_KILL_LAST_FILE;
 				}
 
-				ldbg("contents: " << MYSTD::string(inBuf.rptr(), l));
+				ldbg("contents: " << std::string(inBuf.rptr(), l));
 				inBuf.drop(l);
 				if (h.type != header::ANSWER)
 				{
@@ -428,10 +428,9 @@ struct tDlJob
 				// explicitly blacklist mirror if key file is missing
 				if (st >= 400 && m_pBEdata)
 				{
-					for (tStrVecIterConst it = m_pBEdata->m_keyfiles.begin();
-							it != m_pBEdata->m_keyfiles.end(); ++it)
+					for (const auto& kfile : m_pBEdata->m_keyfiles)
 					{
-						if (endsWith(m_fileUri.sPath, *it))
+						if (endsWith(m_fileUri.sPath, kfile))
 						{
 							sErrorMsg = "500 Keyfile missing, mirror blacklisted";
 							return HINT_DISCON | EFLAG_MIRROR_BROKEN;
@@ -594,29 +593,28 @@ inline bool dlcon::SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg)
 
 	// using backends? Find one which is not blacklisted
 
-	MYMAP<MYSTD::pair<cmstring,cmstring>, mstring>::const_iterator bliter;
-
 	if (job->m_pBEdata)
 	{
 		// keep the existing one if possible
 		if (job->m_pCurBackend)
 		{
 			LOG("Checking [" << job->m_pCurBackend->sHost << "]:" << job->m_pCurBackend->GetPort());
-			bliter = m_blacklist.find(make_pair(job->m_pCurBackend->sHost, job->m_pCurBackend->GetPort()));
+			const auto bliter = m_blacklist.find(make_pair(job->m_pCurBackend->sHost,
+					job->m_pCurBackend->GetPort()));
 			if(bliter == m_blacklist.end())
 				return true;
 		}
 
-		for (auto it=job->m_pBEdata->m_backends.begin();
-				it!=job->m_pBEdata->m_backends.end(); ++it)
+		for (const auto& bend : job->m_pBEdata->m_backends)
 		{
-			bliter = m_blacklist.find(make_pair(it->sHost, it->GetPort()));
+			const auto bliter = m_blacklist.find(make_pair(bend.sHost, bend.GetPort()));
 			if(bliter == m_blacklist.end())
 			{
-				job->m_pCurBackend = &(*it);
+				job->m_pCurBackend = &bend;
 				return true;
 			}
 
+			// uh, blacklisted, remember the last reason
 			if(pReasonMsg)
 				*pReasonMsg = bliter->second;
 		}
@@ -624,15 +622,13 @@ inline bool dlcon::SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg)
 	}
 
 	// ok, look for the mirror data itself
-	bliter = m_blacklist.find(make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort()));
+	auto bliter = m_blacklist.find(make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort()));
 	if(bliter == m_blacklist.end())
 		return true;
-	else
-	{
-		if(pReasonMsg)
-			*pReasonMsg = bliter->second;
-		return false;
-	}
+
+	if(pReasonMsg)
+		*pReasonMsg = bliter->second;
+	return false;
 }
 
 inline void dlcon::EnqJob(tDlJob *todo)
@@ -651,7 +647,7 @@ inline void dlcon::EnqJob(tDlJob *todo)
 }
 
 void dlcon::AddJob(tFileItemPtr m_pItem, 
-		const acfg::tRepoData *pBackends, const MYSTD::string & sPatSuffix)
+		const acfg::tRepoData *pBackends, const std::string & sPatSuffix)
 {
 	EnqJob(new tDlJob(this, m_pItem, pBackends, sPatSuffix,
 			m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax));
@@ -711,7 +707,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 		if (fd>=0)
 		{
 			FD_SET(fd, &rfds);
-			nMaxFd = MYSTD::max(fd, nMaxFd);
+			nMaxFd = std::max(fd, nMaxFd);
 
 			if (!m_sendBuf.empty())
 			{
@@ -747,7 +743,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 #ifdef MINIBUILD
 			string fer("select failed");
 #else
-			errnoFmter fer("FAILURE: select, ");
+			tErrnoFmter fer("FAILURE: select, ");
 			LOG(fer);
 #endif
 			sErrorMsg = string("500 Internal malfunction, ") + fer;
@@ -861,7 +857,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 				sErrorMsg = "502 EPIC FAIL";
 #else
 				// pickup the error code for later and kill current connection ASAP
-				sErrorMsg = errnoFmter("502 ");
+				sErrorMsg = tErrnoFmter("502 ");
 #endif
 				return EFLAG_LOST_CON;
 			}

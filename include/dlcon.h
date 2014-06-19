@@ -18,7 +18,7 @@
 
 struct tDlJob;
 typedef SHARED_PTR<tDlJob> tDlJobPtr;
-typedef MYSTD::list<tDlJobPtr> tDljQueue;
+typedef std::list<tDlJobPtr> tDljQueue;
 
 class dlcon : public lockable
 { 
@@ -57,7 +57,7 @@ class dlcon : public lockable
     	UINT m_bManualMode;
 
     	/// blacklist for permanently failing hosts, with error message
-    	MYMAP<MYSTD::pair<cmstring,cmstring>, mstring> m_blacklist;
+    	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
     	void BlacklistMirror(tDlJobPtr &failJob, cmstring &msg);
     	bool SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg);
 

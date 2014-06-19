@@ -28,7 +28,7 @@
 
 //#define DEBUGIDX
 
-using namespace MYSTD;
+using namespace std;
 
 static cmstring oldStylei18nIdx("/i18n/Index");
 static cmstring diffIdxSfx(".diff/Index");
@@ -37,8 +37,8 @@ static cmstring sPatchResRel("_actmp/patch.result");
 static unsigned int nKillLfd=1;
 time_t m_gMaintTimeNow=0;
 
-tCacheOperation::tCacheOperation(int fd, tSpecialRequest::eMaintWorkType type) :
-	tSpecOpDetachable(fd, type),
+tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
+	tSpecOpDetachable(parms),
 	m_bErrAbort(false), m_bVerbose(false), m_bForceDownload(false),
 	m_bScanInternals(false), m_bByPath(false), m_bByChecksum(false), m_bSkipHeaderChecks(false),
 	m_bTruncateDamaged(false),
@@ -158,7 +158,7 @@ bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 }
 
 
-bool tCacheOperation::Download(const MYSTD::string & sFilePathRel, bool bIndexFile,
+bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile,
 		eDlMsgPrio msgVerbosityLevel, tGetItemDelegate *pItemDelg, const char *pForcedURL)
 {
 
@@ -369,14 +369,7 @@ static unsigned short FindCompIdx(cmstring &s)
 	return i;
 }
 
-tCacheOperation::tContId BuildEquivKey(const tFingerprint &fpr, const string &sDir,
-		const string &sFile, tStrPos maxFnameLen)
-{
-	static const string dis("/binary-");
-	tStrPos pos=sDir.rfind(dis);
-	return make_pair(fpr,
-			(stmiss==pos ? sEmptyString : sDir.substr(pos)) + sFile.substr(0, maxFnameLen));
-}
+static const string dis("/binary-");
 
 void DelTree(const string &what)
 {
@@ -777,9 +770,8 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 	}
 
 	int nInjCount=0;
-	for (tStrDeq::const_iterator it = tgts.begin(); it != tgts.end(); it++)
+	for (const auto& tgtCand : tgts)
 	{
-		const string &tgtCand=*it;
 		if(donorRel == tgtCand)
 			continue;
 		const tIfileAttribs &flags=GetFlags(tgtCand);
@@ -797,15 +789,15 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 	}
 
 	// defuse some stuff located in the same directory, like .gz variants of .bz2 files
-	for (tStrDeq::const_iterator it = tgts.begin(); it != tgts.end(); it++)
+	for (const auto& tgt: tgts)
 	{
-		const tIfileAttribs &myState = GetFlags(*it);
+		auto& myState = GetFlags(tgt);
 		if(!myState.vfile_ondisk || !myState.uptodate || myState.parseignore)
 			continue;
 
-		tStrPos cpos=FindCompSfxPos(*it);
-		string sBasename=it->substr(0, cpos);
-		string sux=cpos==stmiss ? "" : it->substr(FindCompSfxPos(*it));
+		tStrPos cpos=FindCompSfxPos(tgt);
+		string sBasename=tgt.substr(0, cpos);
+		string sux=cpos==stmiss ? "" : tgt.substr(FindCompSfxPos(tgt));
 		for(auto& compsuf : compSuffixesAndEmpty)
 		{
 			if(sux==compsuf) continue; // touch me not
@@ -814,7 +806,7 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 			if(kv!=m_indexFilesRel.end() && kv->second.vfile_ondisk)
 			{
 				kv->second.parseignore=true; // gotcha
-				MTLOGDEBUG("Defused bro of " << *it << ": " << sBro);
+				MTLOGDEBUG("Defused bro of " << tgt << ": " << sBro);
 
 				// also, we don't care if the pdiff index vanished for some reason
 				kv = m_indexFilesRel.find(sBasename+".diff/Index");
@@ -880,6 +872,8 @@ void tCacheOperation::UpdateIndexFiles()
 	const string sPatchBaseAbs=CACHE_BASE+sPatchBaseRel;
 	mkbasedir(sPatchBaseAbs);
 
+	tContId2eqClass eqClasses;
+
 	// just reget them as-is and we are done
 	if (m_bForceDownload)
 	{
@@ -905,7 +899,7 @@ void tCacheOperation::UpdateIndexFiles()
 		<< f.second.vfile_ondisk << "<br>\n" "<br>\n";
 #endif
 
-	typedef map<string, tContId> tFile2Cid;
+	typedef unordered_map<string, tContId> tFile2Cid;
 
 	MTLOGDEBUG("<br><br><b>STARTING ULTIMATE INTELLIGENCE</b><br><br>");
 
@@ -928,8 +922,15 @@ void tCacheOperation::UpdateIndexFiles()
 			if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
 				return;
 
-			m_file2cid[entry.sDirectory+entry.sFileName] = BuildEquivKey(entry.fpr,
-					entry.sDirectory, entry.sFileName, compos);
+			auto& cid = m_file2cid[entry.sDirectory+entry.sFileName];
+			cid.first=entry.fpr;
+			tStrPos pos=entry.sDirectory.rfind(dis);
+			// if looking like Debian archive, keep just the part after binary-...
+			if(stmiss != pos)
+				cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
+			else
+				cid.second=entry.sFileName;
+
 		}
 	};
 
@@ -974,7 +975,7 @@ void tCacheOperation::UpdateIndexFiles()
 				if(it2 != recvr.m_file2cid.end())
 					sCandId=it2->second;
 			}
-			tClassDesc &tgt=m_eqClasses[sCandId];
+			tClassDesc &tgt=eqClasses[sCandId];
 			tgt.paths.push_back(if2cid.first);
 
 			// pick up the id for bz2 verification later
@@ -984,7 +985,7 @@ void tCacheOperation::UpdateIndexFiles()
 			// also the index file id
 			if(tgt.diffIdxId.second.empty()) // XXX if there is no index at all, avoid repeated lookups somehow?
 			{
-				tFile2Cid::iterator j = recvr.m_file2cid.find(sNativeName+diffIdxSfx);
+				auto j = recvr.m_file2cid.find(sNativeName+diffIdxSfx);
 				if(j!=recvr.m_file2cid.end())
 					tgt.diffIdxId=j->second;
 			}
@@ -999,13 +1000,13 @@ void tCacheOperation::UpdateIndexFiles()
 		}
 	}
 
-	auto dbgDump = [&](const char *msg, int pfx) {
 #ifdef DEBUGIDX
+	auto dbgDump = [&](const char *msg, int pfx) {
 		tSS printBuf;
 		printBuf << "#########################################################################<br>\n"
 			<< "## " <<  msg  << "<br>\n"
 			<< "#########################################################################<br>\n";
-		for(const auto& cp : m_eqClasses)
+		for(const auto& cp : eqClasses)
 		{
 			printBuf << pfx << ": TID: "
 				<<  cp.first.first<<cp.first.second<<"<br>\n" << pfx << ": "
@@ -1018,11 +1019,11 @@ void tCacheOperation::UpdateIndexFiles()
 				printBuf << pfx << ":&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << path <<"<br>\n";
 		}
 		SendChunk(printBuf);
-#else
-		(void) msg;
-		(void) pfx;
-#endif
 	};
+#else
+#define dbgDump(x,y)
+#endif
+
 	dbgDump("After class building:", 0);
 
 	if(CheckStopSignal())
@@ -1035,7 +1036,7 @@ void tCacheOperation::UpdateIndexFiles()
 	 * First, strip the list down to those which are at least partially present in the cache
 	 */
 
-	for(auto it=m_eqClasses.begin(); it!=m_eqClasses.end();)
+	for(auto it=eqClasses.begin(); it!=eqClasses.end();)
 	{
 		for(auto& path: it->second.paths)
 		{
@@ -1043,7 +1044,7 @@ void tCacheOperation::UpdateIndexFiles()
 				continue;
 			goto strip_next_class;
 		}
-		m_eqClasses.erase(it++);
+		eqClasses.erase(it++);
 		continue;
 		strip_next_class:
 		++it;
@@ -1052,7 +1053,7 @@ void tCacheOperation::UpdateIndexFiles()
 	dbgDump("Refined (1):", 1);
 
 	// Let the most recent files be in the front of the list, but the uncompressed ones have priority
-	for(auto& it: m_eqClasses)
+	for(auto& it: eqClasses)
 	{
 		sort(it.second.paths.begin(), it.second.paths.end(),
 				fctLessThanCompMtime(CACHE_BASE));
@@ -1065,9 +1066,9 @@ void tCacheOperation::UpdateIndexFiles()
 	DelTree(SABSPATH("_actmp")); // do one to test the permissions
 
 	// Iterate over classes and do patch-update where possible
-	for(tContId2eqClass::iterator cid2eqcl=m_eqClasses.begin(); cid2eqcl!=m_eqClasses.end();cid2eqcl++)
+	for(auto cid2eqcl=eqClasses.begin(); cid2eqcl!=eqClasses.end();cid2eqcl++)
 	{
-		tContId2eqClass::iterator itDiffIdx; // iterator pointing to the patch index descriptor
+		decltype(cid2eqcl) itDiffIdx; // iterator pointing to the patch index descriptor
 		int nProbeCnt(3);
 		string patchidxFileToUse;
 		deque<tPatchEntry> patchList;
@@ -1079,17 +1080,16 @@ void tCacheOperation::UpdateIndexFiles()
 
 		DelTree(SABSPATH("_actmp"));
 
-		if (cid2eqcl->second.diffIdxId.second.empty() || m_eqClasses.end() == (itDiffIdx
-				= m_eqClasses.find(cid2eqcl->second.diffIdxId)) || itDiffIdx->second.paths.empty())
+		if (cid2eqcl->second.diffIdxId.second.empty() || eqClasses.end() == (itDiffIdx
+				= eqClasses.find(cid2eqcl->second.diffIdxId)) || itDiffIdx->second.paths.empty())
 			goto NOT_PATCHABLE; // no patches available
 
 		// iterate over patch paths and fine a present one which is most likely the most recent one
-		for (tStrDeq::const_iterator ppit = itDiffIdx->second.paths.begin(); ppit
-				!= itDiffIdx->second.paths.end(); ppit++)
+		for (const auto& pp : itDiffIdx->second.paths)
 		{
-			if (m_indexFilesRel[*ppit].vfile_ondisk)
+			if (m_indexFilesRel[pp].vfile_ondisk)
 			{
-				patchidxFileToUse = *ppit;
+				patchidxFileToUse = pp;
 				break;
 			}
 		}
@@ -1114,11 +1114,15 @@ void tCacheOperation::UpdateIndexFiles()
 		 * 		  then get the one which matched best. But it's too cumbersome, and
 		 * 		   if the code works correctly, the first hit should always the best version
 		 * 		   */
-		for(tStrDeq::const_iterator its=cid2eqcl->second.paths.begin();
-				nProbeCnt-- >0 && its!= cid2eqcl->second.paths.end(); its++)
+
+		for(const auto& pathRel: cid2eqcl->second.paths)
 		{
+			if(--nProbeCnt<0)
+				break;
+
 			FILE_RAII df;
 			tFingerprint probe;
+			auto absPath(SABSPATH(pathRel));
 			::mkbasedir(sPatchBaseAbs);
 			df.p = fopen(sPatchBaseAbs.c_str(), "w");
 			if(!df.p)
@@ -1126,17 +1130,17 @@ void tCacheOperation::UpdateIndexFiles()
 				SendFmt << "Cannot write temporary patch data to " << sPatchBaseAbs << "<br>";
 				break;
 			}
-			if (GetFlags(*its).vfile_ondisk)
+			if (GetFlags(pathRel).vfile_ondisk)
 			{
 				header h;
-				if(h.LoadFromFile(SABSPATH(*its)+ ".head")<=0  || GetFileSize(SABSPATH(*its), -2)
+				if(h.LoadFromFile(absPath+ ".head")<=0  || GetFileSize(absPath, -2)
 						!= atoofft(h.h[header::CONTENT_LENGTH], -3))
 				{
 					MTLOGDEBUG("########### Header looks suspicious");
 					continue;
 				}
-				MTLOGDEBUG("########### Testing file: " << *its << " as patch base candidate");
-				if (probe.ScanFile(CACHE_BASE + *its, CSTYPE_SHA1, true, df.p))
+				MTLOGDEBUG("########### Testing file: " << pathRel << " as patch base candidate");
+				if (probe.ScanFile(absPath, CSTYPE_SHA1, true, df.p))
 				{
 					df.close(); // write the whole file to disk ASAP!
 
@@ -1147,11 +1151,11 @@ void tCacheOperation::UpdateIndexFiles()
 					if(probe == *pEndSum)
 					{
 						// since we know the stuff is fresh, no need to refetch it later
-						m_indexFilesRel[*its].uptodate=true;
+						m_indexFilesRel[pathRel].uptodate=true;
 						if(m_bVerbose)
-							SendFmt << "Found fresh version in " << *its << "<br>";
+							SendFmt << "Found fresh version in " << pathRel << "<br>";
 
-						Propagate(*its, cid2eqcl, &sPatchBaseAbs);
+						Propagate(pathRel, cid2eqcl, &sPatchBaseAbs);
 
 						if(CheckStopSignal())
 							return;
@@ -1227,7 +1231,7 @@ void tCacheOperation::UpdateIndexFiles()
 */
 		// prefer to download them in that order, no uncompressed versions because
 		// mirrors usually don't have them
-		static const string preComp[] = { ".lzma", ".xz", ".bz2", ".gz"};
+		static const string preComp[] = { ".xz", ".lzma", ".bz2", ".gz"};
 		for (auto& ps : preComp)
 		{
 			for (auto& cand: cid2eqcl->second.paths)
@@ -1313,16 +1317,16 @@ void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator &eqClass
 
 	// ok, it points to the temp file then, create it
 
-	if (Bz2compressFile(SZABSPATH(sPatchResRel), SZABSPATH(sFreshBz2Rel))
-			&& bz2fpr.CheckFile(SABSPATH(sFreshBz2Rel))
+	if (!Bz2compressFile(SZABSPATH(sPatchResRel), SZABSPATH(sFreshBz2Rel))
+			|| !bz2fpr.CheckFile(SABSPATH(sFreshBz2Rel))
 	// fileitem implementation may nuke the data on errors... doesn't matter here
-			&& GetAndCheckHead(sFreshBz2Rel, sRefBz2Rel, bz2fpr.size))
+			|| !GetAndCheckHead(sFreshBz2Rel, sRefBz2Rel, bz2fpr.size))
 	{
-		if (m_bVerbose)
-			SendFmt << "Compressed into " << sFreshBz2Rel << "<br>\n";
-	}
-	else
 		return;
+	}
+
+	if (m_bVerbose)
+		SendFmt << "Compressed into " << sFreshBz2Rel << "<br>\n";
 
 	inject_bz2s:
 	// use a recursive call to distribute bz2 versions
@@ -1380,7 +1384,7 @@ tCacheOperation::enumIndexType tCacheOperation::GuessIndexTypeFromURL(cmstring &
 	return EIDX_UNSUPPORTED;
 }
 
-bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD::string &sPath,
+bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::string &sPath,
 		enumIndexType idxType)
 {
 
@@ -1425,7 +1429,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 	{
 		if(! GetFlags(sPath).forgiveDlErrors) // that would be ok (added by ignorelist), don't bother
 		{
-			errnoFmter err;
+			tErrnoFmter err;
 			SendFmt<<"<span class=\"WARNING\">WARNING: unable to open "<<sPath
 					<<"(" << err << ")</span>\n<br>\n";
 		}
@@ -1690,9 +1694,6 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const MYSTD:
 
 		while(reader.GetOneLine(sLine))
 		{
-			//if(sLine.find("unp_")!=stmiss)
-			//	int nWtf=1;
-			//cout << "file: " << *it << " line: "  << sLine<<endl;
 			if(startsWith(sLine, sStartMark))
 				bUse=true;
 			else if(!startsWithSz(sLine, " ")) // list header block ended for sure
@@ -1834,7 +1835,7 @@ void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 
 void tCacheOperation::AddDelCbox(cmstring &sFileRel)
 {
-	MYSTD::pair<tStrSet::iterator,bool> ck = m_delCboxFilter.insert(sFileRel);
+	std::pair<tStrSet::iterator,bool> ck = m_delCboxFilter.insert(sFileRel);
 	if(! ck.second)
 		return;
 
@@ -1898,7 +1899,7 @@ int parseidx_demo(LPCSTR file)
 	class tParser : public tCacheOperation, ifileprocessor
 	{
 	public:
-		tParser() : tCacheOperation(2, tSpecialRequest::workIMPORT) {};
+		tParser() : tCacheOperation({2, tSpecialRequest::workIMPORT, "doImport="}) {};
 		inline int demo(LPCSTR file)
 		{
 			return !ParseAndProcessIndexFile(*this, file, GuessIndexTypeFromURL(file));
@@ -1912,10 +1913,21 @@ int parseidx_demo(LPCSTR file)
 		virtual bool ProcessRegular(const mstring &sPath, const struct stat &) {return true;}
 		virtual bool ProcessOthers(const mstring &sPath, const struct stat &) {return true;}
 		virtual bool ProcessDirAfter(const mstring &sPath, const struct stat &) {return true;}
-		virtual void Action(const mstring &) override {};
+		virtual void Action() override {};
 	}
 	mgr;
 
 	return mgr.demo(file);
 }
 #endif
+
+
+void tCacheOperation::ProgTell()
+{
+	if (++m_nProgIdx == m_nProgTell)
+	{
+		SendFmt<<"Scanning, found "<<m_nProgIdx<<" file"
+				<< (m_nProgIdx>1?"s":"") << "...<br />\n";
+		m_nProgTell*=2;
+	}
+}

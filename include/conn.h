@@ -40,7 +40,7 @@ class con // : public tRunable
 
       int m_confd;
       
-      MYSTD::list<job*> m_jobs2send;
+      std::list<job*> m_jobs2send;
       
 #ifdef KILLABLE
       // to awake select with dummy data

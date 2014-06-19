@@ -18,7 +18,9 @@ class dlcon;
 class tDlJobHints;
 struct foo;
 
-#define FAKEDATEMARK "Sat, 26 Apr 1986 01:23:39 GMT+3"
+static cmstring FAKEDATEMARK("Sat, 26 Apr 1986 01:23:39 GMT+3");
+static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing, "
+		"aborting as requested.</span>");
 
 static cmstring sIndex("Index");
 static cmstring sslIndex("/Index");
@@ -39,7 +41,7 @@ class tCacheOperation :
 {
 
 public:
-	tCacheOperation(int,tSpecialRequest::eMaintWorkType);
+	tCacheOperation(const tSpecialRequest::tRunParms& parms);
 	virtual ~tCacheOperation();
 
 	// having this here makes no sense except of working around an ICE bug of gcc 4.3/4.4.x
@@ -75,7 +77,7 @@ protected:
 		off_t space = 0;
 	};
 
-	MYSTD::unordered_map<mstring,tIfileAttribs> m_indexFilesRel;
+	std::unordered_map<mstring,tIfileAttribs> m_indexFilesRel;
 	// helpers to keep the code cleaner and more readable
 	const tIfileAttribs &GetFlags(cmstring &sPathRel) const;
 	tIfileAttribs &SetFlags(cmstring &sPathRel);
@@ -112,7 +114,7 @@ protected:
 		eMsgHideErrors,
 		eMsgShow
 	};
-	bool Download(const MYSTD::string & sFilePathRel, bool bIndexFile,
+	bool Download(const std::string & sFilePathRel, bool bIndexFile,
 			eDlMsgPrio msgLevel, tGetItemDelegate *p=NULL, const char *pForcedURL=NULL);
 
 	// internal helper variables
@@ -130,7 +132,7 @@ protected:
 	bool ParseAndProcessIndexFile(ifileprocessor &output_receiver,
 			const mstring &sPath, enumIndexType idxType);
 
-	MYSTD::unordered_map<mstring,bool> m_forceKeepInTrash;
+	std::unordered_map<mstring,bool> m_forceKeepInTrash;
 
 	bool GetAndCheckHead(cmstring & sHeadfile, cmstring &sFilePathRel, off_t nWantedSize);
 	bool Inject(cmstring &fromRel, cmstring &toRel,
@@ -139,32 +141,22 @@ protected:
 	void PrintStats(cmstring &title);
 	mstring m_processedIfile;
 
-	inline void ProgTell()
-	{
-		if (++m_nProgIdx == m_nProgTell)
-		{
-			SendFmt<<"Scanning, found "<<m_nProgIdx<<" file"
-					<< (m_nProgIdx>1?"s":"") << "...<br />\n";
-			m_nProgTell*=2;
-		}
-	}
+	void ProgTell();
 	void AddDelCbox(cmstring &sFileRel);
 
 public:
-	typedef MYSTD::pair<tFingerprint,mstring> tContId;
+	typedef std::pair<tFingerprint,mstring> tContId;
 	struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
-	typedef MYMAP<tContId, tClassDesc> tContId2eqClass;
+	typedef std::map<tContId, tClassDesc> tContId2eqClass;
 
 private:
 
-	tContId2eqClass m_eqClasses;
-
-	bool Propagate(const string &donorRel, tContId2eqClass::iterator eqClassIter,
+	bool Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
 			cmstring *psTmpUnpackedAbs=NULL);
 	void InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter);
 	tCacheOperation(const tCacheOperation&);
 	tCacheOperation& operator=(const tCacheOperation&);
-	bool PatchFile(const mstring &srcRel, const mstring &patchIdxLocation,
+	bool PatchFile(cmstring &srcRel, cmstring &patchIdxLocation,
 			tPListConstIt pit, tPListConstIt itEnd,
 			const tFingerprint *verifData);
 	dlcon *m_pDlcon;
@@ -176,10 +168,10 @@ private:
 };
 
 
-static const string compSuffixes[] = { ".bz2", ".gz", ".lzma", ".xz"};
-static const string compSuffixesAndEmpty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
-static const string compSuffixesAndEmptyByLikelyhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
-static const string compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
+static cmstring compSuffixes[] = { ".bz2", ".gz", ".lzma", ".xz"};
+static cmstring compSuffixesAndEmpty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
+static cmstring compSuffixesAndEmptyByLikelyhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
+static cmstring compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
 
 bool CompDebVerLessThan(cmstring &s1, cmstring s2);
 extern time_t m_gMaintTimeNow;

@@ -7,7 +7,7 @@ class lockguard;
 
 #ifdef DEBUG_never
 #include <iostream>
-#define __lock_yell(x) MYSTD::cerr <<"### " x "\n";
+#define __lock_yell(x) std::cerr <<"### " x "\n";
 #else
 #define __lock_yell(x)
 #endif
@@ -158,7 +158,7 @@ public:
 	void StopAll();
 private:
 	size_t m_nThreadMax, m_nMaxStandby, m_nMaxBacklog;
-	MYSTD::vector<pthread_t> m_threads;
+	std::vector<pthread_t> m_threads;
 	condition m_syncCond;
 };
 #endif

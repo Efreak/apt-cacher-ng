@@ -11,7 +11,7 @@
 #include "cleaner.h"
 
 #include <iostream>
-using namespace MYSTD;
+using namespace std;
 
 #include <cstdio>
 #include <cstring>
@@ -33,6 +33,7 @@ using namespace MYSTD;
 #ifdef DEBUG
 #include "filereader.h"
 #include "csmapping.h"
+#include <regex.h>
 #endif
 
 #include "maintenance.h"
@@ -84,7 +85,7 @@ inline bool fork_away()
 void runDemo()
 {
 
-	//cerr << "Pandora: " << sizeof(tIfileAttribs) << endl;
+	cerr << "Pandora: " << sizeof(regex_t) << endl;
 
 
 	// PLAYGROUND
@@ -111,6 +112,27 @@ void runDemo()
 	 printf("%02x", csum[i]);
 	 printf("\n");
 	 exit(0);
+
+
+
+	if(argc<2)
+		return -1;
+
+	acfg::tHostInfo hi;
+	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1])<<endl;
+	cout << "Host: " << hi.sHost <<", Port: " << hi.sPort << ", Path: " << hi.sPath<<endl;
+	return 0;
+
+
+	 bool Bz2compressFile(const char *, const char*);
+	 return ! Bz2compressFile(argv[1], argv[2]);
+
+
+	 char tbuf[40];
+	 FormatCurrentTime(tbuf);
+	 std::cerr << tbuf << std::endl;
+	 exit(1);
+
 	 */
 
 	if (getenv("GETSUM"))
@@ -129,16 +151,6 @@ void runDemo()
 		exit(0);
 	}
 
-	/*
-	 bool Bz2compressFile(const char *, const char*);
-	 return ! Bz2compressFile(argv[1], argv[2]);
-
-
-	 char tbuf[40];
-	 FormatCurrentTime(tbuf);
-	 MYSTD::cerr << tbuf << MYSTD::endl;
-	 exit(1);
-	 */
 
 	LPCSTR envvar = getenv("PARSEIDX");
 	if (envvar)
@@ -171,7 +183,7 @@ int main(int argc, char **argv)
 	const char *envvar=getenv("TOBASE64");
 	if(envvar)
 	{
-		MYSTD::cout << EncodeBase64Auth(envvar);
+		std::cout << EncodeBase64Auth(envvar);
 		return 0;
 	}
 	envvar=getenv("BECURL");
@@ -246,8 +258,11 @@ int main(int argc, char **argv)
 
 	if(PRINTCFGVAR)
 	{
-		acfg::printVar(PRINTCFGVAR);
-		return 0;
+		string var;
+		if(!acfg::appendVar(PRINTCFGVAR, var))
+			return EXIT_FAILURE;
+		cout << var << endl;
+		return EXIT_SUCCESS;
 	}
 
 	if(!aclog::open())
@@ -282,7 +297,7 @@ int main(int argc, char **argv)
 
 	if (!fork_away())
 	{
-		errnoFmter ef("Failed to change to daemon mode");
+		tErrnoFmter ef("Failed to change to daemon mode");
 		cerr << ef << endl;
 		exit(43);
 	}

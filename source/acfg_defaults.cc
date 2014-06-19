@@ -6,7 +6,7 @@
 #include "meta.h"
 #include "acfg.h"
 
-using namespace MYSTD;
+using namespace std;
 
 namespace acfg
 {
@@ -34,7 +34,7 @@ string vfilepat(INFOLDER
 		"(Index|Packages" COMPOPT "|InRelease|Release|Release\\.gpg|custom\\.gpg|mirrors.txt|"
 		"Sources" COMPOPT "|release|index\\.db-.*\\.gz|Contents-[^/]*" COMPOPT
 		"|pkglist[^/]*\\.bz2|rclist[^/]*\\.bz2|meta-release[^/]*|Translation[^/]*" COMPOPT
-		"|MD5SUMS|SHA1SUMS" // d-i stuff
+		"|MD5SUMS|SHA256SUMS|SHA1SUMS" // d-i stuff
 		"|((setup|setup-legacy)(\\.ini|\\.bz2|\\.hint)(\\.sig)?)|mirrors\\.lst" // cygwin
 		"|repo(index|md)\\.xml(\\.asc|\\.key)?|directory\\.yast" // opensuse
 		"|products|content(\\.asc|\\.key)?|media" // opensuse 2, are they important?
@@ -56,7 +56,7 @@ string wfilepat(INFOLDER
 		"|[a-z]+32.exe"
 		")$");
 
-
+string pfilepatEx, vfilepatEx, wfilepatEx; // for customization by user
 int offlinemode(false), verboselog(true), stupidfs(false), forcemanaged(false),
 extreshhold(20), tpstandbymax(8), tpthreadmax(-1), dirperms(00755), fileperms(00664),
 keepnver(0), maxtempdelay(27), vrangeops(1);
@@ -65,7 +65,7 @@ int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
 logxff(false), oldupdate(false), recompbz2(false), nettimeout(60), updinterval(0),
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(255), exsupcount(RESERVED_DEFVAL),
-optproxytimeout(-1);
+optproxytimeout(-1), patrace(false);
 
 #ifdef DEBUG
 int dnscachetime(30);

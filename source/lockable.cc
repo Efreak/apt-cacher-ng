@@ -10,9 +10,9 @@
 #include <sys/time.h>
 
 //#include <iostream>
-//using namespace MYSTD;
+//using namespace std;
 
-lockable::lockable() { pthread_mutex_init(&__mutex, NULL); /*MYSTD::cout << "inited lock:" <<&__mutex<<endl;*/}
+lockable::lockable() { pthread_mutex_init(&__mutex, NULL); /*std::cout << "inited lock:" <<&__mutex<<endl;*/}
 lockable::~lockable() { pthread_mutex_destroy(&__mutex); }
 void lockable::lock() { /*cout << "locking: " << &__mutex<<endl;*/ pthread_mutex_lock(&__mutex); }
 void lockable::unlock() { /*cout << "releasing: " << &__mutex<<endl;*/ pthread_mutex_unlock(&__mutex); }

@@ -17,11 +17,7 @@
 #include <list>
 #include <unordered_map>
 
-using namespace MYSTD;
-
-
-#define _iterPos(it, start) (it-start.begin())/sizeof(it)
-#define sProblemLoc szPath<< ':'<< _iterPos(it, lines)
+using namespace std;
 
 // hint to use the main configuration excluding the complex directives
 bool g_testMode=false;
@@ -33,7 +29,7 @@ mstring PTHOSTS_PATTERN;
 namespace rechecks
 {
 bool CompileExpressions();
-bool CompileUncExpressions(const string & req, const string & tgt);
+//bool CompileUncExpressions(const string & req, const string & tgt);
 }
 
 
@@ -43,12 +39,12 @@ namespace acfg {
 // internal stuff:
 string sPopularPath("/debian/");
 
-string tmpDontcache, tmpDontcacherq, tmpDontcacheResolved;
+string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt;
 
 tStrMap localdirs;
 static class : public lockable, public NoCaseStringMap {} mimemap;
 
-MYSTD::bitset<65536> *pUserPorts = NULL;
+std::bitset<TCP_PORT_MAX> *pUserPorts = NULL;
 
 typedef struct
 {
@@ -60,71 +56,79 @@ MapNameToString;
 typedef struct
 {
 	const char *name; int *ptr;
-	const char *warn; int base;
+	const char *warn; uint8_t base;
 }
 MapNameToInt;
+
 
 #ifndef MINIBUILD
 
 MapNameToString n2sTbl[] = {
-		{  "Port", 			&port , 0}
-		,{ "CacheDir", 	&cachedir, 0 }
-		,{ "LogDir", 	&logdir , 0}
-		,{ "SupportDir", 	&suppdir, 0}
-		,{ "SocketPath", 	&fifopath, 0}
-		,{ "PidFile", 	&pidfile, 0}
-		,{ "ReportPage",&reportpage, 0}
-		,{ "VfilePattern", &vfilepat, 0}
-		,{ "PfilePattern", &pfilepat, 0}
-		,{ "WfilePattern", &wfilepat, 0}
-		,{ "AdminAuth",  &adminauth, 0}
-		,{ "BindAddress", &bindaddr, 0}
-		,{ "UserAgent", &agentname, 0}
-		,{ "DontCache",	&tmpDontcache, 0}
-		,{ "DontCacheRequested",	&tmpDontcacherq, 0}
-		,{ "DontCacheResolved",	&tmpDontcacheResolved, 0}
-		,{ "PrecacheFor", &mirrorsrcs, 0}
-		,{ "RequestAppendix", &requestapx, 0}
-		,{ "PassThroughPattern", &PTHOSTS_PATTERN, 0}
-		,{ "CApath", &capath, 0}
-		,{ "CAfile", &cafile, 0}
+		{   "Port",                    &port,             0}
+		,{  "CacheDir",                &cachedir,         0}
+		,{  "LogDir",                  &logdir,           0}
+		,{  "SupportDir",              &suppdir,          0}
+		,{  "SocketPath",              &fifopath,         0}
+		,{  "PidFile",                 &pidfile,          0}
+		,{  "ReportPage",&reportpage,  0}
+		,{  "VfilePattern",            &vfilepat,         0}
+		,{  "PfilePattern",            &pfilepat,         0}
+		,{  "WfilePattern",            &wfilepat,         0}
+		,{  "VfilePatternEx",          &vfilepatEx,       0}
+		,{  "PfilePatternEx",          &pfilepatEx,       0}
+		,{  "WfilePatternEx",          &wfilepatEx,       0}
+		,{  "AdminAuth",               &adminauth,        0}
+		,{  "BindAddress",             &bindaddr,         0}
+		,{  "UserAgent",               &agentname,        0}
+		,{  "DontCache",               &tmpDontcache,     0}
+		,{  "DontCacheRequested",      &tmpDontcacheReq,  0}
+		,{  "DontCacheResolved",       &tmpDontcacheTgt,  0}
+		,{  "PrecacheFor",             &mirrorsrcs,       0}
+		,{  "RequestAppendix",         &requestapx,       0}
+		,{  "PassThroughPattern",      &PTHOSTS_PATTERN,  0}
+		,{  "CApath",                  &capath,           0}
+		,{  "CAfile",                  &cafile,           0}
 };
 
 MapNameToInt n2iTbl[] = {
-		{ "Debug", 		&debug, 0 , 10}
-		,{ "OfflineMode", 	&offlinemode , NULL, 10}
-		,{ "ForeGround", 	&foreground , NULL, 10}
-		,{ "Verbose", 		NULL, "Option is deprecated, ignoring the value." , 10}
-		,{ "ForceManaged", 	&forcemanaged , NULL, 10}
-		,{ "StupidFs", 		&stupidfs , NULL, 10}
-		,{ "VerboseLog",	&verboselog , NULL, 10}
-		,{ "ExTreshold",	&extreshhold, NULL, 10}
-		,{ "MaxSpareThreadSets",	&tpstandbymax, "Deprecated option name, mapped to MaxStandbyConThreads", 10}
-		,{ "MaxStandbyConThreads",	&tpstandbymax, NULL, 10}
-		,{ "MaxConThreads",	&tpthreadmax, NULL, 10}
-		,{ "DnsCacheSeconds", &dnscachetime, NULL, 10}
-		,{ "UnbufferLogs", &debug , NULL, 10}
-		,{ "ExAbortOnProblems", &exfailabort, NULL, 10}
-		,{ "ExposeOrigin", &exporigin, NULL, 10}
-		,{ "LogSubmittedOrigin", &logxff, NULL, 10}
-		,{ "OldIndexUpdater", &oldupdate, "Option is deprecated, ignoring the value." , 10}
-		,{ "RecompBz2", &recompbz2, NULL, 10}
-		,{ "NetworkTimeout", &nettimeout, NULL, 10}
-		,{ "MinUpdateInterval", &updinterval, NULL, 10}
-		,{ "ForwardBtsSoap", &forwardsoap, NULL, 10}
-		,{ "KeepExtraVersions", &keepnver, NULL, 10}
-		,{ "UseWrap", &usewrap, NULL, 10}
-		,{ "FreshIndexMaxAge", &maxtempdelay, NULL, 10}
-		,{ "RedirMax", &redirmax, NULL, 10}
-		,{ "VfileUseRangeOps", &vrangeops, NULL, 10}
-		,{ "ResponseFreezeDetectTime", &stucksecs, NULL, 10}
-		,{ "ReuseConnections", &persistoutgoing, NULL, 10}
-		,{ "PipelineDepth", &pipelinelen, NULL, 10}
-		,{ "ExSuppressAdminNotification", &exsupcount, NULL, 10}
-		,{ "OptProxyTimeout", &optproxytimeout, NULL, 10}
+		{   "Debug",                             &debug,            NULL,    10}
+		,{  "OfflineMode",                       &offlinemode,      NULL,    10}
+		,{  "ForeGround",                        &foreground,       NULL,    10}
+		,{  "ForceManaged",                      &forcemanaged,     NULL,    10}
+		,{  "StupidFs",                          &stupidfs,         NULL,    10}
+		,{  "VerboseLog",                        &verboselog,       NULL,    10}
+		,{  "ExTreshold",                        &extreshhold,      NULL,    10}
+		,{  "MaxStandbyConThreads",              &tpstandbymax,     NULL,    10}
+		,{  "MaxConThreads",                     &tpthreadmax,      NULL,    10}
+		,{  "DnsCacheSeconds",                   &dnscachetime,     NULL,    10}
+		,{  "UnbufferLogs",                      &debug,            NULL,    10}
+		,{  "ExAbortOnProblems",                 &exfailabort,      NULL,    10}
+		,{  "ExposeOrigin",                      &exporigin,        NULL,    10}
+		,{  "LogSubmittedOrigin",                &logxff,           NULL,    10}
+		,{  "RecompBz2",                         &recompbz2,        NULL,    10}
+		,{  "NetworkTimeout",                    &nettimeout,       NULL,    10}
+		,{  "MinUpdateInterval",                 &updinterval,      NULL,    10}
+		,{  "ForwardBtsSoap",                    &forwardsoap,      NULL,    10}
+		,{  "KeepExtraVersions",                 &keepnver,         NULL,    10}
+		,{  "UseWrap",                           &usewrap,          NULL,    10}
+		,{  "FreshIndexMaxAge",                  &maxtempdelay,     NULL,    10}
+		,{  "RedirMax",                          &redirmax,         NULL,    10}
+		,{  "VfileUseRangeOps",                  &vrangeops,        NULL,    10}
+		,{  "ResponseFreezeDetectTime",          &stucksecs,        NULL,    10}
+		,{  "ReuseConnections",                  &persistoutgoing,  NULL,    10}
+		,{  "PipelineDepth",                     &pipelinelen,      NULL,    10}
+		,{  "ExSuppressAdminNotification",       &exsupcount,       NULL,    10}
+		,{  "OptProxyTimeout",                   &optproxytimeout,  NULL,    10}
 
-		,{ "DirPerms", &dirperms, NULL, 8}
-		,{ "FilePerms", &fileperms, NULL, 8}
+		,{  "DirPerms",                          &dirperms,         NULL,    8}
+		,{  "FilePerms",                         &fileperms,        NULL,    8}
+
+		,{ "Verbose", 			NULL,			"Option is deprecated, ignoring the value." , 10}
+		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10}
+		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
+
+		,{ "patrace",	&patrace, 		"Developer shortcut" , 10}
+
 };
 
 void ReadRewriteFile(const string & sFile, const string & sRepName);
@@ -136,10 +140,10 @@ map<cmstring, tRepoData> repoparms;
 unordered_map<string, list<pair<cmstring,decltype(repoparms)::iterator>>> mapUrl2pVname;
 
 
-string * GetStringPtr(const string &key) {
+string * GetStringPtr(LPCSTR key) {
 	for(auto &ent : n2sTbl)
 	{
-		if(0==strcasecmp(key.c_str(), ent.name))
+		if(0==strcasecmp(key, ent.name))
 		{
 			if(ent.warn)
 				cerr << "Warning, " << key << ": " << ent.warn << endl;
@@ -149,10 +153,10 @@ string * GetStringPtr(const string &key) {
 	return NULL;
 }
 
-int * GetIntPtr(const string &key, int &base) {
+int * GetIntPtr(LPCSTR key, int &base) {
 	for(auto &ent : n2iTbl)
 	{
-		if(0==strcasecmp(key.c_str(), ent.name))
+		if(0==strcasecmp(key, ent.name))
 		{
 			if(ent.warn)
 				cerr << "Warning, " << key << ": " << ent.warn << endl;
@@ -163,14 +167,23 @@ int * GetIntPtr(const string &key, int &base) {
 	return NULL;
 }
 
-void printVar(cmstring &key)
+bool appendVar(LPCSTR key, mstring& ret)
 {
 	string *ps=GetStringPtr(key);
 	if(ps)
-		cout << *ps << endl;
-	int base, *pn=GetIntPtr(key, base);
-	if(pn)
-		cout << *pn <<endl;
+	{
+		ret.append(*ps);
+		return true;
+	}
+	int base, *pn = GetIntPtr(key, base);
+	if (pn)
+	{
+		char buf[11];
+		int len=snprintf(buf, sizeof(buf), "%d", *pn);
+		ret.append(buf, len);
+		return true;
+	}
+	return false;
 }
 
 // shortcut for frequently needed code, opens the config file, reads step-by-step
@@ -179,12 +192,13 @@ struct tCfgIter
 {
 	filereader reader;
 	string sLine;
-	tCfgIter(cmstring &fn)
+	string sFilename;
+	tCfgIter(cmstring &fn) : sFilename(fn)
 	{
 		reader.OpenFile(fn);
 		reader.AddEofLines();
 	}
-	inline operator bool() const { return reader.CheckGoodState(false); }
+	inline operator bool() const { return reader.CheckGoodState(false, &sFilename); }
 	inline bool Next()
 	{
 		while(reader.GetOneLine(sLine))
@@ -219,7 +233,7 @@ inline void _FixPostPreSlashes(string &val)
 bool ReadOneConfFile(const string & szFilename)
 {
 	tCfgIter itor(szFilename);
-	itor.reader.CheckGoodState(true);
+	itor.reader.CheckGoodState(true, &szFilename);
 
 	NoCaseStringMap dupeCheck;
 
@@ -308,7 +322,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 	}
 	else if(key=="proxy")
 	{
-		static MYSTD::list<tHttpUrl> alt_proxies;
+		static std::list<tHttpUrl> alt_proxies;
 		tHttpUrl cand;
 		if(value.empty() || cand.SetHttpUrl(value))
 		{
@@ -360,8 +374,8 @@ tStrDeq ExpandFileTokens(cmstring &token)
 					<< " found in config or support directories." << endl;
 		}
 		srcs.clear();
-		for (tStrMap::const_iterator it = bname2path.begin(); it != bname2path.end(); ++it)
-			srcs.push_back(it->second);
+		for (auto& b2p : bname2path)
+			srcs.push_back(b2p.second);
 	}
 	return srcs;
 }
@@ -384,14 +398,12 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 	}
 	else
 	{
-		tStrDeq srcs = ExpandFileTokens(token);
-		
-		for(tStrDeq::const_iterator it=srcs.begin(); it!=srcs.end(); it++)
+		for(auto& src : ExpandFileTokens(token))
 		{
 			if (bAsBackend)
-				ReadBackendsFile(*it, repname);
+				ReadBackendsFile(src, repname);
 			else
-				ReadRewriteFile(*it, repname);
+				ReadRewriteFile(src, repname);
 		}
 	}
 }
@@ -536,7 +548,7 @@ cmstring & GetMimeType(cmstring &path)
 	filereader f;
 	if(f.OpenFile(path, true))
 	{
-		size_t maxLen = MYSTD::min(size_t(255), f.GetSize());
+		size_t maxLen = std::min(size_t(255), f.GetSize());
 		for(UINT i=0; i< maxLen; ++i)
 		{
 			if(!isascii((UINT) *(f.GetBuffer()+i)))
@@ -558,7 +570,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 	int * pnTarget;
 	int nNumBase(10);
 
-	if ( NULL != (psTarget = GetStringPtr(key)))
+	if ( NULL != (psTarget = GetStringPtr(key.c_str())))
 	{
 
 		if(pDupeCheck && !bQuiet)
@@ -572,7 +584,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 
 		*psTarget=value;
 	}
-	else if ( NULL != (pnTarget = GetIntPtr(key, nNumBase)))
+	else if ( NULL != (pnTarget = GetIntPtr(key.c_str(), nNumBase)))
 	{
 
 		if(pDupeCheck && !bQuiet)
@@ -634,30 +646,36 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 	else if(0==strncasecmp(key.c_str(), "Remap-", 6) && !g_testMode)
 	{
 		string vname=key.substr(6, key.npos);
-		tStrVec tokens;
-		Tokenize(value, SPACECHARS, tokens);
-		if(tokens.empty() || vname.empty())
+		if(vname.empty())
 		{
 			if(!bQuiet)
-				cerr << "Found invalid entry, ignoring " << key << ": " << value <<endl;
+				cerr << "Bad repository name in " << key << endl;
 			return false;
 		}
-		int type(0); // prefixes ; backends ; flags
-		for(tStrVecIterConst it=tokens.begin(); it!=tokens.end(); ++it)
+		int type(-1); // nothing =-1; prefixes =0 ; backends =1; flags =2
+		for(tSplitWalk split(&value); split.Next();)
 		{
-			if(it->empty())
+			cmstring s(split);
+			if(s.empty())
 				continue;
-			if(it->at(0)=='#')
+			if(s.at(0)=='#')
 				break;
-
-			if(it->at(0)==';')
+			if(type<0)
+				type=0;
+			if(s.at(0)==';')
 				++type;
 			else if(0 == type)
-				AddRemapInfo(false, *it, vname);
+				AddRemapInfo(false, s, vname);
 			else if(1 == type)
-				AddRemapInfo(true, *it, vname);
+				AddRemapInfo(true, s, vname);
 			else if(2 == type)
-				AddRemapFlag(*it, vname);
+				AddRemapFlag(s, vname);
+		}
+		if(type<0)
+		{
+			if(!bQuiet)
+				cerr << "Invalid entry, no configuration: " << key << ": " << value <<endl;
+			return false;
 		}
 		_AddHooksFile(vname);
 	}
@@ -839,14 +857,13 @@ void ShutDown()
 	repoparms.clear();
 }
 
-void ReadRewriteFile(const string & sFile, const string & sRepName)
+void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 {
-
 	filereader reader;
 	if(debug>4)
 		cerr << "Reading rewrite file: " << sFile <<endl;
 	reader.OpenFile(sFile);
-	reader.CheckGoodState(true);
+	reader.CheckGoodState(true, &sFile);
 	reader.AddEofLines();
 
 	tStrVec hosts, paths;
@@ -957,9 +974,8 @@ void ReadConfigDirectory(const char *szPath, bool bTestMode)
 	confdir=buf; // pickup the last config directory
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
-	tStrDeq srcs=ExpandFilePattern(confdir+SZPATHSEP"*.conf", true);
-	for(tStrDeq::const_iterator it=srcs.begin(); it!=srcs.end(); it++)
-		ReadOneConfFile(*it);
+	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP"*.conf", true))
+		ReadOneConfFile(src);
 #else
 	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
 #endif
@@ -1056,15 +1072,16 @@ void PostProcConfig(bool bDumpConfig)
 	numcores = (int) sysconf(_SC_NPROC_ONLN);
 #endif
 
-   if(!rechecks::CompileUncExpressions(
-		   tmpDontcacherq.empty() ? tmpDontcache : tmpDontcacherq,
-		   tmpDontcacheResolved.empty() ? tmpDontcache : tmpDontcacheResolved))
+   if(!rechecks::CompileUncExpressions(rechecks::NOCACHE_REQ,
+		   tmpDontcacheReq.empty() ? tmpDontcache : tmpDontcacheReq)
+   || !rechecks::CompileUncExpressions(rechecks::NOCACHE_TGT,
+		   tmpDontcacheTgt.empty() ? tmpDontcache : tmpDontcacheTgt))
    {
 	   BARF("An error occurred while compiling regular expression for non-cached paths!");
    }
    tmpDontcache.clear();
-   tmpDontcacheResolved.clear();
-   tmpDontcacherq.clear();
+   tmpDontcacheTgt.clear();
+   tmpDontcacheReq.clear();
 
    if(usewrap == RESERVED_DEFVAL)
    {
@@ -1201,43 +1218,48 @@ time_t BackgroundCleanup()
 
 namespace rechecks
 {
-	MYSTD::pair<regex_t, bool> rex[ematchtype_max];
+// this has the exact order of the "regular" types in the enum
+	struct { regex_t *pat=nullptr, *extra=nullptr; } rex[ematchtype_max];
+	// regex_t* rex[ematchtype_max];
+	vector<regex_t> vecReqPatters, vecTgtPatterns;
 
 bool CompileExpressions()
 {
-	const char *pszExpStrings[] = {
-			acfg::pfilepat.c_str(), acfg::vfilepat.c_str(), acfg::wfilepat.c_str(),
-			BADSTUFF_PATTERN, PTHOSTS_PATTERN.c_str()
-	};
-	for(UINT i=0; i<_countof(pszExpStrings); i++)
+	auto compat = [](regex_t* &re, LPCSTR ps)
 	{
-		if(! pszExpStrings[i] || ! pszExpStrings[i][0] )
-			continue;
+		if(!ps ||! *ps )
+		return true;
+		re=new regex_t;
+		int nErr=regcomp(re, ps, REG_EXTENDED);
+		if(!nErr)
+		return true;
 
-		int nErr=regcomp(&rex[i].first, pszExpStrings[i], REG_EXTENDED);
-		if(nErr)
-		{
-			char buf[1024];
-			regerror(nErr,  &rex[i].first, buf, sizeof(buf));
-			buf[_countof(buf)-1]=0; // better be safe...
-			MYSTD::cerr << buf << ": " << pszExpStrings[i] << MYSTD::endl;
+		char buf[1024];
+		regerror(nErr, re, buf, sizeof(buf));
+		delete re;
+		re=nullptr;
+		buf[_countof(buf)-1]=0; // better be safe...
+			std::cerr << buf << ": " << ps << std::endl;
 			return false;
-		}
-		rex[i].second=true;
-	}
-	return true;
+		};
+	using namespace acfg;
+	return compat(rex[FILE_SOLID].pat, pfilepat.c_str())
+			&& compat(rex[FILE_VOLATILE].pat, vfilepat.c_str())
+			&& compat(rex[FILE_WHITELIST].pat, wfilepat.c_str())
+			&& compat(rex[FILE_SOLID].extra, pfilepatEx.c_str())
+			&& compat(rex[FILE_VOLATILE].extra, vfilepatEx.c_str())
+			&& compat(rex[FILE_WHITELIST].extra, wfilepatEx.c_str())
+			&& compat(rex[NASTY_PATH].pat, BADSTUFF_PATTERN)
+			&& compat(rex[PASSTHROUGH].pat, PTHOSTS_PATTERN.c_str());
 }
 
-bool Match(cmstring &in, eMatchType type)
+uint_fast8_t Match(cmstring &in, eMatchType type)
 {
-//	LOGSTARTs("MatchPattern");
-//	LOG("type: " << type << in);
-	if(!rex[type].second)
-		return false;
-
-	bool bRes = !regexec(&rex[type].first, in.c_str(), 0, NULL, 0);
-//	LOG("result: " << (bRes ? "true" : "false"));
-	return bRes;
+	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, NULL, 0))
+		return 1;
+	if(rex[type].extra && !regexec(rex[type].extra, in.c_str(), 0, NULL, 0))
+		return -1;
+	return 0;
 }
 
 eMatchType GetFiletype(const string & in) {
@@ -1248,12 +1270,10 @@ eMatchType GetFiletype(const string & in) {
 	return FILE_INVALID;
 }
 
-deque<regex_t> vecReqPatters, vecTgtPatterns;
-
 #ifndef MINIBUILD
-inline bool CompileUncachedRex(const string & token, bool bIsTgtPattern, bool bRecursiveCall)
+inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool bRecursiveCall)
 {
-	deque<regex_t> & patvec = bIsTgtPattern ? vecTgtPatterns : vecReqPatters;
+	auto & patvec = (NOCACHE_TGT == type) ? vecTgtPatterns : vecReqPatters;
 
 	if (0!=token.compare(0, 5, "file:")) // pure pattern
 	{
@@ -1264,17 +1284,17 @@ inline bool CompileUncachedRex(const string & token, bool bIsTgtPattern, bool bR
 	else if(!bRecursiveCall) // don't go further than one level
 	{
 		tStrDeq srcs = acfg::ExpandFileTokens(token);
-		for(tStrDeq::const_iterator it=srcs.begin(); it!=srcs.end(); it++)
+		for(const auto& src: srcs)
 		{
-			acfg::tCfgIter itor(*it);
+			acfg::tCfgIter itor(src);
 			if(!itor)
 			{
-				cerr << "Error opening pattern file: " << *it <<endl;
+				cerr << "Error opening pattern file: " << src <<endl;
 				return false;
 			}
 			while(itor.Next())
 			{
-				if(!CompileUncachedRex(itor.sLine, bIsTgtPattern, true))
+				if(!CompileUncachedRex(itor.sLine, type, true))
 					return false;
 			}
 		}
@@ -1287,35 +1307,19 @@ inline bool CompileUncachedRex(const string & token, bool bIsTgtPattern, bool bR
 }
 
 
-bool CompileUncExpressions(const string & req, const string & resolved)
+bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat)
 {
-	for(int i=0; i<2; ++i) // req, tgt, stop
-		for(tSplitWalk split(i? &req : &resolved); split.Next(); )
-			if (!CompileUncachedRex(split, i, false))
-				return false;
+	for(tSplitWalk split(&pat); split.Next(); )
+		if (!CompileUncachedRex(split, type, false))
+			return false;
 	return true;
 }
 
-bool MatchUncacheableRequest(const string & in)
+bool MatchUncacheable(const string & in, NOCACHE_PATTYPE type)
 {
-	LOGSTART2s("MatchUncacheableRequest", in << " against " << vecReqPatters.size() << " patterns");
-	for(deque<regex_t>::const_iterator it=vecReqPatters.begin();
-			it!=vecReqPatters.end(); it++)
-	{
-		if(!regexec(& (*it), in.c_str(), 0, NULL, 0))
+	for(const auto& patre: (type == NOCACHE_REQ) ? vecReqPatters : vecTgtPatterns)
+		if(!regexec(&patre, in.c_str(), 0, NULL, 0))
 			return true;
-	}
-	return false;
-}
-
-bool MatchUncacheableTarget(const string &in)
-{
-	for(deque<regex_t>::const_iterator it=vecTgtPatterns.begin();
-			it!=vecTgtPatterns.end(); it++)
-	{
-		if(!regexec(& (*it), in.c_str(), 0, NULL, 0))
-			return true;
-	}
 	return false;
 }
 
@@ -1353,19 +1357,4 @@ void mkbasedir(const string & path)
             mkdir(path.substr(0,pos).c_str(), acfg::dirperms);
     }
 }
-
-
-
-/*
-int main(int argc, char **argv)
-{
-	if(argc<2)
-		return -1;
-	
-	acfg::tHostInfo hi;
-	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1])<<endl;
-	cout << "Host: " << hi.sHost <<", Port: " << hi.sPort << ", Path: " << hi.sPath<<endl;
-	return 0;
-}
-*/
 

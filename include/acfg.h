@@ -19,21 +19,23 @@ struct ltstring
   }
 };
 
-typedef MYMAP<mstring, mstring, ltstring> NoCaseStringMap;
+typedef std::map<mstring, mstring, ltstring> NoCaseStringMap;
 
 namespace acfg
 {
 
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
 reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, bindaddr, port, sUmask,
-tmpDontcacherq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
+tmpDontcacheReq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
 cafile, capath;
+
+extern mstring pfilepatEx, vfilepatEx, wfilepatEx; // for customization by user
 
 extern int debug, numcores, offlinemode, foreground, verbose, stupidfs, forcemanaged, keepnver,
 verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, dlbufsize, usewrap,
 exporigin, logxff, oldupdate, recompbz2, nettimeout, updinterval, forwardsoap, dirperms, fileperms,
 maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsupcount,
-optproxytimeout;
+optproxytimeout, patrace;
 
 // processed config settings
 extern tHttpUrl proxy_info;
@@ -53,7 +55,7 @@ void PostProcConfig(bool bDumpConfig);
 
 struct tRepoData
 {
-	MYSTD::vector<tHttpUrl> m_backends;
+	std::vector<tHttpUrl> m_backends;
 
 	// dirty little helper to execute custom actions when a jobs associates or forgets this data set
 	struct IHookHandler
@@ -70,7 +72,7 @@ struct tRepoData
 	virtual ~tRepoData();
 };
 
-typedef MYSTD::map<cmstring, tRepoData>::const_iterator tBackendDataRef;
+typedef std::map<cmstring, tRepoData>::const_iterator tBackendDataRef;
 
 bool GetRepNameAndPathResidual(const tHttpUrl & in, mstring & sRetPathResidual, tBackendDataRef &beRef);
 
@@ -81,26 +83,35 @@ time_t BackgroundCleanup();
 extern tStrMap localdirs;
 cmstring & GetMimeType(cmstring &path);
 #define TCP_PORT_MAX 65536
-extern MYSTD::bitset<TCP_PORT_MAX> *pUserPorts;
+extern std::bitset<TCP_PORT_MAX> *pUserPorts;
 
 extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 
-void printVar(cmstring &varname);
-//bool ReadOneConfFile(cmstring&);
+bool appendVar(LPCSTR varname, mstring& ret);
+void dump_trace();
 } // namespace acfg
 
 namespace rechecks
 {
+
+enum NOCACHE_PATTYPE : bool
+{
+	NOCACHE_REQ,
+	NOCACHE_TGT
+};
+
 enum eMatchType
 {
-	FILE_INVALID = -1, FILE_SOLID = 0, FILE_VOLATILE = 1, WHITELIST = 2, NASTY_PATH = 3, PASSTHROUGH = 4,
+	FILE_INVALID = -1,
+	FILE_SOLID = 0, FILE_VOLATILE, FILE_WHITELIST,
+	NASTY_PATH, PASSTHROUGH,
 	ematchtype_max
 };
-bool Match(cmstring &in, eMatchType type);
+uint_fast8_t Match(cmstring &in, eMatchType type);
 
 eMatchType GetFiletype(const mstring &);
-bool MatchUncacheableRequest(const mstring &);
-bool MatchUncacheableTarget(const mstring &);
+bool MatchUncacheable(const mstring &, NOCACHE_PATTYPE);
+bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat);
 bool CompileExpressions();
 }
 

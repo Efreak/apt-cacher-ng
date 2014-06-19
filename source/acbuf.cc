@@ -51,7 +51,7 @@ bool acbuf::initFromFile(const char *szPath)
 }
 
 int acbuf::syswrite(int fd, unsigned int maxlen) {
-    size_t todo(MYSTD::min(maxlen, size()));
+    size_t todo(std::min(maxlen, size()));
 
 	int n;
 	do

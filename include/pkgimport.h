@@ -8,16 +8,15 @@
 #include <cstring>
 #include "csmapping.h"
 
-
 class pkgimport : public tCacheOperation, ifileprocessor
 {
 
 public:
 	// XXX: c++11 using tCacheOperation::tCacheOperation;
-	inline pkgimport(int fd, tSpecialRequest::eMaintWorkType type)
-	: tCacheOperation(fd, type) {};
+	inline pkgimport(const tSpecialRequest::tRunParms& parms)
+	: tCacheOperation(parms) {};
 
-	void Action(const mstring & src) override;
+	void Action() override;
 	
 protected:
 	// FileHandler
@@ -34,9 +33,9 @@ private:
 	 	-	when reusing old fingerprints, a file info description is mapped
 	 		to stored fingerprint (cacheMap from tCacheProcessor)
 	*/
-	tImportMap m_importMap;
-	tImportList m_importRest;
-	MYSTD::set<mstring> m_precachedList;
+	std::map<tFingerprint, tImpFileInfo> m_importMap;
+	std::deque<std::pair<tFingerprint, tImpFileInfo> > m_importRest;
+	std::set<mstring> m_precachedList;
 	/* tFprCacheMap m_cacheMap;*/
 	
 
