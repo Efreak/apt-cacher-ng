@@ -256,7 +256,7 @@ void Setup()
 		
 		tStrVec sAdds;
 		if(bindaddr.empty())
-			sAdds.push_back(""); // one dummy entry to get one NULL later
+			sAdds.push_back(sEmptyString); // one dummy entry to get one NULL later
 		else
 			Tokenize(bindaddr, SPACECHARS, sAdds);
 		for(auto& sad : sAdds)

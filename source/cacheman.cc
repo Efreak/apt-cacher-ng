@@ -1564,11 +1564,11 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::s
 			static const string cygkeys[]={"install: ", "source: "};
 
 			trimBack(sLine);
-			for(UINT i=0;i<_countof(cygkeys);i++)
+			for(auto& ckey: cygkeys)
 			{
-				if(!startsWith(sLine, cygkeys[i]))
+				if(!startsWith(sLine, ckey))
 					continue;
-				if (3 == Tokenize(sLine, "\t ", vsMetrics, false, cygkeys[i].length())
+				if (3 == Tokenize(sLine, "\t ", vsMetrics, false, ckey.length())
 						&& info.fpr.SetCs(vsMetrics[2], CSTYPE_MD5)
 						&& 0>= (info.fpr.size=atoofft(vsMetrics[1].c_str(), -2)))
 				{

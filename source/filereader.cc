@@ -476,15 +476,15 @@ public:
 	void finish(uint8_t* ret) override { md5_finish(this, ret); }
 };
 
-auto_ptr<csumBase> csumBase::GetChecker(CSTYPES type)
+std::unique_ptr<csumBase> csumBase::GetChecker(CSTYPES type)
 {
 	switch(type)
 	{
 	case CSTYPE_MD5:
-		return auto_ptr<csumBase>(new csumMD5);
+		return std::unique_ptr<csumBase>(new csumMD5);
 	case CSTYPE_SHA1:
 	default: // for now
-		return auto_ptr<csumBase>(new csumSHA1);
+		return std::unique_ptr<csumBase>(new csumSHA1);
 	}
 }
 

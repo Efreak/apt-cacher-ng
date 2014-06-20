@@ -76,7 +76,7 @@ class job {
 
       const char * BuildAndEnqueHeader(const fileitem::FiStatus &fistate, const off_t &nGooddataSize, header& respHead);
       fileitem::FiStatus _SwitchToPtItem(const mstring &fileLoc);
-      void SetErrorResponse(const char * errorLine, const char *szLocation=NULL);
+      void SetErrorResponse(const char * errorLine, const char *szLocation=NULL, const char *bodytext=NULL);
       void HandleLocalDownload(const mstring &visPath,
     			const mstring &fsBase, const mstring &fsSubpath);
 

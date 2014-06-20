@@ -70,7 +70,7 @@ MapNameToString n2sTbl[] = {
 		,{  "SupportDir",              &suppdir,          0}
 		,{  "SocketPath",              &fifopath,         0}
 		,{  "PidFile",                 &pidfile,          0}
-		,{  "ReportPage",&reportpage,  0}
+		,{  "ReportPage",              &reportpage,       0}
 		,{  "VfilePattern",            &vfilepat,         0}
 		,{  "PfilePattern",            &pfilepat,         0}
 		,{  "WfilePattern",            &wfilepat,         0}
@@ -215,7 +215,7 @@ struct tCfgIter
 inline bool qgrep(cmstring &needle, cmstring &file)
 {
 	for(acfg::tCfgIter itor(file); itor.Next();)
-		if(itor.sLine.find(needle) != stmiss)
+		if(StrHas(itor.sLine, needle))
 			return true;
 	return false;
 }
@@ -544,7 +544,7 @@ cmstring & GetMimeType(cmstring &path)
 			return it->second;
 	}
 	// try some educated guess... assume binary if we are sure, text if we are almost sure
-	static cmstring os("application/octet-stream"), tp("text/plain"), nix("");
+	static cmstring os("application/octet-stream"), tp("text/plain");
 	filereader f;
 	if(f.OpenFile(path, true))
 	{
@@ -556,7 +556,7 @@ cmstring & GetMimeType(cmstring &path)
 		}
 		return tp;
 	}
-	return nix;
+	return sEmptyString;
 }
 
 bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
@@ -570,7 +570,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 	int * pnTarget;
 	int nNumBase(10);
 
-	if ( NULL != (psTarget = GetStringPtr(key.c_str())))
+	if ( nullptr != (psTarget = GetStringPtr(key.c_str())))
 	{
 
 		if(pDupeCheck && !bQuiet)
@@ -584,7 +584,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 
 		*psTarget=value;
 	}
-	else if ( NULL != (pnTarget = GetIntPtr(key.c_str(), nNumBase)))
+	else if ( nullptr != (pnTarget = GetIntPtr(key.c_str(), nNumBase)))
 	{
 
 		if(pDupeCheck && !bQuiet)
@@ -604,7 +604,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 		}
 		
 		errno=0;
-		char *pEnd(0);
+		char *pEnd(nullptr);
 		long nVal = strtol(pStart, &pEnd, nNumBase);
 
 		if(RESERVED_DEFVAL == nVal)
@@ -738,7 +738,7 @@ bool GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResidual,
 	// get all the URLs matching THE HOSTNAME
 	auto rangeIt=mapUrl2pVname.find(in.sHost+":"+in.GetPort());
 	if(rangeIt == mapUrl2pVname.end())
-		return NULL;
+		return false;
 	
 	tStrPos bestMatchLen(0);
 	decltype(repoparms)::iterator pBestHit = repoparms.end();
@@ -1331,11 +1331,11 @@ bool MatchUncacheable(const string & in, NOCACHE_PATTYPE type)
 mstring GetDirPart(const string &in)
 {
 	if(in.empty())
-		return "";
+		return sEmptyString;
 
 	tStrPos end = in.find_last_of(CPATHSEP);
 	if(end == stmiss) // none? don't care then
-		return "";
+		return sEmptyString;
 
 	return in.substr(0, end+1);
 }

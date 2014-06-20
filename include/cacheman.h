@@ -163,7 +163,7 @@ private:
 
 	bool IsDeprecatedArchFile(cmstring &sFilePathRel);
 
-	const tIfileAttribs attr_dummy_pure;
+	const tIfileAttribs attr_dummy_pure = tIfileAttribs();
 	tIfileAttribs attr_dummy;
 };
 
