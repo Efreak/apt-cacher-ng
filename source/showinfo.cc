@@ -65,8 +65,13 @@ void tMarkupFileSend::Run()
 				auto propEnd = (LPCSTR) memchr(propStart+2, (UINT) '}', pend-propStart+2);
 				if(!propEnd)// unclosed, seriously? Just dump the rest at the user
 					goto no_more_props;
-				string key(propStart+2, propEnd-propStart-2);
-				SendChunk(GetProp(key, sEmptyString));
+				if(propStart+6<propEnd && ':' == *(propStart+2))
+					SendIfElse(propStart+3, propEnd);
+				else
+				{
+					string key(propStart+2, propEnd-propStart-2);
+					SendProp(key);
+				}
 				pr=propEnd+1;
 			} else {
 				// not a property string, send as-is
@@ -83,18 +88,13 @@ void tMarkupFileSend::Run()
 	}
 }
 
-cmstring& tDeleter::GetProp(cmstring &key, cmstring& altValue)
+void tDeleter::SendProp(cmstring &key)
 {
 	if(key=="count")
-		return KeepCopy(ltos(files.size()));
+		return SendChunk(ltos(files.size()));
 	if(key == "stuff")
-		return KeepCopy(sHidParms);
-	if(key == "blockIfConfirmed")
-		return m_parms.type == workDELETE ? block : none;
-	if(key == "noneIfConfirmed")
-		return m_parms.type == workDELETE ? none : block;
-
-	return tMarkupFileSend::GetProp(key, altValue);
+		return SendChunk(sHidParms);
+	return tMarkupFileSend::SendProp(key);
 }
 
 tDeleter::tDeleter(const tRunParms& parms)
@@ -163,24 +163,63 @@ tMaintPage::tMaintPage(const tRunParms& parms)
 		lockguard g(tr);
 		tr.clear();
 	}
-
 }
 
-cmstring& tMaintPage::GetProp(cmstring &key, cmstring& altValue)
+// compares c string with a determined part of another string
+#define RAWEQ(longstring, len, pfx) (len==(sizeof(pfx)-1) && 0==memcmp(longstring, pfx, sizeof(pfx)-1))
+#define PFXCMP(longstring, len, pfx) ((sizeof(pfx)-1) <= len && 0==memcmp(longstring, pfx, sizeof(pfx)-1))
+
+inline int tMarkupFileSend::CheckCondition(LPCSTR id, size_t len)
+{
+	if(PFXCMP(id, len, "cfg:"))
+	{
+		int bas;
+		string key(id+4, len-4);
+		auto p=acfg::GetIntPtr(key.c_str(), bas);
+		if(p)
+			return !*p;
+		return -1;
+	}
+	if(RAWEQ(id, len, "delConfirmed"))
+		return m_parms.type != workDELETE;
+
+	return -1;
+}
+
+void tMarkupFileSend::SendIfElse(LPCSTR pszBeginSep, LPCSTR pszEnd) {
+	auto sep = pszBeginSep;
+	auto key=sep+1;
+	auto valYes=(LPCSTR) memchr(key, (UINT) *sep, pszEnd-key);
+	if(!valYes) // heh?
+		return;
+	auto sel=CheckCondition(key, valYes-key);
+	if(sel<0) // heh?
+		return;
+	valYes++; // now really there
+	auto valNo=(LPCSTR) memchr(valYes, (UINT) *sep, pszEnd-valYes);
+	if(!valNo) // heh?
+			return;
+	if(0==sel)
+		SendChunk(valYes, valNo-valYes);
+	else
+		SendChunk(valNo+1, pszEnd-valNo-1);
+}
+
+
+void tMaintPage::SendProp(cmstring &key)
 {
 	if(key=="statsRow")
 	{
 		if(!StrHas(m_parms.cmd, "doCount"))
-			return sReportButton;
-		scratch.push_back(aclog::GetStatReport());
-		return scratch.back();
+			return SendChunk(sReportButton);
+		return SendChunk(aclog::GetStatReport());
 	}
 	static cmstring defStringChecked("checked");
 	if(key == "aOeDefaultChecked")
-		return acfg::exfailabort ? defStringChecked : sEmptyString;
+		return SendChunk(acfg::exfailabort ? defStringChecked : sEmptyString);
 	if(key == "curPatTraceCol")
 	{
-		scratch.push_back(sEmptyString);
+		string sList;
 		auto& tr(tTraceData::getInstance());
 		lockguard g(tr);
 		int bcount=0;
@@ -191,27 +230,17 @@ cmstring& tMaintPage::GetProp(cmstring &key, cmstring& altValue)
 				bcount++;
 				continue;
 			}
-			scratch.back().append(x);
+			sList.append(x);
 			if(&x != &(*tr.rbegin()))
-				scratch.back().append("<br>");
+				sList.append("<br>");
 		}
 		if(bcount)
-			scratch.back().append("some strings not considered due to security restrictions<br>");
-		return scratch.back();
+			sList.append("<br>some strings not considered due to security restrictions<br>");
+		return SendChunk(sList);
 	}
 	// XXX: could add more generic way, like =cfgvar?value:otherwisevalue
 	// but there is not enough need for this yet
-	if(key=="inlineIfPatrace")
-		return acfg::patrace ? sInline : none;
-	if(key=="noneIfPatrace")
-		return !acfg::patrace ? sInline : none;
-
-	if(key == "ifNotTracingDisabled")
-		return acfg::patrace ? sEmptyString : sDisabled;
-	if(key == "ifTracingDisabled")
-			return acfg::patrace ? sDisabled : sEmptyString;
-
-	return tMarkupFileSend::GetProp(key, altValue);
+	return tMarkupFileSend::SendProp(key);
 }
 
 void tMarkupFileSend::SendRaw(const char* pBuf, size_t len)
@@ -227,28 +256,26 @@ void tMarkupFileSend::SendRaw(const char* pBuf, size_t len)
 	SendRawData(pBuf, len, 0);
 }
 
-cmstring& tMarkupFileSend::GetProp(cmstring &key, cmstring& altValue)
+void tMarkupFileSend::SendProp(cmstring &key)
 {
 	if (startsWithSz(key, "cfg:"))
 	{
-		scratch.push_back(sEmptyString);
-		acfg::appendVar(key.c_str() + 4, scratch.back());
-		return scratch.back();
+		string tmp;
+		acfg::appendVar(key.c_str() + 4, tmp);
+		return SendChunk(tmp);
 	}
 	if (key == "serverip")
-		return GetHostname();
+		return SendChunk(GetHostname());
 	tSS buf(1024);
 	if (key == "footer")
-		return GetFooter();
+		return SendChunk(GetFooter());
 	if (key == "hostname")
 	{
 		buf.clear();
 		auto n = gethostname(buf.wptr(), buf.freecapa());
 		if (!n)
-			return KeepCopy(buf.wptr());
+			return SendChunk(buf.wptr(), strlen(buf.wptr()));
 	}
 	if(key=="random")
-		return KeepCopy(ltos(rand()));
-
-	return altValue;
+		return SendChunk(ltos(rand()));
 }

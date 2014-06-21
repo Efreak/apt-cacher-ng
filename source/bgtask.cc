@@ -205,7 +205,7 @@ void tSpecOpDetachable::Run()
 
 			if (!m_delCboxFilter.empty())
 				SendChunkRemoteOnly(NAMEWLEN(
-				"<br><b>Action(s):</b> "
+				"<br><b>Action(s):</b><br>"
 					"<input type=\"submit\" name=\"doDelete\""
 					" value=\"Delete selected files\">"
 					"|<button type=\"button\" onclick=\"checkOrUncheck(true);\">Check all</button>"

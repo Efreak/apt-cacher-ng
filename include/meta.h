@@ -354,8 +354,8 @@ class tSplitWalk
 	LPCSTR m_seps;
 
 public:
-	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS)
-	: s(*line), start(0), len(stmiss), oob(line->size()), m_seps(separators) {}
+	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, UINT begin=0)
+	: s(*line), start(begin), len(stmiss), oob(line->size()), m_seps(separators) {}
 	inline bool Next()
 	{
 		if(len != stmiss) // not initial state, find the next position

@@ -15,22 +15,19 @@ protected:
 			const char *mimetype,
 			const char *httpstatus);
 	// presets some default properties for header/footer/etc.
-	void SetDefaultProps();
 	void SendRaw(const char *pBuf, size_t len);
 	const char *m_sFileName, *m_sMimeType, *m_sHttpCode;
 	bool m_bFatalError=false;
 
 	// uses fallback lookup map, can be feed with data in subclass constructor
-	virtual cmstring& GetProp(cmstring &key, cmstring& altValue);
-	//inline void AddProp(cmstring &k, cmstring& v) {m_properties.insert(std::make_pair(k,v));};
-
-	std::list<mstring> scratch;
-	// keep a copy of some temporary string there and use reference
-	inline mstring& KeepCopy(cmstring& tmp) { scratch.push_back(tmp); return scratch.back();}
+	virtual void SendProp(cmstring &key);
+	// XXX: could make this virtual and customizable, if needed
+	int CheckCondition(LPCSTR key, size_t len); // 0: true, 1: false, -1: unknown condition
 
 private:
-	tMarkupFileSend(const tMarkupFileSend&);
-	tMarkupFileSend operator=(const tMarkupFileSend&);
+	tMarkupFileSend(const tMarkupFileSend&) =delete;
+	tMarkupFileSend operator=(const tMarkupFileSend&)=delete;
+	void SendIfElse(LPCSTR pszBeginSep, LPCSTR pszEnd);
 };
 
 struct tStyleCss : public tMarkupFileSend
@@ -45,7 +42,7 @@ class tDeleter : public tMarkupFileSend
 	tSS sHidParms;
 public:
 	tDeleter(const tRunParms& parms);
-	virtual cmstring& GetProp(cmstring &key, cmstring& altValue) override;
+	virtual void SendProp(cmstring &key) override;
 };
 
 struct tShowInfo : public tMarkupFileSend
@@ -57,8 +54,6 @@ struct tShowInfo : public tMarkupFileSend
 struct tMaintPage : public tMarkupFileSend
 {
 	tMaintPage(const tRunParms& parms);
-	virtual cmstring& GetProp(cmstring &key, cmstring& altValue) override;
+	virtual void SendProp(cmstring &key) override;
 };
-
-
 #endif /*SHOWINFO_H_*/

@@ -20,12 +20,12 @@
                      <div class="visarea" id="logArea">
                         ${stuff} <!-- remember the file set -->
                         <!-- the question/execution variants are switched by the rendering class -->
-                        <div style="display:${noneIfConfirmed}">
+                        <div style="display:${:,delConfirmed,none,block}">
                            Do you really wish to remove ${count} file(s) from your cache?
                            <p>
                            <input type="submit" name="doDeleteYes" value="Delete now"> <input type="submit" name="doNothing" value="Return to main page">
                         </div>
-                        <div style="display:${blockIfConfirmed}">
+                        <div style="display:${:,delConfirmed,block,none}">
                            Deleted ${count} files.
                            <p>
                            <input type="submit" name="doNothing" value="Return to main page">
