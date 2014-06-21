@@ -85,7 +85,7 @@ void tSpecialRequest::SendChunk(const char *data, size_t len)
 
 void tSpecialRequest::EndTransfer() 
 {
-	SendRawData(NAMEWLEN("0\r\n\r\n"), MSG_NOSIGNAL);
+	SendRawData(WITHLEN("0\r\n\r\n"), MSG_NOSIGNAL);
 }
 
 void tSpecialRequest::SendChunkedPageHeader(const char *httpstatus, const char *mimetype)

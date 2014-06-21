@@ -131,7 +131,7 @@ tStrPos findHostStart(const mstring & sUri);
 #define _countof(x) sizeof(x)/sizeof(x[0])
 #endif
 
-#define NAMEWLEN(x) x, (_countof(x)-1)
+#define WITHLEN(x) x, (_countof(x)-1)
 
 //extern mstring sPathSep, sPathSepUnix, sCR, sCRLF;
 

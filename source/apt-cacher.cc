@@ -258,11 +258,16 @@ int main(int argc, char **argv)
 
 	if(PRINTCFGVAR)
 	{
-		string var;
-		if(!acfg::appendVar(PRINTCFGVAR, var))
-			return EXIT_FAILURE;
-		cout << var << endl;
-		return EXIT_SUCCESS;
+		auto ps(acfg::GetStringPtr(PRINTCFGVAR));
+		if(ps)
+		{
+			cout << *ps << endl;
+			return EXIT_SUCCESS;
+		}
+		auto pi(acfg::GetIntPtr(PRINTCFGVAR));
+		if(pi)
+			cout << *pi << endl;
+		return pi ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
 	if(!aclog::open())

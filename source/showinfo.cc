@@ -9,6 +9,13 @@
 
 using namespace std;
 
+#ifdef SendFmt
+// just be sure about that, its buffer is used for local purposes and
+// so it shall not interfere with tFmtSendObj
+#undef SendFmt
+#undef SendFmtRemote
+#endif
+
 static cmstring sReportButton("<tr><td class=\"colcont\"><form action=\"#stats\" method=\"get\">"
 					"<input type=\"submit\" name=\"doCount\" value=\"Count Data\"></form>"
 					"</td><td class=\"colcont\" colspan=8 valign=top><font size=-2>"
@@ -229,10 +236,10 @@ void tMaintPage::SendProp(cmstring &key)
 			}
 			m_fmtHelper<<x;
 			if(&x != &(*tr.rbegin()))
-				m_fmtHelper.append(NAMEWLEN("<br>"));
+				m_fmtHelper.append(WITHLEN("<br>"));
 		}
 		if(bcount)
-			m_fmtHelper.append(NAMEWLEN("<br>some strings not considered due to security restrictions<br>"));
+			m_fmtHelper.append(WITHLEN("<br>some strings not considered due to security restrictions<br>"));
 		return SendChunk(m_fmtHelper);
 	}
 	return tMarkupFileSend::SendProp(key);
@@ -246,8 +253,8 @@ void tMarkupFileSend::SendRaw(const char* pBuf, size_t len)
 			<< (m_sMimeType ? m_sMimeType : "text/html")
 			<< "\r\nContent-Length: " << len
 			<< "\r\n\r\n";
-	SendRawData(m_fmtHelper.rptr(), m_fmtHelper.size(), MSG_MORE);
-	SendRawData(pBuf, len, 0);
+	SendRawData(m_fmtHelper.rptr(), m_fmtHelper.size(), MSG_MORE | MSG_NOSIGNAL);
+	SendRawData(pBuf, len, MSG_NOSIGNAL);
 }
 
 void tMarkupFileSend::SendProp(cmstring &key)

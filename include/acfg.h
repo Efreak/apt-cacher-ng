@@ -87,7 +87,6 @@ extern std::bitset<TCP_PORT_MAX> *pUserPorts;
 
 extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 
-bool appendVar(LPCSTR varname, mstring& ret);
 void dump_trace();
 int * GetIntPtr(LPCSTR key);
 mstring * GetStringPtr(LPCSTR key);

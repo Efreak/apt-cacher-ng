@@ -174,25 +174,6 @@ int * GetIntPtr(LPCSTR key) {
 	return nullptr;
 }
 
-bool appendVar(LPCSTR key, mstring& ret)
-{
-	string *ps=GetStringPtr(key);
-	if(ps)
-	{
-		ret.append(*ps);
-		return true;
-	}
-	int base, *pn = GetIntPtr(key, base);
-	if (pn)
-	{
-		char buf[11];
-		int len=snprintf(buf, sizeof(buf), "%d", *pn);
-		ret.append(buf, len);
-		return true;
-	}
-	return false;
-}
-
 // shortcut for frequently needed code, opens the config file, reads step-by-step
 // and skips comment and empty lines
 struct tCfgIter
