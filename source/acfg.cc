@@ -167,6 +167,13 @@ int * GetIntPtr(LPCSTR key, int &base) {
 	return NULL;
 }
 
+int * GetIntPtr(LPCSTR key) {
+	for(auto &ent : n2iTbl)
+		if(0==strcasecmp(key, ent.name))
+			return ent.ptr;
+	return nullptr;
+}
+
 bool appendVar(LPCSTR key, mstring& ret)
 {
 	string *ps=GetStringPtr(key);

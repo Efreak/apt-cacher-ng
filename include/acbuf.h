@@ -108,7 +108,8 @@ public:
     inline tSS(const tSS &src) : acbuf(), m_fmtmode(src.m_fmtmode) { add(src.data(), src.size()); }
     tSS & addEscaped(const char *fmt);
     inline tSS & operator<<(const char c) { reserve(size()+1); *(wptr())=c; got(1); return *this;}
-
+    inline tSS & clean() { clear(); return *this;}
+    inline tSS & append(const char *data, size_t len) { add(data,len); return *this; }
 
 protected:
     char fmtbuf[22];

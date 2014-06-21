@@ -42,7 +42,7 @@ void tMarkupFileSend::Run()
 	{
 		m_sHttpCode="500 Template Not Found";
 		m_sMimeType="text/plain";
-		return SendRaw(errstring.c_str(), errstring.size());
+		return SendRaw(errstring.data(), (size_t) errstring.size());
 	}
 
 	pr = fr.GetBuffer();
@@ -89,7 +89,7 @@ void tMarkupFileSend::Run()
 void tDeleter::SendProp(cmstring &key)
 {
 	if(key=="count")
-		return SendChunk(tSS()<<files.size());
+		return SendChunk(m_fmtHelper.clean()<<files.size());
 	if(key == "stuff")
 		return SendChunk(sHidParms);
 	return tMarkupFileSend::SendProp(key);
@@ -171,11 +171,10 @@ inline int tMarkupFileSend::CheckCondition(LPCSTR id, size_t len)
 {
 	if(PFXCMP(id, len, "cfg:"))
 	{
-		int bas;
 		string key(id+4, len-4);
-		auto p=acfg::GetIntPtr(key.c_str(), bas);
+		auto p=acfg::GetIntPtr(key.c_str());
 		if(p)
-			return !*p;
+			return ! *p;
 		return -1;
 	}
 	if(RAWEQ(id, len, "delConfirmed"))
@@ -217,40 +216,37 @@ void tMaintPage::SendProp(cmstring &key)
 		return SendChunk(acfg::exfailabort ? defStringChecked : sEmptyString);
 	if(key == "curPatTraceCol")
 	{
-		string sList;
+		m_fmtHelper.clear();
 		auto& tr(tTraceData::getInstance());
 		lockguard g(tr);
 		int bcount=0;
-		for(auto& x: tr)
+		for(cmstring& x: tr)
 		{
 			if(x.find_first_of(BADCHARS) not_eq stmiss)
 			{
 				bcount++;
 				continue;
 			}
-			sList.append(x);
+			m_fmtHelper<<x;
 			if(&x != &(*tr.rbegin()))
-				sList.append("<br>");
+				m_fmtHelper.append(NAMEWLEN("<br>"));
 		}
 		if(bcount)
-			sList.append("<br>some strings not considered due to security restrictions<br>");
-		return SendChunk(sList);
+			m_fmtHelper.append(NAMEWLEN("<br>some strings not considered due to security restrictions<br>"));
+		return SendChunk(m_fmtHelper);
 	}
-	// XXX: could add more generic way, like =cfgvar?value:otherwisevalue
-	// but there is not enough need for this yet
 	return tMarkupFileSend::SendProp(key);
 }
 
 void tMarkupFileSend::SendRaw(const char* pBuf, size_t len)
 {
-	tSS buf(10230);
 	// go the easy way if nothing to replace there
-	buf << "HTTP/1.1 " << (m_sHttpCode ? m_sHttpCode : "200 OK")
+	m_fmtHelper.clean() << "HTTP/1.1 " << (m_sHttpCode ? m_sHttpCode : "200 OK")
 			<< "\r\nConnection: close\r\nContent-Type: "
 			<< (m_sMimeType ? m_sMimeType : "text/html")
 			<< "\r\nContent-Length: " << len
 			<< "\r\n\r\n";
-	SendRawData(buf.rptr(), buf.size(), MSG_MORE);
+	SendRawData(m_fmtHelper.rptr(), m_fmtHelper.size(), MSG_MORE);
 	SendRawData(pBuf, len, 0);
 }
 
@@ -258,21 +254,27 @@ void tMarkupFileSend::SendProp(cmstring &key)
 {
 	if (startsWithSz(key, "cfg:"))
 	{
-		string tmp;
-		acfg::appendVar(key.c_str() + 4, tmp);
-		return SendChunk(tmp);
+		auto ckey=key.c_str() + 4;
+		auto ps(acfg::GetStringPtr(ckey));
+		if(ps)
+			return SendChunk(*ps);
+		auto pi(acfg::GetIntPtr(ckey));
+		if(pi)
+			return SendChunk(m_fmtHelper.clean() << *pi);
+		return;
 	}
 	if (key == "serverip")
 		return SendChunk(GetHostname());
-	tSS buf(1024);
 	if (key == "footer")
 		return SendChunk(GetFooter());
+
 	if (key == "hostname")
 	{
-		if(gethostname(buf.wptr(), buf.freecapa()))
+		m_fmtHelper.clean().setsize(500);
+		if(gethostname(m_fmtHelper.wptr(), m_fmtHelper.freecapa()))
 			return; // failed?
-		return SendChunk(buf.wptr(), strlen(buf.wptr()));
+		return SendChunk(m_fmtHelper.wptr(), strlen(m_fmtHelper.wptr()));
 	}
 	if(key=="random")
-		return SendChunk(buf << rand());
+		return SendChunk(m_fmtHelper.clean() << rand());
 }

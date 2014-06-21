@@ -89,7 +89,8 @@ extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 
 bool appendVar(LPCSTR varname, mstring& ret);
 void dump_trace();
-int * GetIntPtr(LPCSTR key, int &base);
+int * GetIntPtr(LPCSTR key);
+mstring * GetStringPtr(LPCSTR key);
 } // namespace acfg
 
 namespace rechecks
