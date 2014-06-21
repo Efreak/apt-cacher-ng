@@ -13,8 +13,6 @@ static cmstring sReportButton("<tr><td class=\"colcont\"><form action=\"#stats\"
 					"<input type=\"submit\" name=\"doCount\" value=\"Count Data\"></form>"
 					"</td><td class=\"colcont\" colspan=8 valign=top><font size=-2>"
 					"<i>Not calculated, click \"Count data\"</i></font></td></tr>");
-static cmstring sDisabled("disabled");
-static cmstring block("block"), none("none"), sInline("inline");
 
 // some NOOPs
 tMarkupFileSend::tMarkupFileSend(const tSpecialRequest::tRunParms& parms,
@@ -91,7 +89,7 @@ void tMarkupFileSend::Run()
 void tDeleter::SendProp(cmstring &key)
 {
 	if(key=="count")
-		return SendChunk(ltos(files.size()));
+		return SendChunk(tSS()<<files.size());
 	if(key == "stuff")
 		return SendChunk(sHidParms);
 	return tMarkupFileSend::SendProp(key);
@@ -271,11 +269,10 @@ void tMarkupFileSend::SendProp(cmstring &key)
 		return SendChunk(GetFooter());
 	if (key == "hostname")
 	{
-		buf.clear();
-		auto n = gethostname(buf.wptr(), buf.freecapa());
-		if (!n)
-			return SendChunk(buf.wptr(), strlen(buf.wptr()));
+		if(gethostname(buf.wptr(), buf.freecapa()))
+			return; // failed?
+		return SendChunk(buf.wptr(), strlen(buf.wptr()));
 	}
 	if(key=="random")
-		return SendChunk(ltos(rand()));
+		return SendChunk(buf << rand());
 }
