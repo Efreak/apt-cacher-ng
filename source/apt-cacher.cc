@@ -40,7 +40,7 @@ using namespace std;
 
 static void usage();
 static void SetupCacheDir();
-void term_handler(int signum);
+void sig_handler(int signum);
 void log_handler(int signum);
 void dump_handler(int signum);
 void check_algos();
@@ -194,7 +194,7 @@ int main(int argc, char **argv)
 	tSigAct act = tSigAct();
 
 	sigfillset(&act.sa_mask);
-	act.sa_handler = &term_handler;
+	act.sa_handler = &sig_handler;
 	sigaction(SIGTERM, &act, NULL);
 	sigaction(SIGINT, &act, NULL);
 	sigaction(SIGQUIT, &act, NULL);
@@ -375,26 +375,31 @@ void log_handler(int)
 	aclog::close(true);
 }
 
-void term_handler(int signum)
+void sig_handler(int signum)
 {
-	switch (signum)
-	{
-		case (SIGTERM):
-		case (SIGINT):
-		case (SIGQUIT):
-			{
-				g_victor.Stop();
-				aclog::close(false);
-				// and then terminate, resending the signal to default handler
-				tSigAct act = tSigAct();
-				sigfillset(&act.sa_mask);
-				act.sa_handler = SIG_DFL;
-				if (sigaction(signum, &act, NULL))
-					abort(); // shouldn't be needed, but have a sane fallback in case
-				raise(signum);
-			}
-		default:
-			return;
+	switch (signum) {
+	case (SIGBUS):
+		/* OH NO!
+		 * Something going wrong with the mmaped files.
+		 * Log the current state and shutdown gracefully.
+		 */
+		signum = SIGTERM;
+		filereader::report_bad_state();
+	case (SIGTERM):
+	case (SIGINT):
+	case (SIGQUIT): {
+		g_victor.Stop();
+		aclog::close(false);
+		// and then terminate, resending the signal to default handler
+		tSigAct act = tSigAct();
+		sigfillset(&act.sa_mask);
+		act.sa_handler = SIG_DFL;
+		if (sigaction(signum, &act, NULL))
+			abort(); // shouldn't be needed, but have a sane fallback in case
+		raise(signum);
+	}
+	default:
+		return;
 	}
 }
 

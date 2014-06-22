@@ -11,8 +11,10 @@
 #include "md5.h"
 #include "sha1.h"
 #include "csmapping.h"
+#include "aclogger.h"
 
 #include <iostream>
+#include <atomic>
 
 // must be something sensible, ratio impacts stack size by inverse power of 2
 #define BUFSIZEMIN 4095 // makes one page on i386 and should be enough for typical index files
@@ -37,6 +39,9 @@
 
 using namespace std;
 
+string g_lastMmmapedFile;
+// to make sure not to deal with incomplete operations from a signal handler
+atomic_bool g_bLastFileSet;
 
 class IDecompressor
 {
@@ -316,6 +321,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 	m_nBufPos=0;
 	m_nCurLine=0;
 	m_bError = m_bEof = false;
+	g_bLastFileSet.store(true);
 	return true;
 }
 
@@ -336,7 +342,7 @@ bool filereader::CheckGoodState(bool bErrorsConsiderFatal, cmstring *reportFileP
 void filereader::Close()
 {
 	m_nCurLine=0;
-	
+	g_bLastFileSet.store(false);
 	if (m_szFileBuf != MAP_FAILED)
 	{
 		munmap(m_szFileBuf, m_nBufSize);
@@ -354,6 +360,20 @@ void filereader::Close()
 
 filereader::~filereader() {
 	Close();
+}
+
+void filereader::report_bad_state()
+{
+	if(g_bLastFileSet.load())
+	{
+		aclog::err(string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
+			+g_lastMmmapedFile+" . Please check your system logs for related errors.");
+	}
+	else
+	{
+		aclog::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
+			"Please check your system logs for related errors.");
+	}
 }
 
 bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
