@@ -384,7 +384,8 @@ void sig_handler(int signum)
 		 * Log the current state and shutdown gracefully.
 		 */
 		signum = SIGTERM;
-		filereader::report_bad_state();
+		void report_bad_mmap_state();
+		report_bad_mmap_state();
 	case (SIGTERM):
 	case (SIGINT):
 	case (SIGQUIT): {

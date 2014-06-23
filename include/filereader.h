@@ -49,7 +49,6 @@ public:
 	//! @brief Helper to make GetOneLine assume that there is newline(s) when file ends
 	inline void AddEofLines(UINT nCount=1) { m_nEofLines=nCount; }
 
-	static void report_bad_state();
 private:
 
 	bool m_bError, m_bEof;

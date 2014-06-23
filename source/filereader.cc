@@ -362,7 +362,7 @@ filereader::~filereader() {
 	Close();
 }
 
-void filereader::report_bad_state()
+void report_bad_mmap_state()
 {
 	if(g_bLastFileSet.load())
 	{
