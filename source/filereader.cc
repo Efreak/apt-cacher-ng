@@ -201,7 +201,7 @@ static const uint8_t xzMagic[] =
 lzmaMagic[] = {0x5d, 0, 0, 0x80};
 #endif
 
-filereader::filereader() 
+filereader::filereader()
 :
 	m_bError(false),
 	m_bEof(false),
@@ -214,10 +214,10 @@ filereader::filereader()
 {
 };
 
-bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
+bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTrailingNewlines)
 {
 	Close(); // reset to clean state
-	
+	m_nEofLines=nFakeTrailingNewlines;
 	m_fd = open(sFilename.c_str(), O_RDONLY);
 
 	if (m_fd < 0)
@@ -245,7 +245,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 	else // unknown... ok, probe it
 	{
 		filereader fh;
-		if (fh.OpenFile(sFilename, true) && fh.GetSize() >= 10)
+		if (fh.OpenFile(sFilename, true, nFakeTrailingNewlines) && fh.GetSize() >= 10)
 		{
 			if(false) {}
 #ifdef HAVE_ZLIB

@@ -1422,10 +1422,9 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::s
 		return false;
 	}
 
-
 	filereader reader;
 
-	if (!reader.OpenFile(CACHE_BASE+sPath))
+	if (!reader.OpenFile(SABSPATH(sPath), false, 1))
 	{
 		if(! GetFlags(sPath).forgiveDlErrors) // that would be ok (added by ignorelist), don't bother
 		{
@@ -1435,8 +1434,6 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::s
 		}
 		return false;
 	}
-
-	reader.AddEofLines();
 
 	// some common variables
 	mstring sLine, key, val;

@@ -183,8 +183,7 @@ struct tCfgIter
 	string sFilename;
 	tCfgIter(cmstring &fn) : sFilename(fn)
 	{
-		reader.OpenFile(fn);
-		reader.AddEofLines();
+		reader.OpenFile(fn, false, 1);
 	}
 	inline operator bool() const { return reader.CheckGoodState(false, &sFilename); }
 	inline bool Next()
@@ -850,9 +849,8 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 	filereader reader;
 	if(debug>4)
 		cerr << "Reading rewrite file: " << sFile <<endl;
-	reader.OpenFile(sFile);
+	reader.OpenFile(sFile, false, 1);
 	reader.CheckGoodState(true, &sFile);
-	reader.AddEofLines();
 
 	tStrVec hosts, paths;
 	string sLine, key, val;
