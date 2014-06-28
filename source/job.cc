@@ -1027,7 +1027,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 			bool bFreshnessForced = (m_type != rechecks::FILE_INDEX
 				|| m_pReqHead->h[header::ACNGFSMARK] || !pIfmo);
 
-			struct tm tm1={0}, tm2={0};
+			struct tm tm1=tm(), tm2=tm();
 			bool bIfModSeenAndChecked=false;
 			if(pIfmo && header::ParseDate(pIfmo, &tm1) && header::ParseDate(pLastMo, &tm2))
 			{

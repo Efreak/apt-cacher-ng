@@ -1,3 +1,14 @@
+apt-cacher-ng (0.7.27) BETA; urgency=low
+
+  * Starting with this release, this branch goes into maintenance mode and
+    future versions 0.7.x will receive only the most urgent bugfixes and
+    database updates, and some other small and harmless changes
+  * Merged build system changes from 0.8x branch with little modifications,
+    including move of dbgen rules into dbgen/Makefile
+  * Database update
+
+ -- 
+
 apt-cacher-ng (0.7.26) BETA; urgency=low
 
   * FIX: Correct re-escaping URLs on internal forwarding and stop
