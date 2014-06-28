@@ -39,6 +39,12 @@ apt-cacher-ng (0.7.26-1) unstable; urgency=medium
 
  -- Eduard Bloch <blade@debian.org>  Sat, 22 Mar 2014 14:20:56 +0100
 
+apt-cacher-ng (0.7.25~bpo70+1) wheezy-backports; urgency=low
+
+  * Updated wheezy backport
+
+ -- Eduard Bloch <blade@debian.org>  Mon, 03 Feb 2014 22:11:29 +0100
+
 apt-cacher-ng (0.7.25-1) unstable; urgency=medium
 
   * New upstream version with various bugfixes
@@ -130,6 +136,13 @@ apt-cacher-ng (0.7.19-1) unstable; urgency=low
   * Converted apt-cacher-ng to debhelper 9 (closes: #722712)
 
  -- Eduard Bloch <blade@debian.org>  Mon, 28 Oct 2013 22:20:09 +0100
+
+apt-cacher-ng (0.7.18-1~bpo70+1) wheezy-backports; urgency=low
+
+  * Wheezy backport
+  * Disabled native systemd support due to limited tool availability
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 18 Sep 2013 22:14:34 +0200
 
 apt-cacher-ng (0.7.18-1) unstable; urgency=medium
 
