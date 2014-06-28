@@ -1,3 +1,9 @@
+apt-cacher-ng (0.7.26-2~bpo70+2) wheezy-backports; urgency=low
+
+  * Fixed target branch
+
+ -- 
+
 apt-cacher-ng (0.7.26-2~bpo70+1) unstable; urgency=low
 
   * Wheezy backport, changes only from 0.7.25-1~bpo70+1
