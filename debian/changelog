@@ -1,3 +1,9 @@
+apt-cacher-ng (0.7.26-2~bpo70+1) unstable; urgency=low
+
+  * Wheezy backport, changes only from 0.7.25-1~bpo70+1
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 28 Jun 2014 13:54:12 +0200
+
 apt-cacher-ng (0.7.26-2) unstable; urgency=high
 
   * Do not print the submitted (raw) file path in the response body of a 403
