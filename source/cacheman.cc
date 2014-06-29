@@ -872,7 +872,7 @@ void tCacheOperation::UpdateIndexFiles()
 	const string sPatchBaseAbs=CACHE_BASE+sPatchBaseRel;
 	mkbasedir(sPatchBaseAbs);
 
-	tContId2eqClass eqClasses;
+	tContId2eqClass& eqClasses = m_eqClasses;
 
 	// just reget them as-is and we are done
 	if (m_bForceDownload)

@@ -151,6 +151,8 @@ public:
 
 private:
 
+	tContId2eqClass m_eqClasses;
+
 	bool Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
 			cmstring *psTmpUnpackedAbs=NULL);
 	void InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter);
