@@ -42,9 +42,14 @@
 
 using namespace std;
 
-string g_lastMmmapedFile;
 // to make sure not to deal with incomplete operations from a signal handler
-atomic_bool g_bLastFileSet;
+class : public lockable
+{
+public:
+	bool valid=false;
+	pthread_t last_thread;
+	string path;
+} g_LastMmapFile;
 
 namedmutex::mx_name_space g_noTruncateLocks;
 
@@ -343,7 +348,12 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 	m_nBufPos=0;
 	m_nCurLine=0;
 	m_bError = m_bEof = false;
-	g_bLastFileSet.store(true);
+	{
+		lockguard g(g_LastMmapFile);
+		g_LastMmapFile.valid=true;
+		g_LastMmapFile.path=sFilename;
+		g_LastMmapFile.last_thread=pthread_self();
+	}
 	return true;
 }
 
@@ -364,7 +374,11 @@ bool filereader::CheckGoodState(bool bErrorsConsiderFatal, cmstring *reportFileP
 void filereader::Close()
 {
 	m_nCurLine=0;
-	g_bLastFileSet.store(false);
+	{
+		lockguard g(g_LastMmapFile);
+		g_LastMmapFile.valid=false;
+	}
+
 	if (m_szFileBuf != MAP_FAILED)
 	{
 		munmap(m_szFileBuf, m_nBufSize);
@@ -386,10 +400,22 @@ filereader::~filereader() {
 
 void report_bad_mmap_state()
 {
-	if(g_bLastFileSet.load())
+	decltype(g_LastMmapFile) lastrep;
+	{
+		lockguard g(g_LastMmapFile);
+		lastrep=g_LastMmapFile;
+	}
+
+	if(lastrep.valid)
 	{
 		aclog::err(string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
-			+g_lastMmmapedFile+" . Please check your system logs for related errors.");
+			+lastrep.path+" . Please check your system logs for related errors.");
+
+		// This does not work, maybe there are no usable cancellation points in the code there
+		// XXX: find a reliable way to inject an exception into another thread or somehow
+		// jump out of the legacy code :-(
+		//
+		// pthread_cancel(lastrep.last_thread);
 	}
 	else
 	{

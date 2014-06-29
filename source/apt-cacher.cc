@@ -133,12 +133,13 @@ void runDemo()
 	 std::cerr << tbuf << std::endl;
 	 exit(1);
 
+*/
 	if (getenv("GETSUM"))
 	{
 		uint8_t csum[20];
 		string s(getenv("GETSUM"));
 		off_t resSize;
-		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize, stdout);
+		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize /*, stdout*/);
 		for (UINT i = 0; i < sizeof(csum); i++)
 			printf("%02x", csum[i]);
 		printf("\n");
@@ -149,15 +150,13 @@ void runDemo()
 		exit(0);
 	}
 
-
+/*
 	LPCSTR envvar = getenv("PARSEIDX");
 	if (envvar)
 	{
 		int parseidx_demo(LPCSTR);
 		exit(parseidx_demo(envvar));
 	}
-
-	 */
 
 	if (getenv("SHRINK"))
 	{
@@ -167,6 +166,7 @@ void runDemo()
 		auto n=(filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize, stdout));
 		exit(n);
 	}
+	*/
 }
 
 #endif
@@ -395,9 +395,15 @@ void sig_handler(int signum)
 		 * Something going wrong with the mmaped files.
 		 * Log the current state and shutdown gracefully.
 		 */
-		signum = SIGTERM;
+
 		void report_bad_mmap_state();
 		report_bad_mmap_state();
+		aclog::flush();
+
+		// nope, not reliable yet, just exit ASAP and hope that systemd will restart us
+		// return;
+		signum = SIGTERM;
+
 	case (SIGTERM):
 	case (SIGINT):
 	case (SIGQUIT): {
