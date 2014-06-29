@@ -1055,6 +1055,10 @@ void tCacheOperation::UpdateIndexFiles()
 	// Let the most recent files be in the front of the list, but the uncompressed ones have priority
 	for(auto& it: eqClasses)
 	{
+#ifdef DEBUG
+		for(auto&x : it.second.paths)
+			assert(!x.empty());
+#endif
 		sort(it.second.paths.begin(), it.second.paths.end(),
 				fctLessThanCompMtime(CACHE_BASE));
 		// and while we are at it, give them pointers back to the eq-classes

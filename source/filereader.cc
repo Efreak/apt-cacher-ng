@@ -12,9 +12,12 @@
 #include "sha1.h"
 #include "csmapping.h"
 #include "aclogger.h"
+#include "namedmutex.h"
 
 #include <iostream>
 #include <atomic>
+
+//#define SHRINKTEST
 
 // must be something sensible, ratio impacts stack size by inverse power of 2
 #define BUFSIZEMIN 4095 // makes one page on i386 and should be enough for typical index files
@@ -42,6 +45,8 @@ using namespace std;
 string g_lastMmmapedFile;
 // to make sure not to deal with incomplete operations from a signal handler
 atomic_bool g_bLastFileSet;
+
+namedmutex::mx_name_space g_noTruncateLocks;
 
 class IDecompressor
 {
@@ -218,7 +223,16 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 {
 	Close(); // reset to clean state
 	m_nEofLines=nFakeTrailingNewlines;
+
+	// this makes sure not to truncate file while it's mmaped
+	namedmutex mmapMx(g_noTruncateLocks, sFilename);
+	lockguard guardWriteMx(mmapMx);
+
 	m_fd = open(sFilename.c_str(), O_RDONLY);
+#ifdef SHRINKTEST
+	m_fd = open(sFilename.c_str(), O_RDWR);
+#warning destruction mode!!!
+#endif
 
 	if (m_fd < 0)
 	{
@@ -244,22 +258,22 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 #endif
 	else // unknown... ok, probe it
 	{
-		filereader fh;
-		if (fh.OpenFile(sFilename, true, nFakeTrailingNewlines) && fh.GetSize() >= 10)
+		m_UncompBuf.setsize(10);
+		if(m_UncompBuf.sysread(m_fd) >= 10)
 		{
 			if(false) {}
 #ifdef HAVE_ZLIB
-			else if (0 == memcmp(gzMagic, fh.GetBuffer(), _countof(gzMagic)))
+			else if (0 == memcmp(gzMagic, m_UncompBuf.rptr(), _countof(gzMagic)))
 				m_Dec.reset(new tGzDec);
 #endif
 #ifdef HAVE_LIBBZ2
-			else if (0 == memcmp(bz2Magic, fh.GetBuffer(), _countof(bz2Magic)))
+			else if (0 == memcmp(bz2Magic, m_UncompBuf.rptr(), _countof(bz2Magic)))
 				m_Dec.reset(new tBzDec);
 #endif
 #ifdef HAVE_LZMA
-			else if (0 == memcmp(xzMagic, fh.GetBuffer(), _countof(xzMagic)))
+			else if (0 == memcmp(xzMagic, m_UncompBuf.rptr(), _countof(xzMagic)))
 				m_Dec.reset(new tXzDec(false));
-			else if (0 == memcmp(lzmaMagic, fh.GetBuffer(), _countof(lzmaMagic)))
+			else if (0 == memcmp(lzmaMagic, m_UncompBuf.rptr(), _countof(lzmaMagic)))
 				m_Dec.reset(new tXzDec(true));
 #endif
 		}
@@ -318,6 +332,14 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 	posix_madvise(m_szFileBuf, statbuf.st_size, POSIX_MADV_SEQUENTIAL);
 #endif
 	
+#if 0//def SHRINKTEST
+	if (ftruncate(m_fd, GetSize()/2) < 0)
+	{
+		perror ("ftruncate");
+		::exit(1);
+	}
+#endif
+
 	m_nBufPos=0;
 	m_nCurLine=0;
 	m_bError = m_bEof = false;

@@ -9,6 +9,7 @@
 #include "acbuf.h"
 #include "fileio.h"
 #include "cleaner.h"
+#include "namedmutex.h"
 
 #include <errno.h>
 #include <algorithm>
@@ -520,6 +521,11 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		struct stat stbuf;
 				
 		mkbasedir(sPathAbs);
+
+		// this makes sure not to truncate file while it's mmaped
+		namedmutex mmapMx(g_noTruncateLocks, sPathAbs);
+		lockguard guardWriteMx(mmapMx);
+
 		m_filefd=open(sPathAbs.c_str(), flags, acfg::fileperms);
 		ldbg("file opened?! returned: " << m_filefd);
 		
@@ -594,7 +600,8 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		int count=m_head.StoreToFile(sHeadPath);
 
 		if(count<0)
-			return withErrorAndKillFile( (-count!=ENOSPC ? "503 Cache storage error" : "503 OUT OF DISK SPACE"));
+			return withErrorAndKillFile( (-count!=ENOSPC
+					? "503 Cache storage error" : "503 OUT OF DISK SPACE"));
 			
 		// double-check the sane state
 		if(0!=fstat(m_filefd, &stbuf) || stbuf.st_size!=m_nSizeChecked)

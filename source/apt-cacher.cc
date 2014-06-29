@@ -133,8 +133,6 @@ void runDemo()
 	 std::cerr << tbuf << std::endl;
 	 exit(1);
 
-	 */
-
 	if (getenv("GETSUM"))
 	{
 		uint8_t csum[20];
@@ -159,6 +157,16 @@ void runDemo()
 		exit(parseidx_demo(envvar));
 	}
 
+	 */
+
+	if (getenv("SHRINK"))
+	{
+		uint8_t csum[20];
+		string s(getenv("SHRINK"));
+		off_t resSize;
+		auto n=(filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize, stdout));
+		exit(n);
+	}
 }
 
 #endif
@@ -176,10 +184,6 @@ int main(int argc, char **argv)
 	SSL_library_init();
 #endif
 
-#ifdef DEBUG
-	runDemo();
-#endif
-
 	const char *envvar=getenv("TOBASE64");
 	if(envvar)
 	{
@@ -195,6 +199,7 @@ int main(int argc, char **argv)
 
 	sigfillset(&act.sa_mask);
 	act.sa_handler = &sig_handler;
+	sigaction(SIGBUS, &act, NULL);
 	sigaction(SIGTERM, &act, NULL);
 	sigaction(SIGINT, &act, NULL);
 	sigaction(SIGQUIT, &act, NULL);
@@ -212,6 +217,10 @@ int main(int argc, char **argv)
 #endif
 #ifdef SIGXFSZ
 	sigaction(SIGXFSZ, &act, NULL);
+#endif
+
+#ifdef DEBUG
+	runDemo();
 #endif
 
 	// preprocess some startup related parameters
@@ -377,6 +386,9 @@ void log_handler(int)
 
 void sig_handler(int signum)
 {
+#ifdef DEBUG
+	cerr << "caught signal " << signum <<endl;
+#endif
 	switch (signum) {
 	case (SIGBUS):
 		/* OH NO!
