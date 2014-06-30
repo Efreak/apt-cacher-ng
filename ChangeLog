@@ -9,6 +9,10 @@ apt-cacher-ng (0.8) BETA; urgency=low
   * Additional pattern options that extend the current ones, allowing to user
     to add custom configuration without interference with future updates of
     default settings
+  * Special file name pattern set which identifies static files before
+    name is checked against volatile file pattern. The feature is now used to
+    identify special .gpg files that belong to static files while volatile
+    rule matches all others .gpg files (Debian bug 720165)
   * Partial rewrite of internal web page creation code, new syntax for server
     side includes, with smooth access to configuration options and less
     computational overhead
