@@ -46,48 +46,63 @@ static class : public lockable, public NoCaseStringMap {} mimemap;
 
 std::bitset<TCP_PORT_MAX> *pUserPorts = NULL;
 
-typedef struct
+struct MapNameToString
 {
 	const char *name; mstring *ptr;
-	const char *warn;
-}
-MapNameToString;
+};
 
-typedef struct
+struct MapNameToInt
 {
 	const char *name; int *ptr;
 	const char *warn; uint8_t base;
-}
-MapNameToInt;
+};
 
+/*
+bool ProtoSetKeyVal(cmstring& key, cmstring&value);
+struct MapNameToFunc
+{
+	const char *name;
+	const char *warn;
+	//decltype(ProtoSetKeyVal) func;
+	std::function<bool(cmstring&,cmstring&)> func;
+};
+bool testcall(cmstring& key, cmstring&value){return true;}
+auto foo=testcall;
+//decltype(ProtoSetKeyVal) hm=testcall;
+MapNameToFunc n2fTbl[] = {
+		{ "LocalDirsBla", 0, [](const std::string&a,const std::string&b)->bool{return true;}},
+		{ "LocalDirsFoo", 0, foo}
+};
+// XXX: too cumbersome too use, cannot skip skeleton, is there a better way?
+*/
 
 #ifndef MINIBUILD
 
 MapNameToString n2sTbl[] = {
-		{   "Port",                    &port,             0}
-		,{  "CacheDir",                &cachedir,         0}
-		,{  "LogDir",                  &logdir,           0}
-		,{  "SupportDir",              &suppdir,          0}
-		,{  "SocketPath",              &fifopath,         0}
-		,{  "PidFile",                 &pidfile,          0}
-		,{  "ReportPage",              &reportpage,       0}
-		,{  "VfilePattern",            &vfilepat,         0}
-		,{  "PfilePattern",            &pfilepat,         0}
-		,{  "WfilePattern",            &wfilepat,         0}
-		,{  "VfilePatternEx",          &vfilepatEx,       0}
-		,{  "PfilePatternEx",          &pfilepatEx,       0}
-		,{  "WfilePatternEx",          &wfilepatEx,       0}
-		,{  "AdminAuth",               &adminauth,        0}
-		,{  "BindAddress",             &bindaddr,         0}
-		,{  "UserAgent",               &agentname,        0}
-		,{  "DontCache",               &tmpDontcache,     0}
-		,{  "DontCacheRequested",      &tmpDontcacheReq,  0}
-		,{  "DontCacheResolved",       &tmpDontcacheTgt,  0}
-		,{  "PrecacheFor",             &mirrorsrcs,       0}
-		,{  "RequestAppendix",         &requestapx,       0}
-		,{  "PassThroughPattern",      &PTHOSTS_PATTERN,  0}
-		,{  "CApath",                  &capath,           0}
-		,{  "CAfile",                  &cafile,           0}
+		{   "Port",                    &port}
+		,{  "CacheDir",                &cachedir}
+		,{  "LogDir",                  &logdir}
+		,{  "SupportDir",              &suppdir}
+		,{  "SocketPath",              &fifopath}
+		,{  "PidFile",                 &pidfile}
+		,{  "ReportPage",              &reportpage}
+		,{  "VfilePattern",            &vfilepat}
+		,{  "PfilePattern",            &pfilepat}
+		,{  "WfilePattern",            &wfilepat}
+		,{  "VfilePatternEx",          &vfilepatEx}
+		,{  "PfilePatternEx",          &pfilepatEx}
+		,{  "WfilePatternEx",          &wfilepatEx}
+		,{  "AdminAuth",               &adminauth}
+		,{  "BindAddress",             &bindaddr}
+		,{  "UserAgent",               &agentname}
+		,{  "DontCache",               &tmpDontcache}
+		,{  "DontCacheRequested",      &tmpDontcacheReq}
+		,{  "DontCacheResolved",       &tmpDontcacheTgt}
+		,{  "PrecacheFor",             &mirrorsrcs}
+		,{  "RequestAppendix",         &requestapx}
+		,{  "PassThroughPattern",      &PTHOSTS_PATTERN}
+		,{  "CApath",                  &capath}
+		,{  "CAfile",                  &cafile}
 };
 
 MapNameToInt n2iTbl[] = {
@@ -126,9 +141,9 @@ MapNameToInt n2iTbl[] = {
 		,{ "Verbose", 			NULL,			"Option is deprecated, ignoring the value." , 10}
 		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10}
 		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
-
+#ifdef DEBUG
 		,{ "patrace",	&patrace, 		"Developer shortcut" , 10}
-
+#endif
 };
 
 void ReadRewriteFile(const string & sFile, const string & sRepName);
@@ -142,15 +157,9 @@ unordered_map<string, list<pair<cmstring,decltype(repoparms)::iterator>>> mapUrl
 
 string * GetStringPtr(LPCSTR key) {
 	for(auto &ent : n2sTbl)
-	{
 		if(0==strcasecmp(key, ent.name))
-		{
-			if(ent.warn)
-				cerr << "Warning, " << key << ": " << ent.warn << endl;
 			return ent.ptr;
-		}
-	}
-	return NULL;
+	return nullptr;
 }
 
 int * GetIntPtr(LPCSTR key, int &base) {
@@ -164,7 +173,7 @@ int * GetIntPtr(LPCSTR key, int &base) {
 			return ent.ptr;
 		}
 	}
-	return NULL;
+	return nullptr;
 }
 
 int * GetIntPtr(LPCSTR key) {
@@ -760,7 +769,7 @@ const tRepoData * GetBackendVec(cmstring &vname)
 {
 	auto it=repoparms.find(vname);
 	if(it==repoparms.end() || it->second.m_backends.empty())
-		return NULL;
+		return nullptr;
 	return & it->second;
 }
 
@@ -804,24 +813,8 @@ void ReadBackendsFile(const string & sFile, const string &sRepName)
 		{
 			if(keyEq("Site", key))
 				entry.sHost=val;
-			/* TODO: not supported yet, maybe add later - push to a vector of hosts and add multiple later
-			if(keyEq("Aliases", key))
-			{
-				val+=" ";
-				for(string::size_type posA(0), posB(0);
-					posA<val.length();
-					posA=posB+1)
-				{
-					posB=val.find_first_of(" \t\r\n\f\v", posA);
-					if(posB!=posA)
-						hosts.push_back(val.substr(posA, posB-posA));
-				}
-			}
-			*/
 			else if(keyEq("Archive-http", key) || keyEq("X-Archive-http", key))
-			{
 				entry.sPath=val;
-			}
 		}
 		else
 		{
@@ -844,6 +837,9 @@ void ShutDown()
 	repoparms.clear();
 }
 
+/* This parses also legacy files, i.e. raw RFC-822 formated mirror catalogue from the
+ * Debian archive maintenance repository.
+ */
 void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 {
 	filereader reader;
@@ -942,11 +938,7 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 
 tRepoData::~tRepoData()
 {
-	if(m_pHooks)
-	{
-		delete m_pHooks;
-		m_pHooks=NULL;
-	}
+	delete m_pHooks;
 }
 
 void ReadConfigDirectory(const char *szPath, bool bTestMode)
@@ -960,7 +952,7 @@ void ReadConfigDirectory(const char *szPath, bool bTestMode)
 	confdir=buf; // pickup the last config directory
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
-	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP"*.conf", true))
+	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
 		ReadOneConfFile(src);
 #else
 	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
@@ -1007,7 +999,7 @@ void PostProcConfig(bool bDumpConfig)
 	   BARF("Cache directory unknown or not absolute, terminating...");
    
    if(!rechecks::CompileExpressions())
-	   BARF("An error occured while compiling file type regular expression!");
+	   BARF("An error occurred while compiling file type regular expression!");
    
    if(acfg::tpthreadmax < 0)
 	   acfg::tpthreadmax = MAX_VAL(int);
@@ -1112,10 +1104,12 @@ void PostProcConfig(bool bDumpConfig)
 				{
 					cerr << n2s.name << " = ";
 					for (const char *p = n2s.ptr->c_str(); *p; p++)
+					{
 						if ('\\' == *p)
 							cmine << "\\\\";
 						else
 							cmine << *p;
+					}
 					cmine << endl;
 				}
 			}
@@ -1204,9 +1198,8 @@ time_t BackgroundCleanup()
 
 namespace rechecks
 {
-// this has the exact order of the "regular" types in the enum
+	// this has the exact order of the "regular" types in the enum
 	struct { regex_t *pat=nullptr, *extra=nullptr; } rex[ematchtype_max];
-	// regex_t* rex[ematchtype_max];
 	vector<regex_t> vecReqPatters, vecTgtPatterns;
 
 bool CompileExpressions()
