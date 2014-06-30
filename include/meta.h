@@ -131,7 +131,7 @@ tStrPos findHostStart(const mstring & sUri);
 #define _countof(x) sizeof(x)/sizeof(x[0])
 #endif
 
-#define NAMEWLEN(x) x, (_countof(x)-1)
+#define WITHLEN(x) x, (_countof(x)-1)
 
 //extern mstring sPathSep, sPathSepUnix, sCR, sCRLF;
 
@@ -354,8 +354,8 @@ class tSplitWalk
 	LPCSTR m_seps;
 
 public:
-	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS)
-	: s(*line), start(0), len(stmiss), oob(line->size()), m_seps(separators) {}
+	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, UINT begin=0)
+	: s(*line), start(begin), len(stmiss), oob(line->size()), m_seps(separators) {}
 	inline bool Next()
 	{
 		if(len != stmiss) // not initial state, find the next position

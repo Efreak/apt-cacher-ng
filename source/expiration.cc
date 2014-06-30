@@ -25,9 +25,6 @@ using namespace std;
 #warning Unlinking parts defused
 #endif
 
-#define ERRMSGABORT if(m_nErrorCount && m_bErrAbort) { SendChunk(sErr); return; }
-#define ERRABORT if(m_nErrorCount && m_bErrAbort) { return; }
-
 #define TIMEEXPIRED(t) (t < (m_gMaintTimeNow-acfg::extreshhold*86400))
 #define TIME_AGONY (m_gMaintTimeNow-acfg::extreshhold*86400)
 
@@ -54,7 +51,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			{
 				string sPathRel(sDirRel + filenameHave);
 				if(ContHas(m_forceKeepInTrash,sPathRel))
-				return true;
+					return true;
 				string sPathAbs(CACHE_BASE+sPathRel);
 
 				off_t lenFromStat = descHave.fpr.size; // original size before uncompressing
@@ -134,7 +131,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				}
 				else
 				{
-					tIfileAttribs at = GetFlags(sPathRel);
+					auto& at = GetFlags(sPathRel);
 					if(!at.parseignore && !at.forgiveDlErrors) // just warn
 					{
 						SendFmt<< WCLASS "header file missing or damaged for "
@@ -340,22 +337,23 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 	FILE_RAII f;
     if(!bPurgeNow)
     {
-
         DropExceptionalVersions();
-
         string sDbFileAbs=CACHE_BASE+FNAME_PENDING;
-
         f.p = fopen(sDbFileAbs.c_str(), "w");
         if(!f)
         {
-            SendChunk("Unable to open " FNAME_PENDING " for writing, attempting to recreate... ");
+            SendChunk(WITHLEN("Unable to open " FNAME_PENDING
+            		" for writing, attempting to recreate... "));
             ::unlink(sDbFileAbs.c_str());
             f.p=::fopen(sDbFileAbs.c_str(), "w");
             if(f)
-                SendChunk("OK\n<br>\n");
+                SendChunk(WITHLEN("OK\n<br>\n"));
             else
             {
-                SendChunk("<span class=\"ERROR\">FAILED. ABORTING. Check filesystem and file permissions.</span>");
+                SendChunk(WITHLEN(
+                		"<span class=\"ERROR\">"
+                		"FAILED. ABORTING. Check filesystem and file permissions."
+                		"</span>"));
                 return;
             }
         }
@@ -377,14 +375,12 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 			{
 				LOG("forcetrash flag set, whitelist does not apply, not to be removed");
 			}
-			else
+			else if (Match(fileGroup.first, FILE_WHITELIST) || Match(sPathRel, FILE_WHITELIST))
 			{
-				if (Match(fileGroup.first, FILE_WHITELIST) || Match(sPathRel, FILE_WHITELIST))
-				{
-					LOG("Protected file, not to be removed");
-					continue;
-				}
+				LOG("Protected file, not to be removed");
+				continue;
 			}
+
 			if (dir_props.second.nLostAt<=0) // heh, accidentally added?
 				continue;
 			//cout << "Unreferenced: " << it->second.sDirname << it->first <<endl;
@@ -410,7 +406,8 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 
 				nCount++;
 				tagSpace += desc.fpr.size;
-				fprintf(f, "%lu\t%s\t%s\n", desc.nLostAt,
+				fprintf(f, "%lu\t%s\t%s\n",
+						(unsigned long) desc.nLostAt,
 						dir_props.first.c_str(),
 						fileGroup.first.c_str());
 			}
@@ -470,7 +467,7 @@ void expiration::Action()
 		filereader f;
 		if(!f.OpenFile(SABSPATH(FNAME_DAMAGED)))
 		{
-			SendChunk("List of damaged files not found");
+			SendChunk(WITHLEN("List of damaged files not found"));
 			return;
 		}
 		mstring s;
@@ -498,7 +495,7 @@ void expiration::Action()
 
 	SetCommonUserFlags(m_parms.cmd);
 
-	m_bIncompleteIsDamaged=(m_parms.cmd.find("incomAsDamaged")!=stmiss);
+	m_bIncompleteIsDamaged=StrHas(m_parms.cmd, "incomAsDamaged");
 
 	SendChunk("<b>Locating potentially expired files in the cache...</b><br>\n");
 
@@ -534,7 +531,7 @@ void expiration::Action()
 
 	m_damageList.open(SZABSPATH(FNAME_DAMAGED), ios::out | ios::trunc);
 
-	SendChunk("<b>Validating cache contents...</b><br>\n");
+	SendChunk(WITHLEN("<b>Validating cache contents...</b><br>\n"));
 	ProcessSeenIndexFiles(*this);
 
 	if(CheckAndReportError() || CheckStopSignal())
@@ -543,8 +540,8 @@ void expiration::Action()
 	// update timestamps of pending removals
 	LoadPreviousData(false);
 
-	SendChunk("<b>Reviewing candidates for removal...</b><br>\n");
-	RemoveAndStoreStatus(m_parms.cmd.find("purgeNow")!=stmiss);
+	SendChunk(WITHLEN("<b>Reviewing candidates for removal...</b><br>\n"));
+	RemoveAndStoreStatus(StrHas(m_parms.cmd, "purgeNow"));
 	PurgeMaintLogs();
 
 	DelTree(CACHE_BASE+"_actmp");
@@ -569,11 +566,11 @@ void expiration::Action()
 			::unlink(FAIL_INI);
 			f = ::fopen(FAIL_INI, "w");
 			if (f)
-				SendChunk("OK\n<br>\n");
+				SendChunk(WITHLEN("OK\n<br>\n"));
 			else
 			{
-				SendChunk(
-						"<span class=\"ERROR\">FAILED. ABORTING. Check filesystem and file permissions.</span>");
+				SendChunk(WITHLEN("<span class=\"ERROR\">FAILED. ABORTING. "
+						"Check filesystem and file permissions.</span>"));
 			}
 		}
 		if (f)
@@ -589,17 +586,17 @@ void expiration::PurgeMaintLogs()
 {
 	tStrDeq logs = ExpandFilePattern(acfg::logdir + SZPATHSEP MAINT_PFX "*.log*");
 	if (logs.size() > 2)
-		SendChunk(
-				"Found required cleanup tasks: purging maintenance logs...<br>\n");
-	for (tStrDeq::const_iterator it = logs.begin(); it != logs.end(); it++)
+		SendChunk(WITHLEN(
+				"Found required cleanup tasks: purging maintenance logs...<br>\n"));
+	for (const auto &s: logs)
 	{
-		time_t id = atoofft(it->c_str() + acfg::logdir.size() + 7);
+		time_t id = atoofft(s.c_str() + acfg::logdir.size() + 7);
 		//cerr << "id ist: "<< id<<endl;
 		if (id == GetTaskId())
 			continue;
 		//cerr << "Remove: "<<globbuf.gl_pathv[i]<<endl;
 #ifdef ENABLED
-		::unlink(it->c_str());
+		::unlink(s.c_str());
 #endif
 	}
 }
@@ -710,17 +707,17 @@ void expiration::LoadPreviousData(bool bForceInsert)
 	while(reader.GetOneLine(sLine))
 	{
 		char *eptr(NULL);
-		const char *s = sLine.c_str();
+		auto s = sLine.c_str();
 		time_t timestamp = strtoull(s, &eptr, 10);
 		if (!eptr || *eptr != '\t' || !timestamp || timestamp > m_gMaintTimeNow) // where is the DeLorean?
 			continue;
-		const char *sep = strchr(++eptr, (unsigned) '\t');
+		auto sep = strchr(++eptr, (unsigned) '\t');
 		if (!sep)
 			continue;
 		string dir(eptr, sep - eptr);
 		if (!dir.empty() && '/' != *(sep - 1))
 			dir += "/";
-		const char *term = strchr(++sep, (unsigned) '\t'); // just to be sure
+		auto term = strchr(++sep, (unsigned) '\t'); // just to be sure
 		if (term)
 			continue;
 
@@ -763,8 +760,8 @@ inline bool expiration::CheckAndReportError()
 {
 	if (m_nErrorCount > 0 && m_bErrAbort)
 	{
-		SendChunk(sAbortMsg);
-		SendChunk(m_nPrevFailCount+(m_nErrorCount>0) > acfg::exsupcount
+		SendFmt << sAbortMsg <<
+				((m_nPrevFailCount+(m_nErrorCount>0) > acfg::exsupcount)
 				? "<!-- TELL:THE:ADMIN -->"
 						: "<!-- NOT:TELLING:THE:ADMIN:YET -->");
 		return true;

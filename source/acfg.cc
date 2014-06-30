@@ -167,23 +167,11 @@ int * GetIntPtr(LPCSTR key, int &base) {
 	return NULL;
 }
 
-bool appendVar(LPCSTR key, mstring& ret)
-{
-	string *ps=GetStringPtr(key);
-	if(ps)
-	{
-		ret.append(*ps);
-		return true;
-	}
-	int base, *pn = GetIntPtr(key, base);
-	if (pn)
-	{
-		char buf[11];
-		int len=snprintf(buf, sizeof(buf), "%d", *pn);
-		ret.append(buf, len);
-		return true;
-	}
-	return false;
+int * GetIntPtr(LPCSTR key) {
+	for(auto &ent : n2iTbl)
+		if(0==strcasecmp(key, ent.name))
+			return ent.ptr;
+	return nullptr;
 }
 
 // shortcut for frequently needed code, opens the config file, reads step-by-step
@@ -195,8 +183,7 @@ struct tCfgIter
 	string sFilename;
 	tCfgIter(cmstring &fn) : sFilename(fn)
 	{
-		reader.OpenFile(fn);
-		reader.AddEofLines();
+		reader.OpenFile(fn, false, 1);
 	}
 	inline operator bool() const { return reader.CheckGoodState(false, &sFilename); }
 	inline bool Next()
@@ -862,9 +849,8 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 	filereader reader;
 	if(debug>4)
 		cerr << "Reading rewrite file: " << sFile <<endl;
-	reader.OpenFile(sFile);
+	reader.OpenFile(sFile, false, 1);
 	reader.CheckGoodState(true, &sFile);
-	reader.AddEofLines();
 
 	tStrVec hosts, paths;
 	string sLine, key, val;

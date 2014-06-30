@@ -11,8 +11,13 @@
 #include "md5.h"
 #include "sha1.h"
 #include "csmapping.h"
+#include "aclogger.h"
+#include "namedmutex.h"
 
 #include <iostream>
+#include <atomic>
+
+//#define SHRINKTEST
 
 // must be something sensible, ratio impacts stack size by inverse power of 2
 #define BUFSIZEMIN 4095 // makes one page on i386 and should be enough for typical index files
@@ -37,6 +42,16 @@
 
 using namespace std;
 
+// to make sure not to deal with incomplete operations from a signal handler
+class : public lockable
+{
+public:
+	bool valid=false;
+	pthread_t last_thread;
+	string path;
+} g_LastMmapFile;
+
+namedmutex::mx_name_space g_noTruncateLocks;
 
 class IDecompressor
 {
@@ -196,7 +211,7 @@ static const uint8_t xzMagic[] =
 lzmaMagic[] = {0x5d, 0, 0, 0x80};
 #endif
 
-filereader::filereader() 
+filereader::filereader()
 :
 	m_bError(false),
 	m_bEof(false),
@@ -209,11 +224,20 @@ filereader::filereader()
 {
 };
 
-bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
+bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTrailingNewlines)
 {
 	Close(); // reset to clean state
-	
+	m_nEofLines=nFakeTrailingNewlines;
+
+	// this makes sure not to truncate file while it's mmaped
+	namedmutex mmapMx(g_noTruncateLocks, sFilename);
+	lockguard guardWriteMx(mmapMx);
+
 	m_fd = open(sFilename.c_str(), O_RDONLY);
+#ifdef SHRINKTEST
+	m_fd = open(sFilename.c_str(), O_RDWR);
+#warning destruction mode!!!
+#endif
 
 	if (m_fd < 0)
 	{
@@ -239,22 +263,22 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 #endif
 	else // unknown... ok, probe it
 	{
-		filereader fh;
-		if (fh.OpenFile(sFilename, true) && fh.GetSize() >= 10)
+		m_UncompBuf.setsize(10);
+		if(m_UncompBuf.sysread(m_fd) >= 10)
 		{
 			if(false) {}
 #ifdef HAVE_ZLIB
-			else if (0 == memcmp(gzMagic, fh.GetBuffer(), _countof(gzMagic)))
+			else if (0 == memcmp(gzMagic, m_UncompBuf.rptr(), _countof(gzMagic)))
 				m_Dec.reset(new tGzDec);
 #endif
 #ifdef HAVE_LIBBZ2
-			else if (0 == memcmp(bz2Magic, fh.GetBuffer(), _countof(bz2Magic)))
+			else if (0 == memcmp(bz2Magic, m_UncompBuf.rptr(), _countof(bz2Magic)))
 				m_Dec.reset(new tBzDec);
 #endif
 #ifdef HAVE_LZMA
-			else if (0 == memcmp(xzMagic, fh.GetBuffer(), _countof(xzMagic)))
+			else if (0 == memcmp(xzMagic, m_UncompBuf.rptr(), _countof(xzMagic)))
 				m_Dec.reset(new tXzDec(false));
-			else if (0 == memcmp(lzmaMagic, fh.GetBuffer(), _countof(lzmaMagic)))
+			else if (0 == memcmp(lzmaMagic, m_UncompBuf.rptr(), _countof(lzmaMagic)))
 				m_Dec.reset(new tXzDec(true));
 #endif
 		}
@@ -313,9 +337,23 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic)
 	posix_madvise(m_szFileBuf, statbuf.st_size, POSIX_MADV_SEQUENTIAL);
 #endif
 	
+#if 0//def SHRINKTEST
+	if (ftruncate(m_fd, GetSize()/2) < 0)
+	{
+		perror ("ftruncate");
+		::exit(1);
+	}
+#endif
+
 	m_nBufPos=0;
 	m_nCurLine=0;
 	m_bError = m_bEof = false;
+	{
+		lockguard g(g_LastMmapFile);
+		g_LastMmapFile.valid=true;
+		g_LastMmapFile.path=sFilename;
+		g_LastMmapFile.last_thread=pthread_self();
+	}
 	return true;
 }
 
@@ -336,7 +374,11 @@ bool filereader::CheckGoodState(bool bErrorsConsiderFatal, cmstring *reportFileP
 void filereader::Close()
 {
 	m_nCurLine=0;
-	
+	{
+		lockguard g(g_LastMmapFile);
+		g_LastMmapFile.valid=false;
+	}
+
 	if (m_szFileBuf != MAP_FAILED)
 	{
 		munmap(m_szFileBuf, m_nBufSize);
@@ -354,6 +396,32 @@ void filereader::Close()
 
 filereader::~filereader() {
 	Close();
+}
+
+void report_bad_mmap_state()
+{
+	decltype(g_LastMmapFile) lastrep;
+	{
+		lockguard g(g_LastMmapFile);
+		lastrep=g_LastMmapFile;
+	}
+
+	if(lastrep.valid)
+	{
+		aclog::err(string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
+			+lastrep.path+" . Please check your system logs for related errors.");
+
+		// This does not work, maybe there are no usable cancellation points in the code there
+		// XXX: find a reliable way to inject an exception into another thread or somehow
+		// jump out of the legacy code :-(
+		//
+		// pthread_cancel(lastrep.last_thread);
+	}
+	else
+	{
+		aclog::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
+			"Please check your system logs for related errors.");
+	}
 }
 
 bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {

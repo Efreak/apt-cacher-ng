@@ -208,16 +208,16 @@ PfilePatternEx: ${cfg:PfilePatternEx}</pre>
 	    <form action="#trace" method="get">
                <span style="white-space:nowrap;">
                   Current mode:
-                  <font style="display:${inlineIfPatrace};white-space:nowrap;">
+                  <font style="display:${:/cfg:patrace/inline/none};white-space:nowrap;">
                      <font style="color:red;font-weight:bold;white-space:nowrap;">Active</font>
                      (watching download activity)
                   </font>
-                  <font style="display:${noneIfPatrace};white-space:nowrap;">not tracing
+                  <font style="display:${:/cfg:patrace/none/inline};white-space:nowrap;">not tracing
                   </font>
                </span>
                <span>
-		    <input type="submit" name="doTraceStart" value="Start Tracing" ${ifTracingDisabled}>
-                    <input type="submit" name="doTraceStop" value="Stop Tracing" ${ifNotTracingDisabled}>
+		    <input type="submit" name="doTraceStart" value="Start Tracing" ${:/cfg:patrace/disabled/}>
+                    <input type="submit" name="doTraceStop" value="Stop Tracing" ${:/cfg:patrace//disabled}>
                     <input type="submit" name="doTraceClear" value="Clear Trace Data">
                  </span>
                     <p>Currently collected file paths not covered by the configured patterns:

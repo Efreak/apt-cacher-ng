@@ -29,7 +29,8 @@ cleaner::cleaner() : m_thr(0)
 }
 void cleaner::Init()
 {
-	for(UINT i=0; i<_countof(stamps); ++i) stamps[i]=END_OF_TIME;
+	for(auto&ts : stamps)
+		ts=END_OF_TIME;
 }
 
 cleaner::~cleaner()

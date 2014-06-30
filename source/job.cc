@@ -169,7 +169,7 @@ public:
 		m_head.type = header::ANSWER;
 		m_head.frontLine = "HTTP/1.1 ";
 		m_head.frontLine += (szFrontLineMsg ? szFrontLineMsg : "500 Internal Failure");
-		m_head.set(header::CONTENT_TYPE, NAMEWLEN("text/html") );
+		m_head.set(header::CONTENT_TYPE, WITHLEN("text/html") );
 	}
 	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow)
 	{

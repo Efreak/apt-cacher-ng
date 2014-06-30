@@ -334,6 +334,8 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted)
 			srcs.push_back(*s);
 		wordfree(&p);
 	}
+	else
+		cerr << "Warning: failed to find files for " << pattern <<endl;
 	if(bSorted) std::sort(srcs.begin(), srcs.end());
 #elif defined(HAVE_GLOB)
 	auto p=glob_t();
@@ -344,6 +346,8 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted)
 			srcs.push_back(*s);
 		globfree(&p);
 	}
+	else
+		cerr << "Warning: failed to find files for " << pattern <<endl;
 #else
 #warning Needs a file name expansion function, wordexp or glob
 	srcs.push_back(pattern);

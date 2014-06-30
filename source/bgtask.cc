@@ -199,13 +199,13 @@ void tSpecOpDetachable::Run()
 			SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
 					<< "\">Cancel</a>)";
 			SendFmt << "<br>\n";
-			SendChunkRemoteOnly(NAMEWLEN("<form id=\"mainForm\" action=\"#top\">\n"));
+			SendChunkRemoteOnly(WITHLEN("<form id=\"mainForm\" action=\"#top\">\n"));
 
 			Action();
 
 			if (!m_delCboxFilter.empty())
-				SendChunkRemoteOnly(NAMEWLEN(
-				"<br><b>Action(s):</b> "
+				SendChunkRemoteOnly(WITHLEN(
+				"<br><b>Action(s):</b><br>"
 					"<input type=\"submit\" name=\"doDelete\""
 					" value=\"Delete selected files\">"
 					"|<button type=\"button\" onclick=\"checkOrUncheck(true);\">Check all</button>"
@@ -255,7 +255,7 @@ void tSpecOpDetachable::DumpLog(time_t id)
 	tSS path(acfg::logdir.length()+24);
 	path<<acfg::logdir<<CPATHSEP<<MAINT_PFX << id << ".log.html";
 	if (!reader.OpenFile(path))
-		SendChunkRemoteOnly(NAMEWLEN("Log not available"));
+		SendChunkRemoteOnly(WITHLEN("Log not available"));
 	else
 		SendChunkRemoteOnly(reader.GetBuffer(), reader.GetSize());
 }

@@ -872,7 +872,7 @@ void tCacheOperation::UpdateIndexFiles()
 	const string sPatchBaseAbs=CACHE_BASE+sPatchBaseRel;
 	mkbasedir(sPatchBaseAbs);
 
-	tContId2eqClass eqClasses;
+	tContId2eqClass& eqClasses = m_eqClasses;
 
 	// just reget them as-is and we are done
 	if (m_bForceDownload)
@@ -1055,6 +1055,10 @@ void tCacheOperation::UpdateIndexFiles()
 	// Let the most recent files be in the front of the list, but the uncompressed ones have priority
 	for(auto& it: eqClasses)
 	{
+#ifdef DEBUG
+		for(auto&x : it.second.paths)
+			assert(!x.empty());
+#endif
 		sort(it.second.paths.begin(), it.second.paths.end(),
 				fctLessThanCompMtime(CACHE_BASE));
 		// and while we are at it, give them pointers back to the eq-classes
@@ -1422,10 +1426,9 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::s
 		return false;
 	}
 
-
 	filereader reader;
 
-	if (!reader.OpenFile(CACHE_BASE+sPath))
+	if (!reader.OpenFile(SABSPATH(sPath), false, 1))
 	{
 		if(! GetFlags(sPath).forgiveDlErrors) // that would be ok (added by ignorelist), don't bother
 		{
@@ -1435,8 +1438,6 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::s
 		}
 		return false;
 	}
-
-	reader.AddEofLines();
 
 	// some common variables
 	mstring sLine, key, val;

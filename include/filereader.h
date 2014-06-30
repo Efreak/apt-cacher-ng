@@ -26,9 +26,7 @@ public:
 	 * 			filename w/o suffix or path prefix back into it
 	 * @param bCriticalOpen Terminate program on failure
 	 */ 
-	bool OpenFile(const mstring & sFilename, bool bNoMagic=false);
-	
-	//mstring GetPureFilename();
+	bool OpenFile(const mstring & sFilename, bool bNoMagic=false, UINT nFakeTrailingNewlines=0);
 	
 	//////! Filename with all prepended path and compressed suffix stripped
 	//////void GetBaseFileName(mstring & sOut);
@@ -44,10 +42,8 @@ public:
 
 	inline const char *GetBuffer() const { return m_szFileBuf; };
 	inline size_t GetSize() const { return m_nBufSize; };
-	void Close();
 
-	//! @brief Helper to make GetOneLine assume that there is newline(s) when file ends
-	inline void AddEofLines(UINT nCount=1) { m_nEofLines=nCount; }
+	void Close();
 
 private:
 

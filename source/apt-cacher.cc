@@ -40,7 +40,7 @@ using namespace std;
 
 static void usage();
 static void SetupCacheDir();
-void term_handler(int signum);
+void sig_handler(int signum);
 void log_handler(int signum);
 void dump_handler(int signum);
 void check_algos();
@@ -133,14 +133,13 @@ void runDemo()
 	 std::cerr << tbuf << std::endl;
 	 exit(1);
 
-	 */
-
+*/
 	if (getenv("GETSUM"))
 	{
 		uint8_t csum[20];
 		string s(getenv("GETSUM"));
 		off_t resSize;
-		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize, stdout);
+		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize /*, stdout*/);
 		for (UINT i = 0; i < sizeof(csum); i++)
 			printf("%02x", csum[i]);
 		printf("\n");
@@ -151,7 +150,7 @@ void runDemo()
 		exit(0);
 	}
 
-
+/*
 	LPCSTR envvar = getenv("PARSEIDX");
 	if (envvar)
 	{
@@ -159,6 +158,15 @@ void runDemo()
 		exit(parseidx_demo(envvar));
 	}
 
+	if (getenv("SHRINK"))
+	{
+		uint8_t csum[20];
+		string s(getenv("SHRINK"));
+		off_t resSize;
+		auto n=(filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize, stdout));
+		exit(n);
+	}
+	*/
 }
 
 #endif
@@ -176,10 +184,6 @@ int main(int argc, char **argv)
 	SSL_library_init();
 #endif
 
-#ifdef DEBUG
-	runDemo();
-#endif
-
 	const char *envvar=getenv("TOBASE64");
 	if(envvar)
 	{
@@ -194,7 +198,8 @@ int main(int argc, char **argv)
 	tSigAct act = tSigAct();
 
 	sigfillset(&act.sa_mask);
-	act.sa_handler = &term_handler;
+	act.sa_handler = &sig_handler;
+	sigaction(SIGBUS, &act, NULL);
 	sigaction(SIGTERM, &act, NULL);
 	sigaction(SIGINT, &act, NULL);
 	sigaction(SIGQUIT, &act, NULL);
@@ -212,6 +217,10 @@ int main(int argc, char **argv)
 #endif
 #ifdef SIGXFSZ
 	sigaction(SIGXFSZ, &act, NULL);
+#endif
+
+#ifdef DEBUG
+	runDemo();
 #endif
 
 	// preprocess some startup related parameters
@@ -258,11 +267,16 @@ int main(int argc, char **argv)
 
 	if(PRINTCFGVAR)
 	{
-		string var;
-		if(!acfg::appendVar(PRINTCFGVAR, var))
-			return EXIT_FAILURE;
-		cout << var << endl;
-		return EXIT_SUCCESS;
+		auto ps(acfg::GetStringPtr(PRINTCFGVAR));
+		if(ps)
+		{
+			cout << *ps << endl;
+			return EXIT_SUCCESS;
+		}
+		auto pi(acfg::GetIntPtr(PRINTCFGVAR));
+		if(pi)
+			cout << *pi << endl;
+		return pi ? EXIT_SUCCESS : EXIT_FAILURE;
 	}
 
 	if(!aclog::open())
@@ -370,26 +384,41 @@ void log_handler(int)
 	aclog::close(true);
 }
 
-void term_handler(int signum)
+void sig_handler(int signum)
 {
-	switch (signum)
-	{
-		case (SIGTERM):
-		case (SIGINT):
-		case (SIGQUIT):
-			{
-				g_victor.Stop();
-				aclog::close(false);
-				// and then terminate, resending the signal to default handler
-				tSigAct act = tSigAct();
-				sigfillset(&act.sa_mask);
-				act.sa_handler = SIG_DFL;
-				if (sigaction(signum, &act, NULL))
-					abort(); // shouldn't be needed, but have a sane fallback in case
-				raise(signum);
-			}
-		default:
-			return;
+#ifdef DEBUG
+	cerr << "caught signal " << signum <<endl;
+#endif
+	switch (signum) {
+	case (SIGBUS):
+		/* OH NO!
+		 * Something going wrong with the mmaped files.
+		 * Log the current state and shutdown gracefully.
+		 */
+
+		void report_bad_mmap_state();
+		report_bad_mmap_state();
+		aclog::flush();
+
+		// nope, not reliable yet, just exit ASAP and hope that systemd will restart us
+		// return;
+		signum = SIGTERM;
+
+	case (SIGTERM):
+	case (SIGINT):
+	case (SIGQUIT): {
+		g_victor.Stop();
+		aclog::close(false);
+		// and then terminate, resending the signal to default handler
+		tSigAct act = tSigAct();
+		sigfillset(&act.sa_mask);
+		act.sa_handler = SIG_DFL;
+		if (sigaction(signum, &act, NULL))
+			abort(); // shouldn't be needed, but have a sane fallback in case
+		raise(signum);
+	}
+	default:
+		return;
 	}
 }
 

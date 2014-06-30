@@ -11,12 +11,10 @@ static const int RESERVED_DEFVAL = -4223;
 
 #define ACFG_REDIRMAX_DEFAULT 5
 
-struct ltstring
-{
-  bool operator()(const mstring &s1, const mstring &s2) const
-  {
-    return strcasecmp(s1.c_str(), s2.c_str()) < 0;
-  }
+struct ltstring {
+	bool operator()(const mstring &s1, const mstring &s2) const {
+		return strcasecmp(s1.c_str(), s2.c_str()) < 0;
+	}
 };
 
 typedef std::map<mstring, mstring, ltstring> NoCaseStringMap;
@@ -49,20 +47,16 @@ void ReadConfigDirectory(const char*, bool bTestMode);
 //! Prepare various things resulting from variable combinations, etc.
 void PostProcConfig(bool bDumpConfig);
 
-// TODO: document me
-// throw away the rewritten part of the path, foo/debian/bla.deb -> bla.deb,
-// no slash needed with backends...
-
 struct tRepoData
 {
 	std::vector<tHttpUrl> m_backends;
 
 	// dirty little helper to execute custom actions when a jobs associates or forgets this data set
-	struct IHookHandler
-	{
+	struct IHookHandler {
 		virtual void JobRelease()=0;
 		virtual void JobConnect()=0;
-    virtual ~IHookHandler() {};
+		virtual ~IHookHandler() {
+		}
 	};
 	IHookHandler *m_pHooks;
 	tStrVec m_keyfiles;
@@ -87,8 +81,9 @@ extern std::bitset<TCP_PORT_MAX> *pUserPorts;
 
 extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 
-bool appendVar(LPCSTR varname, mstring& ret);
 void dump_trace();
+int * GetIntPtr(LPCSTR key);
+mstring * GetStringPtr(LPCSTR key);
 } // namespace acfg
 
 namespace rechecks
