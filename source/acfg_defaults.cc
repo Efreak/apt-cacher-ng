@@ -22,7 +22,9 @@ capath("/etc/ssl/certs"), cafile;
 //#define COMPONENT_OPTIONAL "(-[a-z0-9-])"
 //#define PARANOIASOURCE "(\\.orig|\\.debian)"
 
-string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST "(\\.gpg)?"
+string spfilepat(INFOLDER ".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST "\\.gpg)$");
+
+string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
 		"|\\.udeb|\\.debdelta|\\.diff/.*\\.gz|(Devel)?ReleaseAnnouncement(\\?.*)?"
 		"|[a-f0-9]+-(susedata|updateinfo|primary|deltainfo).xml.gz" //opensuse, index data, hash in filename
@@ -31,7 +33,7 @@ string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST "(\\.gpg)?"
 ")$");
 
 string vfilepat(INFOLDER
-		"(Index|Packages" COMPOPT "|InRelease|Release|Release\\.gpg|custom\\.gpg|mirrors.txt|"
+		"(Index|Packages" COMPOPT "|InRelease|Release|mirrors\\.txt|.*\\.gpg|"
 		"Sources" COMPOPT "|release|index\\.db-.*\\.gz|Contents-[^/]*" COMPOPT
 		"|pkglist[^/]*\\.bz2|rclist[^/]*\\.bz2|meta-release[^/]*|Translation[^/]*" COMPOPT
 		"|MD5SUMS|SHA256SUMS|SHA1SUMS" // d-i stuff
@@ -43,12 +45,12 @@ string vfilepat(INFOLDER
 		"|" ALXPATTERN // Arch Linux
 		"|metalink\\?repo|.*prestodelta\\.xml\\.gz|repodata/.*\\.(xml|sqlite)" COMPRLIST // CentOS
 		")$" // end of only-filename paterns
-		"|/dists/.*/installer-[^/]+/[^0-9][^/]+/images/.*"); // d-i stuff but not containing a number (year) in the revision directory (like "current", "beta", ...)
+		"|/dists/.*/installer-[^/]+/[^0-9][^/]+/images/.*"); // d-i stuff but not containing a date (year number) in the revision directory (like "current", "beta", ...)
 
 //string wfilepat( VPATPREFIX  "(Release|Release\\.gpg|release|meta-release|Translation[^/]*\\.bz2)$");
 //string wfilepat(vfilepat);
 string wfilepat(INFOLDER
-		"(Release|InRelease|Release\\.gpg|custom\\.gpg"
+		"(Release|InRelease|.*\\.gpg"
 		"|(Packages|Sources)" COMPRLIST "?" // hm... private repos without Release file :-(
 		"|Translation[^/]*" COMPRLIST "?" // to be checked, but they should never really go anywhere
 		"|.*\\.xml" // SUSE
@@ -56,7 +58,7 @@ string wfilepat(INFOLDER
 		"|[a-z]+32.exe"
 		")$");
 
-string pfilepatEx, vfilepatEx, wfilepatEx; // for customization by user
+string pfilepatEx, spfilepatEx, vfilepatEx, wfilepatEx; // for customization by user
 int offlinemode(false), verboselog(true), stupidfs(false), forcemanaged(false),
 extreshhold(20), tpstandbymax(8), tpthreadmax(-1), dirperms(00755), fileperms(00664),
 keepnver(0), maxtempdelay(27), vrangeops(1);

@@ -25,9 +25,9 @@ namespace acfg
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
 reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, bindaddr, port, sUmask,
 tmpDontcacheReq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
-cafile, capath;
+cafile, capath, spfilepat;
 
-extern mstring pfilepatEx, vfilepatEx, wfilepatEx; // for customization by user
+extern mstring pfilepatEx, vfilepatEx, wfilepatEx, spfilepatEx; // for customization by user
 
 extern int debug, numcores, offlinemode, foreground, verbose, stupidfs, forcemanaged, keepnver,
 verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, dlbufsize, usewrap,
@@ -100,9 +100,10 @@ enum eMatchType
 	FILE_INVALID = -1,
 	FILE_SOLID = 0, FILE_VOLATILE, FILE_WHITELIST,
 	NASTY_PATH, PASSTHROUGH,
+	FILE_SPECIAL_SOLID,
 	ematchtype_max
 };
-uint_fast8_t Match(cmstring &in, eMatchType type);
+bool Match(cmstring &in, eMatchType type);
 
 eMatchType GetFiletype(const mstring &);
 bool MatchUncacheable(const mstring &, NOCACHE_PATTYPE);

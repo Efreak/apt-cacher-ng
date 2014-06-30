@@ -88,10 +88,12 @@ MapNameToString n2sTbl[] = {
 		,{  "ReportPage",              &reportpage}
 		,{  "VfilePattern",            &vfilepat}
 		,{  "PfilePattern",            &pfilepat}
+		,{  "SPfilePattern",           &spfilepat}
 		,{  "WfilePattern",            &wfilepat}
 		,{  "VfilePatternEx",          &vfilepatEx}
 		,{  "PfilePatternEx",          &pfilepatEx}
 		,{  "WfilePatternEx",          &wfilepatEx}
+		,{  "SPfilePattern",           &spfilepatEx}
 		,{  "AdminAuth",               &adminauth}
 		,{  "BindAddress",             &bindaddr}
 		,{  "UserAgent",               &agentname}
@@ -1222,29 +1224,43 @@ bool CompileExpressions()
 			return false;
 		};
 	using namespace acfg;
-	return compat(rex[FILE_SOLID].pat, pfilepat.c_str())
+	return (compat(rex[FILE_SOLID].pat, pfilepat.c_str())
 			&& compat(rex[FILE_VOLATILE].pat, vfilepat.c_str())
 			&& compat(rex[FILE_WHITELIST].pat, wfilepat.c_str())
 			&& compat(rex[FILE_SOLID].extra, pfilepatEx.c_str())
 			&& compat(rex[FILE_VOLATILE].extra, vfilepatEx.c_str())
 			&& compat(rex[FILE_WHITELIST].extra, wfilepatEx.c_str())
 			&& compat(rex[NASTY_PATH].pat, BADSTUFF_PATTERN)
-			&& compat(rex[PASSTHROUGH].pat, PTHOSTS_PATTERN.c_str());
+			&& compat(rex[PASSTHROUGH].pat, PTHOSTS_PATTERN.c_str())
+			&& compat(rex[FILE_SPECIAL_SOLID].pat, spfilepat.c_str())
+			&& compat(rex[FILE_SPECIAL_SOLID].extra, spfilepatEx.c_str())
+			);
 }
 
-uint_fast8_t Match(cmstring &in, eMatchType type)
+inline bool MatchType(cmstring &in, eMatchType type)
 {
 	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, NULL, 0))
-		return 1;
+		return true;
 	if(rex[type].extra && !regexec(rex[type].extra, in.c_str(), 0, NULL, 0))
-		return -1;
-	return 0;
+		return true;
+	return false;
 }
 
-eMatchType GetFiletype(const string & in) {
-	if (Match(in, FILE_VOLATILE))
+bool Match(cmstring &in, eMatchType type)
+{
+	if(MatchType(in, type))
+		return true;
+	// XXX: very special behavior...
+	return (type == FILE_SOLID && MatchType(in, FILE_SPECIAL_SOLID));
+}
+
+eMatchType GetFiletype(const string & in)
+{
+	if (MatchType(in, FILE_SPECIAL_SOLID))
+		return FILE_SOLID;
+	if (MatchType(in, FILE_VOLATILE))
 		return FILE_VOLATILE;
-	if (Match(in, FILE_SOLID))
+	if (MatchType(in, FILE_SOLID))
 		return FILE_SOLID;
 	return FILE_INVALID;
 }
