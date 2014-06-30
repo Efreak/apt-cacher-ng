@@ -7,4 +7,5 @@ conf/*mirror* /usr/lib/apt-cacher-ng
 conf/*.html /usr/lib/apt-cacher-ng
 conf/*.css /usr/lib/apt-cacher-ng
 conf/*.conf /etc/apt-cacher-ng
+conf/*gentoo*default /usr/lib/apt-cacher-ng
 contrib/apt-cacher-ng.service /etc/avahi/services

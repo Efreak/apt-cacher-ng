@@ -1,8 +1,11 @@
-apt-cacher-ng (0.7.27-0.1) UNRELEASED; urgency=low
+apt-cacher-ng (0.8.0~pre1-1) experimental; urgency=low
 
-  * Here be 0.7.27-0.1
+  * New upstream version
+    + handles side effects on mmaped files more carefully (maybe a fix
+      for #722360)
+  * Fixed links to gentoo_mirrors.default (closes: #736579)
 
- -- Eduard Bloch <blade@debian.org>  Mon, 19 May 2014 21:02:07 +0200
+ -- 
 
 apt-cacher-ng (0.7.26-1) unstable; urgency=medium
 
