@@ -58,9 +58,6 @@ class dlcon : public lockable
 
     	/// blacklist for permanently failing hosts, with error message
     	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
-    	void BlacklistMirror(tDlJobPtr &failJob, cmstring &msg);
-    	bool SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg);
-
     	tSS m_sendBuf, m_inBuf;
 
     	UINT ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &qActive);

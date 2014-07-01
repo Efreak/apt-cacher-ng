@@ -145,14 +145,14 @@ struct tDlJob
 
 		m_pBEdata = NULL;
 		m_pCurBackend = NULL;
-		if (m_fileUri.SetHttpUrl(s))
-			m_fileUri.bIsTransferlEncoded=true;
-		else
+
+		if (!m_fileUri.SetHttpUrl(s))
 		{
 			sErrorMsg = "500 Bad redirection (invalid URL)";
 			return false;
 		}
 
+		m_fileUri.bIsTransferlEncoded=true;
 		return true;
 	}
 
@@ -578,59 +578,6 @@ private:
 	tDlJob & operator=(const tDlJob&);
 };
 
-
-inline void dlcon::BlacklistMirror(tDlJobPtr & job, cmstring &msg)
-{
-	LOGSTART2("dlcon::BlacklistMirror", "blacklisting " <<
-			job->GetPeerHost()->ToURI(false));
-	m_blacklist[make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort())] = msg;
-}
-
-
-inline bool dlcon::SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg)
-{
-	LOGSTART("dlcon::SetupJobConfig");
-
-	// using backends? Find one which is not blacklisted
-
-	if (job->m_pBEdata)
-	{
-		// keep the existing one if possible
-		if (job->m_pCurBackend)
-		{
-			LOG("Checking [" << job->m_pCurBackend->sHost << "]:" << job->m_pCurBackend->GetPort());
-			const auto bliter = m_blacklist.find(make_pair(job->m_pCurBackend->sHost,
-					job->m_pCurBackend->GetPort()));
-			if(bliter == m_blacklist.end())
-				return true;
-		}
-
-		for (const auto& bend : job->m_pBEdata->m_backends)
-		{
-			const auto bliter = m_blacklist.find(make_pair(bend.sHost, bend.GetPort()));
-			if(bliter == m_blacklist.end())
-			{
-				job->m_pCurBackend = &bend;
-				return true;
-			}
-
-			// uh, blacklisted, remember the last reason
-			if(pReasonMsg)
-				*pReasonMsg = bliter->second;
-		}
-		return false;
-	}
-
-	// ok, look for the mirror data itself
-	auto bliter = m_blacklist.find(make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort()));
-	if(bliter == m_blacklist.end())
-		return true;
-
-	if(pReasonMsg)
-		*pReasonMsg = bliter->second;
-	return false;
-}
-
 inline void dlcon::EnqJob(tDlJob *todo)
 {
 	setLockGuard;
@@ -976,6 +923,58 @@ void dlcon::WorkLoop()
 	int nLostConTolerance=0;
 #define MAX_RETRY 5
 
+	auto BlacklistMirror = [&](tDlJobPtr & job)
+	{
+		LOGSTART2("BlacklistMirror", "blacklisting " <<
+				job->GetPeerHost()->ToURI(false));
+		m_blacklist[std::make_pair(job->GetPeerHost()->sHost,
+				job->GetPeerHost()->GetPort())] = sErrorMsg;
+	};
+
+	auto SetupJobConfig = [&](tDlJobPtr &job, mstring *pReasonMsg)
+	{
+		LOGSTART("dlcon::SetupJobConfig");
+
+		// using backends? Find one which is not blacklisted
+
+		if (job->m_pBEdata)
+		{
+			// keep the existing one if possible
+			if (job->m_pCurBackend)
+			{
+				LOG("Checking [" << job->m_pCurBackend->sHost << "]:" << job->m_pCurBackend->GetPort());
+				const auto bliter = m_blacklist.find(make_pair(job->m_pCurBackend->sHost,
+						job->m_pCurBackend->GetPort()));
+				if(bliter == m_blacklist.end())
+					return true;
+			}
+
+			for (const auto& bend : job->m_pBEdata->m_backends)
+			{
+				const auto bliter = m_blacklist.find(make_pair(bend.sHost, bend.GetPort()));
+				if(bliter == m_blacklist.end())
+				{
+					job->m_pCurBackend = &bend;
+					return true;
+				}
+
+				// uh, blacklisted, remember the last reason
+				if(pReasonMsg)
+					*pReasonMsg = bliter->second;
+			}
+			return false;
+		}
+
+		// ok, look for the mirror data itself
+		auto bliter = m_blacklist.find(make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort()));
+		if(bliter == m_blacklist.end())
+			return true;
+
+		if(pReasonMsg)
+			*pReasonMsg = bliter->second;
+		return false;
+	};
+
 	while(true) // outer loop: jobs, connection handling
 	{
         // init state or transfer loop jumped out, what are the needed actions?
@@ -1065,7 +1064,7 @@ void dlcon::WorkLoop()
         		}
         		else
         		{
-        			BlacklistMirror(m_qNewjobs.front(), sErrorMsg);
+        			BlacklistMirror(m_qNewjobs.front());
         			continue; // try the next backend
         		}
         	}
@@ -1185,7 +1184,7 @@ void dlcon::WorkLoop()
 		{
 			// disconnected by OS... give it a chance, or maybe not...
 			if (--nLostConTolerance <= 0)
-				BlacklistMirror(inpipe.front(), sErrorMsg);
+				BlacklistMirror(inpipe.front());
 
 			timespec sleeptime = { 0, 325000000 };
 			nanosleep(&sleeptime, NULL);
@@ -1216,7 +1215,7 @@ void dlcon::WorkLoop()
         // resolving the "fatal error" situation, push the pipelined job back to new, etc.
 
         if( (EFLAG_MIRROR_BROKEN & loopRes) && !inpipe.empty())
-        	BlacklistMirror(inpipe.front(), sErrorMsg);
+        	BlacklistMirror(inpipe.front());
 
         if( (EFLAG_JOB_BROKEN & loopRes) && !inpipe.empty())
         {
