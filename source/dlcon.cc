@@ -316,7 +316,7 @@ struct tDlJob
 		return m_fileUri.ToURI(bEscaped);
 	}
 
-	uint_fast8_t NewDataHandler(acbuf & inBuf)
+	inline uint_fast8_t NewDataHandler(acbuf & inBuf)
 	{
 		LOGSTART("tDlJob::NewDataHandler");
 		while (true)
@@ -339,13 +339,10 @@ struct tDlJob
 
 		ldbg("Rest: " << m_nRest);
 
-		if (m_nRest == 0)
-		{
-			m_DlState = (STATE_PROCESS_DATA == m_DlState) ? STATE_FINISHJOB : STATE_GETCHUNKHEAD;
-		}
-		else
+		if (m_nRest != 0)
 			return HINT_MORE; // will come back
 
+		m_DlState = (STATE_PROCESS_DATA == m_DlState) ? STATE_FINISHJOB : STATE_GETCHUNKHEAD;
 		return HINT_SWITCH;
 	}
 
@@ -404,17 +401,15 @@ struct tDlJob
 				{
 					if (st == 301 || st == 302 || st == 307)
 					{
-						if (RewriteSource(h.h[header::LOCATION]))
-						{
-							// drop the redirect page contents if possible so the outer loop
-							// can scan other headers
-							off_t contLen = atoofft(h.h[header::CONTENT_LENGTH], 0);
-							if (contLen <= inBuf.size())
-								inBuf.drop(contLen);
-							return HINT_TGTCHANGE; // no other flags, caller will evaluate the state
-						}
-						else
+						if (!RewriteSource(h.h[header::LOCATION]))
 							return EFLAG_JOB_BROKEN;
+
+						// drop the redirect page contents if possible so the outer loop
+						// can scan other headers
+						off_t contLen = atoofft(h.h[header::CONTENT_LENGTH], 0);
+						if (contLen <= inBuf.size())
+							inBuf.drop(contLen);
+						return HINT_TGTCHANGE; // no other flags, caller will evaluate the state
 					}
 
 					// for non-redirection responses process as usual
@@ -438,9 +433,10 @@ struct tDlJob
 					}
 				}
 
-				const char *pCon = h.h[header::CONNECTION];
+				auto pCon = h.h[header::CONNECTION];
 				if(!pCon)
 					pCon = h.h[header::PROXY_CONNECTION];
+
 				if (pCon && 0 == strcasecmp(pCon, "close"))
 				{
 					ldbg("Peer wants to close connection after request");
@@ -498,7 +494,7 @@ struct tDlJob
 			{
 				// similar states, just handled differently afterwards
 				ldbg("STATE_GETDATA");
-				uint_fast8_t res = NewDataHandler(inBuf);
+				auto res = NewDataHandler(inBuf);
 				if (HINT_SWITCH != res)
 					return res;
 			}
@@ -569,7 +565,6 @@ struct tDlJob
 		return (m_DlState == STATE_GETHEADER || m_DlState == STATE_REGETHEADER);
 		// XXX: In theory, could also easily recover from STATE_FINISH but that's
 		// unlikely to happen
-
 	}
 
 private:
@@ -837,7 +832,6 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 
 				if (HINT_DONE & res)
 				{
-
 					// just in case that server damaged the last response body
 					con->KnowLastFile(WEAK_PTR<fileitem>(inpipe.front()->m_pStorage));
 
@@ -865,7 +859,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 					 * more responses of that kind in the queue. Apply the redirection handling
 					 * to the rest as well if possible without having side effects.
 					 */
-					tDljQueue::iterator it = inpipe.begin();
+					auto it = inpipe.begin();
 					for(++it; it != inpipe.end(); ++it)
 					{
 						UINT rr = (**it).ProcessIncomming(m_inBuf, true);
