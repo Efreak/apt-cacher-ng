@@ -29,7 +29,6 @@ mstring PTHOSTS_PATTERN;
 namespace rechecks
 {
 bool CompileExpressions();
-//bool CompileUncExpressions(const string & req, const string & tgt);
 }
 
 
@@ -136,6 +135,7 @@ MapNameToInt n2iTbl[] = {
 		,{  "PipelineDepth",                     &pipelinelen,      NULL,    10}
 		,{  "ExSuppressAdminNotification",       &exsupcount,       NULL,    10}
 		,{  "OptProxyTimeout",                   &optproxytimeout,  NULL,    10}
+		,{  "MaxDlSpeed",                        &maxdlspeed,       NULL,    10}
 
 		,{  "DirPerms",                          &dirperms,         NULL,    8}
 		,{  "FilePerms",                         &fileperms,        NULL,    8}

@@ -79,6 +79,13 @@ class dlcon : public lockable
     	// the default behavior or using or not using the proxy. Will be set
     	// if access proxies shall no longer be used.
     	bool m_bProxyTot;
+
+    	// this is a binary factor, meaning how many reads from buffer are OK when
+    	// speed limiting is enabled
+    	unsigned m_nSpeedLimiterRoundUp = (unsigned(1)<<16)-1;
+    	unsigned m_nSpeedLimitMaxPerTake = MAX_VAL(unsigned);
+      unsigned m_nLastDlCount=0;
+      void UpdateSpeedLimiting();
 };
 
 #endif

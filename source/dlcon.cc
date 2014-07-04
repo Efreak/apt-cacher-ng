@@ -1,3 +1,7 @@
+
+#include <unistd.h>
+#include <sys/time.h>
+
 #define LOCAL_DEBUG
 #include "debug.h"
 
@@ -751,10 +755,20 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 #endif
 			))
 		{
+       UpdateSpeedLimiting();
+			// waiting for the next time slice to get data from buffer
+			timeval tv;
+			if(0==gettimeofday(&tv, nullptr))
+			{
+				auto usNext = tv.tv_usec | m_nSpeedLimiterRoundUp;
+				usleep(usNext-tv.tv_usec);
+			}
 #ifdef HAVE_SSL
 			if(con->GetBIO())
 			{
-				r=BIO_read(con->GetBIO(), m_inBuf.wptr(), m_inBuf.freecapa());
+#warning groesse begrenzen
+				r=BIO_read(con->GetBIO(), m_inBuf.wptr(),
+						std::min(m_nSpeedLimitMaxPerTake, m_inBuf.freecapa()));
 				if(r>0)
 					m_inBuf.got(r);
 				else // <=0 doesn't mean an error, only a double check can tell
@@ -763,7 +777,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 			else
 #endif
 			{
-				r = m_inBuf.sysread(fd);
+				r = m_inBuf.sysread(fd, m_nSpeedLimitMaxPerTake);
 			}
 
 #ifdef DISCO_FAILURE
@@ -1254,4 +1268,17 @@ void dlcon::WorkLoop()
         }
 
 	}
+}
+
+//std::atomic_uint 
+void dlcon::UpdateSpeedLimiting()
+{
+#warning hier speed nachrechnen wenn sich der count aendert oder auch nicht
+   auto nSpeedNowKib = UINT(acfg::maxdlspeed);
+   auto nTakesPerSec = nSpeedNowKib / 32;
+   m_nSpeedLimitMaxPerTake = nSpeedNowKib*1024/nTakesPerSec;
+   auto nIntervalUS=1000000 / nTakesPerSec;
+   // creating a bitmask
+   for(m_nSpeedLimiterRoundUp=1,nIntervalUS/=2;nIntervalUS;nIntervalUS>>=1)
+         m_nSpeedLimiterRoundUp = (m_nSpeedLimiterRoundUp<<1)|1;
 }
