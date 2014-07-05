@@ -30,9 +30,9 @@ using namespace std;
 #endif
 
 
-#ifdef DEBUG
 #include "filereader.h"
 #include "csmapping.h"
+#ifdef DEBUG
 #include <regex.h>
 #endif
 
@@ -79,12 +79,10 @@ inline bool fork_away()
 }
 #endif
 
-#ifdef DEBUG
-
-
 void runDemo()
 {
 
+#ifdef DEBUG
 	cerr << "Pandora: " << sizeof(regex_t) << endl;
 
 
@@ -134,6 +132,8 @@ void runDemo()
 	 exit(1);
 
 */
+
+#endif
 	if (getenv("GETSUM"))
 	{
 		uint8_t csum[20];
@@ -168,8 +168,6 @@ void runDemo()
 	}
 	*/
 }
-
-#endif
 
 
 int main(int argc, char **argv)
@@ -219,9 +217,9 @@ int main(int argc, char **argv)
 	sigaction(SIGXFSZ, &act, NULL);
 #endif
 
-#ifdef DEBUG
+//#ifdef DEBUG
 	runDemo();
-#endif
+//#endif
 
 	// preprocess some startup related parameters
 	bool bForceCleanup(false);

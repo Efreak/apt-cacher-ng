@@ -1270,10 +1270,9 @@ void dlcon::WorkLoop()
 	}
 }
 
-//std::atomic_uint 
 void dlcon::UpdateSpeedLimiting()
 {
-#warning hier speed nachrechnen wenn sich der count aendert oder auch nicht
+#warning now adapt the speed using the number of parallel downloads
    auto nSpeedNowKib = UINT(acfg::maxdlspeed);
    auto nTakesPerSec = nSpeedNowKib / 32;
    m_nSpeedLimitMaxPerTake = nSpeedNowKib*1024/nTakesPerSec;

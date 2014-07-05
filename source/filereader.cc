@@ -17,6 +17,11 @@
 #include <iostream>
 #include <atomic>
 
+#ifdef HAVE_SSL
+#include <openssl/sha.h>
+#include <openssl/md5.h>
+#endif
+
 //#define SHRINKTEST
 
 // must be something sensible, ratio impacts stack size by inverse power of 2
@@ -529,6 +534,23 @@ bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
 }
 
 #ifndef MINIBUILD
+
+#ifdef HAVE_SSL
+class csumSHA1 : public csumBase, public SHA_CTX
+{
+public:
+	csumSHA1() { SHA1_Init(this); }
+	void add(const char *data, size_t size) override { SHA1_Update(this, (const void*) data, size); }
+	void finish(uint8_t* ret) override { SHA1_Final(ret, this); }
+};
+class csumMD5 : public csumBase, public MD5_CTX
+{
+public:
+	csumMD5() { MD5_Init(this); }
+	void add(const char *data, size_t size) override { MD5_Update(this, (const void*) data, size); }
+	void finish(uint8_t* ret) override { MD5_Final(ret, this); }
+};
+#else
 class csumSHA1 : public csumBase, public SHA_INFO
 {
 public:
@@ -543,6 +565,7 @@ public:
 	void add(const char *data, size_t size) override { md5_append(this, (md5_byte_t*) data, size); }
 	void finish(uint8_t* ret) override { md5_finish(this, ret); }
 };
+#endif
 
 std::unique_ptr<csumBase> csumBase::GetChecker(CSTYPES type)
 {
