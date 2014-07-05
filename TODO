@@ -1,10 +1,6 @@
 
 TODO:
 
-Download rate limiting (throttling)
-
-Add expiration for installer images using SHA256SUMS or MD5SUMS (whichever is covered by the Release file)
-
 Use cache control headers where possible
 
 [for s.] root startup and EUID changing for privileged port use
@@ -49,7 +45,6 @@ For 0.9:
 
  - For import, make it more controlable. Control page should offer checkboxes:
 [] Thrust old apt-cacher metadata if found (skip file verification)
-[] Learn index files locations from old metadata
 [] Forced copy of imported index files (overwrites existing!)
 [] Optimistic Precaching Strategy
 
