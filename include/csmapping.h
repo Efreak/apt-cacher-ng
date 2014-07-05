@@ -27,15 +27,15 @@ public:
 
 // kind of file identity, compares by file size and checksum (MD5 or SHA1)
 struct tFingerprint {
-	off_t size;
-	CSTYPES csType;
+	off_t size =0;
+	CSTYPES csType =CSTYPE_INVALID;
 	uint8_t csum[MAXCSLEN];
 	
-	tFingerprint() : size(0), csType(CSTYPE_INVALID) {};
+	tFingerprint() =default;
 	tFingerprint(const tFingerprint &a) : size(a.size),
 	csType(a.csType)
 	{
-		memcpy(csum, a.csum, 20);
+		memcpy(csum, a.csum, sizeof(csum));
 	};
 	
 	bool SetCs(const mstring & hexString, CSTYPES eCstype)
@@ -146,12 +146,12 @@ struct tImpFileInfo
 {
     mstring sPath;
     
-    time_t mtime;
-    bool bFileUsed;
+    time_t mtime = 0;
+    bool bFileUsed = false;
     
     inline tImpFileInfo(const mstring & s, time_t m) :
-        sPath(s), mtime(m), bFileUsed(false) {};
-    inline tImpFileInfo() : mtime(0), bFileUsed(false) {};
+        sPath(s), mtime(m) {};
+    tImpFileInfo() =default;
 };
 struct ltCacheKeyComp
 {

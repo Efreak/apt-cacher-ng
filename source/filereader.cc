@@ -589,7 +589,7 @@ bool filereader::GetChecksum(const mstring & sFileName, int csType, uint8_t out[
 
 bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *fDump)
 {
-	unique_ptr<csumBase> summer(csumBase::GetChecker(CSTYPES(csType)));
+	auto summer(csumBase::GetChecker(CSTYPES(csType)));
 	scannedSize=0;
 	
 	if(!m_Dec.get())
@@ -637,7 +637,7 @@ void check_algos()
 {
 	const char testvec[]="abc";
 	uint8_t out[20];
-	unique_ptr<csumBase> ap(csumBase::GetChecker(CSTYPE_SHA1));
+	auto ap(csumBase::GetChecker(CSTYPE_SHA1));
 	ap->add(testvec, sizeof(testvec)-1);
 	ap->finish(out);
 	if(!CsEqual("a9993e364706816aba3e25717850c26c9cd0d89d", out, 20))
