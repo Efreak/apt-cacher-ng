@@ -85,7 +85,6 @@ class dlcon : public lockable
     	unsigned m_nSpeedLimiterRoundUp = (unsigned(1)<<16)-1;
     	unsigned m_nSpeedLimitMaxPerTake = MAX_VAL(unsigned);
       unsigned m_nLastDlCount=0;
-      void UpdateSpeedLimiting();
 };
 
 #endif

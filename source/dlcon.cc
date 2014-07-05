@@ -1,6 +1,7 @@
 
 #include <unistd.h>
 #include <sys/time.h>
+#include <atomic>
 
 #define LOCAL_DEBUG
 #include "debug.h"
@@ -20,7 +21,9 @@ using namespace std;
 
 typedef std::pair<const tHttpUrl*,bool> tHostIsproxy;
 
-static const cmstring sGenericError("567 Unknown download error occured");
+static cmstring sGenericError("567 Unknown download error occured");
+
+std::atomic_uint g_nDlCons(0);
 
 dlcon::dlcon(bool bManualExecution, string *xff) :
 		m_bStopASAP(false), m_bManualMode(bManualExecution), m_nTempPipelineDisable(0),
@@ -35,6 +38,7 @@ dlcon::dlcon(bool bManualExecution, string *xff) :
 	}
 	if (xff)
 		m_sXForwardedFor = *xff;
+  g_nDlCons++;
 }
 
 struct tDlJob
@@ -76,10 +80,10 @@ struct tDlJob
 		STATE_FINISHJOB
 	} tDlState;
 
-	const acfg::tRepoData * m_pBEdata=NULL;
+	const acfg::tRepoData * m_pBEdata=nullptr;
 
 	tHttpUrl m_fileUri;
-	const tHttpUrl *m_pCurBackend=NULL;
+	const tHttpUrl *m_pCurBackend=nullptr;
 
 	uint_fast8_t m_eReconnectASAP =0;
 
@@ -96,7 +100,7 @@ struct tDlJob
 	}
 
 	inline tDlJob(dlcon *p, tFileItemPtr pFi, const tHttpUrl& uri, int redirmax) :
-			m_pStorage(pFi), m_parent(*p), m_pBEdata(NULL),
+			m_pStorage(pFi), m_parent(*p),
 			m_fileUri(uri),
 			m_nRedirRemaining(redirmax)
 	{
@@ -622,6 +626,7 @@ dlcon::~dlcon()
 	LOGSTART("dlcon::~dlcon, Destroying dlcon");
 	checkforceclose(m_wakepipe[0]);
 	checkforceclose(m_wakepipe[1]);
+  g_nDlCons--;
 }
 
 inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &inpipe)
@@ -755,18 +760,36 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 #endif
 			))
 		{
-       UpdateSpeedLimiting();
-			// waiting for the next time slice to get data from buffer
-			timeval tv;
-			if(0==gettimeofday(&tv, nullptr))
-			{
-				auto usNext = tv.tv_usec | m_nSpeedLimiterRoundUp;
-				usleep(usNext-tv.tv_usec);
-			}
+       if(acfg::maxdlspeed != RESERVED_DEFVAL)
+       {
+          auto nCntNew=g_nDlCons.load();
+          if(m_nLastDlCount != nCntNew)
+          {
+             m_nLastDlCount=nCntNew;
+
+             // well, split the bandwidth
+             auto nSpeedNowKib = UINT(acfg::maxdlspeed) / nCntNew;
+             auto nTakesPerSec = nSpeedNowKib / 32;
+             if(!nTakesPerSec)
+                nTakesPerSec=1;
+             m_nSpeedLimitMaxPerTake = nSpeedNowKib*1024/nTakesPerSec;
+             auto nIntervalUS=1000000 / nTakesPerSec;
+             // creating a bitmask
+             for(m_nSpeedLimiterRoundUp=1,nIntervalUS/=2;nIntervalUS;nIntervalUS>>=1)
+                m_nSpeedLimiterRoundUp = (m_nSpeedLimiterRoundUp<<1)|1;
+
+          }
+          // waiting for the next time slice to get data from buffer
+          timeval tv;
+          if(0==gettimeofday(&tv, nullptr))
+          {
+             auto usNext = tv.tv_usec | m_nSpeedLimiterRoundUp;
+             usleep(usNext-tv.tv_usec);
+          }
+       }
 #ifdef HAVE_SSL
 			if(con->GetBIO())
 			{
-#warning groesse begrenzen
 				r=BIO_read(con->GetBIO(), m_inBuf.wptr(),
 						std::min(m_nSpeedLimitMaxPerTake, m_inBuf.freecapa()));
 				if(r>0)
@@ -1268,16 +1291,4 @@ void dlcon::WorkLoop()
         }
 
 	}
-}
-
-void dlcon::UpdateSpeedLimiting()
-{
-#warning now adapt the speed using the number of parallel downloads
-   auto nSpeedNowKib = UINT(acfg::maxdlspeed);
-   auto nTakesPerSec = nSpeedNowKib / 32;
-   m_nSpeedLimitMaxPerTake = nSpeedNowKib*1024/nTakesPerSec;
-   auto nIntervalUS=1000000 / nTakesPerSec;
-   // creating a bitmask
-   for(m_nSpeedLimiterRoundUp=1,nIntervalUS/=2;nIntervalUS;nIntervalUS>>=1)
-         m_nSpeedLimiterRoundUp = (m_nSpeedLimiterRoundUp<<1)|1;
 }
