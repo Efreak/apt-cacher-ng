@@ -96,4 +96,6 @@ string cacheDirSlash; // guaranteed to have a trailing path separator
 
 int conprotos[2] = { PF_UNSPEC, PF_UNSPEC };
 
+std::atomic_bool degraded(false);
+
 }

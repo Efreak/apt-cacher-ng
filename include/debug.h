@@ -25,6 +25,7 @@
 #define LOGSTART2(x,y)
 #define LOGSTART2s(x,y)
 #define DBGQLOG(x)
+#define dbgprint(x)
 inline void dump_proc_status(){}; // strip away
 
 #else
@@ -39,6 +40,8 @@ inline void dump_proc_status(){}; // strip away
 #define LOGSTARTs(x) t_logger __logobj(x, NULL);
 #define LOGSTART2(x, y) t_logger __logobj(x, this); LOGLVL(LOG_DEBUG, y)
 #define LOGSTART2s(x, y) t_logger __logobj(x, NULL); LOGLVL(LOG_DEBUG, y)
+
+#define dbgprint(x) std::cerr << x << std::endl;
 
 #define ldbg(x) LOG(x)
 

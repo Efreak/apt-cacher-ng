@@ -5,6 +5,7 @@
 #include "config.h"
 #include "meta.h"
 #include <bitset>
+#include <atomic>
 
 static const int RESERVED_DEFVAL = -4223;
 #define ACNG_DEF_PORT "3142"
@@ -40,6 +41,8 @@ extern tHttpUrl proxy_info;
 extern mstring agentheader;
 
 extern int conprotos[2];
+
+extern std::atomic_bool degraded;
 
 bool SetOption(const mstring &line, bool bQuiet=false, NoCaseStringMap *pDupeChecker=NULL);
 void ReadConfigDirectory(const char*, bool bTestMode);

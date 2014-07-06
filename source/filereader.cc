@@ -14,6 +14,10 @@
 #include "aclogger.h"
 #include "namedmutex.h"
 
+#include "debug.h"
+// for pthread_kill
+#include "signal.h"
+
 #include <iostream>
 #include <atomic>
 
@@ -36,11 +40,11 @@
 #else
 
 #ifndef HAVE_ZLIB
-#warning Zlib or its development files are not available. Install them (e.g. zlib1g-dev) and run "make distclean". Gzip format support disabled.
+#warning Zlib or its development files are not available. Install them (e.g. zlib1g-dev) and run "make distclean". Gzip format support disabled for now.
 #endif
 
 #ifndef HAVE_LIBBZ2
-#warning LibBz2 or its development files are not available. Install them (e.g. libbz2-dev) and run "make distclean". Bzip2 format support disabled.
+#warning LibBz2 or its development files are not available. Install them (e.g. libbz2-dev) and run "make distclean". Bzip2 format support disabled for now.
 #endif
 
 #endif
@@ -236,6 +240,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 
 	// this makes sure not to truncate file while it's mmaped
 	namedmutex mmapMx(g_noTruncateLocks, sFilename);
+#error schwachsinn, verlaesst den scope aber lock soll bleiben
 	lockguard guardWriteMx(mmapMx);
 
 	m_fd = open(sFilename.c_str(), O_RDONLY);
@@ -321,6 +326,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 		if(m_szFileBuf==MAP_FAILED)
 		{
 				m_sErrorString=tErrnoFmter();
+       dbgprint("bad mmap: " << m_sErrorString);
 				return false;
 		}
 		m_nBufSize = statbuf.st_size;
@@ -355,6 +361,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 	m_bError = m_bEof = false;
 	{
 		lockguard g(g_LastMmapFile);
+    dbgprint("remember last mmaped file: " << sFilename);
 		g_LastMmapFile.valid=true;
 		g_LastMmapFile.path=sFilename;
 		g_LastMmapFile.last_thread=pthread_self();
@@ -403,8 +410,11 @@ filereader::~filereader() {
 	Close();
 }
 
-void report_bad_mmap_state()
+bool report_bad_mmap_state()
 {
+   bool ret=false;
+
+   acfg::degraded.store(true);
 	decltype(g_LastMmapFile) lastrep;
 	{
 		lockguard g(g_LastMmapFile);
@@ -413,6 +423,8 @@ void report_bad_mmap_state()
 
 	if(lastrep.valid)
 	{
+     ret=true;
+
 		aclog::err(string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
 			+lastrep.path+" . Please check your system logs for related errors.");
 
@@ -421,12 +433,25 @@ void report_bad_mmap_state()
 		// jump out of the legacy code :-(
 		//
 		// pthread_cancel(lastrep.last_thread);
+    if(pthread_equal(pthread_self(), lastrep.last_thread))
+    {
+       dbgprint("sigbus in own thread");
+       pthread_exit(nullptr);
+    }
+    else
+    {
+       dbgprint("sigbus in other thread, forwarding");
+       pthread_kill(lastrep.last_thread, SIGBUS);
+    }
 	}
 	else
 	{
 		aclog::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
 			"Please check your system logs for related errors.");
 	}
+
+  aclog::flush();
+  return ret;
 }
 
 bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
