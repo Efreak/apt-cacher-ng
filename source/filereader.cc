@@ -239,6 +239,9 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 	m_nEofLines=nFakeTrailingNewlines;
 
 	// this makes sure not to truncate file while it's mmaped
+        m_filelock.init(sFilename);
+#error args, locke, aber richtig, unlocken im Close, aber sicher
+
 	namedmutex mmapMx(g_noTruncateLocks, sFilename);
 #error schwachsinn, verlaesst den scope aber lock soll bleiben
 	lockguard guardWriteMx(mmapMx);

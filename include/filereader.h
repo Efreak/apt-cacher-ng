@@ -5,6 +5,7 @@
 #include "config.h"
 #include "acbuf.h"
 #include "fileio.h"
+#include "namedmutex.h"
 
 class IDecompressor;
 
@@ -68,6 +69,8 @@ private:
 	// not to be copied
 	filereader& operator=(const filereader&);
 	filereader(const filereader&);
+
+        namedmutex m_filelock;
 };
 
 extern uint_fast16_t hexmap[];

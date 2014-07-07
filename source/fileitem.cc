@@ -524,7 +524,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 
 		// this makes sure not to truncate file while it's mmaped
 		namedmutex mmapMx(g_noTruncateLocks, sPathAbs);
-		lockguard guardWriteMx(mmapMx);
+    namedmutex::guard guardWriteMx(mmapMx, false);
 
 		m_filefd=open(sPathAbs.c_str(), flags, acfg::fileperms);
 		ldbg("file opened?! returned: " << m_filefd);
