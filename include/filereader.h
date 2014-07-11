@@ -5,6 +5,7 @@
 #include "config.h"
 #include "acbuf.h"
 #include "fileio.h"
+#include "filelocks.h"
 
 class IDecompressor;
 
@@ -68,6 +69,8 @@ private:
 	// not to be copied
 	filereader& operator=(const filereader&);
 	filereader(const filereader&);
+
+	std::unique_ptr<filelocks::flock> m_mmapLock;
 };
 
 extern uint_fast16_t hexmap[];

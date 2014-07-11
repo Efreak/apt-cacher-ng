@@ -12,7 +12,7 @@
 #include "sha1.h"
 #include "csmapping.h"
 #include "aclogger.h"
-#include "namedmutex.h"
+#include "filelocks.h"
 
 #include <iostream>
 #include <atomic>
@@ -41,6 +41,7 @@
 #endif
 
 using namespace std;
+/*
 
 // to make sure not to deal with incomplete operations from a signal handler
 class : public lockable
@@ -52,6 +53,7 @@ public:
 } g_LastMmapFile;
 
 namedmutex::mx_name_space g_noTruncateLocks;
+*/
 
 class IDecompressor
 {
@@ -230,8 +232,9 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 	m_nEofLines=nFakeTrailingNewlines;
 
 	// this makes sure not to truncate file while it's mmaped
-	namedmutex mmapMx(g_noTruncateLocks, sFilename);
-	lockguard guardWriteMx(mmapMx);
+	m_mmapLock = filelocks::Acquire(sFilename);
+	// namedmutex mmapMx(g_noTruncateLocks, sFilename);
+	// lockguard guardWriteMx(mmapMx);
 
 	m_fd = open(sFilename.c_str(), O_RDONLY);
 #ifdef SHRINKTEST
@@ -348,12 +351,15 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 	m_nBufPos=0;
 	m_nCurLine=0;
 	m_bError = m_bEof = false;
+#warning spaeter
+	/*
 	{
 		lockguard g(g_LastMmapFile);
 		g_LastMmapFile.valid=true;
 		g_LastMmapFile.path=sFilename;
 		g_LastMmapFile.last_thread=pthread_self();
 	}
+	*/
 	return true;
 }
 
@@ -374,10 +380,14 @@ bool filereader::CheckGoodState(bool bErrorsConsiderFatal, cmstring *reportFileP
 void filereader::Close()
 {
 	m_nCurLine=0;
+	m_mmapLock.reset();
+#warning fixme
+#if 0
 	{
 		lockguard g(g_LastMmapFile);
 		g_LastMmapFile.valid=false;
 	}
+#endif
 
 	if (m_szFileBuf != MAP_FAILED)
 	{
@@ -400,6 +410,8 @@ filereader::~filereader() {
 
 void report_bad_mmap_state()
 {
+#warning spaeter
+#if 0
 	decltype(g_LastMmapFile) lastrep;
 	{
 		lockguard g(g_LastMmapFile);
@@ -422,6 +434,7 @@ void report_bad_mmap_state()
 		aclog::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
 			"Please check your system logs for related errors.");
 	}
+#endif
 }
 
 bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
