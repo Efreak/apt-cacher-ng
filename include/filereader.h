@@ -5,7 +5,7 @@
 #include "config.h"
 #include "acbuf.h"
 #include "fileio.h"
-#include "namedmutex.h"
+#include "filelocks.h"
 
 class IDecompressor;
 
@@ -70,7 +70,11 @@ private:
 	filereader& operator=(const filereader&);
 	filereader(const filereader&);
 
+<<<<<<< HEAD
         namedmutex m_filelock;
+=======
+	std::unique_ptr<filelocks::flock> m_mmapLock;
+>>>>>>> 0bf41ab... Avoid over-complicated multi-locking solution, the simple one is robust and good enough
 };
 
 extern uint_fast16_t hexmap[];

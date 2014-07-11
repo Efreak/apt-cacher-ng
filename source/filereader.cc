@@ -12,7 +12,7 @@
 #include "sha1.h"
 #include "csmapping.h"
 #include "aclogger.h"
-#include "namedmutex.h"
+#include "filelocks.h"
 
 #include "debug.h"
 // for pthread_kill
@@ -50,6 +50,7 @@
 #endif
 
 using namespace std;
+/*
 
 // to make sure not to deal with incomplete operations from a signal handler
 class : public lockable
@@ -61,6 +62,7 @@ public:
 } g_LastMmapFile;
 
 namedmutex::mx_name_space g_noTruncateLocks;
+*/
 
 class IDecompressor
 {
@@ -239,12 +241,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 	m_nEofLines=nFakeTrailingNewlines;
 
 	// this makes sure not to truncate file while it's mmaped
-        m_filelock.init(sFilename);
-#error args, locke, aber richtig, unlocken im Close, aber sicher
-
-	namedmutex mmapMx(g_noTruncateLocks, sFilename);
-#error schwachsinn, verlaesst den scope aber lock soll bleiben
-	lockguard guardWriteMx(mmapMx);
+	m_mmapLock = filelocks::Acquire(sFilename);
 
 	m_fd = open(sFilename.c_str(), O_RDONLY);
 #ifdef SHRINKTEST
@@ -362,6 +359,8 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 	m_nBufPos=0;
 	m_nCurLine=0;
 	m_bError = m_bEof = false;
+#warning spaeter
+	/*
 	{
 		lockguard g(g_LastMmapFile);
     dbgprint("remember last mmaped file: " << sFilename);
@@ -369,6 +368,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 		g_LastMmapFile.path=sFilename;
 		g_LastMmapFile.last_thread=pthread_self();
 	}
+	*/
 	return true;
 }
 
@@ -389,10 +389,14 @@ bool filereader::CheckGoodState(bool bErrorsConsiderFatal, cmstring *reportFileP
 void filereader::Close()
 {
 	m_nCurLine=0;
+	m_mmapLock.reset();
+#warning fixme
+#if 0
 	{
 		lockguard g(g_LastMmapFile);
 		g_LastMmapFile.valid=false;
 	}
+#endif
 
 	if (m_szFileBuf != MAP_FAILED)
 	{
@@ -415,9 +419,14 @@ filereader::~filereader() {
 
 bool report_bad_mmap_state()
 {
+<<<<<<< HEAD
    bool ret=false;
 
    acfg::degraded.store(true);
+=======
+#warning spaeter
+#if 0
+>>>>>>> 0bf41ab... Avoid over-complicated multi-locking solution, the simple one is robust and good enough
 	decltype(g_LastMmapFile) lastrep;
 	{
 		lockguard g(g_LastMmapFile);
@@ -452,9 +461,13 @@ bool report_bad_mmap_state()
 		aclog::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
 			"Please check your system logs for related errors.");
 	}
+<<<<<<< HEAD
 
   aclog::flush();
   return ret;
+=======
+#endif
+>>>>>>> 0bf41ab... Avoid over-complicated multi-locking solution, the simple one is robust and good enough
 }
 
 bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {

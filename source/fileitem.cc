@@ -9,7 +9,7 @@
 #include "acbuf.h"
 #include "fileio.h"
 #include "cleaner.h"
-#include "namedmutex.h"
+#include "filelocks.h"
 
 #include <errno.h>
 #include <algorithm>
@@ -523,8 +523,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		mkbasedir(sPathAbs);
 
 		// this makes sure not to truncate file while it's mmaped
-		namedmutex mmapMx(g_noTruncateLocks, sPathAbs);
-    namedmutex::guard guardWriteMx(mmapMx, false);
+		auto tempLock = filelocks::Acquire(sPathAbs);
 
 		m_filefd=open(sPathAbs.c_str(), flags, acfg::fileperms);
 		ldbg("file opened?! returned: " << m_filefd);
