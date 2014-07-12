@@ -16,6 +16,7 @@
 #include <vector>
 #include <deque>
 #include <limits>
+#include <atomic>
 #include <cstdio>
 #include <ctime>
 #include <cstring>
@@ -492,6 +493,8 @@ struct tErrnoFmter: public mstring
 };
 
 mstring EncodeBase64Auth(cmstring & s);
+
+//extern std::atomic_bool g_degraded;
 
 #endif // _META_H
 

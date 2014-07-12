@@ -7,15 +7,17 @@
 #include <sys/mman.h>
 #include <errno.h>
 #include <limits>
+#include <signal.h>
 
 #include "md5.h"
 #include "sha1.h"
 #include "csmapping.h"
 #include "aclogger.h"
 #include "filelocks.h"
+#include "lockable.h"
+#include "debug.h"
 
 #include <iostream>
-#include <atomic>
 
 //#define SHRINKTEST
 
@@ -41,19 +43,23 @@
 #endif
 
 using namespace std;
-/*
 
 // to make sure not to deal with incomplete operations from a signal handler
-class : public lockable
+class tMmapEntry
 {
 public:
-	bool valid=false;
-	pthread_t last_thread;
+	std::atomic_bool valid;
+	pthread_t threadref;
 	string path;
-} g_LastMmapFile;
+	tMmapEntry() : threadref() {
+		valid.store(false);
+	}
+};
 
-namedmutex::mx_name_space g_noTruncateLocks;
-*/
+// this weird kludge is only needed in order to access this data from POSIX signal handlers
+// which needs to be both, reliable and lock-free
+tMmapEntry g_mmapMemory[10];
+lockable g_mmapMemoryLock;
 
 class IDecompressor
 {
@@ -335,6 +341,8 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 		m_nBufSize = 0;
 	}
 	
+	// ORDER DOES MATTER! No returns anymore before the mmap entry was booked in "the memory"
+
 #ifdef HAVE_MADVISE
 	// if possible, prepare to read that
 	posix_madvise(m_szFileBuf, statbuf.st_size, POSIX_MADV_SEQUENTIAL);
@@ -351,15 +359,20 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 	m_nBufPos=0;
 	m_nCurLine=0;
 	m_bError = m_bEof = false;
-#warning spaeter
-	/*
+
 	{
-		lockguard g(g_LastMmapFile);
-		g_LastMmapFile.valid=true;
-		g_LastMmapFile.path=sFilename;
-		g_LastMmapFile.last_thread=pthread_self();
+		// try to keep a thread reference in some free slot
+		lockguard g(g_mmapMemoryLock);
+		for(auto &x : g_mmapMemory)
+		{
+			if(!x.valid.load())
+			{
+				x.path=sFilename;
+				x.threadref=pthread_self();
+				x.valid.store(true);
+			}
+		}
 	}
-	*/
 	return true;
 }
 
@@ -381,16 +394,20 @@ void filereader::Close()
 {
 	m_nCurLine=0;
 	m_mmapLock.reset();
-#warning fixme
-#if 0
-	{
-		lockguard g(g_LastMmapFile);
-		g_LastMmapFile.valid=false;
-	}
-#endif
 
 	if (m_szFileBuf != MAP_FAILED)
 	{
+		{
+			lockguard g(g_mmapMemoryLock);
+			for (auto &x : g_mmapMemory)
+			{
+				if (x.valid.load()
+				&& pthread_equal(pthread_self(), x.threadref)
+				&& m_mmapLock.get() && x.path == m_mmapLock->path)
+					x.valid = false;
+			}
+		}
+
 		munmap(m_szFileBuf, m_nBufSize);
 		m_szFileBuf = (char*) MAP_FAILED;
 	}
@@ -408,32 +425,56 @@ filereader::~filereader() {
 	Close();
 }
 
-void report_bad_mmap_state()
+std::atomic_int g_nThreadsToKill;
+
+void handle_sigbus()
 {
-#warning spaeter
-#if 0
-	decltype(g_LastMmapFile) lastrep;
+#if 1
+	for (auto &x : g_mmapMemory)
 	{
-		lockguard g(g_LastMmapFile);
-		lastrep=g_LastMmapFile;
-	}
-
-	if(lastrep.valid)
-	{
+		if (!x.valid.load())
+			continue;
 		aclog::err(string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
-			+lastrep.path+" . Please check your system logs for related errors.");
+			+x.path+" . Please check your system logs for related errors.");
+	}
 
-		// This does not work, maybe there are no usable cancellation points in the code there
-		// XXX: find a reliable way to inject an exception into another thread or somehow
-		// jump out of the legacy code :-(
-		//
-		// pthread_cancel(lastrep.last_thread);
-	}
-	else
+#else
+	// attempt to pass the signal around threads, stopping the one troublemaker
+	std::cerr << "BUS ARRIVED" << std::endl;
+
+	bool metoo = false;
+
+	if (g_nThreadsToKill.load())
+		goto suicid;
+
+	g_degraded.store(true);
+
+	// this must run lock-free
+	for (auto &x : g_mmapMemory)
 	{
-		aclog::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
-			"Please check your system logs for related errors.");
+		if (!x.valid.load())
+			continue;
+		aclog::err(
+				string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
+						+ x.path + " . Please check your system logs for related errors.");
+
+		if (pthread_equal(pthread_self(), x.threadref))
+			metoo = true;
+		else
+		{
+			g_nThreadsToKill.fetch_add(1);
+			pthread_kill(x.threadref, SIGBUS);
+		}
 	}
+
+	if (!metoo)
+		return;
+
+	suicid: aclog::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
+			"Please check your system logs for related errors.");
+
+	g_nThreadsToKill.fetch_add(-1);
+	pthread_exit(0);
 #endif
 }
 

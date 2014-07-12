@@ -43,6 +43,7 @@ static void SetupCacheDir();
 void sig_handler(int signum);
 void log_handler(int signum);
 void dump_handler(int signum);
+void handle_sigbus();
 void check_algos();
 
 //void DispatchAndRunMaintTask(cmstring &cmd, int fd, const char *auth);
@@ -396,12 +397,11 @@ void sig_handler(int signum)
 		 * Log the current state and shutdown gracefully.
 		 */
 
-		void report_bad_mmap_state();
-		report_bad_mmap_state();
+		handle_sigbus();
 		aclog::flush();
 
 		// nope, not reliable yet, just exit ASAP and hope that systemd will restart us
-		// return;
+		//return;
 		signum = SIGTERM;
 
 	case (SIGTERM):
