@@ -650,3 +650,5 @@ string EncodeBase64Auth(cmstring & s)
 	}
 	return out;
 }
+
+//std::atomic_bool g_degraded(false);

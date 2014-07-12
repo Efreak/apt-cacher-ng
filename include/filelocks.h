@@ -10,10 +10,8 @@ namespace filelocks
 struct flock
 {
 	~flock();
-private:
-	friend std::unique_ptr<flock> Acquire(const std::string& path);
-	std::string path;
 	flock(const std::string& p) : path(p){};
+	std::string path;
 };
 std::unique_ptr<flock> Acquire(const std::string& path);
 };

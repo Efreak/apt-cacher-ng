@@ -192,7 +192,7 @@ void pkgimport::Action()
 				<<" from the fingerprint cache<br>\n");
 	
 	m_bLookForIFiles=true;
-	DirectoryWalk(acfg::cachedir, this);
+	DirectoryWalk(acfg::cachedir, this, true);
 
 	{
 		lockguard g(&abortMx);
@@ -222,7 +222,8 @@ void pkgimport::Action()
 	}
 	
 	m_bLookForIFiles=false;
-	DirectoryWalk(m_sSrcPath, this);
+	DBGQLOG("building contents map for " << m_sSrcPath);
+	DirectoryWalk(m_sSrcPath, this, true);
 
 	{
 		lockguard g(&abortMx);
@@ -439,8 +440,12 @@ void pkgimport::_LoadKeyCache(const string & sFileName)
 		*/
 }
 
-
 /*
+bool pkgimport::ProcessOthers(const mstring& sPath, const struct stat&)
+{
+	if(S_ISLNK())
+}
+
 void tFInfo::Dump(FILE *fh, const string & second)
 {
 	fprintf(fh, "%s;%lu;%lu\n%s\n", sPath.c_str(), nSize, nTime, second.c_str());

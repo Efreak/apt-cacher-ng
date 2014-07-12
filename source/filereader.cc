@@ -7,24 +7,17 @@
 #include <sys/mman.h>
 #include <errno.h>
 #include <limits>
+#include <signal.h>
 
 #include "md5.h"
 #include "sha1.h"
 #include "csmapping.h"
 #include "aclogger.h"
 #include "filelocks.h"
-
+#include "lockable.h"
 #include "debug.h"
-// for pthread_kill
-#include "signal.h"
 
 #include <iostream>
-#include <atomic>
-
-#ifdef HAVE_SSL
-#include <openssl/sha.h>
-#include <openssl/md5.h>
-#endif
 
 //#define SHRINKTEST
 
@@ -40,29 +33,33 @@
 #else
 
 #ifndef HAVE_ZLIB
-#warning Zlib or its development files are not available. Install them (e.g. zlib1g-dev) and run "make distclean". Gzip format support disabled for now.
+#warning Zlib or its development files are not available. Install them (e.g. zlib1g-dev) and run "make distclean". Gzip format support disabled.
 #endif
 
 #ifndef HAVE_LIBBZ2
-#warning LibBz2 or its development files are not available. Install them (e.g. libbz2-dev) and run "make distclean". Bzip2 format support disabled for now.
+#warning LibBz2 or its development files are not available. Install them (e.g. libbz2-dev) and run "make distclean". Bzip2 format support disabled.
 #endif
 
 #endif
 
 using namespace std;
-/*
 
 // to make sure not to deal with incomplete operations from a signal handler
-class : public lockable
+class tMmapEntry
 {
 public:
-	bool valid=false;
-	pthread_t last_thread;
+	std::atomic_bool valid;
+	pthread_t threadref;
 	string path;
-} g_LastMmapFile;
+	tMmapEntry() : threadref() {
+		valid.store(false);
+	}
+};
 
-namedmutex::mx_name_space g_noTruncateLocks;
-*/
+// this weird kludge is only needed in order to access this data from POSIX signal handlers
+// which needs to be both, reliable and lock-free
+tMmapEntry g_mmapMemory[10];
+lockable g_mmapMemoryLock;
 
 class IDecompressor
 {
@@ -242,6 +239,8 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 
 	// this makes sure not to truncate file while it's mmaped
 	m_mmapLock = filelocks::Acquire(sFilename);
+	// namedmutex mmapMx(g_noTruncateLocks, sFilename);
+	// lockguard guardWriteMx(mmapMx);
 
 	m_fd = open(sFilename.c_str(), O_RDONLY);
 #ifdef SHRINKTEST
@@ -326,7 +325,6 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 		if(m_szFileBuf==MAP_FAILED)
 		{
 				m_sErrorString=tErrnoFmter();
-       dbgprint("bad mmap: " << m_sErrorString);
 				return false;
 		}
 		m_nBufSize = statbuf.st_size;
@@ -343,6 +341,8 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 		m_nBufSize = 0;
 	}
 	
+	// ORDER DOES MATTER! No returns anymore before the mmap entry was booked in "the memory"
+
 #ifdef HAVE_MADVISE
 	// if possible, prepare to read that
 	posix_madvise(m_szFileBuf, statbuf.st_size, POSIX_MADV_SEQUENTIAL);
@@ -359,16 +359,20 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, UINT nFakeTra
 	m_nBufPos=0;
 	m_nCurLine=0;
 	m_bError = m_bEof = false;
-#warning spaeter
-	/*
+
 	{
-		lockguard g(g_LastMmapFile);
-    dbgprint("remember last mmaped file: " << sFilename);
-		g_LastMmapFile.valid=true;
-		g_LastMmapFile.path=sFilename;
-		g_LastMmapFile.last_thread=pthread_self();
+		// try to keep a thread reference in some free slot
+		lockguard g(g_mmapMemoryLock);
+		for(auto &x : g_mmapMemory)
+		{
+			if(!x.valid.load())
+			{
+				x.path=sFilename;
+				x.threadref=pthread_self();
+				x.valid.store(true);
+			}
+		}
 	}
-	*/
 	return true;
 }
 
@@ -390,16 +394,20 @@ void filereader::Close()
 {
 	m_nCurLine=0;
 	m_mmapLock.reset();
-#warning fixme
-#if 0
-	{
-		lockguard g(g_LastMmapFile);
-		g_LastMmapFile.valid=false;
-	}
-#endif
 
 	if (m_szFileBuf != MAP_FAILED)
 	{
+		{
+			lockguard g(g_mmapMemoryLock);
+			for (auto &x : g_mmapMemory)
+			{
+				if (x.valid.load()
+				&& pthread_equal(pthread_self(), x.threadref)
+				&& m_mmapLock.get() && x.path == m_mmapLock->path)
+					x.valid = false;
+			}
+		}
+
 		munmap(m_szFileBuf, m_nBufSize);
 		m_szFileBuf = (char*) MAP_FAILED;
 	}
@@ -417,57 +425,57 @@ filereader::~filereader() {
 	Close();
 }
 
-bool report_bad_mmap_state()
+std::atomic_int g_nThreadsToKill;
+
+void handle_sigbus()
 {
-<<<<<<< HEAD
-   bool ret=false;
-
-   acfg::degraded.store(true);
-=======
-#warning spaeter
-#if 0
->>>>>>> 0bf41ab... Avoid over-complicated multi-locking solution, the simple one is robust and good enough
-	decltype(g_LastMmapFile) lastrep;
+#if 1
+	for (auto &x : g_mmapMemory)
 	{
-		lockguard g(g_LastMmapFile);
-		lastrep=g_LastMmapFile;
-	}
-
-	if(lastrep.valid)
-	{
-     ret=true;
-
+		if (!x.valid.load())
+			continue;
 		aclog::err(string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
-			+lastrep.path+" . Please check your system logs for related errors.");
-
-		// This does not work, maybe there are no usable cancellation points in the code there
-		// XXX: find a reliable way to inject an exception into another thread or somehow
-		// jump out of the legacy code :-(
-		//
-		// pthread_cancel(lastrep.last_thread);
-    if(pthread_equal(pthread_self(), lastrep.last_thread))
-    {
-       dbgprint("sigbus in own thread");
-       pthread_exit(nullptr);
-    }
-    else
-    {
-       dbgprint("sigbus in other thread, forwarding");
-       pthread_kill(lastrep.last_thread, SIGBUS);
-    }
+			+x.path+" . Please check your system logs for related errors.");
 	}
-	else
+
+#else
+	// attempt to pass the signal around threads, stopping the one troublemaker
+	std::cerr << "BUS ARRIVED" << std::endl;
+
+	bool metoo = false;
+
+	if (g_nThreadsToKill.load())
+		goto suicid;
+
+	g_degraded.store(true);
+
+	// this must run lock-free
+	for (auto &x : g_mmapMemory)
 	{
-		aclog::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
-			"Please check your system logs for related errors.");
-	}
-<<<<<<< HEAD
+		if (!x.valid.load())
+			continue;
+		aclog::err(
+				string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
+						+ x.path + " . Please check your system logs for related errors.");
 
-  aclog::flush();
-  return ret;
-=======
+		if (pthread_equal(pthread_self(), x.threadref))
+			metoo = true;
+		else
+		{
+			g_nThreadsToKill.fetch_add(1);
+			pthread_kill(x.threadref, SIGBUS);
+		}
+	}
+
+	if (!metoo)
+		return;
+
+	suicid: aclog::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
+			"Please check your system logs for related errors.");
+
+	g_nThreadsToKill.fetch_add(-1);
+	pthread_exit(0);
 #endif
->>>>>>> 0bf41ab... Avoid over-complicated multi-locking solution, the simple one is robust and good enough
 }
 
 bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
@@ -575,23 +583,6 @@ bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
 }
 
 #ifndef MINIBUILD
-
-#ifdef HAVE_SSL
-class csumSHA1 : public csumBase, public SHA_CTX
-{
-public:
-	csumSHA1() { SHA1_Init(this); }
-	void add(const char *data, size_t size) override { SHA1_Update(this, (const void*) data, size); }
-	void finish(uint8_t* ret) override { SHA1_Final(ret, this); }
-};
-class csumMD5 : public csumBase, public MD5_CTX
-{
-public:
-	csumMD5() { MD5_Init(this); }
-	void add(const char *data, size_t size) override { MD5_Update(this, (const void*) data, size); }
-	void finish(uint8_t* ret) override { MD5_Final(ret, this); }
-};
-#else
 class csumSHA1 : public csumBase, public SHA_INFO
 {
 public:
@@ -606,7 +597,6 @@ public:
 	void add(const char *data, size_t size) override { md5_append(this, (md5_byte_t*) data, size); }
 	void finish(uint8_t* ret) override { md5_finish(this, ret); }
 };
-#endif
 
 std::unique_ptr<csumBase> csumBase::GetChecker(CSTYPES type)
 {
@@ -630,7 +620,7 @@ bool filereader::GetChecksum(const mstring & sFileName, int csType, uint8_t out[
 
 bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *fDump)
 {
-	auto summer(csumBase::GetChecker(CSTYPES(csType)));
+	unique_ptr<csumBase> summer(csumBase::GetChecker(CSTYPES(csType)));
 	scannedSize=0;
 	
 	if(!m_Dec.get())
@@ -678,7 +668,7 @@ void check_algos()
 {
 	const char testvec[]="abc";
 	uint8_t out[20];
-	auto ap(csumBase::GetChecker(CSTYPE_SHA1));
+	unique_ptr<csumBase> ap(csumBase::GetChecker(CSTYPE_SHA1));
 	ap->add(testvec, sizeof(testvec)-1);
 	ap->finish(out);
 	if(!CsEqual("a9993e364706816aba3e25717850c26c9cd0d89d", out, 20))

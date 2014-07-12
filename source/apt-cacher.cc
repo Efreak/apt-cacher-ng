@@ -43,6 +43,7 @@ static void SetupCacheDir();
 void sig_handler(int signum);
 void log_handler(int signum);
 void dump_handler(int signum);
+void handle_sigbus();
 void check_algos();
 
 //void DispatchAndRunMaintTask(cmstring &cmd, int fd, const char *auth);
@@ -399,14 +400,12 @@ dbgprint("caught signal " << signum);
 		 * Log the current state and shutdown gracefully.
 		 */
 
-		bool report_bad_mmap_state();
-		if(report_bad_mmap_state()) // action was forwarded
-       return;
-
+		handle_sigbus();
 		aclog::flush();
 
 		// nope, not reliable yet, just exit ASAP and hope that systemd will restart us
-		signum = SIGTERM;
+		//return;
+		//signum = SIGTERM;
     // return;
 
 	case (SIGTERM):

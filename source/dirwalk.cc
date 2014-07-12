@@ -55,7 +55,7 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 
 	if(bFollowSymlinks)
 	{
-		if(stat(sPath.c_str(), &m_stinfo)<0)
+		if(stat(sPath.c_str(), &m_stinfo))
 			return true; // slight risk of missing information here... bug ignoring is safer
 	}
 	else
@@ -69,16 +69,19 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 						*/
 			return true; // slight risk of missing information here... bug ignoring is safer
 		}
+		// dangling symlink?
 		if(S_ISLNK(m_stinfo.st_mode))
 			return true;
 	}
 	
-	if(S_ISREG(m_stinfo.st_mode))
+	if(S_ISREG(m_stinfo.st_mode)
+#ifdef DEBUG
+			|| S_ISBLK(m_stinfo.st_mode)
+#endif
+	)
 		return h->ProcessRegular(sPath, m_stinfo);
 	else if(! S_ISDIR(m_stinfo.st_mode))
-	{
 		return h->ProcessOthers(sPath, m_stinfo);
-	}
 	
 	// ok, we are a directory, scan it and descend where needed
 
