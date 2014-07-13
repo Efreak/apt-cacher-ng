@@ -406,6 +406,7 @@ dbgprint("caught signal " << signum);
 		// nope, not reliable yet, just exit ASAP and hope that systemd will restart us
 		//return;
 		//signum = SIGTERM;
+    // return;
 
 	case (SIGTERM):
 	case (SIGINT):
