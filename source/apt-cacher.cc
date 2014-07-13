@@ -402,7 +402,7 @@ void sig_handler(int signum)
 
 		// nope, not reliable yet, just exit ASAP and hope that systemd will restart us
 		//return;
-		signum = SIGTERM;
+		//signum = SIGTERM;
 
 	case (SIGTERM):
 	case (SIGINT):
