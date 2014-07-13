@@ -44,6 +44,9 @@ apt-cacher-ng (0.8) BETA; urgency=low
     open in the maintenance tasks
   * Rudimentary handling of SIGBUS; only user notification with guessed
     trouble source (mmap'ed file) in error log and gracefull exit
+  * If OpenSSL is available, use libcrypto implementation of SHA1 and MD5
+    hashing (much faster on modern CPUs)
+
 
 apt-cacher-ng (0.7.26) BETA; urgency=low
 
