@@ -11,7 +11,6 @@ http://fedora.fastbull.org/linux/
 http://fedora.inode.at/fedora/linux/
 http://fedora.linux.ee/pub/fedora/linux/
 http://fedora.linuxman.biz/linux/
-http://fedora.mirror.constant.com/linux/
 http://fedora.mirror.garr.it/mirrors/fedora/linux/
 http://fedora.mirror.nexicom.net/linux/
 http://fedora.mirror.tn/fedora/linux/
@@ -43,14 +42,13 @@ http://ftp.halifax.rwth-aachen.de/fedora/linux/
 http://ftp.heanet.ie/pub/fedora/linux/
 http://ftp.icm.edu.pl/pub/Linux/fedora/linux/
 http://ftp.iinet.net.au/pub/fedora/linux/
-http://ftp.ines.lug.ro/fedora/linux/
 http://ftp.isu.edu.tw/pub/Linux/Fedora/linux/
 http://ftp.itu.edu.tr/Mirror/Fedora/linux/
 http://ftp.linux.ncsu.edu/pub/fedora/linux/
+http://ftp.lysator.liu.se/pub/fedora/linux/
 http://ftp.ncnu.edu.tw/Linux/Fedora/linux/
 http://ftp.nluug.nl/pub/os/Linux/distr/fedora/linux/
 http://ftp.ntua.gr/pub/linux/fedora/linux/
-http://ftp.pbone.net/pub/fedora/linux/
 http://ftp.ps.pl/pub/Linux/fedora-linux/
 http://ftp.rhd.ru/pub/fedora/linux/
 http://ftp.sjtu.edu.cn/fedora/linux/
@@ -60,6 +58,7 @@ http://ftp.tsukuba.wide.ad.jp/Linux/fedora/linux/
 http://ftp.tudelft.nl/download.fedora.redhat.com/linux/
 http://ftp.twaren.net/Linux/Fedora/linux/
 http://ftp.udl.es/pub/fedora/linux/
+http://ftp.uma.es/mirror/fedora/linux/
 http://ftp.uni-bayreuth.de/linux/fedora/linux/
 http://ftp.uni-kl.de/pub/linux/fedora/linux/
 http://ftp.uni-koeln.de/mirrors/fedora/linux/
@@ -76,6 +75,7 @@ http://linus.iyte.edu.tr/linux/fedora/linux/
 http://lug.mtu.edu/fedora/linux/
 http://mir01.syntis.net/fedora/linux/
 http://mirror.1000mbps.com/fedora/linux/
+http://mirror.aarnet.edu.au/pub/fedora/linux/
 http://mirror.anl.gov/pub/fedora/linux/
 http://mirror.arlug.ro/pub/fedora/linux/
 http://mirror.as24220.net/pub/fedora/linux/
@@ -86,6 +86,7 @@ http://mirror.clarkson.edu/fedora/linux/
 http://mirror.cogentco.com/pub/linux/fedora/linux/
 http://mirror.cpsc.ucalgary.ca/mirror/fedora/linux/
 http://mirror.crucial.com.au/fedora/linux/
+http://mirror.cs.pitt.edu/fedora/linux/
 http://mirror.csclub.uwaterloo.ca/fedora/linux/
 http://mirror.datacenter.by/pub/fedoraproject.org/linux/
 http://mirror.de.leaseweb.net/fedora/linux/
@@ -99,7 +100,6 @@ http://mirror.hmc.edu/fedora/linux/
 http://mirror.i3d.net/pub/fedora/linux/
 http://mirror.iprimus.com.au/fedora/linux/
 http://mirror.its.dal.ca/pub/fedora/linux/
-http://mirror.its.sfu.ca/mirror/fedora/linux/
 http://mirror.karneval.cz/pub/linux/fedora/linux/
 http://mirror.lagoon.nc/pub/fedora/linux/
 http://mirror.liberty.edu/pub/fedora/linux/
