@@ -2,24 +2,25 @@ apt-cacher-ng (0.8) BETA; urgency=low
 
   * Better reporting of error messages in config file reader (Alioth
     task 314684)
-  * Source tree cleanup
-  * code review and refactoring with C++11 features, now requiring language
-    feature support of GCC 4.7 or newer or equivalent Clang compiler
+  * Source tree cleanup, moving to git
+  * Database update
+  * overall code review and refactoring with C++11 features, now requiring
+    language feature support of GCC 4.7 or newer or equivalent Clang compiler
   * Admin helper tool for identification of required filename pattern changes
   * Additional pattern options that extend the current ones, allowing to user
     to add custom configuration without interference with future updates of
     default settings
   * Special file name pattern set which identifies static files before
     name is checked against volatile file pattern. The feature is now used to
-    identify special .gpg files that belong to static files while volatile
-    rule matches all others .gpg files (Debian bug 720165)
+    identify special .gpg files that are static while volatile rule matches
+    all others .gpg files (Debian bug 720165)
   * Partial rewrite of internal web page creation code, new syntax for server
     side includes, with smooth access to configuration options and less
     computational overhead
   * better checks for compiler and linker features
   * CXXFLAGS and LDFLAGS variable passing (for optimizations, see INSTALL)
   * Using hash maps/sets on various locations for better performance
-  * Portability fixes for systems w/o zlib of libbz2
+  * Portability fixes for systems without zlib or libbz2
   * Lots of refactoring on maintenance page factory code, including bugfix:
     Displaying user info page rather than admin page if the admin page site
     name was not configured in the config at all
@@ -29,14 +30,23 @@ apt-cacher-ng (0.8) BETA; urgency=low
     + contents checking for Debian Installer image indexes, no more carte
       blanche for d-i files unless one adds them manually to the whitelist
     + better checking file sizes inconsistencies without checksumming
-  * Review of repository management
+  * Review and refactoring of repository management:
     + better readability
     + now using better tailored containers
     + stricter size format parsing on certain places
     + fixed removal checkboxes not appearing sometimes
-  * Database update
   * Helper rules to install database generation scripts, see Debian package
     for details
+  * If OpenSSL is available, use libcrypto implementations of SHA1 and MD5
+    hashing (much faster on modern CPUs)
+  * Added data download throttling (AKA speed/rate limiting)
+  * Additional care about never truncating files while they might be still
+    open in the maintenance tasks
+  * Rudimentary handling of SIGBUS; only user notification with guessed
+    trouble source (mmap'ed file) in error log and gracefull exit
+  * If OpenSSL is available, use libcrypto implementation of SHA1 and MD5
+    hashing (much faster on modern CPUs)
+
 
 apt-cacher-ng (0.7.26) BETA; urgency=low
 

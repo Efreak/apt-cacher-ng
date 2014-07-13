@@ -8,6 +8,8 @@
 #ifndef TCPCONNECT_H_
 #define TCPCONNECT_H_
 
+#include <atomic>
+
 #include "meta.h"
 #include "sockio.h"
 
@@ -51,15 +53,17 @@ public:
 
 protected:
 	tcpconnect operator=(const tcpconnect&);
-	tcpconnect(const tcpconnect&);
+	tcpconnect(const tcpconnect&) =default;
 	tcpconnect();
 
-	int m_conFd;
+	int m_conFd =-1;
 	mstring m_sHostName, m_sPort;
 
-	acfg::tRepoData::IHookHandler *m_pConnStateObserver;
+	acfg::tRepoData::IHookHandler *m_pConnStateObserver =nullptr;
 
 	WEAK_PTR<fileitem> m_lastFile;
+
+	static std::atomic_uint g_nconns;
 
 public:
 	//! @brief Remember the file name belonging to the recently initiated transfer
@@ -71,12 +75,29 @@ private:
 	bool Connect(mstring &sErrOut, int timeout);
 
 #ifdef HAVE_SSL
-	BIO *m_bio;
-	SSL_CTX * m_ctx;
-	SSL * m_ssl;
+	BIO *m_bio = nullptr;
+	SSL_CTX * m_ctx = nullptr;
+	SSL * m_ssl = nullptr;
 	bool SSLinit(mstring &sErr, cmstring &host, cmstring &port);
 #endif
 };
+/*
+// little tool for related classes, helps counting all object instances
+class instcount
+{
+	private:
+	typedef std::atomic_uint tInstCounter;
+	tInstCounter& m_instCount;
 
+public:
+	inline instcount(tInstCounter& cter) : m_instCount(cter) {
+		m_instCount.fetch_add(1);
+	}
+	virtual ~instcount() {
+		m_instCount.fetch_add(-1);
+	}
+	unsigned int GetInstCount(unsigned type) { return m_instCount.load();}
+};
+*/
 
 #endif /* TCPCONNECT_H_ */

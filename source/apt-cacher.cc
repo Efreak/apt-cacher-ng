@@ -30,9 +30,9 @@ using namespace std;
 #endif
 
 
-#ifdef DEBUG
 #include "filereader.h"
 #include "csmapping.h"
+#ifdef DEBUG
 #include <regex.h>
 #endif
 
@@ -80,12 +80,10 @@ inline bool fork_away()
 }
 #endif
 
-#ifdef DEBUG
-
-
 void runDemo()
 {
 
+#ifdef DEBUG
 	cerr << "Pandora: " << sizeof(regex_t) << endl;
 
 
@@ -135,12 +133,22 @@ void runDemo()
 	 exit(1);
 
 */
+auto bt=getenv("BUSTEST");
+  if (bt)
+  {
+     static filereader r;
+     if(!r.OpenFile(bt))
+        exit(42);
+     else
+        std::cerr << "opened bt: " << bt << endl;
+  }
+#endif
 	if (getenv("GETSUM"))
 	{
 		uint8_t csum[20];
 		string s(getenv("GETSUM"));
 		off_t resSize;
-		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize /*, stdout*/);
+		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
 		for (UINT i = 0; i < sizeof(csum); i++)
 			printf("%02x", csum[i]);
 		printf("\n");
@@ -150,7 +158,6 @@ void runDemo()
 		}
 		exit(0);
 	}
-
 /*
 	LPCSTR envvar = getenv("PARSEIDX");
 	if (envvar)
@@ -169,8 +176,6 @@ void runDemo()
 	}
 	*/
 }
-
-#endif
 
 
 int main(int argc, char **argv)
@@ -220,9 +225,9 @@ int main(int argc, char **argv)
 	sigaction(SIGXFSZ, &act, NULL);
 #endif
 
-#ifdef DEBUG
+//#ifdef DEBUG
 	runDemo();
-#endif
+//#endif
 
 	// preprocess some startup related parameters
 	bool bForceCleanup(false);
@@ -387,9 +392,7 @@ void log_handler(int)
 
 void sig_handler(int signum)
 {
-#ifdef DEBUG
-	cerr << "caught signal " << signum <<endl;
-#endif
+dbgprint("caught signal " << signum);
 	switch (signum) {
 	case (SIGBUS):
 		/* OH NO!

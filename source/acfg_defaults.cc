@@ -69,6 +69,8 @@ forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL
 stucksecs(500), persistoutgoing(1), pipelinelen(255), exsupcount(RESERVED_DEFVAL),
 optproxytimeout(-1), patrace(false);
 
+int maxdlspeed(RESERVED_DEFVAL);
+
 #ifdef DEBUG
 int dnscachetime(30);
 #else
@@ -93,5 +95,7 @@ tHttpUrl proxy_info;
 string cacheDirSlash; // guaranteed to have a trailing path separator
 
 int conprotos[2] = { PF_UNSPEC, PF_UNSPEC };
+
+std::atomic_bool degraded(false);
 
 }

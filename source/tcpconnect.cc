@@ -33,17 +33,20 @@ volatile int nConCount(0), nDisconCount(0), nReuseCount(0);
 #include <openssl/err.h>
 #endif
 
-tcpconnect::tcpconnect() :	m_conFd(-1), m_pConnStateObserver(NULL)
-#ifdef HAVE_SSL
-,m_bio(NULL), m_ctx(NULL), m_ssl(NULL)
-#endif
+std::atomic_uint tcpconnect::g_nconns(0);
+
+tcpconnect::tcpconnect()
 {
+	if(acfg::maxdlspeed != RESERVED_DEFVAL)
+		g_nconns.fetch_add(1);
 }
 
 tcpconnect::~tcpconnect()
 {
 	LOGSTART("tcpconnect::~tcpconnect, terminating outgoing connection class");
 	Disconnect();
+	if(acfg::maxdlspeed != RESERVED_DEFVAL)
+		g_nconns.fetch_add(-1);
 #ifdef HAVE_SSL
 	if(m_ctx)
 		SSL_CTX_free(m_ctx);

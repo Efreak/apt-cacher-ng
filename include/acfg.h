@@ -5,6 +5,7 @@
 #include "config.h"
 #include "meta.h"
 #include <bitset>
+#include <atomic>
 
 static const int RESERVED_DEFVAL = -4223;
 #define ACNG_DEF_PORT "3142"
@@ -33,13 +34,15 @@ extern int debug, numcores, offlinemode, foreground, verbose, stupidfs, forceman
 verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, dlbufsize, usewrap,
 exporigin, logxff, oldupdate, recompbz2, nettimeout, updinterval, forwardsoap, dirperms, fileperms,
 maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsupcount,
-optproxytimeout, patrace;
+optproxytimeout, patrace, maxdlspeed;
 
 // processed config settings
 extern tHttpUrl proxy_info;
 extern mstring agentheader;
 
 extern int conprotos[2];
+
+extern std::atomic_bool degraded;
 
 bool SetOption(const mstring &line, bool bQuiet=false, NoCaseStringMap *pDupeChecker=NULL);
 void ReadConfigDirectory(const char*, bool bTestMode);

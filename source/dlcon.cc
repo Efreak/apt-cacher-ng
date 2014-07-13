@@ -1,3 +1,8 @@
+
+#include <unistd.h>
+#include <sys/time.h>
+#include <atomic>
+
 #define LOCAL_DEBUG
 #include "debug.h"
 
@@ -16,7 +21,9 @@ using namespace std;
 
 typedef std::pair<const tHttpUrl*,bool> tHostIsproxy;
 
-static const cmstring sGenericError("567 Unknown download error occured");
+static cmstring sGenericError("567 Unknown download error occured");
+
+std::atomic_uint g_nDlCons(0);
 
 dlcon::dlcon(bool bManualExecution, string *xff) :
 		m_bStopASAP(false), m_bManualMode(bManualExecution), m_nTempPipelineDisable(0),
@@ -31,6 +38,7 @@ dlcon::dlcon(bool bManualExecution, string *xff) :
 	}
 	if (xff)
 		m_sXForwardedFor = *xff;
+  g_nDlCons++;
 }
 
 struct tDlJob
@@ -72,10 +80,10 @@ struct tDlJob
 		STATE_FINISHJOB
 	} tDlState;
 
-	const acfg::tRepoData * m_pBEdata=NULL;
+	const acfg::tRepoData * m_pBEdata=nullptr;
 
 	tHttpUrl m_fileUri;
-	const tHttpUrl *m_pCurBackend=NULL;
+	const tHttpUrl *m_pCurBackend=nullptr;
 
 	uint_fast8_t m_eReconnectASAP =0;
 
@@ -92,7 +100,7 @@ struct tDlJob
 	}
 
 	inline tDlJob(dlcon *p, tFileItemPtr pFi, const tHttpUrl& uri, int redirmax) :
-			m_pStorage(pFi), m_parent(*p), m_pBEdata(NULL),
+			m_pStorage(pFi), m_parent(*p),
 			m_fileUri(uri),
 			m_nRedirRemaining(redirmax)
 	{
@@ -145,14 +153,14 @@ struct tDlJob
 
 		m_pBEdata = NULL;
 		m_pCurBackend = NULL;
-		if (m_fileUri.SetHttpUrl(s))
-			m_fileUri.bIsTransferlEncoded=true;
-		else
+
+		if (!m_fileUri.SetHttpUrl(s))
 		{
 			sErrorMsg = "500 Bad redirection (invalid URL)";
 			return false;
 		}
 
+		m_fileUri.bIsTransferlEncoded=true;
 		return true;
 	}
 
@@ -316,7 +324,7 @@ struct tDlJob
 		return m_fileUri.ToURI(bEscaped);
 	}
 
-	uint_fast8_t NewDataHandler(acbuf & inBuf)
+	inline uint_fast8_t NewDataHandler(acbuf & inBuf)
 	{
 		LOGSTART("tDlJob::NewDataHandler");
 		while (true)
@@ -339,13 +347,10 @@ struct tDlJob
 
 		ldbg("Rest: " << m_nRest);
 
-		if (m_nRest == 0)
-		{
-			m_DlState = (STATE_PROCESS_DATA == m_DlState) ? STATE_FINISHJOB : STATE_GETCHUNKHEAD;
-		}
-		else
+		if (m_nRest != 0)
 			return HINT_MORE; // will come back
 
+		m_DlState = (STATE_PROCESS_DATA == m_DlState) ? STATE_FINISHJOB : STATE_GETCHUNKHEAD;
 		return HINT_SWITCH;
 	}
 
@@ -404,17 +409,15 @@ struct tDlJob
 				{
 					if (st == 301 || st == 302 || st == 307)
 					{
-						if (RewriteSource(h.h[header::LOCATION]))
-						{
-							// drop the redirect page contents if possible so the outer loop
-							// can scan other headers
-							off_t contLen = atoofft(h.h[header::CONTENT_LENGTH], 0);
-							if (contLen <= inBuf.size())
-								inBuf.drop(contLen);
-							return HINT_TGTCHANGE; // no other flags, caller will evaluate the state
-						}
-						else
+						if (!RewriteSource(h.h[header::LOCATION]))
 							return EFLAG_JOB_BROKEN;
+
+						// drop the redirect page contents if possible so the outer loop
+						// can scan other headers
+						off_t contLen = atoofft(h.h[header::CONTENT_LENGTH], 0);
+						if (contLen <= inBuf.size())
+							inBuf.drop(contLen);
+						return HINT_TGTCHANGE; // no other flags, caller will evaluate the state
 					}
 
 					// for non-redirection responses process as usual
@@ -438,9 +441,10 @@ struct tDlJob
 					}
 				}
 
-				const char *pCon = h.h[header::CONNECTION];
+				auto pCon = h.h[header::CONNECTION];
 				if(!pCon)
 					pCon = h.h[header::PROXY_CONNECTION];
+
 				if (pCon && 0 == strcasecmp(pCon, "close"))
 				{
 					ldbg("Peer wants to close connection after request");
@@ -498,7 +502,7 @@ struct tDlJob
 			{
 				// similar states, just handled differently afterwards
 				ldbg("STATE_GETDATA");
-				uint_fast8_t res = NewDataHandler(inBuf);
+				auto res = NewDataHandler(inBuf);
 				if (HINT_SWITCH != res)
 					return res;
 			}
@@ -569,7 +573,6 @@ struct tDlJob
 		return (m_DlState == STATE_GETHEADER || m_DlState == STATE_REGETHEADER);
 		// XXX: In theory, could also easily recover from STATE_FINISH but that's
 		// unlikely to happen
-
 	}
 
 private:
@@ -577,59 +580,6 @@ private:
 	tDlJob(const tDlJob&);
 	tDlJob & operator=(const tDlJob&);
 };
-
-
-inline void dlcon::BlacklistMirror(tDlJobPtr & job, cmstring &msg)
-{
-	LOGSTART2("dlcon::BlacklistMirror", "blacklisting " <<
-			job->GetPeerHost()->ToURI(false));
-	m_blacklist[make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort())] = msg;
-}
-
-
-inline bool dlcon::SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg)
-{
-	LOGSTART("dlcon::SetupJobConfig");
-
-	// using backends? Find one which is not blacklisted
-
-	if (job->m_pBEdata)
-	{
-		// keep the existing one if possible
-		if (job->m_pCurBackend)
-		{
-			LOG("Checking [" << job->m_pCurBackend->sHost << "]:" << job->m_pCurBackend->GetPort());
-			const auto bliter = m_blacklist.find(make_pair(job->m_pCurBackend->sHost,
-					job->m_pCurBackend->GetPort()));
-			if(bliter == m_blacklist.end())
-				return true;
-		}
-
-		for (const auto& bend : job->m_pBEdata->m_backends)
-		{
-			const auto bliter = m_blacklist.find(make_pair(bend.sHost, bend.GetPort()));
-			if(bliter == m_blacklist.end())
-			{
-				job->m_pCurBackend = &bend;
-				return true;
-			}
-
-			// uh, blacklisted, remember the last reason
-			if(pReasonMsg)
-				*pReasonMsg = bliter->second;
-		}
-		return false;
-	}
-
-	// ok, look for the mirror data itself
-	auto bliter = m_blacklist.find(make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort()));
-	if(bliter == m_blacklist.end())
-		return true;
-
-	if(pReasonMsg)
-		*pReasonMsg = bliter->second;
-	return false;
-}
 
 inline void dlcon::EnqJob(tDlJob *todo)
 {
@@ -676,6 +626,7 @@ dlcon::~dlcon()
 	LOGSTART("dlcon::~dlcon, Destroying dlcon");
 	checkforceclose(m_wakepipe[0]);
 	checkforceclose(m_wakepipe[1]);
+  g_nDlCons--;
 }
 
 inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &inpipe)
@@ -809,10 +760,38 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 #endif
 			))
 		{
+       if(acfg::maxdlspeed != RESERVED_DEFVAL)
+       {
+          auto nCntNew=g_nDlCons.load();
+          if(m_nLastDlCount != nCntNew)
+          {
+             m_nLastDlCount=nCntNew;
+
+             // well, split the bandwidth
+             auto nSpeedNowKib = UINT(acfg::maxdlspeed) / nCntNew;
+             auto nTakesPerSec = nSpeedNowKib / 32;
+             if(!nTakesPerSec)
+                nTakesPerSec=1;
+             m_nSpeedLimitMaxPerTake = nSpeedNowKib*1024/nTakesPerSec;
+             auto nIntervalUS=1000000 / nTakesPerSec;
+             // creating a bitmask
+             for(m_nSpeedLimiterRoundUp=1,nIntervalUS/=2;nIntervalUS;nIntervalUS>>=1)
+                m_nSpeedLimiterRoundUp = (m_nSpeedLimiterRoundUp<<1)|1;
+
+          }
+          // waiting for the next time slice to get data from buffer
+          timeval tv;
+          if(0==gettimeofday(&tv, nullptr))
+          {
+             auto usNext = tv.tv_usec | m_nSpeedLimiterRoundUp;
+             usleep(usNext-tv.tv_usec);
+          }
+       }
 #ifdef HAVE_SSL
 			if(con->GetBIO())
 			{
-				r=BIO_read(con->GetBIO(), m_inBuf.wptr(), m_inBuf.freecapa());
+				r=BIO_read(con->GetBIO(), m_inBuf.wptr(),
+						std::min(m_nSpeedLimitMaxPerTake, m_inBuf.freecapa()));
 				if(r>0)
 					m_inBuf.got(r);
 				else // <=0 doesn't mean an error, only a double check can tell
@@ -821,7 +800,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 			else
 #endif
 			{
-				r = m_inBuf.sysread(fd);
+				r = m_inBuf.sysread(fd, m_nSpeedLimitMaxPerTake);
 			}
 
 #ifdef DISCO_FAILURE
@@ -890,7 +869,6 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 
 				if (HINT_DONE & res)
 				{
-
 					// just in case that server damaged the last response body
 					con->KnowLastFile(WEAK_PTR<fileitem>(inpipe.front()->m_pStorage));
 
@@ -918,7 +896,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 					 * more responses of that kind in the queue. Apply the redirection handling
 					 * to the rest as well if possible without having side effects.
 					 */
-					tDljQueue::iterator it = inpipe.begin();
+					auto it = inpipe.begin();
 					for(++it; it != inpipe.end(); ++it)
 					{
 						UINT rr = (**it).ProcessIncomming(m_inBuf, true);
@@ -975,6 +953,58 @@ void dlcon::WorkLoop()
 
 	int nLostConTolerance=0;
 #define MAX_RETRY 5
+
+	auto BlacklistMirror = [&](tDlJobPtr & job)
+	{
+		LOGSTART2("BlacklistMirror", "blacklisting " <<
+				job->GetPeerHost()->ToURI(false));
+		m_blacklist[std::make_pair(job->GetPeerHost()->sHost,
+				job->GetPeerHost()->GetPort())] = sErrorMsg;
+	};
+
+	auto SetupJobConfig = [&](tDlJobPtr &job, mstring *pReasonMsg)
+	{
+		LOGSTART("dlcon::SetupJobConfig");
+
+		// using backends? Find one which is not blacklisted
+
+		if (job->m_pBEdata)
+		{
+			// keep the existing one if possible
+			if (job->m_pCurBackend)
+			{
+				LOG("Checking [" << job->m_pCurBackend->sHost << "]:" << job->m_pCurBackend->GetPort());
+				const auto bliter = m_blacklist.find(make_pair(job->m_pCurBackend->sHost,
+						job->m_pCurBackend->GetPort()));
+				if(bliter == m_blacklist.end())
+					return true;
+			}
+
+			for (const auto& bend : job->m_pBEdata->m_backends)
+			{
+				const auto bliter = m_blacklist.find(make_pair(bend.sHost, bend.GetPort()));
+				if(bliter == m_blacklist.end())
+				{
+					job->m_pCurBackend = &bend;
+					return true;
+				}
+
+				// uh, blacklisted, remember the last reason
+				if(pReasonMsg)
+					*pReasonMsg = bliter->second;
+			}
+			return false;
+		}
+
+		// ok, look for the mirror data itself
+		auto bliter = m_blacklist.find(make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort()));
+		if(bliter == m_blacklist.end())
+			return true;
+
+		if(pReasonMsg)
+			*pReasonMsg = bliter->second;
+		return false;
+	};
 
 	while(true) // outer loop: jobs, connection handling
 	{
@@ -1065,7 +1095,7 @@ void dlcon::WorkLoop()
         		}
         		else
         		{
-        			BlacklistMirror(m_qNewjobs.front(), sErrorMsg);
+        			BlacklistMirror(m_qNewjobs.front());
         			continue; // try the next backend
         		}
         	}
@@ -1185,7 +1215,7 @@ void dlcon::WorkLoop()
 		{
 			// disconnected by OS... give it a chance, or maybe not...
 			if (--nLostConTolerance <= 0)
-				BlacklistMirror(inpipe.front(), sErrorMsg);
+				BlacklistMirror(inpipe.front());
 
 			timespec sleeptime = { 0, 325000000 };
 			nanosleep(&sleeptime, NULL);
@@ -1216,7 +1246,7 @@ void dlcon::WorkLoop()
         // resolving the "fatal error" situation, push the pipelined job back to new, etc.
 
         if( (EFLAG_MIRROR_BROKEN & loopRes) && !inpipe.empty())
-        	BlacklistMirror(inpipe.front(), sErrorMsg);
+        	BlacklistMirror(inpipe.front());
 
         if( (EFLAG_JOB_BROKEN & loopRes) && !inpipe.empty())
         {

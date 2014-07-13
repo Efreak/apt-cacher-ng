@@ -182,6 +182,8 @@ inline int tMarkupFileSend::CheckCondition(LPCSTR id, size_t len)
 		auto p=acfg::GetIntPtr(key.c_str());
 		if(p)
 			return ! *p;
+    if(key == "degraded")
+       return acfg::degraded.load();
 		return -1;
 	}
 	if(RAWEQ(id, len, "delConfirmed"))

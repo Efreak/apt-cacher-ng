@@ -8,6 +8,8 @@ INCLUDE (CheckIncludeFiles)
 
 INCLUDE_DIRECTORIES(. ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
+FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
+
 # minimum prqs
 list(APPEND AcngLdList pthread)
 
@@ -129,6 +131,8 @@ SET(TESTSRC "#include \"${CMAKE_SOURCE_DIR}/include/testssl.h\"")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_SSL)
 IF(HAVE_SSL)
    list(APPEND AcngLdList "${SSL_LIB_LIST}")
+   LIST(REMOVE_ITEM SRCS "${CMAKE_SOURCE_DIR}/source/sha1.cc")
+   LIST(REMOVE_ITEM SRCS "${CMAKE_SOURCE_DIR}/source/md5.cc")
 ELSE(HAVE_SSL)
    MESSAGE("- OpenSSL not found or not working, disabling support")
    SET(HAVE_SSL )
@@ -290,7 +294,6 @@ SET(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
 
-FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
 ADD_EXECUTABLE(apt-cacher-ng ${SRCS})
 list(REMOVE_DUPLICATES AcngLdList)
 TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList})

@@ -67,11 +67,13 @@ int acbuf::syswrite(int fd, unsigned int maxlen) {
     return n;
 }
 
-int acbuf::sysread(int fd) {
+int acbuf::sysread(int fd, unsigned int maxlen)
+{
+	size_t todo(std::min(maxlen, freecapa()));
 	int n;
 	do {
-		n=::read(fd, m_buf+w, m_nCapacity-w);
-	} while( (n<0 && EINTR==errno) /* || (EAGAIN == errno && n<=0) */ ); // cannot handle EAGAIN here, let the caller check errno
+		n=::read(fd, m_buf+w, todo);
+	} while( (n<0 && EINTR == errno) /* || (EAGAIN == errno && n<=0) */ ); // cannot handle EAGAIN here, let the caller check errno
     if(n<0)
     	return -errno;
     if(n>0)

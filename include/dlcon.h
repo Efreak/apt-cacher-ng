@@ -58,9 +58,6 @@ class dlcon : public lockable
 
     	/// blacklist for permanently failing hosts, with error message
     	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
-    	void BlacklistMirror(tDlJobPtr &failJob, cmstring &msg);
-    	bool SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg);
-
     	tSS m_sendBuf, m_inBuf;
 
     	UINT ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &qActive);
@@ -82,6 +79,12 @@ class dlcon : public lockable
     	// the default behavior or using or not using the proxy. Will be set
     	// if access proxies shall no longer be used.
     	bool m_bProxyTot;
+
+    	// this is a binary factor, meaning how many reads from buffer are OK when
+    	// speed limiting is enabled
+    	unsigned m_nSpeedLimiterRoundUp = (unsigned(1)<<16)-1;
+    	unsigned m_nSpeedLimitMaxPerTake = MAX_VAL(unsigned);
+      unsigned m_nLastDlCount=0;
 };
 
 #endif

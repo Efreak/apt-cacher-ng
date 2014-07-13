@@ -59,7 +59,7 @@ class acbuf
          * \param fd File descriptor
          * \return Number of read bytes, negative on failures, see read(2)
          */
-        int sysread(int fd);
+        int sysread(int fd, unsigned int maxlen=MAX_VAL(unsigned int));
 
 
     protected:

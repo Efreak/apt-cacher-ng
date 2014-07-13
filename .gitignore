@@ -8,3 +8,6 @@ TODO.next
 dbgen/tmp/*
 doc/dev/*
 perfstats/*
+dev/*
+*/.gitignore
+patches
