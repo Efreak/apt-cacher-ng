@@ -1,3 +1,9 @@
+apt-cacher-ng (0.7.27) UNRELEASED; urgency=medium
+
+  * Moved avahi-daemon to Suggests (LP: #1259191)
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 16 Jul 2014 20:51:58 +0200
+
 apt-cacher-ng (0.7.26-2) unstable; urgency=high
 
   * Do not print the submitted (raw) file path in the response body of a 403
