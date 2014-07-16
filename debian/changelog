@@ -7,6 +7,7 @@ apt-cacher-ng (0.8.0~pre1-1) experimental; urgency=low
       patterns (closes: #720165)
   * Fixed links to gentoo_mirrors.default (closes: #736579)
   * Added Russian translation (closes: #736252)
+  * Moved avahi-daemon to Suggests (LP: #1259191)
 
  -- 
 
