@@ -1,3 +1,4 @@
+http://archive.linux.duke.edu/pub/fedora/linux/
 http://be.mirror.eurid.eu/fedora/linux/
 http://dl.fedoraproject.org/pub/fedora/linux/
 http://download.polytechnic.edu.na/pub/fedora/linux/
@@ -9,6 +10,7 @@ http://fedora.c3sl.ufpr.br/linux/
 http://fedora.dcc.fc.up.pt/linux/
 http://fedora.fastbull.org/linux/
 http://fedora.inode.at/fedora/linux/
+http://fedora.ip-connect.vn.ua/linux/
 http://fedora.linux.ee/pub/fedora/linux/
 http://fedora.linuxman.biz/linux/
 http://fedora.mirror.garr.it/mirrors/fedora/linux/
@@ -24,7 +26,6 @@ http://fedora.tu-chemnitz.de/pub/linux/fedora/linux/
 http://fedora.uib.no/fedora/linux/
 http://fedora.xfree.com.ar/linux/
 http://fr2.rpmfind.net/linux/fedora/linux/
-http://free.nchc.org.tw/fedora/linux/
 http://ftp-stud.hs-esslingen.de/pub/fedora/linux/
 http://ftp.acc.umu.se/mirror/fedora/linux/
 http://ftp.astral.ro/mirrors/fedora/pub/fedora/linux/
@@ -59,7 +60,6 @@ http://ftp.tudelft.nl/download.fedora.redhat.com/linux/
 http://ftp.twaren.net/Linux/Fedora/linux/
 http://ftp.udl.es/pub/fedora/linux/
 http://ftp.uma.es/mirror/fedora/linux/
-http://ftp.uni-bayreuth.de/linux/fedora/linux/
 http://ftp.uni-kl.de/pub/linux/fedora/linux/
 http://ftp.uni-koeln.de/mirrors/fedora/linux/
 http://ftp.upjs.sk/pub/fedora/linux/
@@ -115,6 +115,7 @@ http://mirror.pnl.gov/fedora/linux/
 http://mirror.prgmr.com/pub/fedora/linux/
 http://mirror.proserve.nl/fedora/linux/
 http://mirror.seas.harvard.edu/fedora/linux/
+http://mirror.sfo12.us.leaseweb.net/fedora/linux/
 http://mirror.slu.cz/fedora/linux/
 http://mirror.smartmedia.net.id/fedora/linux/
 http://mirror.sov.uk.goscomb.net/fedora/linux/
@@ -140,13 +141,11 @@ http://mirrors.mit.edu/fedora/linux/
 http://mirrors.n-ix.net/fedora/linux/
 http://mirrors.nic.cz/fedora/linux/
 http://mirrors.ptd.net/fedora/linux/
-http://mirrors.rit.edu/fedora/fedora/linux/
 http://mirrors.tummy.com/pub/fedora.redhat.com/fedora/linux/
 http://mirrors.usc.edu/pub/linux/distributions/fedora/linux/
 http://mirrors.vinahost.vn/fedora/linux/
 http://mirrors.xmission.com/fedora/linux/
 http://nl.mirror.eurid.eu/fedora/linux/
-http://opensource.nchc.org.tw/fedora/linux/
 http://repo.fedora.md/fedora/linux/
 http://sunsite.mff.cuni.cz/MIRRORS/fedora.redhat.com/linux/
 http://ucmirror.canterbury.ac.nz/linux/fedora/linux/
