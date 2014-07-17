@@ -40,7 +40,7 @@ fixversion: VERSION
 	cmp include/config.h build/tmp/hh || cp build/tmp/hh include/config.h
 
 VERSION=$(shell cat VERSION)
-TAGVERSION=$(subst ~,_,$(subst :,%,$(VERSION)))
+TAGVERSION=$(subst pre,_pre,$(VERSION))
 DISTNAME=apt-cacher-ng-$(VERSION)
 DEBSRCNAME=apt-cacher-ng_$(shell echo $(VERSION) | sed -e "s,pre,~pre,").orig.tar.xz
 
@@ -49,7 +49,6 @@ tarball: fixversion doc notdebianbranch nosametarball
 	git diff-index --quiet --cached HEAD || git commit -a
 	git diff-files --quiet || git commit -a
 	git archive --prefix $(DISTNAME)/ HEAD | xz -9 > ../$(DISTNAME).tar.xz
-#	cp -l tmp/$(DISTNAME)/doc/README tmp/$(DISTNAME)
 	test -e /etc/debian_version && ln -f ../$(DISTNAME).tar.xz ../$(DEBSRCNAME) || true
 	test -e ../tarballs && ln -f ../$(DISTNAME).tar.xz ../tarballs/$(DEBSRCNAME) || true
 	test -e ../build-area && ln -f ../$(DISTNAME).tar.xz ../build-area/$(DEBSRCNAME) || true
