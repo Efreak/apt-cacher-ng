@@ -1,6 +1,7 @@
 apt-cacher-ng (0.7.27-1) unstable; urgency=medium
 
   * New upstream release
+    + Includes fix of CVE-2014-4510, package patch dropped
   * Moved avahi-daemon to Suggests (LP: #1259191)
 
  -- Eduard Bloch <blade@debian.org>  Thu, 17 Jul 2014 21:10:25 +0200
