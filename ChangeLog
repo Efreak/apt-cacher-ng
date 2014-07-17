@@ -1,4 +1,4 @@
-apt-cacher-ng (0.8~pre1) ALPHA; urgency=low
+apt-cacher-ng (0.8.0~pre1) ALPHA; urgency=low
 
   * Better reporting of error messages in config file reader (Alioth
     task 314684)
