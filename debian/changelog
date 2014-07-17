@@ -1,6 +1,6 @@
 apt-cacher-ng (0.8.0~pre1-1) experimental; urgency=low
 
-  * New upstream version
+  * New upstream prerelease version
     + handles side effects on mmaped files more carefully (maybe a fix
       for #722360)
     + adds special handling for .gpg files without impact on static file
@@ -9,7 +9,7 @@ apt-cacher-ng (0.8.0~pre1-1) experimental; urgency=low
   * Added Russian translation (closes: #736252)
   * Moved avahi-daemon to Suggests (LP: #1259191)
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Thu, 17 Jul 2014 22:40:25 +0200
 
 apt-cacher-ng (0.7.26-1) unstable; urgency=medium
 
