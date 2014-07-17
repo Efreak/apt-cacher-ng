@@ -1,4 +1,4 @@
-apt-cacher-ng (0.8) BETA; urgency=low
+apt-cacher-ng (0.8~pre1) ALPHA; urgency=low
 
   * Better reporting of error messages in config file reader (Alioth
     task 314684)
@@ -47,6 +47,7 @@ apt-cacher-ng (0.8) BETA; urgency=low
   * If OpenSSL is available, use libcrypto implementation of SHA1 and MD5
     hashing (much faster on modern CPUs)
 
+ -- Eduard Bloch <blade@debian.org>  Wed, 16 Jul 2014 22:00:34 +0200
 
 apt-cacher-ng (0.7.26) BETA; urgency=low
 

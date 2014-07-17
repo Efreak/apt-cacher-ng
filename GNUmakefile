@@ -40,11 +40,14 @@ fixversion: VERSION
 	cmp include/config.h build/tmp/hh || cp build/tmp/hh include/config.h
 
 VERSION=$(shell cat VERSION)
+TAGVERSION=$(subst ~,_,$(subst :,%,$(VERSION)))
 DISTNAME=apt-cacher-ng-$(VERSION)
 DEBSRCNAME=apt-cacher-ng_$(shell echo $(VERSION) | sed -e "s,pre,~pre,").orig.tar.xz
 
 tarball: fixversion doc notdebianbranch nosametarball
-	git diff-index --quiet HEAD || git commit -a
+	# this is buggy, checking staged and unstaged changes separately for now :-( git diff-index --quiet HEAD || git commit -a
+	git diff-index --quiet --cached HEAD || git commit -a
+	git diff-files --quiet || git commit -a
 	git archive --prefix $(DISTNAME)/ HEAD | xz -9 > ../$(DISTNAME).tar.xz
 #	cp -l tmp/$(DISTNAME)/doc/README tmp/$(DISTNAME)
 	test -e /etc/debian_version && ln -f ../$(DISTNAME).tar.xz ../$(DEBSRCNAME) || true
@@ -55,10 +58,10 @@ tarball-remove:
 	rm -f ../$(DISTNAME).tar.xz ../tarballs/$(DEBSRCNAME) ../$(DEBSRCNAME) ../build-area/$(DEBSRCNAME)
 
 release: noremainingwork tarball
-	git tag upstream/$(VERSION)
+	git tag upstream/$(TAGVERSION)
 
 unrelease: tarball-remove
-	git tag -d upstream/$(VERSION)
+	git tag -d upstream/$(TAGVERSION)
 
 noremainingwork:
 	test ! -e TODO.next # the quick reminder for the next release should be empty
