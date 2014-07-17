@@ -40,6 +40,7 @@ fixversion: VERSION
 	cmp include/config.h build/tmp/hh || cp build/tmp/hh include/config.h
 
 VERSION=$(shell cat VERSION)
+TAGVERSION=$(subst ~,_,$(subst :,%,$(VERSION)))
 DISTNAME=apt-cacher-ng-$(VERSION)
 DEBSRCNAME=apt-cacher-ng_$(shell echo $(VERSION) | sed -e "s,pre,~pre,").orig.tar.xz
 
@@ -55,10 +56,10 @@ tarball-remove:
 	rm -f ../$(DISTNAME).tar.xz ../tarballs/$(DEBSRCNAME) ../$(DEBSRCNAME) ../build-area/$(DEBSRCNAME)
 
 release: noremainingwork tarball
-	git tag upstream/$(VERSION)
+	git tag upstream/$(TAGVERSION)
 
 unrelease: tarball-remove
-	git tag -d upstream/$(VERSION)
+	git tag -d upstream/$(TAGVERSION)
 
 noremainingwork:
 	test ! -e TODO.next # the quick reminder for the next release should be empty
