@@ -7,6 +7,8 @@
 #include "fileio.h"
 #include "job.h"
 
+#include <iostream>
+
 using namespace std;
 
 #ifdef SendFmt
@@ -176,6 +178,7 @@ tMaintPage::tMaintPage(const tRunParms& parms)
 
 inline int tMarkupFileSend::CheckCondition(LPCSTR id, size_t len)
 {
+	//std::cerr << "check if: " << string(id, len) << std::endl;
 	if(PFXCMP(id, len, "cfg:"))
 	{
 		string key(id+4, len-4);
@@ -189,20 +192,24 @@ inline int tMarkupFileSend::CheckCondition(LPCSTR id, size_t len)
 	if(RAWEQ(id, len, "delConfirmed"))
 		return m_parms.type != workDELETE;
 
-	return -1;
+	return -2;
 }
 
-void tMarkupFileSend::SendIfElse(LPCSTR pszBeginSep, LPCSTR pszEnd) {
+void tMarkupFileSend::SendIfElse(LPCSTR pszBeginSep, LPCSTR pszEnd)
+{
+	//std::cerr << "got if: " << string(pszBeginSep, pszEnd-pszBeginSep) << std::endl;
 	auto sep = pszBeginSep;
 	auto key=sep+1;
 	auto valYes=(LPCSTR) memchr(key, (UINT) *sep, pszEnd-key);
 	if(!valYes) // heh?
 		return;
 	auto sel=CheckCondition(key, valYes-key);
+	//std::cerr << "sel: " << sel << std::endl;
 	if(sel<0) // heh?
 		return;
 	valYes++; // now really there
 	auto valNo=(LPCSTR) memchr(valYes, (UINT) *sep, pszEnd-valYes);
+	//std::cerr << "valNO: " << valNo<< std::endl;
 	if(!valNo) // heh?
 			return;
 	if(0==sel)

@@ -22,7 +22,7 @@ protected:
 	// uses fallback lookup map, can be feed with data in subclass constructor
 	virtual void SendProp(cmstring &key);
 	// XXX: could make this virtual and customizable, if needed
-	int CheckCondition(LPCSTR key, size_t len); // 0: true, 1: false, -1: unknown condition
+	int CheckCondition(LPCSTR key, size_t len); // 0: true, 1: false, <0: unknown condition
 
 private:
 	tMarkupFileSend(const tMarkupFileSend&) =delete;

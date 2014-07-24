@@ -143,9 +143,7 @@ MapNameToInt n2iTbl[] = {
 		,{ "Verbose", 			NULL,			"Option is deprecated, ignoring the value." , 10}
 		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10}
 		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
-#ifdef DEBUG
-		,{ "patrace",	&patrace, 		"Developer shortcut" , 10}
-#endif
+		,{ "Patrace",	&patrace, 		"Don't use in config files!" , 10}
 };
 
 void ReadRewriteFile(const string & sFile, const string & sRepName);
