@@ -661,7 +661,8 @@ void job::PrepareDownload() {
 	if((m_nReqRangeFrom>=0 && m_nReqRangeTo>=0)
 			|| (m_pReqHead->type==header::HEAD && 0!=(m_nReqRangeTo=-1)))
 	{
-		lockguard g(m_pItem.get().get());
+		auto p(m_pItem.get());
+		lockguard g(p.get());
 		if(m_pItem->CheckUsableRange_unlocked(m_nReqRangeTo))
 		{
 			LOG("Got a partial request for incomplete download; range is available");
