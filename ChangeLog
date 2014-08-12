@@ -2,6 +2,8 @@ apt-cacher-ng (0.8.0~pre2) ALPHA; urgency=low
 
   * Fixed Tracing mode in non-debug build
   * Added NEWS.Debian to the volatile patterns filter (LP: #1350432)
+  * Fixes premature release of internal file descriptors sometimes causing
+    pointless reconnects (thanks to Kirill Timofeev)
 
  -- 
 
