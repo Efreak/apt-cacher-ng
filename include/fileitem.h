@@ -142,7 +142,7 @@ public:
 	fileItemMgmt& operator=(const fileItemMgmt &src);
 
 	inline fileitem* operator->() const {return m_ptr.get();}
-	inline tFileItemPtr & get() {return m_ptr;}
+	inline tFileItemPtr get() {return m_ptr;}
 	inline operator bool() const {return (bool) m_ptr;}
 
 	// deletes global registration and replaces m_ptr with another copy

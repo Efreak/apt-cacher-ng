@@ -698,7 +698,7 @@ inline void fileItemMgmt::Unreg()
 {
 	LOGSTART("fileItemMgmt::Unreg");
 
-	if(!m_ptr)
+	if(!m_ptr) // unregistered before?
 		return;
 
 	lockguard managementLock(mapItems);
@@ -707,7 +707,8 @@ inline void fileItemMgmt::Unreg()
 	if(m_ptr->m_globRef == mapItems.end())
 		return;
 
-	lockguard fitemLock(*m_ptr);
+	auto local_ptr(m_ptr); // might disappear
+	lockguard fitemLock(*local_ptr);
 
 	if ( -- m_ptr->usercount <= 0)
 	{
@@ -734,6 +735,9 @@ inline void fileItemMgmt::Unreg()
 		LOG("*this is last entry, deleting dl/fi mapping");
 		mapItems.erase(m_ptr->m_globRef);
 		m_ptr->m_globRef = mapItems.end();
+
+		// make sure it's not double-unregistered accidentally!
+		m_ptr.reset();
 	}
 }
 
@@ -928,6 +932,7 @@ fileitem_with_storage::~fileitem_with_storage()
 
 fileItemMgmt::fileItemMgmt(const fileItemMgmt &src)
 {
+	LOGSTART2("fileItemMgmt::fileItemMgmt [copy]", src.m_ptr.get());
 	fileItemMgmt *x = const_cast<fileItemMgmt *>(&src);
 	this->m_ptr = x->m_ptr;
 	x->m_ptr.reset();
