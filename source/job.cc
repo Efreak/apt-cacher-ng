@@ -1034,7 +1034,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 			m_bChunkMode=true;
 			sb<<"Transfer-Encoding: chunked\r\n";
 		}
-		else if(200==httpstatus) // good data response with known length, can try some optimizations
+		else if(200==httpstatus) // state: good data response with known length, can try some optimizations
 		{
 			LOG("has known content length, optimizing response...");
 
@@ -1045,7 +1045,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 			const char *pLastMo = respHead.h[header::LAST_MODIFIED];
 
 			// consider contents "fresh" for non-volatile data, or when "our" special client is there, or the client simply doesn't care
-			bool bFreshnessForced = (m_type != rechecks::FILE_VOLATILE
+			bool bDataIsFresh = (m_type != rechecks::FILE_VOLATILE
 				|| m_pReqHead->h[header::ACNGFSMARK] || !pIfmo);
 
 			auto tm1=tm(), tm2=tm();
@@ -1058,31 +1058,31 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 			}
 
 			// is it fresh? or is this relevant? or is range mode forced?
-			if(  bFreshnessForced || bIfModSeenAndChecked)
+			if(  bDataIsFresh || bIfModSeenAndChecked)
 			{
 				off_t nContLen=atoofft(respHead.h[header::CONTENT_LENGTH]);
 
+				// Client requested with Range* spec?
 				if(m_nReqRangeFrom >=0)
 				{
 					if(m_nReqRangeTo<0 || m_nReqRangeTo>=nContLen) // open-end? set the end to file length. Also when request range would be too large
 						m_nReqRangeTo=nContLen-1;
+
+					// or simply don't care within that rage
+					bool bPermitPartialStart = (
+							fistate >= fileitem::FIST_DLGOTHEAD
+							&& fistate <= fileitem::FIST_COMPLETE
+							&& nGooddataSize >= ( m_nReqRangeFrom - acfg::maxredlsize));
 
 					/*
 					 * make sure that our client doesn't just hang here while the download thread is
 					 * fetching from 0 to start position for many minutes. If the resumed position
 					 * is beyond of what we already have, fall back to 200 (complete download).
 					 */
-					if(  fistate==fileitem::FIST_COMPLETE
+					if(fistate==fileitem::FIST_COMPLETE
 							// or can start sending within this range (positive range-from)
-							|| (
-									fistate >= fileitem::FIST_DLGOTHEAD
-									&& fistate <= fileitem::FIST_COMPLETE
-									&& nGooddataSize>=m_nReqRangeFrom
-								)
-							// don't care, found special hint from acngfs (kludge...)
-							|| m_pReqHead->h[header::ACNGFSMARK]
-
-						)
+							|| bPermitPartialStart	// don't care since found special hint from acngfs (kludge...)
+							|| m_pReqHead->h[header::ACNGFSMARK] )
 					{
 						// detect errors, out-of-range case
 						if(m_nReqRangeFrom>=nContLen || m_nReqRangeTo<m_nReqRangeFrom)

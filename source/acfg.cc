@@ -136,6 +136,7 @@ MapNameToInt n2iTbl[] = {
 		,{  "ExSuppressAdminNotification",       &exsupcount,       NULL,    10}
 		,{  "OptProxyTimeout",                   &optproxytimeout,  NULL,    10}
 		,{  "MaxDlSpeed",                        &maxdlspeed,       NULL,    10}
+		,{  "MaxInresponsiveDlSize",             &maxredlsize,      NULL,    10}
 
 		,{  "DirPerms",                          &dirperms,         NULL,    8}
 		,{  "FilePerms",                         &fileperms,        NULL,    8}

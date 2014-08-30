@@ -4,6 +4,9 @@ apt-cacher-ng (0.8.0~pre2) ALPHA; urgency=low
   * Added NEWS.Debian to the volatile patterns filter (LP: #1350432)
   * Fixes premature release of internal file descriptors sometimes causing
     pointless reconnects (thanks to Kirill Timofeev)
+  * Added a trick to allow silent handling of arbitrary range requests in a
+    more appropriate way (returning 206) within a limited defined period
+    (configured through MaxInresponsiveDlSize variable; Debian bug #744727)
 
  -- 
 
