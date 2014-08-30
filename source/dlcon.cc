@@ -122,45 +122,59 @@ struct tDlJob
 			m_pStorage->DecDlRefCount(sErrorMsg.empty() ? sGenericError : sErrorMsg);
 	}
 
+	inline string RemoteUri(bool bUrlEncoded)
+	{
+		if(m_pCurBackend)
+			return m_pCurBackend->ToURI(bUrlEncoded) +
+					( bUrlEncoded ? UrlEscape(m_fileUri.sPath)
+							: m_fileUri.sPath);
+
+		return m_fileUri.ToURI(bUrlEncoded);
+	}
+
 	inline bool RewriteSource(const char *pNewUrl)
 	{
-
+		LOGSTART("tDlJob::RewriteSource");
 		if (--m_nRedirRemaining <= 0)
 		{
 			sErrorMsg = "500 Bad redirection (loop)";
 			return false;
 		}
 
-		if (!pNewUrl)
+		if (!pNewUrl || !*pNewUrl)
 		{
 			sErrorMsg = "500 Bad redirection (empty)";
 			return false;
 		}
 
-		// it's previous server's job to not send any crap. Just make sure that
-		// the format is right for further processing here.
-		mstring s;
-		for (const char *p = pNewUrl; *p; ++p)
+		// start modifying the target URL, point of no return
+
+		m_pBEdata = nullptr;
+		m_pCurBackend = nullptr;
+
+		auto sLocationDecoded = UrlUnescape(pNewUrl);
+
+		tHttpUrl newUri;
+		if (newUri.SetHttpUrl(sLocationDecoded, false))
 		{
-			if (isspace((unsigned char) *p) || *p == '%')
-			{
-				s += "%";
-				s += BytesToHexString((uint8_t*) p, 1);
-			}
-			else
-				s += *p;
+			dbgline;
+			m_fileUri = newUri;
+			return true;
 		}
-
-		m_pBEdata = NULL;
-		m_pCurBackend = NULL;
-
-		if (!m_fileUri.SetHttpUrl(s))
+		// ok, some protocol-relative crap? let it parse the hostname but keep the protocol
+		if (startsWithSz(sLocationDecoded, "//"))
 		{
-			sErrorMsg = "500 Bad redirection (invalid URL)";
-			return false;
+			stripPrefixChars(sLocationDecoded, "/");
+			return m_fileUri.SetHttpUrl(
+					m_fileUri.GetProtoPrefix() + sLocationDecoded);
 		}
-
-		m_fileUri.bIsTransferlEncoded=true;
+		if (startsWithSz(sLocationDecoded, "/"))
+		{
+			m_fileUri.sPath = sLocationDecoded;
+			return true;
+		}
+		// ok, must be relative
+		m_fileUri.sPath+=(sPathSepUnix+sLocationDecoded);
 		return true;
 	}
 
@@ -202,10 +216,7 @@ struct tDlJob
 			if (m_pCurBackend) // base dir from backend definition
 				head << UrlEscape(m_pCurBackend->sPath);
 
-			if(m_fileUri.bIsTransferlEncoded)
-				head << m_fileUri.sPath;
-			else
-				head << UrlEscape(m_fileUri.sPath);
+			head << UrlEscape(m_fileUri.sPath);
 		}
 
 		ldbg(RemoteUri(true));
@@ -309,19 +320,6 @@ struct tDlJob
 		//head.syswrite(2);
 #endif
 
-	}
-
-	inline string RemoteUri(bool bEscaped)
-	{
-		if(m_pCurBackend)
-			return m_pCurBackend->ToURI(bEscaped) +
-					( (bEscaped && !m_fileUri.bIsTransferlEncoded)
-							?
-							UrlEscape(m_fileUri.sPath)
-							:
-							m_fileUri.sPath);
-
-		return m_fileUri.ToURI(bEscaped);
 	}
 
 	inline uint_fast8_t NewDataHandler(acbuf & inBuf)

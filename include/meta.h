@@ -167,10 +167,17 @@ public:
 	bool SetHttpUrl(cmstring &uri, bool unescape = true);
 	mstring ToURI(bool bEscaped) const;
 	mstring sHost, sPath, sUserPass;
-	bool bIsTransferlEncoded;
 #ifdef HAVE_SSL
-	bool bSSL;
+	bool bSSL=false;
 #endif
+	inline cmstring GetProtoPrefix() const
+	{
+		return
+#ifdef HAVE_SSL
+			bSSL ? "https://" :
+#endif
+					"http://";
+	}
 
 	tHttpUrl & operator=(const tHttpUrl &a) 
 	{
@@ -178,7 +185,6 @@ public:
 #ifdef HAVE_SSL
 		bSSL=a.bSSL;
 #endif
-		bIsTransferlEncoded=a.bIsTransferlEncoded;
 		return *this;
 	};
 	bool operator==(const tHttpUrl &a) const
@@ -188,7 +194,6 @@ public:
 #ifdef HAVE_SSL
 				&& a.bSSL == bSSL
 #endif
-				&& a.bIsTransferlEncoded == bIsTransferlEncoded
 				;
 	};
 	bool operator!=(const tHttpUrl &a) const
@@ -200,14 +205,8 @@ public:
 #ifdef HAVE_SSL
 	bSSL=false;
 #endif
-	bIsTransferlEncoded=false;
 	}
-	inline tHttpUrl()
-	: bIsTransferlEncoded(false)
-#ifdef HAVE_SSL
-	, bSSL(false)
-#endif
-	{};
+
 
 	inline cmstring& GetDefaultPortForProto() const { return
 #ifdef HAVE_SSL
