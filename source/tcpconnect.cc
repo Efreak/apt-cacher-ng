@@ -551,7 +551,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 
 	if(!perr)
 		perr=ERR_reason_error_string(ERR_get_error());
-	sErr="SSL error: ";
+	sErr="500 SSL error: ";
 	sErr+=(perr?perr:"Generic SSL failure");
 	return false;
 }
