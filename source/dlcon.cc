@@ -666,6 +666,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 #ifdef HAVE_SSL
 			else if(con->GetBIO() && BIO_should_write(con->GetBIO()))
 			{
+				ldbg("NOTE: OpenSSL wants to write although send buffer is empty!");
 				FD_SET(fd, &wfds);
 			}
 #endif
@@ -683,10 +684,10 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 		}
 
 		r=select(nMaxFd + 1, &rfds, &wfds, NULL, &tv);
+		ldbg("returned: " << r << ", errno: " << errno);
 
 		if (r < 0)
 		{
-			dbgline;
 			if (EINTR == errno)
 				continue;
 #ifdef MINIBUILD
@@ -700,7 +701,6 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 		}
 		else if (r == 0) // looks like a timeout
 		{
-			dbgline;
 			sErrorMsg = "500 Connection timeout";
 			// was there anything to do at all?
 			if(inpipe.empty())
@@ -720,36 +720,46 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 			return HINT_SWITCH;
 		}
 
-		if (fd>=0)
+		if (fd >= 0)
 		{
-#ifdef HAVE_SSL
-			if (con->GetBIO())
-			{
-				int s=BIO_write(con->GetBIO(), m_sendBuf.rptr(), m_sendBuf.size());
-				if(s>0)
-					m_sendBuf.drop(s);
-			}
-			else
-#endif
 			if (FD_ISSET(fd, &wfds))
 			{
 				FD_CLR(fd, &wfds);
 
-				ldbg("Sending data...\n" << m_sendBuf);
-				int s = ::send(fd, m_sendBuf.data(), m_sendBuf.length(), MSG_NOSIGNAL);
-				ldbg("Sent " << s << " bytes from " << m_sendBuf.length() << " to " << con.get());
-				if (s < 0)
+#ifdef HAVE_SSL
+				if (con->GetBIO())
 				{
-					// EAGAIN is weird but let's retry later, otherwise reconnect
-					if (errno != EAGAIN && errno != EINTR)
-					{
-						sErrorMsg = "502 Send failed";
-						return EFLAG_LOST_CON;
-					}
+					int s = BIO_write(con->GetBIO(), m_sendBuf.rptr(),
+							m_sendBuf.size());
+					ldbg(
+							"tried to write to SSL, " << m_sendBuf.size() << " bytes, result: " << s);
+					if (s > 0)
+						m_sendBuf.drop(s);
 				}
 				else
-					m_sendBuf.drop(s);
+				{
+#endif
+					ldbg("Sending data...\n" << m_sendBuf);
+					int s = ::send(fd, m_sendBuf.data(), m_sendBuf.length(),
+							MSG_NOSIGNAL);
+					ldbg(
+							"Sent " << s << " bytes from " << m_sendBuf.length() << " to " << con.get());
+					if (s < 0)
+					{
+						// EAGAIN is weird but let's retry later, otherwise reconnect
+						if (errno != EAGAIN && errno != EINTR)
+						{
+							sErrorMsg = "502 Send failed";
+							return EFLAG_LOST_CON;
+						}
+					}
+					else
+						m_sendBuf.drop(s);
+
+				}
+#ifdef HAVE_SSL
 			}
+#endif
 		}
 
 		if (fd >=0 && (FD_ISSET(fd, &rfds)
