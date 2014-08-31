@@ -18,14 +18,14 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 {
 	LOGSTART2("CAddrInfo::Resolve", "Resolving " << sHostname);
 
-	LPCSTR port = sPort.empty() ? NULL : sPort.c_str();
+	LPCSTR port = sPort.empty() ? nullptr : sPort.c_str();
 
 	static struct addrinfo hints =
 	{
 	// we provide numbers, no resolution needed; only supported addresses
-			(port?AI_NUMERICSERV:0) | AI_ADDRCONFIG,
+			(port ? AI_NUMERICSERV:0) | AI_ADDRCONFIG,
 			PF_UNSPEC, SOCK_STREAM, IPPROTO_TCP,
-			0, NULL, NULL, NULL };
+			0, nullptr, nullptr, nullptr };
 
 	// if only one family is specified, filter on this earlier
 	if(acfg::conprotos[0] != PF_UNSPEC && acfg::conprotos[1] == PF_UNSPEC)
@@ -34,7 +34,7 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 	if (m_resolvedInfo)
 	{
 		freeaddrinfo(m_resolvedInfo);
-		m_resolvedInfo=NULL;
+		m_resolvedInfo=nullptr;
 	}
 
 	int r=getaddrinfo(sHostname.c_str(), port, &hints, &m_resolvedInfo);
@@ -79,7 +79,6 @@ CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string 
 	mstring dnsKey=sHostname+":"+sPort;
 
 	SPtr p;
-
 	{
 		lockguard g(mapDnsCache);
 		SPtr localEntry;

@@ -45,7 +45,7 @@ public:
 	virtual ~tCacheOperation();
 
 protected:
-	enum enumIndexType
+	enum enumMetaType
 		: uint_least8_t
 		{
 			EIDX_UNSUPPORTED = 0,
@@ -65,19 +65,19 @@ protected:
 	{
 		bool vfile_ondisk=false, uptodate=false, parseignore=false, hideDlErrors=false,
 				forgiveDlErrors=false, alreadyparsed=false;
-		enumIndexType eIdxType = EIDX_UNSUPPORTED;
+		enumMetaType eIdxType = EIDX_UNSUPPORTED;
 		const tStrDeq *bros = nullptr;
 		off_t space = 0;
 	};
 
-	std::unordered_map<mstring,tIfileAttribs> m_indexFilesRel;
+	std::unordered_map<mstring,tIfileAttribs> m_metaFilesRel;
 	// helpers to keep the code cleaner and more readable
 	const tIfileAttribs &GetFlags(cmstring &sPathRel) const;
 	tIfileAttribs &SetFlags(cmstring &sPathRel);
 
 	void SetCommonUserFlags(cmstring &cmd);
 
-	void UpdateIndexFiles();
+	void UpdateVolatileFiles();
 	void _BusyDisplayLogs();
 	void _Usermsg(mstring m);
 	bool AddIFileCandidate(const mstring &sFileRel);
@@ -97,7 +97,7 @@ protected:
 	 *   
 	 * */
 
-	void ProcessSeenIndexFiles(ifileprocessor &pkgHandler);
+	void ProcessSeenMetaFiles(ifileprocessor &pkgHandler);
 
 	void StartDlder();
 
@@ -107,7 +107,7 @@ protected:
 		eMsgHideErrors,
 		eMsgShow
 	};
-	bool Download(const std::string & sFilePathRel, bool bIndexFile,
+	bool Download(const std::string & sFilePathRel, bool bIsVolatileFile,
 			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(), const char *pForcedURL=NULL);
 
 	// internal helper variables
@@ -116,14 +116,14 @@ protected:
 	bool m_bTruncateDamaged;
 	int m_nErrorCount;
 
-	enumIndexType GuessIndexTypeFromURL(const mstring &sPath);
+	enumMetaType GuessMetaTypeFromURL(const mstring &sPath);
 
 	unsigned int m_nProgIdx, m_nProgTell;
 
 	void TellCount(uint nCount, off_t nSize);
 
-	bool ParseAndProcessIndexFile(ifileprocessor &output_receiver,
-			const mstring &sPath, enumIndexType idxType);
+	bool ParseAndProcessMetaFile(ifileprocessor &output_receiver,
+			const mstring &sPath, enumMetaType idxType);
 
 	std::unordered_map<mstring,bool> m_forceKeepInTrash;
 
