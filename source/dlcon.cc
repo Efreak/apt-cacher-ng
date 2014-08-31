@@ -122,45 +122,59 @@ struct tDlJob
 			m_pStorage->DecDlRefCount(sErrorMsg.empty() ? sGenericError : sErrorMsg);
 	}
 
+	inline string RemoteUri(bool bUrlEncoded)
+	{
+		if(m_pCurBackend)
+			return m_pCurBackend->ToURI(bUrlEncoded) +
+					( bUrlEncoded ? UrlEscape(m_fileUri.sPath)
+							: m_fileUri.sPath);
+
+		return m_fileUri.ToURI(bUrlEncoded);
+	}
+
 	inline bool RewriteSource(const char *pNewUrl)
 	{
-
+		LOGSTART("tDlJob::RewriteSource");
 		if (--m_nRedirRemaining <= 0)
 		{
 			sErrorMsg = "500 Bad redirection (loop)";
 			return false;
 		}
 
-		if (!pNewUrl)
+		if (!pNewUrl || !*pNewUrl)
 		{
 			sErrorMsg = "500 Bad redirection (empty)";
 			return false;
 		}
 
-		// it's previous server's job to not send any crap. Just make sure that
-		// the format is right for further processing here.
-		mstring s;
-		for (const char *p = pNewUrl; *p; ++p)
+		// start modifying the target URL, point of no return
+
+		m_pBEdata = nullptr;
+		m_pCurBackend = nullptr;
+
+		auto sLocationDecoded = UrlUnescape(pNewUrl);
+
+		tHttpUrl newUri;
+		if (newUri.SetHttpUrl(sLocationDecoded, false))
 		{
-			if (isspace((unsigned char) *p) || *p == '%')
-			{
-				s += "%";
-				s += BytesToHexString((uint8_t*) p, 1);
-			}
-			else
-				s += *p;
+			dbgline;
+			m_fileUri = newUri;
+			return true;
 		}
-
-		m_pBEdata = NULL;
-		m_pCurBackend = NULL;
-
-		if (!m_fileUri.SetHttpUrl(s))
+		// ok, some protocol-relative crap? let it parse the hostname but keep the protocol
+		if (startsWithSz(sLocationDecoded, "//"))
 		{
-			sErrorMsg = "500 Bad redirection (invalid URL)";
-			return false;
+			stripPrefixChars(sLocationDecoded, "/");
+			return m_fileUri.SetHttpUrl(
+					m_fileUri.GetProtoPrefix() + sLocationDecoded);
 		}
-
-		m_fileUri.bIsTransferlEncoded=true;
+		if (startsWithSz(sLocationDecoded, "/"))
+		{
+			m_fileUri.sPath = sLocationDecoded;
+			return true;
+		}
+		// ok, must be relative
+		m_fileUri.sPath+=(sPathSepUnix+sLocationDecoded);
 		return true;
 	}
 
@@ -202,10 +216,7 @@ struct tDlJob
 			if (m_pCurBackend) // base dir from backend definition
 				head << UrlEscape(m_pCurBackend->sPath);
 
-			if(m_fileUri.bIsTransferlEncoded)
-				head << m_fileUri.sPath;
-			else
-				head << UrlEscape(m_fileUri.sPath);
+			head << UrlEscape(m_fileUri.sPath);
 		}
 
 		ldbg(RemoteUri(true));
@@ -309,19 +320,6 @@ struct tDlJob
 		//head.syswrite(2);
 #endif
 
-	}
-
-	inline string RemoteUri(bool bEscaped)
-	{
-		if(m_pCurBackend)
-			return m_pCurBackend->ToURI(bEscaped) +
-					( (bEscaped && !m_fileUri.bIsTransferlEncoded)
-							?
-							UrlEscape(m_fileUri.sPath)
-							:
-							m_fileUri.sPath);
-
-		return m_fileUri.ToURI(bEscaped);
 	}
 
 	inline uint_fast8_t NewDataHandler(acbuf & inBuf)
@@ -483,6 +481,18 @@ struct tDlJob
 				// ok, can pass the data to the file handler
 				h.set(header::XORIG, RemoteUri(false));
 				bool bDoRetry(false);
+				if(acfg::redirmax
+						&& !acfg::badredmime.empty()
+						&& acfg::redirmax != m_nRedirRemaining
+						&& h.h[header::CONTENT_TYPE]
+						&& strstr(h.h[header::CONTENT_TYPE], acfg::badredmime.c_str()))
+				{
+					// this was redirected and the destination is BAD!
+					h.frontLine="HTTP/1.1 501 Redirected to invalid target";
+					void DropDnsCache();
+					DropDnsCache();
+				}
+
 				if(!m_pStorage->DownloadStartedStoreHeader(h, inBuf.rptr(), bHotItem, bDoRetry))
 				{
 					if(bDoRetry)
@@ -668,6 +678,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 #ifdef HAVE_SSL
 			else if(con->GetBIO() && BIO_should_write(con->GetBIO()))
 			{
+				ldbg("NOTE: OpenSSL wants to write although send buffer is empty!");
 				FD_SET(fd, &wfds);
 			}
 #endif
@@ -685,10 +696,10 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 		}
 
 		r=select(nMaxFd + 1, &rfds, &wfds, NULL, &tv);
+		ldbg("returned: " << r << ", errno: " << errno);
 
 		if (r < 0)
 		{
-			dbgline;
 			if (EINTR == errno)
 				continue;
 #ifdef MINIBUILD
@@ -702,7 +713,6 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 		}
 		else if (r == 0) // looks like a timeout
 		{
-			dbgline;
 			sErrorMsg = "500 Connection timeout";
 			// was there anything to do at all?
 			if(inpipe.empty())
@@ -722,36 +732,46 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 			return HINT_SWITCH;
 		}
 
-		if (fd>=0)
+		if (fd >= 0)
 		{
-#ifdef HAVE_SSL
-			if (con->GetBIO())
-			{
-				int s=BIO_write(con->GetBIO(), m_sendBuf.rptr(), m_sendBuf.size());
-				if(s>0)
-					m_sendBuf.drop(s);
-			}
-			else
-#endif
 			if (FD_ISSET(fd, &wfds))
 			{
 				FD_CLR(fd, &wfds);
 
-				ldbg("Sending data...\n" << m_sendBuf);
-				int s = ::send(fd, m_sendBuf.data(), m_sendBuf.length(), MSG_NOSIGNAL);
-				ldbg("Sent " << s << " bytes from " << m_sendBuf.length() << " to " << con.get());
-				if (s < 0)
+#ifdef HAVE_SSL
+				if (con->GetBIO())
 				{
-					// EAGAIN is weird but let's retry later, otherwise reconnect
-					if (errno != EAGAIN && errno != EINTR)
-					{
-						sErrorMsg = "502 Send failed";
-						return EFLAG_LOST_CON;
-					}
+					int s = BIO_write(con->GetBIO(), m_sendBuf.rptr(),
+							m_sendBuf.size());
+					ldbg(
+							"tried to write to SSL, " << m_sendBuf.size() << " bytes, result: " << s);
+					if (s > 0)
+						m_sendBuf.drop(s);
 				}
 				else
-					m_sendBuf.drop(s);
+				{
+#endif
+					ldbg("Sending data...\n" << m_sendBuf);
+					int s = ::send(fd, m_sendBuf.data(), m_sendBuf.length(),
+							MSG_NOSIGNAL);
+					ldbg(
+							"Sent " << s << " bytes from " << m_sendBuf.length() << " to " << con.get());
+					if (s < 0)
+					{
+						// EAGAIN is weird but let's retry later, otherwise reconnect
+						if (errno != EAGAIN && errno != EINTR)
+						{
+							sErrorMsg = "502 Send failed";
+							return EFLAG_LOST_CON;
+						}
+					}
+					else
+						m_sendBuf.drop(s);
+
+				}
+#ifdef HAVE_SSL
 			}
+#endif
 		}
 
 		if (fd >=0 && (FD_ISSET(fd, &rfds)

@@ -104,43 +104,45 @@ MapNameToString n2sTbl[] = {
 		,{  "PassThroughPattern",      &PTHOSTS_PATTERN}
 		,{  "CApath",                  &capath}
 		,{  "CAfile",                  &cafile}
+		,{  "BadRedirDetectMime",      &badredmime}
 };
 
 MapNameToInt n2iTbl[] = {
-		{   "Debug",                             &debug,            NULL,    10}
-		,{  "OfflineMode",                       &offlinemode,      NULL,    10}
-		,{  "ForeGround",                        &foreground,       NULL,    10}
-		,{  "ForceManaged",                      &forcemanaged,     NULL,    10}
-		,{  "StupidFs",                          &stupidfs,         NULL,    10}
-		,{  "VerboseLog",                        &verboselog,       NULL,    10}
-		,{  "ExTreshold",                        &extreshhold,      NULL,    10}
-		,{  "MaxStandbyConThreads",              &tpstandbymax,     NULL,    10}
-		,{  "MaxConThreads",                     &tpthreadmax,      NULL,    10}
-		,{  "DnsCacheSeconds",                   &dnscachetime,     NULL,    10}
-		,{  "UnbufferLogs",                      &debug,            NULL,    10}
-		,{  "ExAbortOnProblems",                 &exfailabort,      NULL,    10}
-		,{  "ExposeOrigin",                      &exporigin,        NULL,    10}
-		,{  "LogSubmittedOrigin",                &logxff,           NULL,    10}
-		,{  "RecompBz2",                         &recompbz2,        NULL,    10}
-		,{  "NetworkTimeout",                    &nettimeout,       NULL,    10}
-		,{  "MinUpdateInterval",                 &updinterval,      NULL,    10}
-		,{  "ForwardBtsSoap",                    &forwardsoap,      NULL,    10}
-		,{  "KeepExtraVersions",                 &keepnver,         NULL,    10}
-		,{  "UseWrap",                           &usewrap,          NULL,    10}
-		,{  "FreshIndexMaxAge",                  &maxtempdelay,     NULL,    10}
-		,{  "RedirMax",                          &redirmax,         NULL,    10}
-		,{  "VfileUseRangeOps",                  &vrangeops,        NULL,    10}
-		,{  "ResponseFreezeDetectTime",          &stucksecs,        NULL,    10}
-		,{  "ReuseConnections",                  &persistoutgoing,  NULL,    10}
-		,{  "PipelineDepth",                     &pipelinelen,      NULL,    10}
-		,{  "ExSuppressAdminNotification",       &exsupcount,       NULL,    10}
-		,{  "OptProxyTimeout",                   &optproxytimeout,  NULL,    10}
-		,{  "MaxDlSpeed",                        &maxdlspeed,       NULL,    10}
+		{   "Debug",                             &debug,            nullptr,    10}
+		,{  "OfflineMode",                       &offlinemode,      nullptr,    10}
+		,{  "ForeGround",                        &foreground,       nullptr,    10}
+		,{  "ForceManaged",                      &forcemanaged,     nullptr,    10}
+		,{  "StupidFs",                          &stupidfs,         nullptr,    10}
+		,{  "VerboseLog",                        &verboselog,       nullptr,    10}
+		,{  "ExTreshold",                        &extreshhold,      nullptr,    10}
+		,{  "MaxStandbyConThreads",              &tpstandbymax,     nullptr,    10}
+		,{  "MaxConThreads",                     &tpthreadmax,      nullptr,    10}
+		,{  "DnsCacheSeconds",                   &dnscachetime,     nullptr,    10}
+		,{  "UnbufferLogs",                      &debug,            nullptr,    10}
+		,{  "ExAbortOnProblems",                 &exfailabort,      nullptr,    10}
+		,{  "ExposeOrigin",                      &exporigin,        nullptr,    10}
+		,{  "LogSubmittedOrigin",                &logxff,           nullptr,    10}
+		,{  "RecompBz2",                         &recompbz2,        nullptr,    10}
+		,{  "NetworkTimeout",                    &nettimeout,       nullptr,    10}
+		,{  "MinUpdateInterval",                 &updinterval,      nullptr,    10}
+		,{  "ForwardBtsSoap",                    &forwardsoap,      nullptr,    10}
+		,{  "KeepExtraVersions",                 &keepnver,         nullptr,    10}
+		,{  "UseWrap",                           &usewrap,          nullptr,    10}
+		,{  "FreshIndexMaxAge",                  &maxtempdelay,     nullptr,    10}
+		,{  "RedirMax",                          &redirmax,         nullptr,    10}
+		,{  "VfileUseRangeOps",                  &vrangeops,        nullptr,    10}
+		,{  "ResponseFreezeDetectTime",          &stucksecs,        nullptr,    10}
+		,{  "ReuseConnections",                  &persistoutgoing,  nullptr,    10}
+		,{  "PipelineDepth",                     &pipelinelen,      nullptr,    10}
+		,{  "ExSuppressAdminNotification",       &exsupcount,       nullptr,    10}
+		,{  "OptProxyTimeout",                   &optproxytimeout,  nullptr,    10}
+		,{  "MaxDlSpeed",                        &maxdlspeed,       nullptr,    10}
+		,{  "MaxInresponsiveDlSize",             &maxredlsize,      nullptr,    10}
 
-		,{  "DirPerms",                          &dirperms,         NULL,    8}
-		,{  "FilePerms",                         &fileperms,        NULL,    8}
+		,{  "DirPerms",                          &dirperms,         nullptr,    8}
+		,{  "FilePerms",                         &fileperms,        nullptr,    8}
 
-		,{ "Verbose", 			NULL,			"Option is deprecated, ignoring the value." , 10}
+		,{ "Verbose", 			nullptr,			"Option is deprecated, ignoring the value." , 10}
 		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10}
 		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
 		,{ "Patrace",	&patrace, 		"Don't use in config files!" , 10}

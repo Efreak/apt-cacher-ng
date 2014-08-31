@@ -44,13 +44,6 @@ public:
 	tCacheOperation(const tSpecialRequest::tRunParms& parms);
 	virtual ~tCacheOperation();
 
-	// having this here makes no sense except of working around an ICE bug of gcc 4.3/4.4.x
-	class tGetItemDelegate
-	{
-		public:
-			virtual fileItemMgmt GetFileItemPtr()=0;
-	};
-
 protected:
 	enum enumIndexType
 		: uint_least8_t
@@ -115,7 +108,7 @@ protected:
 		eMsgShow
 	};
 	bool Download(const std::string & sFilePathRel, bool bIndexFile,
-			eDlMsgPrio msgLevel, tGetItemDelegate *p=NULL, const char *pForcedURL=NULL);
+			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(), const char *pForcedURL=NULL);
 
 	// internal helper variables
 	bool m_bErrAbort, m_bVerbose, m_bForceDownload;

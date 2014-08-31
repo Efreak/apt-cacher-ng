@@ -13,7 +13,7 @@ namespace acfg
 
 string cachedir("/var/tmp"), logdir("/var/tmp"), fifopath, pidfile, reportpage,
 confdir, adminauth, bindaddr, mirrorsrcs, suppdir("/usr/lib/apt-cacher-ng"),
-capath("/etc/ssl/certs"), cafile;
+capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 
 #define INFOLDER "(^|.*/)"
 #define COMPRLIST "(\\.gz|\\.bz2|\\.lzma|\\.xz)"
@@ -43,7 +43,8 @@ string vfilepat(INFOLDER
 		"|filelists\\.xml\\.gz|filelists\\.sqlite\\.bz2|repomd\\.xml" // SL, http://ra.khe.sh/computers/linux/apt-cacher-ng-with-yum.html
 		"|packages\\.[a-zA-Z][a-zA-Z]\\.gz|info\\.txt|license\\.tar\\.gz|license\\.zip" //opensuse
 		"|" ALXPATTERN // Arch Linux
-		"|metalink\\?repo|.*prestodelta\\.xml\\.gz|repodata/.*\\.(xml|sqlite)" COMPRLIST // CentOS
+		"|metalink\\?repo|.*prestodelta\\.xml\\.gz|repodata/.*\\.(xml|sqlite)" COMPOPT // CentOS
+		"|\\.treeinfo|vmlinuz|(initrd|product|squashfs|updates)\\.img" // Fedora
 		")$" // end of only-filename paterns
 		"|/dists/.*/installer-[^/]+/[^0-9][^/]+/images/.*"); // d-i stuff but not containing a date (year number) in the revision directory (like "current", "beta", ...)
 
@@ -67,7 +68,7 @@ int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
 logxff(false), oldupdate(false), recompbz2(false), nettimeout(60), updinterval(0),
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(255), exsupcount(RESERVED_DEFVAL),
-optproxytimeout(-1), patrace(false);
+optproxytimeout(-1), patrace(false), maxredlsize(1<<16);
 
 int maxdlspeed(RESERVED_DEFVAL);
 

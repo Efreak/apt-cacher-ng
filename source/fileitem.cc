@@ -698,7 +698,7 @@ inline void fileItemMgmt::Unreg()
 {
 	LOGSTART("fileItemMgmt::Unreg");
 
-	if(!m_ptr)
+	if(!m_ptr) // unregistered before?
 		return;
 
 	lockguard managementLock(mapItems);
@@ -707,7 +707,8 @@ inline void fileItemMgmt::Unreg()
 	if(m_ptr->m_globRef == mapItems.end())
 		return;
 
-	lockguard fitemLock(*m_ptr);
+	auto local_ptr(m_ptr); // might disappear
+	lockguard fitemLock(*local_ptr);
 
 	if ( -- m_ptr->usercount <= 0)
 	{
@@ -734,13 +735,16 @@ inline void fileItemMgmt::Unreg()
 		LOG("*this is last entry, deleting dl/fi mapping");
 		mapItems.erase(m_ptr->m_globRef);
 		m_ptr->m_globRef = mapItems.end();
+
+		// make sure it's not double-unregistered accidentally!
+		m_ptr.reset();
 	}
 }
 
 
-fileItemMgmt fileItemMgmt::GetRegisteredFileItem(cmstring &sPathUnescaped, bool bConsiderAltStore)
+bool fileItemMgmt::PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore)
 {
-	LOGSTART2s("fileitem::GetFileItem", sPathUnescaped);
+	LOGSTART2("fileitem::GetFileItem", sPathUnescaped);
 
 	MYTRY
 	{
@@ -763,9 +767,8 @@ fileItemMgmt fileItemMgmt::GetRegisteredFileItem(cmstring &sPathUnescaped, bool 
 						{
 							it->second->usercount++;
 							LOG("Sharing an existing REPLACEMENT file item");
-							fileItemMgmt ret;
-							ret.m_ptr = it->second;
-							return ret;
+							m_ptr = it->second;
+							return true;
 						}
 					}
 					// ok, then create a modded name version in the replacement directory
@@ -777,16 +780,14 @@ fileItemMgmt fileItemMgmt::GetRegisteredFileItem(cmstring &sPathUnescaped, bool 
 					p->usercount=1;
 					tFileItemPtr sp(p);
 					p->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
-					fileItemMgmt ret;
-					ret.m_ptr = sp;
-					return ret;
+					m_ptr = sp;
+					return true;
 				}
 			}
 			LOG("Sharing existing file item");
 			it->second->usercount++;
-			fileItemMgmt ret;
-			ret.m_ptr = it->second;
-			return ret;
+			m_ptr = it->second;
+			return true;
 		}
 		LOG("Registering the NEW file item...");
 		fileitem_with_storage *p = new fileitem_with_storage(sPathRel);
@@ -794,34 +795,43 @@ fileItemMgmt fileItemMgmt::GetRegisteredFileItem(cmstring &sPathUnescaped, bool 
 		tFileItemPtr sp(p);
 		p->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
 		//lockGlobalMap.unLock();
-		fileItemMgmt ret;
-		ret.m_ptr = sp;
-		return ret;
+		m_ptr = sp;
+		return true;
 	}
 	MYCATCH(std::bad_alloc&)
 	{
 	}
-	return fileItemMgmt();
+	return false;
 }
 
 // make the fileitem globally accessible
-fileItemMgmt fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
+bool fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 {
+	LOGSTART2("fileitem::RegisterFileItem", spCustomFileItem->m_sPathRel);
+
 	if (!spCustomFileItem || spCustomFileItem->m_sPathRel.empty())
-		return fileItemMgmt();
+		return false;
+
+	Unreg();
 
 	lockguard lockGlobalMap(mapItems);
 
 	if(ContHas(mapItems, spCustomFileItem->m_sPathRel))
-		return fileItemMgmt(); // conflict, another agent is already active
+		return false; // conflict, another agent is already active
 
 	spCustomFileItem->m_globRef = mapItems.insert(make_pair(spCustomFileItem->m_sPathRel,
 			spCustomFileItem));
 
 	spCustomFileItem->usercount=1;
-	fileItemMgmt ret;
-	ret.m_ptr = spCustomFileItem;
-	return ret;
+	m_ptr = spCustomFileItem;
+	return true;
+}
+
+void fileItemMgmt::RegisterFileitemLocalOnly(fileitem* replacement)
+{
+	LOGSTART2("fileItemMgmt::ReplaceWithLocal", replacement);
+	Unreg();
+	m_ptr.reset(replacement);
 }
 
 
@@ -924,27 +934,6 @@ fileitem_with_storage::~fileitem_with_storage()
 		::unlink(SZABSPATH(m_sPathRel));
 		::unlink((SABSPATH(m_sPathRel)+".head").c_str());
 	}
-}
-
-fileItemMgmt::fileItemMgmt(const fileItemMgmt &src)
-{
-	fileItemMgmt *x = const_cast<fileItemMgmt *>(&src);
-	this->m_ptr = x->m_ptr;
-	x->m_ptr.reset();
-}
-
-fileItemMgmt& fileItemMgmt::operator=(const fileItemMgmt &src)
-{
-	fileItemMgmt *x = const_cast<fileItemMgmt *>(&src);
-	this->m_ptr = x->m_ptr;
-	x->m_ptr.reset();
-	return *this;
-}
-
-void fileItemMgmt::ReplaceWithLocal(fileitem* replacement)
-{
-	Unreg();
-	m_ptr.reset(replacement);
 }
 
 #endif // MINIBUILD

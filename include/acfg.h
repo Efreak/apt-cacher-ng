@@ -26,7 +26,7 @@ namespace acfg
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
 reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, bindaddr, port, sUmask,
 tmpDontcacheReq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
-cafile, capath, spfilepat;
+cafile, capath, spfilepat, badredmime;
 
 extern mstring pfilepatEx, vfilepatEx, wfilepatEx, spfilepatEx; // for customization by user
 
@@ -34,7 +34,7 @@ extern int debug, numcores, offlinemode, foreground, verbose, stupidfs, forceman
 verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, dlbufsize, usewrap,
 exporigin, logxff, oldupdate, recompbz2, nettimeout, updinterval, forwardsoap, dirperms, fileperms,
 maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsupcount,
-optproxytimeout, patrace, maxdlspeed;
+optproxytimeout, patrace, maxdlspeed, maxredlsize;
 
 // processed config settings
 extern tHttpUrl proxy_info;

@@ -184,15 +184,7 @@ bool ParseKeyValLine(const string & sIn, string & sOutKey, string & sOutVal)
 
 bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 {
-	sPort.clear();
-	sHost.clear();
-	sPath.clear();
-	sUserPass.clear();
-#ifdef HAVE_SSL
-	bSSL=false;
-#endif
-	bIsTransferlEncoded=false;
-	
+	clear();
 	mstring url = unescape ? UrlUnescape(sUrlRaw) : sUrlRaw;
 
 	trimBack(url);
@@ -292,13 +284,9 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 
 string tHttpUrl::ToURI(bool bUrlEscaped) const
 {
-#ifdef HAVE_SSL
-	mstring s(bSSL ? "https://" : "http://");
-#else
-	mstring s("http://");
-#endif
+	auto s(GetProtoPrefix());
 	// if needs transfer escaping and is not internally escaped
-	if (bUrlEscaped && !bIsTransferlEncoded)
+	if (bUrlEscaped)
 	{
 		UrlEscapeAppend(sHost, s);
 		if (!sPort.empty())
