@@ -123,12 +123,16 @@ public:
 class fileItemMgmt
 {
 public:
-	// related to GetRegisteredFileItem but used for registration of custom file item
-	// implementations created elsewhere (which still need to obey regular work flow)
-	static fileItemMgmt RegisterFileItem(tFileItemPtr spCustomFileItem);
 
 	// public constructor wrapper, get a unique object from the map or a new one
-	static fileItemMgmt GetRegisteredFileItem(cmstring &sPathUnescaped, bool bConsiderAltStore);
+	bool PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore);
+
+	// related to GetRegisteredFileItem but used for registration of custom file item
+	// implementations created elsewhere (which still need to obey regular work flow)
+	bool RegisterFileItem(tFileItemPtr spCustomFileItem);
+
+	// deletes global registration and replaces m_ptr with another copy
+	void RegisterFileitemLocalOnly(fileitem* replacement);
 
 	//! @return: true iff there is still something in the pool for later cleaning
 	static time_t BackgroundCleanup();
@@ -138,19 +142,19 @@ public:
 	// when copied around, invalidates the original reference
 	~fileItemMgmt();
 	inline fileItemMgmt() {}
-	fileItemMgmt(const fileItemMgmt &src);
-	fileItemMgmt& operator=(const fileItemMgmt &src);
-
-	inline fileitem* operator->() const {return m_ptr.get();}
 	inline tFileItemPtr get() {return m_ptr;}
 	inline operator bool() const {return (bool) m_ptr;}
 
-	// deletes global registration and replaces m_ptr with another copy
-	void ReplaceWithLocal(fileitem* replacement);
 
 private:
 	tFileItemPtr m_ptr;
 	void Unreg();
+
+	fileItemMgmt(const fileItemMgmt &src);
+	fileItemMgmt& operator=(const fileItemMgmt &src);
+
+	inline fileitem* operator->() const {return m_ptr.get();}
+
 };
 #else
 #define fileItemMgmt void

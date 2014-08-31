@@ -159,7 +159,7 @@ bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 
 
 bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile,
-		eDlMsgPrio msgVerbosityLevel, tGetItemDelegate *pItemDelg, const char *pForcedURL)
+		eDlMsgPrio msgVerbosityLevel, tFileItemPtr pFi, const char *pForcedURL)
 {
 
 	LOGSTART("tCacheMan::Download");
@@ -189,13 +189,14 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 	const acfg::tRepoData *pBackends(NULL);
 	mstring sPatSuffix;
 
-	//bool bFallbackMethodUsed = false;
+	fileItemMgmt fiaccess;
 
-	fileItemMgmt fi(pItemDelg
-			? pItemDelg->GetFileItemPtr()
-			: fileItemMgmt::GetRegisteredFileItem(sFilePathRel, false));
-
-	if (!fi.get())
+	if(!pFi)
+	{
+		fiaccess.PrepageRegisteredFileItemWithStorage(sFilePathRel, false);
+		pFi=fiaccess.get();
+	}
+	if (!pFi)
 	{
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 			SendFmt << "Checking " << sFilePathRel << "...\n"; // just display the name ASAP
@@ -203,24 +204,24 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 	}
 	if (bIndexFile && m_bForceDownload)
 	{
-		if (!fi->SetupClean())
+		if (!pFi->SetupClean())
 			GOTOREPMSG("Item busy, cannot reload");
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 			SendFmt << "Downloading " << sFilePathRel << "...\n";
 	}
 	else
 	{
-		fileitem::FiStatus initState = fi->Setup(bIndexFile);
+		fileitem::FiStatus initState = pFi->Setup(bIndexFile);
 		if (initState > fileitem::FIST_COMPLETE)
-			GOTOREPMSG(fi->GetHeader().frontLine);
+			GOTOREPMSG(pFi->GetHeader().frontLine);
 		if (fileitem::FIST_COMPLETE == initState)
 		{
-			int hs = fi->GetHeader().getStatus();
+			int hs = pFi->GetHeader().getStatus();
 			if(hs != 200)
 			{
 				SendFmt << "Error downloading " << sFilePathRel << ":\n";
 				goto format_error;
-				//GOTOREPMSG(fi->GetHeader().frontLine);
+				//GOTOREPMSG(pFi->GetHeader().frontLine);
 			}
 			SendFmt << "Checking " << sFilePathRel << "... (complete)<br>\n";
 			return true;
@@ -245,8 +246,8 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 	else
 	{
 		// must have the URL somewhere
-		lockguard(fi.get().get());
-		const header &hor=fi->GetHeaderUnlocked();
+		lockguard(pFi.get());
+		const header &hor=pFi->GetHeaderUnlocked();
 		if(hor.h[header::XORIG] && url.SetHttpUrl(hor.h[header::XORIG]))
 		{
 			ldbg("got the URL from fi header");
@@ -289,17 +290,17 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 	}
 
 	if(pBackends)
-		m_pDlcon->AddJob(fi.get(), pBackends, sPatSuffix);
+		m_pDlcon->AddJob(pFi, pBackends, sPatSuffix);
 	else
-		m_pDlcon->AddJob(fi.get(), url);
+		m_pDlcon->AddJob(pFi, url);
 
 	m_pDlcon->WorkLoop();
-	if (fi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
-			&& fi->GetHeaderUnlocked().getStatus() == 200)
+	if (pFi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
+			&& pFi->GetHeaderUnlocked().getStatus() == 200)
 	{
 		bSuccess = true;
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
-			SendFmt << "<i>(" << fi->GetTransferCount() / 1024 << "KiB)</i>\n";
+			SendFmt << "<i>(" << pFi->GetTransferCount() / 1024 << "KiB)</i>\n";
 	}
 	else
 	{
@@ -313,7 +314,7 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 		}
 		else if (flags.forgiveDlErrors
 				||
-				(fi->GetHeaderUnlocked().getStatus() == 404
+				(pFi->GetHeaderUnlocked().getStatus() == 404
 								&& endsWith(sFilePathRel, oldStylei18nIdx))
 		)
 		{
@@ -322,7 +323,7 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 				SendFmt << "<i>(ignored)</i>\n";
 		}
 		else
-			GOTOREPMSG(fi->GetHttpMsg());
+			GOTOREPMSG(pFi->GetHttpMsg());
 	}
 
 	rep_dlresult:
@@ -583,54 +584,44 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 		MTLOGASSERT(false,"Verification failed, against: " << respathAbs);
 		return false;
 	}
-
 	return true;
-
 }
-
-// dirty little helper used to store the head and only the head to a specified location
-class fakeCon : public ::tCacheOperation::tGetItemDelegate
-{
-   public:
-	cmstring & sTempDataRel, &sReferencePathRel;
-	off_t nGotSize;
-	fakeCon(cmstring & a, cmstring &b) :
-			sTempDataRel(a), sReferencePathRel(b), nGotSize(-1)
-	{
-	}
-	fileItemMgmt GetFileItemPtr()
-	{
-		class tHeadOnlyStorage: public fileitem_with_storage
-		{
-		public:
-			fakeCon &m_parent;
-			tHeadOnlyStorage(fakeCon &p) :
-					fileitem_with_storage(p.sTempDataRel) // storage ref to physical data file
-							, m_parent(p)
-			{
-				m_bAllowStoreData = false;
-				m_bHeadOnly = true;
-				m_head.LoadFromFile(SABSPATH(p.sReferencePathRel+".head"));
-			}
-			~tHeadOnlyStorage()
-			{
-				m_head.StoreToFile( CACHE_BASE + m_sPathRel + ".head");
-				m_parent.nGotSize = atoofft(m_head.h[header::CONTENT_LENGTH], -17);
-			}
-		};
-		fileItemMgmt ret;
-		ret.ReplaceWithLocal(static_cast<fileitem*>(new tHeadOnlyStorage(*this)));
-		return ret;
-	}
-	virtual ~fakeCon() {}
-};
 
 bool tCacheOperation::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sReferencePathRel,
 		off_t nWantedSize)
 {
-	fakeCon contor(sTempDataRel, sReferencePathRel);
-	return (Download(sReferencePathRel, true, eMsgHideAll, &contor)
-			&& contor.nGotSize == nWantedSize);
+
+
+	class tHeadOnlyStorage: public fileitem_with_storage
+	{
+	public:
+
+		cmstring & m_sTempDataRel, &m_sReferencePathRel;
+		off_t m_nGotSize;
+
+		tHeadOnlyStorage(cmstring & sTempDataRel, cmstring &sReferencePathRel) :
+
+			fileitem_with_storage(sTempDataRel) // storage ref to physical data file
+					,
+			m_sTempDataRel(sTempDataRel),
+			m_sReferencePathRel(sReferencePathRel), m_nGotSize(-1)
+
+
+		{
+			m_bAllowStoreData = false;
+			m_bHeadOnly = true;
+			m_head.LoadFromFile(SABSPATH(m_sReferencePathRel+".head"));
+		}
+		~tHeadOnlyStorage()
+		{
+			m_head.StoreToFile( CACHE_BASE + m_sPathRel + ".head");
+			m_nGotSize = atoofft(m_head.h[header::CONTENT_LENGTH], -17);
+		}
+	};
+
+	tFileItemPtr p(new tHeadOnlyStorage(sTempDataRel, sReferencePathRel));
+	return (Download(sReferencePathRel, true, eMsgHideAll, p)
+			&& ( (tHeadOnlyStorage*) p.get())->m_nGotSize == nWantedSize);
 }
 
 
@@ -728,8 +719,8 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 	tInjectItem *p=new tInjectItem(to, bTryLink);
 	tFileItemPtr pfi(static_cast<fileitem*>(p));
 	// register it in global scope
-	fileItemMgmt fi(fileItemMgmt::RegisterFileItem(pfi));
-	if (!fi)
+	fileItemMgmt fi;
+	if(!fi.RegisterFileItem(pfi))
 	{
 		MTLOGASSERT(false, "Couldn't register copy item");
 		return false;
@@ -762,10 +753,12 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 	fileItemMgmt src;
 	if(GetFlags(donorRel).uptodate)
 	{
-		src = fileItemMgmt::GetRegisteredFileItem(donorRel, false);
-		src->Setup(false);
+		if(!src.PrepageRegisteredFileItemWithStorage(donorRel, false))
+			return false;
+
+		src.get()->Setup(false);
 		// something changed it in meantime?!
-		if (src->GetStatus() != fileitem::FIST_COMPLETE)
+		if (src.get()->GetStatus() != fileitem::FIST_COMPLETE)
 			return false;
 	}
 

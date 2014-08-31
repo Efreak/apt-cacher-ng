@@ -10,6 +10,7 @@ apt-cacher-ng (0.8.0~pre2) ALPHA; urgency=low
   * Stopped using encoded URL strings in the internal processing (pointless
     code compilications)
   * Added support for more formats of the Location: URL in redirects
+  * Refactoring of old file item maintaining code
 
  -- 
 
