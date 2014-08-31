@@ -11,6 +11,8 @@ apt-cacher-ng (0.8.0~pre2) ALPHA; urgency=low
     code compilications)
   * Added support for more formats of the Location: URL in redirects
   * Refactoring of old file item maintaining code
+  * FIX: rare case of premature abortion of a chunked transfer if the source
+    deliveres data to slowly
 
  -- 
 

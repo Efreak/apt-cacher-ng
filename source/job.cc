@@ -904,6 +904,11 @@ job::eJobResult job::SendData(int confd, int nAllJobCount)
 				{
 					m_nChunkRemainingBytes=nGoodDataSize-m_nSendPos;
 					ldbg("STATE_SEND_CHUNK_HEADER for " << m_nChunkRemainingBytes);
+					if(!m_nChunkRemainingBytes && fistate < fileitem::FIST_COMPLETE)
+					{
+						ldbg("No data to send YET, will try later");
+						return R_AGAIN;
+					}
 					m_sendbuf << tSS::hex << m_nChunkRemainingBytes << tSS::dec
 							<< (m_nChunkRemainingBytes ? "\r\n" : "\r\n\r\n");
 
