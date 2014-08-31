@@ -1,10 +1,11 @@
-apt-cacher-ng (0.8.0~pre1-2) experimental; urgency=low
+apt-cacher-ng (0.8.0~pre2-1) experimental; urgency=low
 
   * New upstream prerelease version
     + Added NEWS.Debian to the volatile patterns filter (LP: #1350432)
-  * 
+    + Special workaround for clients cutting parts of the file header with
+      partial request (closes: #744727)
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Sat, 30 Aug 2014 21:41:24 -0700
 
 apt-cacher-ng (0.8.0~pre1-1) experimental; urgency=low
 
