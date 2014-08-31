@@ -26,7 +26,7 @@ namespace acfg
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
 reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, bindaddr, port, sUmask,
 tmpDontcacheReq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
-cafile, capath, spfilepat;
+cafile, capath, spfilepat, badredmime;
 
 extern mstring pfilepatEx, vfilepatEx, wfilepatEx, spfilepatEx; // for customization by user
 

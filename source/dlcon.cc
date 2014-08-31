@@ -481,6 +481,18 @@ struct tDlJob
 				// ok, can pass the data to the file handler
 				h.set(header::XORIG, RemoteUri(false));
 				bool bDoRetry(false);
+				if(acfg::redirmax
+						&& !acfg::badredmime.empty()
+						&& acfg::redirmax != m_nRedirRemaining
+						&& h.h[header::CONTENT_TYPE]
+						&& strstr(h.h[header::CONTENT_TYPE], acfg::badredmime.c_str()))
+				{
+					// this was redirected and the destination is BAD!
+					h.frontLine="HTTP/1.1 501 Redirected to invalid target";
+					void DropDnsCache();
+					DropDnsCache();
+				}
+
 				if(!m_pStorage->DownloadStartedStoreHeader(h, inBuf.rptr(), bHotItem, bDoRetry))
 				{
 					if(bDoRetry)

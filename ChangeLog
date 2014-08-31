@@ -2,8 +2,10 @@ apt-cacher-ng (0.8.0~pre2) ALPHA; urgency=low
 
   * Fixed Tracing mode in non-debug build
   * Added NEWS.Debian to the volatile patterns filter (LP: #1350432)
-  * Fixes premature release of internal file descriptors sometimes causing
+  * FIX: premature release of internal file descriptors sometimes causing
     pointless reconnects (thanks to Kirill Timofeev)
+  * FIX: rare case of premature abortion of a chunked transfer if the source
+    deliveres data to slowly
   * Added a trick to allow silent handling of arbitrary range requests in a
     more appropriate way (returning 206) within a limited defined period
     (configured through MaxInresponsiveDlSize variable; Debian bug #744727)
@@ -11,10 +13,9 @@ apt-cacher-ng (0.8.0~pre2) ALPHA; urgency=low
     code compilications)
   * Added support for more formats of the Location: URL in redirects
   * Refactoring of old file item maintaining code
-  * FIX: rare case of premature abortion of a chunked transfer if the source
-    deliveres data to slowly
+  * Partial workaround for transparent redirects to WiFi auth sites etc.
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Sat, 30 Aug 2014 21:33:14 -0700
 
 apt-cacher-ng (0.8.0~pre1) ALPHA; urgency=low
 

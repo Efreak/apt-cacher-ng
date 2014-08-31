@@ -104,6 +104,7 @@ MapNameToString n2sTbl[] = {
 		,{  "PassThroughPattern",      &PTHOSTS_PATTERN}
 		,{  "CApath",                  &capath}
 		,{  "CAfile",                  &cafile}
+		,{  "BadRedirDetectMime",      &badredmime}
 };
 
 MapNameToInt n2iTbl[] = {

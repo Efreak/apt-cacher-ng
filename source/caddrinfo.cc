@@ -138,3 +138,8 @@ time_t CAddrInfo::BackgroundCleanup()
 	return ret;
 }
 
+void DropDnsCache()
+{
+	lockguard g(mapDnsCache);
+	mapDnsCache.clear();
+}
