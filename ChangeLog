@@ -1,3 +1,12 @@
+apt-cacher-ng (0.8.0~pre3) BETA; urgency=low
+
+  * Special handling for a case where no volatile (meta) data is present in
+    the cache in its original version but the pdiff patches are there. The
+    guessed best version of the base file is fetched automatically.
+  * Internal refactoring
+
+ --
+
 apt-cacher-ng (0.8.0~pre2) ALPHA; urgency=low
 
   * Fixed Tracing mode in non-debug build

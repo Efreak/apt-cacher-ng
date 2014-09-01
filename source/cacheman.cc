@@ -866,7 +866,6 @@ void tCacheOperation::UpdateVolatileFiles()
 	mkbasedir(sPatchBaseAbs);
 
 	tContId2eqClass& eqClasses = m_eqClasses;
-
 	// just reget them as-is and we are done
 	if (m_bForceDownload)
 	{
@@ -882,7 +881,7 @@ void tCacheOperation::UpdateVolatileFiles()
 
 #ifdef DEBUGIDX
 	for (auto& f: m_metaFilesRel)
-		SendFmt << f.first << ": "
+		SendFmt << "State of " << f.first << ": "
 		<< f.second.alreadyparsed << "<br>\n"
 		<< f.second.forgiveDlErrors << "<br>\n"
 		<< f.second.hideDlErrors<< "<br>\n"
@@ -923,10 +922,10 @@ void tCacheOperation::UpdateVolatileFiles()
 				cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
 			else
 				cid.second=entry.sFileName;
-
 		}
 	};
 
+	// iterate over initial *Releases files
 	for(auto& iref : m_metaFilesRel)
 	{
 		const string &sPathRel=iref.first;
@@ -1022,8 +1021,54 @@ void tCacheOperation::UpdateVolatileFiles()
 	if(CheckStopSignal())
 		return;
 
+	// this makes sure that if there is some class of diff index, the related base file must also be available in the cache
+	for(auto& p: eqClasses)
+	{
+		// no diff idx, don't care!
+		if(p.second.diffIdxId.second.empty())
+			continue;
+		if(p.second.paths.empty())
+			continue; // that's crap, can not fix it anyhow
+		for(auto& path: p.second.paths)
+		{
+			if(GetFlags(path).vfile_ondisk)
+				goto basefile_is_there;
+		}
+		{
+		// ok, no base file is present but an index reference exists... is any index file present?
+		auto xidx = eqClasses.find(p.second.diffIdxId);
+		bool bhaveidx=false;
+		if(xidx != eqClasses.end())
+		{
+			for (auto& idxfilepath: xidx->second.paths)
+			{
+				bhaveidx=GetFlags(idxfilepath).vfile_ondisk;
+				if(bhaveidx)
+					break;
+			}
+		}
+		if(bhaveidx) {
+			// ok, this is the stupid situation. Enforce download of any of those base files...
+			// pickup the version with the best compression, if possible
+			for(auto& ps : compSuffixesAndEmptyByRatio)
+			{
+				for(auto& path: p.second.paths)
+				{
+					if(endsWith(path, ps))
+					{
+						m_metaFilesRel[path].vfile_ondisk=true;
+						goto basefile_is_there;
+					}
+				}
+			}
+		}
+
+		}
+		basefile_is_there:
+		;
+	}
+
 	/*
-	 *
 	 * OK, the equiv-classes map is built, now post-process the knowledge
 	 *
 	 * First, strip the list down to those which are at least partially present in the cache
