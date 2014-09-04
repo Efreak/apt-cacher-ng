@@ -10,7 +10,7 @@ CDIR=$(TGT)/etc/apt-cacher-ng
 	dh $@ --parallel --with systemd
 
 override_dh_install:
-	dh_install $(test -e build/acngfs || echo -Xacngfs)
+	dh_install $(shell test -e build/acngfs || echo -Xacngfs)
 	cp systemd/apt-cacher-ng.service debian
 	cp systemd/apt-cacher-ng.conf debian/apt-cacher-ng.tmpfile
 	install -m 755 scripts/expire-caller.pl $(TGT)/usr/lib/apt-cacher-ng
