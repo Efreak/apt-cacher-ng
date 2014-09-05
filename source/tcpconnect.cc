@@ -24,7 +24,8 @@ using namespace std;
 //#define NOCONCACHE
 
 #ifdef DEBUG
-volatile int nConCount(0), nDisconCount(0), nReuseCount(0);
+#include <atomic>
+atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 #endif
 
 #ifdef HAVE_SSL
@@ -203,7 +204,7 @@ inline bool tcpconnect::Connect(string & sErrorMsg, int timeout)
 				continue;
 			}
 #ifdef DEBUG
-			__sync_fetch_and_add(&nConCount, 1);
+			nConCount.fetch_add(1);
 #endif
 			ldbg("connect() ok");
 			set_nb(m_conFd);
@@ -227,8 +228,7 @@ void tcpconnect::Disconnect()
 	LOGSTART("tcpconnect::_Disconnect");
 
 #ifdef DEBUG
-	if(m_conFd >=0)
-		__sync_fetch_and_add(&nDisconCount, 1);
+	nDisconCount.fetch_add(m_conFd >=0);
 #endif
 
 #ifdef HAVE_SSL
@@ -307,40 +307,42 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 	{ // mutex context
 		lockguard __g(spareConPool);
 		auto it=spareConPool.find(key);
-		if(spareConPool.end() == it)
-		{
-			p.reset(new tcpconnect);
-			if(p)
-			{
-				p->m_sHostName=sHostname;
-				p->m_sPort=sPort;
-			}
-
-			if(!p || !p->Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
-				p.reset();
-#ifdef HAVE_SSL
-			else if(bSsl)
-			{
-				if(!p->SSLinit(sErrOut, sHostname, sPort))
-				{
-					p.reset();
-					LOG("ssl init error");
-				}
-			}
-#endif
-		}
-		else
+		if(spareConPool.end() != it)
 		{
 			p=it->second.first;
 			spareConPool.erase(it);
 			bReused = true;
 			ldbg("got connection " << p.get() << " from the idle pool");
 #ifdef DEBUG
-			__sync_fetch_and_add(&nReuseCount, 1);
+			nReuseCount.fetch_add(1);
 #endif
 		}
 	}
 #endif
+
+	if(!p)
+	{
+		p.reset(new tcpconnect);
+		if(p)
+		{
+			p->m_sHostName=sHostname;
+			p->m_sPort=sPort;
+		}
+
+		if(!p || !p->Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
+			p.reset();
+#ifdef HAVE_SSL
+		else if(bSsl)
+		{
+			if(!p->SSLinit(sErrOut, sHostname, sPort))
+			{
+				p.reset();
+				LOG("ssl init error");
+			}
+		}
+#endif
+	}
+
 
 	if(p && pStateTracker)
 	{
@@ -475,9 +477,9 @@ void tcpconnect::dump_status()
 				<< ", recycled at " << x.second.second << "\n";
 	}
 #ifdef DEBUG
-	msg << "dbg counts, con: " << __sync_fetch_and_add(&nConCount, 0)
-			<< " , discon: " << __sync_fetch_and_add(&nDisconCount, 0)
-			<< " , reuse: " << __sync_fetch_and_add(&nReuseCount, 0) << "\n";
+	msg << "dbg counts, con: " << nConCount.load()
+			<< " , discon: " << nDisconCount.load()
+			<< " , reuse: " << nReuseCount.load() << "\n";
 #endif
 
 	aclog::err(msg);
