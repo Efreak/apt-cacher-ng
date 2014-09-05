@@ -7,6 +7,7 @@ apt-cacher-ng (0.8.0~pre3) BETA; urgency=low
     debug code
   * FIX: potential bottleneck (serialization of connect operations because of
     too big critical section)
+  * Database update
 
  --
 
