@@ -1,3 +1,18 @@
+apt-cacher-ng (0.8.0~pre3) BETA; urgency=low
+
+  * Special handling for a case where no volatile (meta) data is present in
+    the cache in its original version but the pdiff patches are there. The
+    guessed best version of the base file is fetched automatically.
+  * Internal refactoring, replacement of GCC specific atomic operations in
+    debug code
+  * FIX: potential bottleneck (serialization of connect operations because of
+    too big critical section)
+  * FIX: SSL_connect now running on non-blocking file handle with timeout,
+    hopefully avoiding the sometimes happening freezing for hours
+  * Database update
+
+ --
+
 apt-cacher-ng (0.8.0~pre2) ALPHA; urgency=low
 
   * Fixed Tracing mode in non-debug build

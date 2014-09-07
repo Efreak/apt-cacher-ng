@@ -100,7 +100,7 @@ void pkgmirror::Action()
 	if(CheckStopSignal())
 		return;
 
-	if(m_indexFilesRel.empty())
+	if(m_metaFilesRel.empty())
 	{
 		SendChunk("<div class=\"ERROR\">No index files detected. Unable to continue, cannot map files to internal locations.</div>");
 		return;
@@ -110,7 +110,7 @@ void pkgmirror::Action()
 		return;
 
 	if(!m_bSkipIxUpdate)
-		UpdateIndexFiles();
+		UpdateVolatileFiles();
 
 	if(CheckStopSignal())
 		return;
@@ -145,13 +145,13 @@ void pkgmirror::Action()
 
 	SendChunk("<b>Identifying relevant index files...</b><br>");
 	// ok, now go through all release files and pickup all appropriate index files
-	for(auto& path2x: m_indexFilesRel)
+	for(auto& path2x: m_metaFilesRel)
 	{
 		if(endsWithSzAr(path2x.first, "Release"))
 		{
 			if(!m_bSkipIxUpdate && !GetFlags((cmstring)path2x.first).uptodate)
 				Download((cmstring)path2x.first, true, eMsgShow);
-			ParseAndProcessIndexFile(picker, (cmstring) path2x.first, EIDX_RELEASE);
+			ParseAndProcessMetaFile(picker, (cmstring) path2x.first, EIDX_RELEASE);
 		}
 		else
 			picker.TryAdd((cmstring)path2x.first);
@@ -237,7 +237,7 @@ void pkgmirror::Action()
 #endif
 			off_t needBefore=(m_totalSize-m_totalHave);
 
-			ParseAndProcessIndexFile(*this, src, GuessIndexTypeFromURL(src));
+			ParseAndProcessMetaFile(*this, src, GuessMetaTypeFromURL(src));
 
 			SendFmt << src << ": "
 					<< offttosH((m_totalSize-m_totalHave)-needBefore)
@@ -267,7 +267,7 @@ void pkgmirror::Action()
 			if(CheckStopSignal())
 				return;
 			ConfigDelta(src);
-			ParseAndProcessIndexFile(*this, src, GuessIndexTypeFromURL(src));
+			ParseAndProcessMetaFile(*this, src, GuessMetaTypeFromURL(src));
 		}
 	}
 }

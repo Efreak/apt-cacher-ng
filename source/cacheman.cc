@@ -74,13 +74,13 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 	if(sPathRel.empty())
 		return false;
 
-	enumIndexType t;
+	enumMetaType t;
 	if ( (rechecks::FILE_VOLATILE == rechecks::GetFiletype(sPathRel)
 	// SUSE stuff, not volatile but also contains file index data
 	|| endsWithSzAr(sPathRel, ".xml.gz") )
-	&& (t=GuessIndexTypeFromURL(sPathRel)) != EIDX_UNSUPPORTED)
+	&& (t=GuessMetaTypeFromURL(sPathRel)) != EIDX_UNSUPPORTED)
 	{
-		tIfileAttribs & atts=m_indexFilesRel[sPathRel];
+		tIfileAttribs & atts=m_metaFilesRel[sPathRel];
 		atts.vfile_ondisk=true;
 		atts.eIdxType=t;
 
@@ -91,8 +91,8 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 
 const tCacheOperation::tIfileAttribs & tCacheOperation::GetFlags(cmstring &sPathRel) const
 {
-	auto it=m_indexFilesRel.find(sPathRel);
-	if(m_indexFilesRel.end()==it)
+	auto it=m_metaFilesRel.find(sPathRel);
+	if(m_metaFilesRel.end()==it)
 		return attr_dummy_pure;
 	return it->second;
 }
@@ -100,7 +100,7 @@ const tCacheOperation::tIfileAttribs & tCacheOperation::GetFlags(cmstring &sPath
 tCacheOperation::tIfileAttribs &tCacheOperation::SetFlags(cmstring &sPathRel)
 {
 	ASSERT(!sPathRel.empty());
-	return sPathRel.empty() ? attr_dummy : m_indexFilesRel[sPathRel];
+	return sPathRel.empty() ? attr_dummy : m_metaFilesRel[sPathRel];
 }
 
 // detects when an architecture has been removed entirely from the Debian archive
@@ -158,7 +158,7 @@ bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 }
 
 
-bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile,
+bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatileFile,
 		eDlMsgPrio msgVerbosityLevel, tFileItemPtr pFi, const char *pForcedURL)
 {
 
@@ -177,7 +177,7 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 	if(flags.uptodate)
 	{
 		if(NEEDED_VERBOSITY_ALL_BUT_ERRORS)
-			SendFmt<<"Checking "<<sFilePathRel<< (bIndexFile
+			SendFmt<<"Checking "<<sFilePathRel<< (bIsVolatileFile
 					? "... (fresh)<br>\n" : "... (complete)<br>\n");
 		return true;
 	}
@@ -202,7 +202,7 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 			SendFmt << "Checking " << sFilePathRel << "...\n"; // just display the name ASAP
 		GOTOREPMSG(" could not create file item handler.");
 	}
-	if (bIndexFile && m_bForceDownload)
+	if (bIsVolatileFile && m_bForceDownload)
 	{
 		if (!pFi->SetupClean())
 			GOTOREPMSG("Item busy, cannot reload");
@@ -211,7 +211,7 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 	}
 	else
 	{
-		fileitem::FiStatus initState = pFi->Setup(bIndexFile);
+		fileitem::FiStatus initState = pFi->Setup(bIsVolatileFile);
 		if (initState > fileitem::FIST_COMPLETE)
 			GOTOREPMSG(pFi->GetHeader().frontLine);
 		if (fileitem::FIST_COMPLETE == initState)
@@ -227,7 +227,7 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 			return true;
 		}
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
-			SendFmt << (bIndexFile ? "Checking/Updating " : "Downloading ")
+			SendFmt << (bIsVolatileFile ? "Checking/Updating " : "Downloading ")
 			<< sFilePathRel	<< "...\n";
 	}
 
@@ -328,7 +328,7 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIndexFile
 
 	rep_dlresult:
 
-	if (bSuccess && bIndexFile)
+	if (bSuccess && bIsVolatileFile)
 		SetFlags(sFilePathRel).uptodate = true;
 
 	if(!bSuccess)
@@ -516,7 +516,7 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 				+pit->patchName+".gz");
 		if(!Download(pfile, false, eMsgShow))
 		{
-			m_indexFilesRel.erase(pfile); // remove the mess for sure
+			m_metaFilesRel.erase(pfile); // remove the mess for sure
 			SendFmt << "Failed to download patch file " << pfile << " , stop patching...<br>";
 			return false;
 		}
@@ -795,15 +795,15 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 		{
 			if(sux==compsuf) continue; // touch me not
 			mstring sBro = sBasename+compsuf;
-			auto kv=m_indexFilesRel.find(sBro);
-			if(kv!=m_indexFilesRel.end() && kv->second.vfile_ondisk)
+			auto kv=m_metaFilesRel.find(sBro);
+			if(kv!=m_metaFilesRel.end() && kv->second.vfile_ondisk)
 			{
 				kv->second.parseignore=true; // gotcha
 				MTLOGDEBUG("Defused bro of " << tgt << ": " << sBro);
 
 				// also, we don't care if the pdiff index vanished for some reason
-				kv = m_indexFilesRel.find(sBasename+".diff/Index");
-				if(kv!=m_indexFilesRel.end())
+				kv = m_metaFilesRel.find(sBasename+".diff/Index");
+				if(kv!=m_metaFilesRel.end())
 					kv->second.forgiveDlErrors=true;
 
 				// if we have a freshly unpacked version and bro should be the the same
@@ -855,9 +855,9 @@ void tCacheOperation::StartDlder()
 		m_pDlcon = new dlcon(true);
 }
 
-void tCacheOperation::UpdateIndexFiles()
+void tCacheOperation::UpdateVolatileFiles()
 {
-	LOGSTART("expiration::UpdateIndexFiles()");
+	LOGSTART("expiration::UpdateVolatileFiles()");
 
 	SendChunk("<b>Bringing index files up to date...</b><br>\n");
 
@@ -866,23 +866,22 @@ void tCacheOperation::UpdateIndexFiles()
 	mkbasedir(sPatchBaseAbs);
 
 	tContId2eqClass& eqClasses = m_eqClasses;
-
 	// just reget them as-is and we are done
 	if (m_bForceDownload)
 	{
-		for (auto& f: m_indexFilesRel)
+		for (auto& f: m_metaFilesRel)
 		{
 			// nope... tell the fileitem to ignore file data instead ::truncate(SZABSPATH(it->first), 0);
 			if (!Download(f.first, true, eMsgShow))
-				m_nErrorCount += !m_indexFilesRel[f.first].forgiveDlErrors;
+				m_nErrorCount += !m_metaFilesRel[f.first].forgiveDlErrors;
 		}
 		ERRMSGABORT;
 		return;
 	}
 
 #ifdef DEBUGIDX
-	for (auto& f: m_indexFilesRel)
-		SendFmt << f.first << ": "
+	for (auto& f: m_metaFilesRel)
+		SendFmt << "State of " << f.first << ": "
 		<< f.second.alreadyparsed << "<br>\n"
 		<< f.second.forgiveDlErrors << "<br>\n"
 		<< f.second.hideDlErrors<< "<br>\n"
@@ -923,21 +922,21 @@ void tCacheOperation::UpdateIndexFiles()
 				cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
 			else
 				cid.second=entry.sFileName;
-
 		}
 	};
 
-	for(auto& iref : m_indexFilesRel)
+	// iterate over initial *Releases files
+	for(auto& iref : m_metaFilesRel)
 	{
 		const string &sPathRel=iref.first;
 
 		if(!endsWith(sPathRel, relKey) && !endsWith(sPathRel, inRelKey))
 			continue;
 
-		if(!Download(sPathRel, true, m_indexFilesRel[sPathRel].hideDlErrors
+		if(!Download(sPathRel, true, m_metaFilesRel[sPathRel].hideDlErrors
 				? eMsgHideErrors : eMsgShow))
 		{
-			m_nErrorCount+=(!m_indexFilesRel[sPathRel].hideDlErrors);
+			m_nErrorCount+=(!m_metaFilesRel[sPathRel].hideDlErrors);
 
 			if(CheckStopSignal())
 				return;
@@ -947,12 +946,12 @@ void tCacheOperation::UpdateIndexFiles()
 
 		// InRelease comes before Release so we can just drop the other one
 		if(endsWith(sPathRel, inRelKey))
-			m_indexFilesRel.erase(sPathRel.substr(0, sPathRel.size()-inRelKey.size())+relKey);
+			m_metaFilesRel.erase(sPathRel.substr(0, sPathRel.size()-inRelKey.size())+relKey);
 
-		m_indexFilesRel[sPathRel].uptodate=true;
+		m_metaFilesRel[sPathRel].uptodate=true;
 
 		releaseStuffReceiver recvr;
-		ParseAndProcessIndexFile(recvr, sPathRel, EIDX_RELEASE);
+		ParseAndProcessMetaFile(recvr, sPathRel, EIDX_RELEASE);
 
 		if(recvr.m_file2cid.empty())
 			continue;
@@ -985,10 +984,10 @@ void tCacheOperation::UpdateIndexFiles()
 
 			// and while we are at it, check the checksum of small files in order
 			// to reduce server request count
-			if(if2cid.second.first.size<10000 && ContHas(m_indexFilesRel, if2cid.first))
+			if(if2cid.second.first.size<10000 && ContHas(m_metaFilesRel, if2cid.first))
 			{
 				if(if2cid.second.first.CheckFile(SABSPATH(if2cid.first)))
-					m_indexFilesRel[if2cid.first].uptodate=true;
+					m_metaFilesRel[if2cid.first].uptodate=true;
 			}
 		}
 	}
@@ -1022,8 +1021,54 @@ void tCacheOperation::UpdateIndexFiles()
 	if(CheckStopSignal())
 		return;
 
+	// this makes sure that if there is some class of diff index, the related base file must also be available in the cache
+	for(auto& p: eqClasses)
+	{
+		// no diff idx, don't care!
+		if(p.second.diffIdxId.second.empty())
+			continue;
+		if(p.second.paths.empty())
+			continue; // that's crap, can not fix it anyhow
+		for(auto& path: p.second.paths)
+		{
+			if(GetFlags(path).vfile_ondisk)
+				goto basefile_is_there;
+		}
+		{
+		// ok, no base file is present but an index reference exists... is any index file present?
+		auto xidx = eqClasses.find(p.second.diffIdxId);
+		bool bhaveidx=false;
+		if(xidx != eqClasses.end())
+		{
+			for (auto& idxfilepath: xidx->second.paths)
+			{
+				bhaveidx=GetFlags(idxfilepath).vfile_ondisk;
+				if(bhaveidx)
+					break;
+			}
+		}
+		if(bhaveidx) {
+			// ok, this is the stupid situation. Enforce download of any of those base files...
+			// pickup the version with the best compression, if possible
+			for(auto& ps : compSuffixesAndEmptyByRatio)
+			{
+				for(auto& path: p.second.paths)
+				{
+					if(endsWith(path, ps))
+					{
+						m_metaFilesRel[path].vfile_ondisk=true;
+						goto basefile_is_there;
+					}
+				}
+			}
+		}
+
+		}
+		basefile_is_there:
+		;
+	}
+
 	/*
-	 *
 	 * OK, the equiv-classes map is built, now post-process the knowledge
 	 *
 	 * First, strip the list down to those which are at least partially present in the cache
@@ -1084,7 +1129,7 @@ void tCacheOperation::UpdateIndexFiles()
 		// iterate over patch paths and fine a present one which is most likely the most recent one
 		for (const auto& pp : itDiffIdx->second.paths)
 		{
-			if (m_indexFilesRel[pp].vfile_ondisk)
+			if (m_metaFilesRel[pp].vfile_ondisk)
 			{
 				patchidxFileToUse = pp;
 				break;
@@ -1148,7 +1193,7 @@ void tCacheOperation::UpdateIndexFiles()
 					if(probe == *pEndSum)
 					{
 						// since we know the stuff is fresh, no need to refetch it later
-						m_indexFilesRel[pathRel].uptodate=true;
+						m_metaFilesRel[pathRel].uptodate=true;
 						if(m_bVerbose)
 							SendFmt << "Found fresh version in " << pathRel << "<br>";
 
@@ -1259,7 +1304,7 @@ void tCacheOperation::UpdateIndexFiles()
 	MTLOGDEBUG("<br><br><b>NOW GET THE REST</b><br><br>");
 
 	// fetch all remaining stuff
-	for(auto& idx2att : m_indexFilesRel)
+	for(auto& idx2att : m_metaFilesRel)
 	{
 		if(idx2att.second.uptodate || idx2att.second.parseignore || !idx2att.second.vfile_ondisk)
 			continue;
@@ -1341,7 +1386,7 @@ void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator &eqClass
 #endif
 }
 
-tCacheOperation::enumIndexType tCacheOperation::GuessIndexTypeFromURL(cmstring &sPath)
+tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(cmstring &sPath)
 {
 	tStrPos pos = sPath.rfind(SZPATHSEP);
 	string sPureIfileName = (stmiss == pos) ? sPath : sPath.substr(pos + 1);
@@ -1381,11 +1426,11 @@ tCacheOperation::enumIndexType tCacheOperation::GuessIndexTypeFromURL(cmstring &
 	return EIDX_UNSUPPORTED;
 }
 
-bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::string &sPath,
-		enumIndexType idxType)
+bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::string &sPath,
+		enumMetaType idxType)
 {
 
-	LOGSTART("expiration::_ParseAndProcessIndexFile");
+	LOGSTART("expiration::ParseAndProcessMetaFile");
 
 #ifdef DEBUG_FLAGS
 	bool bNix=StrHas(sPath, "/i18n/");
@@ -1440,7 +1485,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::s
 	string sStartMark;
 	bool bUse(false);
 
-	enumIndexType origIdxType=idxType;
+	enumMetaType origIdxType=idxType;
 
 
 	REDO_AS_TYPE:
@@ -1584,7 +1629,7 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::s
 		}
 		break;
 	case EIDX_SUSEREPO:
-		LOG("SUSE index file, entry level");
+		LOG("SUSE pkg list file, entry level");
 		while(reader.GetOneLine(sLine))
 		{
 			if(CheckStopSignal())
@@ -1769,18 +1814,18 @@ bool tCacheOperation::ParseAndProcessIndexFile(ifileprocessor &ret, const std::s
 	return reader.CheckGoodState(false);
 }
 
-void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
+void tCacheOperation::ProcessSeenMetaFiles(ifileprocessor &pkgHandler)
 {
 	LOGSTART("expiration::_ParseVolatileFilesAndHandleEntries");
-	for(auto& path2att: m_indexFilesRel)
+	for(auto& path2att: m_metaFilesRel)
 	{
 		if(CheckStopSignal())
 			return;
 
 		const tIfileAttribs &att=path2att.second;
-		enumIndexType itype = att.eIdxType;
+		enumMetaType itype = att.eIdxType;
 		if(!itype)
-			itype=GuessIndexTypeFromURL(path2att.first);
+			itype=GuessMetaTypeFromURL(path2att.first);
 		if(!itype) // still unknown. Where does it come from? Just ignore.
 			continue;
 		if(att.parseignore || (!att.vfile_ondisk && !att.uptodate))
@@ -1805,9 +1850,9 @@ void tCacheOperation::ProcessSeenIndexFiles(ifileprocessor &pkgHandler)
 
 		SendChunk(string("Parsing metadata in ")+path2att.first+"<br>\n");
 
-		if( ! ParseAndProcessIndexFile(pkgHandler, path2att.first, itype))
+		if( ! ParseAndProcessMetaFile(pkgHandler, path2att.first, itype))
 		{
-			if(!m_indexFilesRel[path2att.first].forgiveDlErrors)
+			if(!m_metaFilesRel[path2att.first].forgiveDlErrors)
 			{
 				m_nErrorCount++;
 				SendChunk("<span class=\"ERROR\">An error occured while reading this file, some contents may have been ignored.</span>\n");
@@ -1862,7 +1907,7 @@ void tCacheOperation::PrintStats(cmstring &title)
 	off_t total=0;
 	const UINT nMax = m_bVerbose ? (UINT_MAX-1) : 10;
 	UINT hidden=0;
-	for(auto &f: m_indexFilesRel)
+	for(auto &f: m_metaFilesRel)
 	{
 		total += f.second.space;
 		if(f.second.space)
@@ -1896,7 +1941,7 @@ int parseidx_demo(LPCSTR file)
 		tParser() : tCacheOperation({2, tSpecialRequest::workIMPORT, "doImport="}) {};
 		inline int demo(LPCSTR file)
 		{
-			return !ParseAndProcessIndexFile(*this, file, GuessIndexTypeFromURL(file));
+			return !ParseAndProcessMetaFile(*this, file, GuessMetaTypeFromURL(file));
 		}
 		virtual void HandlePkgEntry(const tRemoteFileInfo &entry)
 		{
