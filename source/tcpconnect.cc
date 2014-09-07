@@ -5,6 +5,8 @@
  *      Author: ed
  */
 
+#include <sys/select.h>
+
 #define LOCAL_DEBUG
 #include "debug.h"
 
@@ -490,6 +492,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	SSL * ssl(NULL);
 	int hret(0);
 	LPCSTR perr(0);
+	mstring ebuf;
 
 	// cleaned up in the destructor on EOL
 	if(!m_ctx)
@@ -513,13 +516,51 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  			| SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
  			| SSL_MODE_ENABLE_PARTIAL_WRITE);
 
- 	// make it blocking for sure otherwise SSL_connect would become messy
-	set_block(m_conFd);
-
  	if((hret=SSL_set_fd(ssl, m_conFd)) != 1)
  		goto ssl_init_fail_retcode;
-	if((hret=SSL_connect(ssl)) != 1)
-		goto ssl_init_fail_retcode;
+
+ 	while(true)
+ 	{
+ 		hret=SSL_connect(ssl);
+ 		if(hret == 1 )
+ 			break;
+ 		if(hret == 0)
+ 			goto ssl_init_fail_retcode;
+
+		fd_set rfds, wfds;
+		FD_ZERO(&rfds);
+		FD_ZERO(&wfds);
+ 		switch(SSL_get_error(ssl, hret))
+ 		{
+ 		case SSL_ERROR_WANT_READ:
+ 			FD_SET(m_conFd, &rfds);
+ 			break;
+ 		case SSL_ERROR_WANT_WRITE:
+ 			FD_SET(m_conFd, &wfds);
+ 			break;
+ 		default:
+ 			goto ssl_init_fail_retcode;
+ 		}
+ 		struct timeval tv;
+ 		tv.tv_sec = acfg::nettimeout;
+ 		tv.tv_usec = 0;
+		int nReady=select(m_conFd+1, &rfds, &wfds, NULL, &tv);
+		if(!nReady)
+		{
+			perr="Socket timeout";
+			goto ssl_init_fail;
+		}
+		if (nReady<0)
+		{
+#ifndef MINIBUILD
+			ebuf=tErrnoFmter("Socket error");
+			perr=ebuf.c_str();
+#else
+			perr="Socket error";
+#endif
+			goto ssl_init_fail;
+		}
+ 	}
 
  	m_bio = BIO_new(BIO_f_ssl());
  	if(!m_bio)
