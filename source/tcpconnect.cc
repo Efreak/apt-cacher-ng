@@ -5,6 +5,8 @@
  *      Author: ed
  */
 
+#include <sys/select.h>
+
 #define LOCAL_DEBUG
 #include "debug.h"
 
@@ -24,7 +26,8 @@ using namespace std;
 //#define NOCONCACHE
 
 #ifdef DEBUG
-volatile int nConCount(0), nDisconCount(0), nReuseCount(0);
+#include <atomic>
+atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 #endif
 
 #ifdef HAVE_SSL
@@ -203,7 +206,7 @@ inline bool tcpconnect::Connect(string & sErrorMsg, int timeout)
 				continue;
 			}
 #ifdef DEBUG
-			__sync_fetch_and_add(&nConCount, 1);
+			nConCount.fetch_add(1);
 #endif
 			ldbg("connect() ok");
 			set_nb(m_conFd);
@@ -227,8 +230,7 @@ void tcpconnect::Disconnect()
 	LOGSTART("tcpconnect::_Disconnect");
 
 #ifdef DEBUG
-	if(m_conFd >=0)
-		__sync_fetch_and_add(&nDisconCount, 1);
+	nDisconCount.fetch_add(m_conFd >=0);
 #endif
 
 #ifdef HAVE_SSL
@@ -307,40 +309,42 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 	{ // mutex context
 		lockguard __g(spareConPool);
 		auto it=spareConPool.find(key);
-		if(spareConPool.end() == it)
-		{
-			p.reset(new tcpconnect);
-			if(p)
-			{
-				p->m_sHostName=sHostname;
-				p->m_sPort=sPort;
-			}
-
-			if(!p || !p->Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
-				p.reset();
-#ifdef HAVE_SSL
-			else if(bSsl)
-			{
-				if(!p->SSLinit(sErrOut, sHostname, sPort))
-				{
-					p.reset();
-					LOG("ssl init error");
-				}
-			}
-#endif
-		}
-		else
+		if(spareConPool.end() != it)
 		{
 			p=it->second.first;
 			spareConPool.erase(it);
 			bReused = true;
 			ldbg("got connection " << p.get() << " from the idle pool");
 #ifdef DEBUG
-			__sync_fetch_and_add(&nReuseCount, 1);
+			nReuseCount.fetch_add(1);
 #endif
 		}
 	}
 #endif
+
+	if(!p)
+	{
+		p.reset(new tcpconnect);
+		if(p)
+		{
+			p->m_sHostName=sHostname;
+			p->m_sPort=sPort;
+		}
+
+		if(!p || !p->Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
+			p.reset();
+#ifdef HAVE_SSL
+		else if(bSsl)
+		{
+			if(!p->SSLinit(sErrOut, sHostname, sPort))
+			{
+				p.reset();
+				LOG("ssl init error");
+			}
+		}
+#endif
+	}
+
 
 	if(p && pStateTracker)
 	{
@@ -475,9 +479,9 @@ void tcpconnect::dump_status()
 				<< ", recycled at " << x.second.second << "\n";
 	}
 #ifdef DEBUG
-	msg << "dbg counts, con: " << __sync_fetch_and_add(&nConCount, 0)
-			<< " , discon: " << __sync_fetch_and_add(&nDisconCount, 0)
-			<< " , reuse: " << __sync_fetch_and_add(&nReuseCount, 0) << "\n";
+	msg << "dbg counts, con: " << nConCount.load()
+			<< " , discon: " << nDisconCount.load()
+			<< " , reuse: " << nReuseCount.load() << "\n";
 #endif
 
 	aclog::err(msg);
@@ -488,6 +492,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	SSL * ssl(NULL);
 	int hret(0);
 	LPCSTR perr(0);
+	mstring ebuf;
 
 	// cleaned up in the destructor on EOL
 	if(!m_ctx)
@@ -511,13 +516,51 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  			| SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
  			| SSL_MODE_ENABLE_PARTIAL_WRITE);
 
- 	// make it blocking for sure otherwise SSL_connect would become messy
-	set_block(m_conFd);
-
  	if((hret=SSL_set_fd(ssl, m_conFd)) != 1)
  		goto ssl_init_fail_retcode;
-	if((hret=SSL_connect(ssl)) != 1)
-		goto ssl_init_fail_retcode;
+
+ 	while(true)
+ 	{
+ 		hret=SSL_connect(ssl);
+ 		if(hret == 1 )
+ 			break;
+ 		if(hret == 0)
+ 			goto ssl_init_fail_retcode;
+
+		fd_set rfds, wfds;
+		FD_ZERO(&rfds);
+		FD_ZERO(&wfds);
+ 		switch(SSL_get_error(ssl, hret))
+ 		{
+ 		case SSL_ERROR_WANT_READ:
+ 			FD_SET(m_conFd, &rfds);
+ 			break;
+ 		case SSL_ERROR_WANT_WRITE:
+ 			FD_SET(m_conFd, &wfds);
+ 			break;
+ 		default:
+ 			goto ssl_init_fail_retcode;
+ 		}
+ 		struct timeval tv;
+ 		tv.tv_sec = acfg::nettimeout;
+ 		tv.tv_usec = 0;
+		int nReady=select(m_conFd+1, &rfds, &wfds, NULL, &tv);
+		if(!nReady)
+		{
+			perr="Socket timeout";
+			goto ssl_init_fail;
+		}
+		if (nReady<0)
+		{
+#ifndef MINIBUILD
+			ebuf=tErrnoFmter("Socket error");
+			perr=ebuf.c_str();
+#else
+			perr="Socket error";
+#endif
+			goto ssl_init_fail;
+		}
+ 	}
 
  	m_bio = BIO_new(BIO_f_ssl());
  	if(!m_bio)

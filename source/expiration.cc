@@ -524,7 +524,7 @@ void expiration::Action()
 	//	SendChunk(tSS()<<it->second.sDirname << "~~~" << it->first << " : " << it->second.fpr.size<<"<br>");
 
 	LoadHints();
-	UpdateIndexFiles();
+	UpdateVolatileFiles();
 
 	if(CheckAndReportError() || CheckStopSignal())
 		goto save_fail_count;
@@ -532,7 +532,7 @@ void expiration::Action()
 	m_damageList.open(SZABSPATH(FNAME_DAMAGED), ios::out | ios::trunc);
 
 	SendChunk(WITHLEN("<b>Validating cache contents...</b><br>\n"));
-	ProcessSeenIndexFiles(*this);
+	ProcessSeenMetaFiles(*this);
 
 	if(CheckAndReportError() || CheckStopSignal())
 		goto save_fail_count;
@@ -634,7 +634,7 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		 */
 		// folder doesn't have sha256 version but that's ok. At least md5 version is there.
 		// XXX: change that when "oldstable" also has sha256 version
-		auto& idesc = m_indexFilesRel[idir + "MD5SUMS"];
+		auto& idesc = m_metaFilesRel[idir + "MD5SUMS"];
 		/* pretend that it's there but not usable so the refreshing code will try to get at
 		 * least one copy for that location if it's needed there
 		 */
