@@ -5,9 +5,17 @@ CDIR=$(TGT)/etc/apt-cacher-ng
 
 #export DEB_CXXFLAGS_MAINT_APPEND  = -flto
 #export DEB_LDFLAGS_MAINT_APPEND = -flto
+export DEB_CXXFLAGS_MAINT_APPEND  = $(CPPFLAGS)
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+# cmake doesn't follow CPPFLAGS, see #653916
+CXXFLAGS+=$(CPPFLAGS)
 
 %:
 	dh $@ --parallel --with systemd
+
+override_dh_auto_build:
+	dh_auto_build -- VERBOSE=1
 
 override_dh_install:
 	dh_install $(shell test -e build/acngfs || echo -Xacngfs)
