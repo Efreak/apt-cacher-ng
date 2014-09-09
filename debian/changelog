@@ -5,7 +5,7 @@ apt-cacher-ng (0.8.0~pre3-1) experimental; urgency=low
     (workaround from wiki, exporting variables manually and adding CPPFLAGS to
     CXXFLAGS, closes: #760699)
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Tue, 09 Sep 2014 22:54:01 +0200
 
 apt-cacher-ng (0.8.0~pre2-1) experimental; urgency=low
 
