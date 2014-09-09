@@ -47,6 +47,18 @@ in the archive /usr/share/doc/apt-cacher-ng/examples/dbgenerator.tgz
 (make and wget packages are also required). Just run "make" and look into conf/
 subdirectory after 5-10 minutes.
 
+DATABASE UPDATE
+---------------
+
+The package includes a set of databases (for Debian, Linux, Fedora and other
+distributions) which help on merging user's request to shared cache
+repositories, improving the cache performance.
+
+This databases can be updated manually using the scripts included in the
+examples/dbgenerator.tar.xz archive. After extracting, run "make" to run the
+lengthy cycle of mirror data retrival, remote host checking, then run (as root)
+"make install".
+
 INETD USAGE
 -----------
 
@@ -61,4 +73,4 @@ be adapted as needed, also see the package documentation for more details.
 NOTE: this inetd bridge is not required in order to set ACLs via /etc/host.*
 files. Recent versions of apt-cacher-ng support these access filters natively.
 
- -- Eduard Bloch <blade@debian.org>  Thu, 19 Jun 2014 15:50:34 +0200
+ -- Eduard Bloch <blade@debian.org>  Tue, 09 Sep 2014 22:42:39 +0200
