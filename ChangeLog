@@ -11,7 +11,7 @@ apt-cacher-ng (0.8.0~pre3) BETA; urgency=low
     hopefully avoiding the sometimes happening freezing for hours
   * Database update
 
- --
+ -- Eduard Bloch <blade@debian.org>  Tue, 09 Sep 2014 22:52:32 +0200
 
 apt-cacher-ng (0.8.0~pre2) ALPHA; urgency=low
 
