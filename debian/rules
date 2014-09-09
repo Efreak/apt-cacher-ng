@@ -34,7 +34,7 @@ override_dh_compress:
 
 override_dh_clean:
 	dh_clean
-	rm -f debian/apt-cacher-ng.service debian/apt-cacher-ng.tmpfile dbgen/dbgenerator.*
+	rm -rf debian/apt-cacher-ng.service debian/apt-cacher-ng.tmpfile dbgen/dbgenerator.* dbgen/dbupdate
 	debconf-updatepo
 
 override_dh_installchangelogs:
