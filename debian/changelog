@@ -1,8 +1,9 @@
 apt-cacher-ng (0.8.0~pre3-1) experimental; urgency=low
 
   * New upstream prerelease version
-  * UNFINISHED: Corrected passing of hardening flags from CPPFLAGS down to cmake (patch by
-    Guillaume Delacour with little modification, closes: #760699)
+  * Corrected passing of hardening flags from CPPFLAGS down to cmake
+    (workaround from wiki, exporting variables manually and adding CPPFLAGS to
+    CXXFLAGS, closes: #760699)
 
  -- 
 

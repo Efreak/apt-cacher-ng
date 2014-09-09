@@ -5,11 +5,13 @@ CDIR=$(TGT)/etc/apt-cacher-ng
 
 #export DEB_CXXFLAGS_MAINT_APPEND  = -flto
 #export DEB_LDFLAGS_MAINT_APPEND = -flto
-export DEB_CXXFLAGS_MAINT_APPEND  = $(CPPFLAGS)
-
-export DEB_BUILD_MAINT_OPTIONS = hardening=+all
-# cmake doesn't follow CPPFLAGS, see #653916
-CXXFLAGS+=$(CPPFLAGS)
+#export DEB_CXXFLAGS_MAINT_APPEND  = $(CPPFLAGS)
+# cmake doesn't follow CPPFLAGS, use the workaround from
+# https://wiki.debian.org/Hardening#Notes_for_packages_using_CMake
+CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
+CFLAGS:=$(shell dpkg-buildflags --get CFLAGS) $(CPPFLAGS)
+CXXFLAGS:=$(shell dpkg-buildflags --get CXXFLAGS) $(CPPFLAGS)
+LDFLAGS:=$(shell dpkg-buildflags --get LDFLAGS)
 
 %:
 	dh $@ --parallel --with systemd
