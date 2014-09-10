@@ -21,14 +21,14 @@ using namespace std;
 
 #ifdef HAVE_SSL
 /* OpenSSL headers */
-
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
 #include "openssl/err.h"
-
-
 #endif
 
+#ifdef HAVE_SD_NOTIFY
+#include <systemd/sd-daemon.h>
+#endif
 
 #include "filereader.h"
 #include "csmapping.h"
@@ -332,7 +332,9 @@ int main(int argc, char **argv)
 			checkForceFclose(PID_FILE);
 		}
 	}
-
+#ifdef HAVE_SD_NOTIFY
+	sd_notify(0, "READY=1");
+#endif
 	return conserver::Run();
 
 }

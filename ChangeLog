@@ -1,3 +1,9 @@
+apt-cacher-ng (0.8.0~pre4) BETA; urgency=low
+
+  * Initial sd_notify integration
+
+ -- 
+
 apt-cacher-ng (0.8.0~pre3) BETA; urgency=low
 
   * Special handling for a case where no volatile (meta) data is present in
