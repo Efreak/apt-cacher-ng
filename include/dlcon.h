@@ -47,8 +47,15 @@ class dlcon : public lockable
     	
     	tDljQueue m_qNewjobs;
 
-    	int m_wakepipe[2];
-
+#ifdef HAVE_LINUX_EVENTFD
+    	int m_wakeventfd = -1;
+#define fdWakeRead m_wakeventfd
+#define fdWakeWrite m_wakeventfd
+#else
+    	int m_wakepipe[] = {-1, -1};
+#define fdWakeRead m_wakepipe[0]
+#define fdWakeWrite m_wakepipe[1]
+#endif
     	// flags and local copies for input parsing
     	/// remember being attached to an fitem
 
@@ -85,6 +92,8 @@ class dlcon : public lockable
     	unsigned m_nSpeedLimiterRoundUp = (unsigned(1)<<16)-1;
     	unsigned m_nSpeedLimitMaxPerTake = MAX_VAL(unsigned);
       unsigned m_nLastDlCount=0;
+
+      void wake();
 };
 
 #endif

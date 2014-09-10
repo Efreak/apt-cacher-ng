@@ -25,3 +25,4 @@
 #cmakedefine PTHREAD_COND_TIMEDWAIT_TIME_RANGE_OK
 #cmakedefine HAVE_SSL
 #cmakedefine HAVE_SD_NOTIFY
+#cmakedefine HAVE_LINUX_EVENTFD

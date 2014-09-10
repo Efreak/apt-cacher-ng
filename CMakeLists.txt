@@ -206,6 +206,8 @@ int main(int argc, char **argv) { off_t yes(3); return (int) sendfile(1, 2, &yes
 ")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LINUX_SENDFILE)
 
+CHECK_CXX_SOURCE_COMPILES("#include \"${CMAKE_SOURCE_DIR}/include/testeventfd.h\"" HAVE_LINUX_EVENTFD)
+
 SET(TESTSRC "
 #include <unistd.h>
 int main() { return pread(0, NULL, 0, 0); }
