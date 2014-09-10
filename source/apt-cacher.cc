@@ -26,10 +26,6 @@ using namespace std;
 #include "openssl/err.h"
 #endif
 
-#ifdef HAVE_SD_NOTIFY
-#include <systemd/sd-daemon.h>
-#endif
-
 #include "filereader.h"
 #include "csmapping.h"
 #ifdef DEBUG
@@ -332,9 +328,6 @@ int main(int argc, char **argv)
 			checkForceFclose(PID_FILE);
 		}
 	}
-#ifdef HAVE_SD_NOTIFY
-	sd_notify(0, "READY=1");
-#endif
 	return conserver::Run();
 
 }
