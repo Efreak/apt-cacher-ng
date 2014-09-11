@@ -335,7 +335,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 	}
 }
 
-tStrDeq ExpandFileTokens(cmstring &token)
+tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
 {
 	tStrDeq srcs;
 	string sPath = token.substr(5);
@@ -351,21 +351,44 @@ tStrDeq ExpandFileTokens(cmstring &token)
 	else
 	{
 		tStrMap bname2path;
-		for (const auto& dir : { &suppdir, &confdir })
+#ifdef DEBUG
+		bool bp=(token == "file:backends_gentoo");
+#endif
+		auto lookup = [&sPath, &srcs, &bname2path](bool bAddDefault)
 		{
-			// chop slashes. That should not be required but better be sure.
-			while(endsWithSzAr(*dir, sPathSep) && dir->size()>1)
+			for (const auto& dir : { &confdir, &suppdir })
+			{
+				// chop slashes. That should not be required but better be sure.
+				while(endsWithSzAr(*dir, sPathSep) && dir->size()>1)
 				dir->resize(dir->size()-1);
 
-			// temporary only
-			srcs = ExpandFilePattern( (cmstring) *dir + sPathSep + sPath, true);
-			if (srcs.size() == 1 && GetFileSize(srcs[0], -23) == off_t(-23))
-				continue; // file not existing, wildcard returned
+				auto pat=(cmstring) *dir + sPathSep + sPath;
+				if(bAddDefault)
+					pat+=".default";
+				//cerr << "heh, token: " << token << " in dir: " << *dir << " to: " << pat;
+				srcs = ExpandFilePattern(pat, true);
+				if (srcs.size() == 1 && !Cstat(srcs.front()))
+					continue;// file not existing, wildcard returned
 
-			// hits in confdir will overwrite those from suppdir
-			for (; !srcs.empty(); srcs.pop_back())
-				bname2path[::GetBaseName(srcs.back())] = srcs.back();
+				// hits in confdir will overwrite those from suppdir
+				for (auto& s: srcs)
+				{
+					auto nam(GetBaseName(s));
+					if(bAddDefault)
+						nam.erase(nam.size()-8);
+					bname2path.emplace(nam, s);
+				}
+
+			}
+		};
+		lookup(false);
+		if(bUseDefaultFallback && bname2path.empty())
+		{
+			if(debug>4)
+				cerr << "Looking for fallback version: " << sPath << ".default" <<endl;
+			lookup(true);
 		}
+
 		if (bname2path.empty())
 		{
 			cerr << "WARNING: No URL list file matching " << token
@@ -396,7 +419,7 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 	}
 	else
 	{
-		for(auto& src : ExpandFileTokens(token))
+		for(auto& src : ExpandFileTokens(token, true))
 		{
 			if (bAsBackend)
 				ReadBackendsFile(src, repname);
@@ -790,13 +813,13 @@ void ReadBackendsFile(const string & sFile, const string &sRepName)
 	{
 		if(debug&6)
 			cerr << "No backend data found, file ignored."<<endl;
-		goto try_read_default;
+		return;
 	}
 	
 	while(itor.Next())
 	{
 		if(debug & LOG_DEBUG)
-			cerr << "backends, got line: " << itor.sLine <<endl;
+			cerr << "Backend URL: " << itor.sLine <<endl;
 
 		trimBack(itor.sLine);
 
@@ -824,13 +847,6 @@ void ReadBackendsFile(const string & sFile, const string &sRepName)
 					<< itor.reader.GetCurrentLine());
 		}
 	}
-
-try_read_default:
-	if(nAddCount || endsWithSzAr(sFile, ".default"))
-		return;
-	if(debug>4)
-		cerr << "Trying to read replacement from " << sFile << ".default" <<endl;
-	ReadBackendsFile(sFile+".default", sRepName);
 }
 
 void ShutDown()
@@ -960,6 +976,15 @@ void ReadConfigDirectory(const char *szPath, bool bTestMode)
 	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
 #endif
 	dump_proc_status();
+	if(debug & LOG_DEBUG)
+	{
+		uint nUrls=0;
+		for(const auto& x: mapUrl2pVname)
+			nUrls+=x.second.size();
+
+		cerr << "Loaded " << repoparms.size() << " backend descriptors\nLoaded mappings for "
+				<< mapUrl2pVname.size() << " hosts and " << nUrls<<" paths\n";
+	}
 }
 
 void PostProcConfig(bool bDumpConfig)
@@ -1278,7 +1303,7 @@ inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool 
 	}
 	else if(!bRecursiveCall) // don't go further than one level
 	{
-		tStrDeq srcs = acfg::ExpandFileTokens(token);
+		tStrDeq srcs = acfg::ExpandFileTokens(token, true);
 		for(const auto& src: srcs)
 		{
 			acfg::tCfgIter itor(src);
