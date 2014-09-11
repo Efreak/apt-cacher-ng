@@ -6,6 +6,8 @@ apt-cacher-ng (0.8.0~pre4) BETA; urgency=low
     ExecStartPre command.
   * Alternative to download thread wake via pipe with eventfd on Linux systems
     (needs less file descriptors)
+  * Config file lookup code change to found .default files scattered between
+    config and support-data folders
 
  -- 
 
