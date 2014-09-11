@@ -24,6 +24,10 @@
 #include <tcpd.h>
 #endif
 
+#ifdef HAVE_SD_NOTIFY
+#include <systemd/sd-daemon.h>
+#endif
+
 #include "debug.h"
 
 using namespace std;
@@ -347,6 +351,11 @@ void Setup()
 int Run()
 {
 	LOGSTART2s("Run", "GoGoGo");
+
+#ifdef HAVE_SD_NOTIFY
+	sd_notify(0, "READY=1");
+#endif
+
 	fd_set rfds, wfds;
 	int maxfd = 1 + *max_element(g_vecSocks.begin(), g_vecSocks.end());
 	USRDBG( "Listening to incoming connections...");

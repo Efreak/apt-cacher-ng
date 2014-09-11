@@ -2,7 +2,8 @@ Requirements:
 
  - Linux or mostly POSIX.1-2001 compliant environment
  - GNU make, CMake 2.6.2 or newer
- - gcc 4.7 or newer or clang 3.0 or newer and Boost headers
+ - gcc 4.7 or newer or clang 3.0 or newer and latest libstdc++ or Boost headers
+ - on Linux systems, kernel 2.6.22 or newer and glibc 2.8 or newer
 
 Optional development packages for optional features:
  - zlib, libbz2, liblzma (from XZ), openssl and their development components
@@ -55,5 +56,5 @@ Experimental flags:
 CXXFLAGS=-flto -O3
 (enables Link Time Optimization for smaller and more efficient code,
 speed optimization or alternatively -Os for binary size optimization)
-LDFLAGS=-fto
+LDFLAGS=-flto
 (must be enabled to use Link Time Optimization)

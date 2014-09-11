@@ -14,6 +14,10 @@
 #include "fileio.h"
 #include "sockio.h"
 
+#ifdef HAVE_LINUX_EVENTFD
+#include <sys/eventfd.h>
+#endif
+
 using namespace std;
 
 // evil hack to simulate random disconnects
@@ -30,12 +34,17 @@ dlcon::dlcon(bool bManualExecution, string *xff) :
 		m_bProxyTot(false)
 {
 	LOGSTART("dlcon::dlcon");
-	m_wakepipe[0] = m_wakepipe[1] = -1;
+#ifdef HAVE_LINUX_EVENTFD
+	m_wakeventfd=eventfd(0, 0);
+	if(m_wakeventfd>=0)
+		set_nb(m_wakeventfd);
+#else
 	if (0 == pipe(m_wakepipe))
 	{
 		set_nb(m_wakepipe[0]);
 		set_nb(m_wakepipe[1]);
 	}
+#endif
 	if (xff)
 		m_sXForwardedFor = *xff;
   g_nDlCons++;
@@ -591,6 +600,17 @@ private:
 	tDlJob & operator=(const tDlJob&);
 };
 
+void dlcon::wake()
+{
+	if (fdWakeWrite<0)
+		return;
+#ifdef HAVE_LINUX_EVENTFD
+	while(eventfd_write(fdWakeWrite, 1)<0) ;
+#else
+	POKE(fdWakeWrite);
+#endif
+}
+
 inline void dlcon::EnqJob(tDlJob *todo)
 {
 	setLockGuard;
@@ -602,8 +622,7 @@ inline void dlcon::EnqJob(tDlJob *todo)
 	LOGSTART2("dlcon::EnqJob", todo->m_fileUri.ToURI(false));
 
 	m_qNewjobs.push_back(tDlJobPtr(todo));
-	if (m_wakepipe[1]>=0)
-		POKE(m_wakepipe[1]);
+	wake();
 }
 
 void dlcon::AddJob(tFileItemPtr m_pItem, 
@@ -628,14 +647,18 @@ void dlcon::SignalStop()
 	m_bStopASAP=true;
 	m_qNewjobs.clear();
 
-	POKE(m_wakepipe[1]);
+	wake();
 }
 
 dlcon::~dlcon()
 {
 	LOGSTART("dlcon::~dlcon, Destroying dlcon");
+#ifdef HAVE_LINUX_EVENTFD
+	checkforceclose(m_wakeventfd);
+#else
 	checkforceclose(m_wakepipe[0]);
 	checkforceclose(m_wakepipe[1]);
+#endif
   g_nDlCons--;
 }
 
@@ -662,8 +685,8 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 
 	for (;;)
 	{
-		FD_SET(m_wakepipe[0], &rfds);
-		int nMaxFd = m_wakepipe[0];
+		FD_SET(fdWakeRead, &rfds);
+		int nMaxFd = fdWakeRead;
 
 		if (fd>=0)
 		{
@@ -724,11 +747,20 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 				return (HINT_DISCON|EFLAG_JOB_BROKEN);
 		}
 
-		if (FD_ISSET(m_wakepipe[0], &rfds))
+		if (FD_ISSET(fdWakeRead, &rfds))
 		{
 			dbgline;
+#ifdef HAVE_LINUX_EVENTFD
+			eventfd_t xtmp;
+			int tmp;
+			do {
+				tmp = eventfd_read(fdWakeRead, &xtmp);
+			} while (tmp < 0 && (errno == EINTR || errno == EAGAIN));
+
+#else
 			for (int tmp; read(m_wakepipe[0], &tmp, 1) > 0;)
 				;
+#endif
 			return HINT_SWITCH;
 		}
 
@@ -959,7 +991,7 @@ void dlcon::WorkLoop()
 		return;
 	}
 
-	if(m_wakepipe[0]<0 || m_wakepipe[1]<0)
+	if(fdWakeRead<0 || fdWakeWrite<0)
 	{
 		aclog::err("Error creating pipe file descriptors");
 		return;

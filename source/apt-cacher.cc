@@ -21,14 +21,10 @@ using namespace std;
 
 #ifdef HAVE_SSL
 /* OpenSSL headers */
-
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
 #include "openssl/err.h"
-
-
 #endif
-
 
 #include "filereader.h"
 #include "csmapping.h"
@@ -332,7 +328,6 @@ int main(int argc, char **argv)
 			checkForceFclose(PID_FILE);
 		}
 	}
-
 	return conserver::Run();
 
 }
