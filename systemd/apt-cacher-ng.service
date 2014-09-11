@@ -9,6 +9,7 @@ User=apt-cacher-ng
 Group=apt-cacher-ng
 # this can be changed to notify if the support was enabled at build time
 Type=simple
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
