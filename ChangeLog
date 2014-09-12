@@ -1,4 +1,4 @@
-apt-cacher-ng (0.8.0~pre4) BETA; urgency=low
+apt-cacher-ng (0.8.0rc1) BETA; urgency=low
 
   * Systemd changes: sd_notify integration if libsystemd-daemon is available.
     Service file now can act more precisely if Type is set to notify. Minor
