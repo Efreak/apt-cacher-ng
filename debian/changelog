@@ -1,7 +1,8 @@
 apt-cacher-ng (0.8.0~pre4-1) UNRELEASED; urgency=medium
 
   * New upstream version
-    + systemd related changes (startup notification, restart on failure)
+    + systemd related changes (startup notification, restart on crashes,
+      closes: #752255)
 
  -- 
 
