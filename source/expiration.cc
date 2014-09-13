@@ -54,8 +54,6 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 					return true;
 				string sPathAbs(CACHE_BASE+sPathRel);
 
-				off_t lenFromStat = descHave.fpr.size; // original size before uncompressing
-
 				// end line ending starting from a class and add checkbox as needed
 				auto finish_bad = [&]()->bool
 				{
@@ -81,18 +79,20 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				return false;
 			};
 
-			if(lenFromStat<0)
+			Cstat realState(SABSPATH(sPathRel));
+			if(!realState)
 			{
-				SendFmt << ECLASS "file has bad attributes, invalidating " << sPathRel;
-				return finish_bad();
+				SendFmt << WCLASS "File not accessible, ignoring " << sPathRel << CLASSEND;
+				return false;
 			}
+			off_t lenFromStat = realState.st_size;
+			//SendFmt << "DBG-disk-size: " << lenFromStat;
 
 			// those file were not updated by index handling, and are most likely not
 			// matching their parent indexes. The best way is to see them as zero-sized and
 			// handle them the same way.
 			if(GetFlags(sPathRel).parseignore)
 				goto handle_incomplete;
-
 
 			// Basic header checks. Skip if the file was forcibly updated/reconstructed before.
 			if (m_bSkipHeaderChecks || descHave.bNoHeaderCheck)

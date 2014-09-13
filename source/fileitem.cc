@@ -251,9 +251,24 @@ bool fileitem::SetupClean(bool bForce)
 		m_status=FIST_INITED;
 	}
 	cmstring sPathAbs(SABSPATH(m_sPathRel));
-	if(::truncate(sPathAbs.c_str(), 0) || ::truncate((sPathAbs+".head").c_str(), 0))
-		return false;
-
+	cmstring sPathHead(sPathAbs+".head");
+	// header allowed to be lost in process...
+//	if(unlink(sPathHead.c_str()))
+//		::ignore_value(::truncate(sPathHead.c_str(), 0));
+	::ignore_value(::truncate(sPathAbs.c_str(), 0));
+	Cstat stf(sPathAbs);
+	if(stf && stf.st_size>0)
+		return false; // didn't work. Permissions? Anyhow, too dangerous to act on this now
+	header h;
+	h.LoadFromFile(sPathHead);
+	h.del(header::CONTENT_LENGTH);
+	h.del(header::CONTENT_TYPE);
+	h.del(header::LAST_MODIFIED);
+	h.del(header::XFORWARDEDFOR);
+	h.del(header::CONTENT_RANGE);
+	h.StoreToFile(sPathHead);
+//	if(0==stat(sPathHead.c_str(), &stf) && stf.st_size >0)
+//		return false; // that's weird too, header still exists with real size
 	m_head.clear();
 	m_nSizeSeen=m_nSizeChecked=0;
 

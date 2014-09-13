@@ -251,8 +251,6 @@ void header::set(eHeadPos key, off_t nValue)
     set(key, buf, len);
 }
 
-#ifndef MINIBUILD
-
 tSS header::ToString() const
 {
 	tSS s;
@@ -310,8 +308,6 @@ int header::StoreToFile(cmstring &sPath) const
 	
 	return nByteCount;
 }
-
-#endif // MINIBUILD
 
 std::string header::GenInfoHeaders()
 {

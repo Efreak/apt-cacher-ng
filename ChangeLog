@@ -8,6 +8,14 @@ apt-cacher-ng (0.8.0rc1) BETA; urgency=low
     (needs less file descriptors)
   * Config file lookup code change to found .default files scattered between
     config and support-data folders
+  * Fix false positive of the bad-auth-page-redirection detector, triggering
+    on multiple redirects with some HTML content (Sourceforge scheme). Also
+    allowed ?&= to be sent unencoded since some server's don't decode the
+    escaped version correctly.
+  * Keep some information in cached headers while reseting the file state
+    (needed to retrive original URL for maintenance tasks)
+  * Rereading disk information in advanced file checks (maintenance), cache
+    cannot be trusted and keeping it fresh is not worth the efforts
 
  -- 
 

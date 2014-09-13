@@ -414,7 +414,7 @@ struct tDlJob
 
 				if (acfg::redirmax) // internal redirection might be disabled
 				{
-					if (st == 301 || st == 302 || st == 307)
+					if (IS_REDIRECT(st))
 					{
 						if (!RewriteSource(h.h[header::LOCATION]))
 							return EFLAG_JOB_BROKEN;
@@ -494,7 +494,8 @@ struct tDlJob
 						&& !acfg::badredmime.empty()
 						&& acfg::redirmax != m_nRedirRemaining
 						&& h.h[header::CONTENT_TYPE]
-						&& strstr(h.h[header::CONTENT_TYPE], acfg::badredmime.c_str()))
+						&& strstr(h.h[header::CONTENT_TYPE], acfg::badredmime.c_str())
+						&& h.getStatus() < 300) // contains the final data/response
 				{
 					// this was redirected and the destination is BAD!
 					h.frontLine="HTTP/1.1 501 Redirected to invalid target";

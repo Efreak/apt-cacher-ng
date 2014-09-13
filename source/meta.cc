@@ -452,6 +452,7 @@ inline bool is_safe_url_char(char c)
 {
 // follows rfc3986 except of ~ which some servers seem to handle incorrectly,
 	// https://alioth.debian.org/tracker/?func=detail&aid=314030&group_id=100566&atid=413111
+	// and the $?= which some SF servers cannot decode in their forwarding scheme
 	switch (c)
 	{
 	case '/':
@@ -520,6 +521,9 @@ inline bool is_safe_url_char(char c)
 	case '-':
 	case '.':
 	case '_':
+	case '?':
+	case '&':
+	case '=':
 		return true;
 	default:
 		return false;

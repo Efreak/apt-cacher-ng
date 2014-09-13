@@ -96,6 +96,8 @@ class dlcon : public lockable
       void wake();
 };
 
+#define IS_REDIRECT(st) (st == 301 || st == 302 || st == 307)
+
 #endif
 
 
