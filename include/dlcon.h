@@ -30,10 +30,9 @@ class dlcon : public lockable
         
         void SignalStop();
 
-	    void AddJob(tFileItemPtr m_pItem, tHttpUrl hi);
-        void AddJob(tFileItemPtr m_pItem, const acfg::tRepoData *pBackends,
-        		const mstring & sPatSuffix);
-    	void EnqJob(tDlJob *);
+        bool AddJob(tFileItemPtr m_pItem, tHttpUrl *pForcedUrl=nullptr,
+        		const acfg::tRepoData *pRepoDesc=nullptr,
+        		cmstring *sPatSuffix=nullptr);
 
         mstring m_sXForwardedFor;
 

@@ -288,7 +288,7 @@ inline bool pkgmirror::ConfigDelta(cmstring &sPathRel)
 	if (m_repCutLen != stmiss)
 	{
 		vname.resize(m_repCutLen);
-		const acfg::tRepoData *pRepo = acfg::GetBackendVec(vname);
+		const acfg::tRepoData *pRepo = acfg::GetRepoData(vname);
 #ifdef DEBUG
 		if(acfg::debug & LOG_MORE)
 		{

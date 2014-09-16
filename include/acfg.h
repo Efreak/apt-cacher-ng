@@ -60,20 +60,24 @@ struct tRepoData
 		virtual void JobConnect()=0;
 		virtual ~IHookHandler() {
 		}
-	};
-	IHookHandler *m_pHooks;
+	} *m_pHooks = nullptr;
 	tStrVec m_keyfiles;
 	tHttpUrl m_deltasrc;
-	tHttpUrl *m_pProxy;
-	tRepoData() : m_pHooks(NULL), m_pProxy(NULL) {};
+	tHttpUrl *m_pProxy = nullptr;
 	virtual ~tRepoData();
 };
 
-typedef std::map<cmstring, tRepoData>::const_iterator tBackendDataRef;
+typedef std::map<cmstring, tRepoData>::const_iterator tRepoDataRef;
 
-bool GetRepNameAndPathResidual(const tHttpUrl & in, mstring & sRetPathResidual, tBackendDataRef &beRef);
+/*
+ * Resolves a repository descriptor for the given URL, returns a reference to its descriptor
+ * (actually a pair with first: name, second: descriptor).
+ *
+ * @return: true IFF a repository was found and the by-reference arguments are set
+ */
+bool GetRepNameAndPathResidual(const tHttpUrl & in, mstring & sRetPathResidual, tRepoDataRef &beRef);
 
-const tRepoData * GetBackendVec(cmstring &vname);
+const tRepoData * GetRepoData(cmstring &vname);
 
 time_t BackgroundCleanup();
 

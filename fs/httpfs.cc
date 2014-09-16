@@ -307,7 +307,7 @@ public:
 
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
-		dler.AddJob(spFi, uri);
+		dler.AddJob(spFi, &uri);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		pFi->WaitForFinish(&nHttpCode);
@@ -380,7 +380,7 @@ public:
 			}
 		};
 		tFileItemPtr probe(static_cast<fileitem*>(new tFitemProbe()));
-		dler.AddJob(probe, uri);
+		dler.AddJob(probe, &uri);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);

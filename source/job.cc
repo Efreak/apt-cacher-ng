@@ -502,7 +502,7 @@ void job::PrepareDownload() {
     tHttpUrl tUrl; // parsed URL
 
 	// resolve to an internal repo location and maybe backends later
-	acfg::tBackendDataRef beRef;
+	acfg::tRepoDataRef repoMapEntry;
 	bool bUseRepo;
 
     fileitem::FiStatus fistate(fileitem::FIST_FRESH);
@@ -621,10 +621,10 @@ void job::PrepareDownload() {
 		// got something valid, has type now, trace it
 		USRDBG("Processing new job, "<<m_pReqHead->frontLine);
 
-		bUseRepo = acfg::GetRepNameAndPathResidual(tUrl, sPathResidual, beRef);
+		bUseRepo = acfg::GetRepNameAndPathResidual(tUrl, sPathResidual, repoMapEntry);
 
 		if(bUseRepo)
-			m_sFileLoc=beRef->first+SZPATHSEP+sPathResidual;
+			m_sFileLoc=repoMapEntry->first+SZPATHSEP+sPathResidual;
 		else
 			m_sFileLoc=tUrl.sHost+tUrl.sPath;
 
@@ -685,35 +685,32 @@ void job::PrepareDownload() {
     	}
     	
     	dbgline;
-    	MYTRY
+MYTRY
 		{
-			if(bUseRepo && ! beRef->second.m_backends.empty())
-			{
-				LOG("Backends found, using them with " << sPathResidual
-						<< ", first backend: " <<beRef->second.m_backends.front().ToURI(false));
+    		auto bHaveRedirects=(bUseRepo && !repoMapEntry->second.m_backends.empty());
 
-				if(! bPtMode
-						&& rechecks::MatchUncacheable(
-								beRef->second.m_backends.front().ToURI(false)+sPathResidual,
-								rechecks::NOCACHE_TGT))
+    		if (acfg::forcemanaged && !bHaveRedirects)
+						goto report_notallowed;
+
+				if (!bPtMode)
 				{
-					fistate=_SwitchToPtItem(m_sFileLoc);
+					auto testUri= bHaveRedirects
+							? repoMapEntry->second.m_backends.front().ToURI(false) + sPathResidual
+							: tUrl.ToURI(false);
+					if (rechecks::MatchUncacheable(testUri, rechecks::NOCACHE_TGT))
+						fistate = _SwitchToPtItem(m_sFileLoc);
 				}
 
-				m_pParentCon->m_pDlClient->AddJob(m_pItem.get(), & beRef->second, sPathResidual);
-			}
-			else
-			{
-			    if(acfg::forcemanaged)
-			    	goto report_notallowed;
-			    LOG("Passing new job for " << tUrl.ToURI(false) << " to " << m_pParentCon->m_dlerthr);
-
-				if(! bPtMode && rechecks::MatchUncacheable(tUrl.ToURI(false), rechecks::NOCACHE_TGT))
-					fistate=_SwitchToPtItem(m_sFileLoc);
-
-			    m_pParentCon->m_pDlClient->AddJob(m_pItem.get(), tUrl);
-			}
-			ldbg("Download job enqueued for " << m_sFileLoc);
+				if(m_pParentCon->m_pDlClient->AddJob(m_pItem.get(),
+						&tUrl, bUseRepo ? (& repoMapEntry->second) : nullptr, &sPathResidual))
+				{
+					ldbg("Download job enqueued for " << m_sFileLoc);
+				}
+				else
+				{
+					ldbg("PANIC! Error creating download job for " << m_sFileLoc);
+					goto report_overload;
+				}
 		}
 		MYCATCH(std::bad_alloc&) // OOM, may this ever happen here?
 		{

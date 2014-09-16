@@ -16,6 +16,10 @@ apt-cacher-ng (0.8.0rc1) BETA; urgency=low
     (needed to retrive original URL for maintenance tasks)
   * Rereading disk information in advanced file checks (maintenance), cache
     cannot be trusted and keeping it fresh is not worth the efforts
+  * Fixed HTTP redirection with backend mode
+  * Maintenance download code now prefers the original path resolved by
+    backend consideration if that option looks more likely
+  * Internal refactoring WRT download job management
 
  -- 
 

@@ -749,10 +749,8 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 	return true;
 }
 
-
-//const string * GetVnameForUrl(string path, string::size_type * nMatchLen)
 bool GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResidual,
-		tBackendDataRef &beRef)
+		tRepoDataRef &beRef)
 {
 	sRetPathResidual.clear();
 	
@@ -790,7 +788,7 @@ bool GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResidual,
 	return false;
 }
 
-const tRepoData * GetBackendVec(cmstring &vname)
+const tRepoData * GetRepoData(cmstring &vname)
 {
 	auto it=repoparms.find(vname);
 	if(it==repoparms.end() || it->second.m_backends.empty())

@@ -184,12 +184,11 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 
 #define GOTOREPMSG(x) {sErr = x; bSuccess=false; goto rep_dlresult; }
 
-	tHttpUrl url;
-
-	const acfg::tRepoData *pBackends(NULL);
+	const acfg::tRepoData *pRepoDesc=nullptr;
 	mstring sPatSuffix;
 
 	fileItemMgmt fiaccess;
+	tHttpUrl parser, *pResolvedUrl=nullptr;
 
 	if(!pFi)
 	{
@@ -236,63 +235,56 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 
 	if (!m_pDlcon)
 		GOTOREPMSG("Item busy, cannot reload");
-
 	if (pForcedURL)
 	{
 		// handle alternative behavior in the first or last cycles
-		if (!url.SetHttpUrl(pForcedURL))
+		if (!parser.SetHttpUrl(pForcedURL))
 			GOTOREPMSG("Invalid source URL");
+		pResolvedUrl=&parser;
+#warning review, maybe need to resolve backends for forced url?
 	}
 	else
 	{
 		// must have the URL somewhere
 		lockguard(pFi.get());
 		const header &hor=pFi->GetHeaderUnlocked();
-		if(hor.h[header::XORIG] && url.SetHttpUrl(hor.h[header::XORIG]))
+
+		bool bPathOK=parser.SetHttpUrl(sFilePathRel, false);
+		ldbg("Find backend for " << sFilePathRel << " parsed as host: "  << parser.sHost
+				<< " and path: " << parser.sPath << ", ok? " << bPathOK);
+		if(!acfg::stupidfs && bPathOK
+				&& 0 != (pRepoDesc = acfg::GetRepoData(parser.sHost))
+				&& !pRepoDesc->m_backends.empty())
 		{
-			ldbg("got the URL from fi header");
+			ldbg("will use backend mode");
+			sPatSuffix=parser.sPath;
 		}
 		else
 		{
-			// ok, maybe it's not the file we have on disk, depending on how this method
-			// was called? get the URL from there?
-			header h;
-			h.LoadFromFile(acfg::cacheDirSlash + sFilePathRel + ".head");
-			if (h.h[header::XORIG] && url.SetHttpUrl(h.h[header::XORIG]))
+			if(bPathOK) // remember at least this one as fallback
+				pResolvedUrl=&parser;
+
+			// and prefer the source from xorig which is likely to deliver better result
+			if(hor.h[header::XORIG] && parser.SetHttpUrl(hor.h[header::XORIG], false))
+				pResolvedUrl=&parser;
+
+			if(!pResolvedUrl)
 			{
-				ldbg("got the URL from related .head file");
+				SendFmt << "<b>Failed to resolve original URL</b><br>";
+				return false;
 			}
-			else
+
+			// might still need a repo data description
+			acfg::tRepoDataRef beRef;
+			if(acfg::GetRepNameAndPathResidual(parser, sPatSuffix, beRef))
 			{
-				// no luck... ok, enforce the backend/subpath method and hope it's there
-				// accessed as http/port80
-				// bFallbackMethodUsed = true;
-				tHttpUrl parser;
-				if (parser.SetHttpUrl(sFilePathRel)
-						&& 0 != (pBackends = acfg::GetBackendVec(parser.sHost)))
-				{
-					ldbg("guessed from the repository path which could be mapped to a backend")
-					sPatSuffix = parser.sPath;
-				}
-				else
-				{
-					ldbg("guessed purely from repository path, hostname is " << parser.sHost)
-					url=parser;
-				}
+				pRepoDesc = & beRef->second;
+				pResolvedUrl = nullptr;
 			}
 		}
 	}
-	if (!pBackends) // we still might want to remap it
-	{
-		acfg::tBackendDataRef beRef;
-		if(acfg::GetRepNameAndPathResidual(url, sPatSuffix, beRef))
-			pBackends = & beRef->second;
-	}
 
-	if(pBackends)
-		m_pDlcon->AddJob(pFi, pBackends, sPatSuffix);
-	else
-		m_pDlcon->AddJob(pFi, url);
+	m_pDlcon->AddJob(pFi, pResolvedUrl, pRepoDesc, &sPatSuffix);
 
 	m_pDlcon->WorkLoop();
 	if (pFi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE

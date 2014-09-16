@@ -469,7 +469,7 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 	};
 
 	tFileItemPtr fi((fileitem*)new tPrintItem);
-	dl.AddJob(fi, url);
+	dl.AddJob(fi, &url, nullptr, nullptr);
 	dl.WorkLoop();
 	return (fi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
 			&& fi->GetHeaderUnlocked().getStatus() == 200) ? 0 : -3;
