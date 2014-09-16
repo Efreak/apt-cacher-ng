@@ -159,7 +159,7 @@ bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 
 
 bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatileFile,
-		eDlMsgPrio msgVerbosityLevel, tFileItemPtr pFi, const char *pForcedURL)
+		eDlMsgPrio msgVerbosityLevel, tFileItemPtr pFi, tHttpUrl *pForcedURL)
 {
 
 	LOGSTART("tCacheMan::Download");
@@ -188,7 +188,7 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 	mstring sPatSuffix;
 
 	fileItemMgmt fiaccess;
-	tHttpUrl parser, *pResolvedUrl=nullptr;
+	tHttpUrl parser, *pResolvedDirectUrl=nullptr;
 
 	if(!pFi)
 	{
@@ -238,10 +238,7 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 	if (pForcedURL)
 	{
 		// handle alternative behavior in the first or last cycles
-		if (!parser.SetHttpUrl(pForcedURL))
-			GOTOREPMSG("Invalid source URL");
-		pResolvedUrl=&parser;
-#warning review, maybe need to resolve backends for forced url?
+		pResolvedDirectUrl=&parser;
 	}
 	else
 	{
@@ -262,29 +259,32 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 		else
 		{
 			if(bPathOK) // remember at least this one as fallback
-				pResolvedUrl=&parser;
+				pResolvedDirectUrl=&parser;
 
 			// and prefer the source from xorig which is likely to deliver better result
 			if(hor.h[header::XORIG] && parser.SetHttpUrl(hor.h[header::XORIG], false))
-				pResolvedUrl=&parser;
+				pResolvedDirectUrl=&parser;
 
-			if(!pResolvedUrl)
+			if(!pResolvedDirectUrl)
 			{
 				SendFmt << "<b>Failed to resolve original URL</b><br>";
 				return false;
 			}
-
-			// might still need a repo data description
-			acfg::tRepoDataRef beRef;
-			if(acfg::GetRepNameAndPathResidual(parser, sPatSuffix, beRef))
-			{
-				pRepoDesc = & beRef->second;
-				pResolvedUrl = nullptr;
-			}
 		}
 	}
 
-	m_pDlcon->AddJob(pFi, pResolvedUrl, pRepoDesc, &sPatSuffix);
+	// might still need a repo data description
+	if (pResolvedDirectUrl)
+	{
+		acfg::tRepoDataRef beRef;
+		if (acfg::GetRepNameAndPathResidual(*pResolvedDirectUrl, sPatSuffix, beRef))
+		{
+			pRepoDesc = &beRef->second;
+			pResolvedDirectUrl = nullptr;
+		}
+	}
+
+	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sPatSuffix);
 
 	m_pDlcon->WorkLoop();
 	if (pFi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
