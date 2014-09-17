@@ -276,11 +276,13 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 	// might still need a repo data description
 	if (pResolvedDirectUrl)
 	{
-		acfg::tRepoDataRef beRef;
-		if (acfg::GetRepNameAndPathResidual(*pResolvedDirectUrl, sPatSuffix, beRef))
+		acfg::tRepoResolvResult repinfo;
+		acfg::GetRepNameAndPathResidual(*pResolvedDirectUrl, repinfo);
+		pRepoDesc = repinfo.repodata;
+		if(repinfo.repodata && !repinfo.repodata->m_backends.empty())
 		{
-			pRepoDesc = &beRef->second;
 			pResolvedDirectUrl = nullptr;
+			sPatSuffix = repinfo.sRestPath;
 		}
 	}
 

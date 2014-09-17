@@ -152,9 +152,9 @@ void ReadRewriteFile(const string & sFile, const string & sRepName);
 void ReadBackendsFile(const string & sFile, const string &sRepName);
 
 map<cmstring, tRepoData> repoparms;
-
-// maps hostname:port -> { <path,pointer>, ... }
-unordered_map<string, list<pair<cmstring,decltype(repoparms)::iterator>>> mapUrl2pVname;
+typedef decltype(repoparms)::iterator tPairRepoNameData;
+// maps hostname:port -> { <pathprefix,repopointer>, ... }
+std::unordered_map<string, list<pair<cmstring,tPairRepoNameData>>> mapUrl2pVname;
 
 
 string * GetStringPtr(LPCSTR key) {
@@ -749,18 +749,15 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 	return true;
 }
 
-bool GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResidual,
-		tRepoDataRef &beRef)
+void GetRepNameAndPathResidual(const tHttpUrl & in, tRepoResolvResult &result)
 {
-	sRetPathResidual.clear();
-	
 	// get all the URLs matching THE HOSTNAME
 	auto rangeIt=mapUrl2pVname.find(in.sHost+":"+in.GetPort());
 	if(rangeIt == mapUrl2pVname.end())
-		return false;
+		return;
 	
 	tStrPos bestMatchLen(0);
-	decltype(repoparms)::iterator pBestHit = repoparms.end();
+	auto pBestHit = repoparms.end();
 		
 	// now find the longest directory part which is the suffix of requested URL's path
 	for (auto& repo : rangeIt->second)
@@ -769,23 +766,19 @@ bool GetRepNameAndPathResidual(const tHttpUrl & in, string & sRetPathResidual,
 		// it's also surrounded by /, ensured during construction
 		const string & prefix=repo.first; // path of the rewrite entry
 		tStrPos len=prefix.length();
-		if (in.sPath.size() > len && 0==in.sPath.compare(0, len, prefix))
+		if (len>bestMatchLen && in.sPath.size() > len && 0==in.sPath.compare(0, len, prefix))
 		{
-			if (len>bestMatchLen)
-			{
-				bestMatchLen=len;
-				pBestHit=repo.second;
-			}
+			bestMatchLen=len;
+			pBestHit=repo.second;
 		}
 	}
 		
 	if(pBestHit != repoparms.end())
 	{
-		sRetPathResidual=in.sPath.substr(bestMatchLen);
-		beRef=pBestHit;
-		return true;
+		result.psRepoName = & pBestHit->first;
+		result.sRestPath = in.sPath.substr(bestMatchLen);
+		result.repodata = & pBestHit->second;
 	}
-	return false;
 }
 
 const tRepoData * GetRepoData(cmstring &vname)

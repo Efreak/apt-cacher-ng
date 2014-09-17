@@ -67,7 +67,11 @@ struct tRepoData
 	virtual ~tRepoData();
 };
 
-typedef std::map<cmstring, tRepoData>::const_iterator tRepoDataRef;
+struct tRepoResolvResult {
+	cmstring* psRepoName=nullptr;
+	mstring sRestPath;
+	const tRepoData* repodata=nullptr;
+};
 
 /*
  * Resolves a repository descriptor for the given URL, returns a reference to its descriptor
@@ -75,7 +79,7 @@ typedef std::map<cmstring, tRepoData>::const_iterator tRepoDataRef;
  *
  * @return: true IFF a repository was found and the by-reference arguments are set
  */
-bool GetRepNameAndPathResidual(const tHttpUrl & in, mstring & sRetPathResidual, tRepoDataRef &beRef);
+void GetRepNameAndPathResidual(const tHttpUrl & uri, tRepoResolvResult &result);
 
 const tRepoData * GetRepoData(cmstring &vname);
 

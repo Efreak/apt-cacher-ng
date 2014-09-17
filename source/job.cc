@@ -499,11 +499,10 @@ void job::PrepareDownload() {
 #endif
 
     string sReqPath, sPathResidual;
-    tHttpUrl tUrl; // parsed URL
+    tHttpUrl theUrl; // parsed URL
 
 	// resolve to an internal repo location and maybe backends later
-	acfg::tRepoDataRef repoMapEntry;
-	bool bUseRepo;
+	acfg::tRepoResolvResult repoMapping;
 
     fileitem::FiStatus fistate(fileitem::FIST_FRESH);
     bool bPtMode(false);
@@ -541,16 +540,16 @@ void job::PrepareDownload() {
 		if (0==sReqPath.compare(0, 11, "apt-cacher/"))
 		sReqPath.erase(11);
 		
-		if(!tUrl.SetHttpUrl(sReqPath, false))
+		if(!theUrl.SetHttpUrl(sReqPath, false))
 		{
 			m_eMaintWorkType=tSpecialRequest::workUSERINFO;
 			return;
 		}
-		LOG("refined path: " << tUrl.sPath << "\n on host: " << tUrl.sHost);
+		LOG("refined path: " << theUrl.sPath << "\n on host: " << theUrl.sHost);
 
 		char *pEnd(0);
 		UINT nPort = 80;
-		LPCSTR sPort=tUrl.GetPort().c_str();
+		LPCSTR sPort=theUrl.GetPort().c_str();
 		if(!*sPort)
 		{
 			nPort = (UINT) strtoul(sPort, &pEnd, 10);
@@ -568,12 +567,12 @@ void job::PrepareDownload() {
 		}
 
 		// kill multiple slashes
-		for(tStrPos pos; stmiss != (pos = tUrl.sPath.find("//")); )
-			tUrl.sPath.erase(pos, 1);
+		for(tStrPos pos; stmiss != (pos = theUrl.sPath.find("//")); )
+			theUrl.sPath.erase(pos, 1);
 
-		bPtMode=rechecks::MatchUncacheable(tUrl.ToURI(false), rechecks::NOCACHE_REQ);
+		bPtMode=rechecks::MatchUncacheable(theUrl.ToURI(false), rechecks::NOCACHE_REQ);
 
-		LOG("input uri: "<<tUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode);
+		LOG("input uri: "<<theUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode);
 
 		if(!acfg::reportpage.empty())
 		{
@@ -589,23 +588,23 @@ void job::PrepareDownload() {
 		using namespace rechecks;
 
 		{
-			tStrMap::const_iterator it = acfg::localdirs.find(tUrl.sHost);
+			tStrMap::const_iterator it = acfg::localdirs.find(theUrl.sHost);
 			if (it != acfg::localdirs.end())
 			{
-				HandleLocalDownload(sReqPath, it->second, tUrl.sPath);
+				HandleLocalDownload(sReqPath, it->second, theUrl.sPath);
 				return;
 			}
 		}
 
 		// entered directory but not defined as local? Then 404 it with hints
-		if(!tUrl.sPath.empty() && endsWithSzAr(tUrl.sPath, "/"))
+		if(!theUrl.sPath.empty() && endsWithSzAr(theUrl.sPath, "/"))
 		{
 			LOG("generic user information page");
 			m_eMaintWorkType=tSpecialRequest::workUSERINFO;
 			return;
 		}
 
-		m_type = GetFiletype(tUrl.sPath);
+		m_type = GetFiletype(theUrl.sPath);
 
 		if ( m_type == FILE_INVALID )
 		{
@@ -615,18 +614,17 @@ void job::PrepareDownload() {
 			// ok, collect some information helpful to the user
 			m_type = FILE_VOLATILE;
 			lockguard g(traceData);
-			traceData.insert(tUrl.sPath);
+			traceData.insert(theUrl.sPath);
 		}
 		
 		// got something valid, has type now, trace it
 		USRDBG("Processing new job, "<<m_pReqHead->frontLine);
 
-		bUseRepo = acfg::GetRepNameAndPathResidual(tUrl, sPathResidual, repoMapEntry);
-
-		if(bUseRepo)
-			m_sFileLoc=repoMapEntry->first+SZPATHSEP+sPathResidual;
+		acfg::GetRepNameAndPathResidual(theUrl, repoMapping);
+		if(repoMapping.psRepoName && !repoMapping.psRepoName->empty())
+			m_sFileLoc=*repoMapping.psRepoName+SZPATHSEP+repoMapping.sRestPath;
 		else
-			m_sFileLoc=tUrl.sHost+tUrl.sPath;
+			m_sFileLoc=theUrl.sHost+theUrl.sPath;
 
 		bForceFreshnessChecks = ( ! acfg::offlinemode && m_type == FILE_VOLATILE);
 		m_pItem.PrepageRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
@@ -687,22 +685,25 @@ void job::PrepareDownload() {
     	dbgline;
 MYTRY
 		{
-    		auto bHaveRedirects=(bUseRepo && !repoMapEntry->second.m_backends.empty());
+    		auto bHaveRedirects=(repoMapping.repodata && !repoMapping.repodata->m_backends.empty());
 
     		if (acfg::forcemanaged && !bHaveRedirects)
 						goto report_notallowed;
 
 				if (!bPtMode)
 				{
+					// XXX: this only checks the first found backend server, what about others?
 					auto testUri= bHaveRedirects
-							? repoMapEntry->second.m_backends.front().ToURI(false) + sPathResidual
-							: tUrl.ToURI(false);
+							? repoMapping.repodata->m_backends.front().ToURI(false)
+									+ repoMapping.sRestPath
+							: theUrl.ToURI(false);
 					if (rechecks::MatchUncacheable(testUri, rechecks::NOCACHE_TGT))
 						fistate = _SwitchToPtItem(m_sFileLoc);
 				}
 
-				if(m_pParentCon->m_pDlClient->AddJob(m_pItem.get(),
-						&tUrl, bUseRepo ? (& repoMapEntry->second) : nullptr, &sPathResidual))
+					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.get(),
+							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
+							bHaveRedirects ? &repoMapping.sRestPath : nullptr))
 				{
 					ldbg("Download job enqueued for " << m_sFileLoc);
 				}
