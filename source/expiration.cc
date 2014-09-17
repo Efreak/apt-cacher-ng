@@ -172,9 +172,13 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			{
 				// IO error? better keep it for now, not sure how to deal with it
 				SendFmt << ECLASS "An error occurred while checksumming "
-				<< sPathRel << ", leaving as-is for now." CLASSEND;
+				<< sPathRel << ", leaving as-is for now.";
+				if(entry.bInflateForCs)
+					SendFmt << " NOTE: this can be caused by the incomplete compression"
+							" header if the download was not finished.";
 				aclog::err(tSS() << "Error reading " << sPathAbs );
 				AddDelCbox(sPathRel);
+				SendFmt<<CLASSEND;
 				return false;
 			}
 
@@ -215,10 +219,15 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			// ok... considering damaged...
 			if (m_bTruncateDamaged)
 			{
-				ignore_value(::truncate(sPathAbs.c_str(), 0));
-				SendFmt << WCLASS << " incomplete download, truncating (as requested): "
-				<< sPathRel;
-				return finish_good(0);
+				if(lenFromStat >0)
+				{
+					ignore_value(::truncate(sPathAbs.c_str(), 0));
+					SendFmt << WCLASS << " incomplete download, truncating (as requested): "
+					<< sPathRel;
+					return finish_good(0);
+				}
+				// otherwise be quiet and don't care
+				return false;
 			}
 
 			SendFmt << ECLASS << " incomplete download, invalidating (as requested) "<< sPathRel;
