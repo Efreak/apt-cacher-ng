@@ -3,14 +3,30 @@
 TGT=$(CURDIR)/debian/apt-cacher-ng
 CDIR=$(TGT)/etc/apt-cacher-ng
 
+#export DEB_CXXFLAGS_MAINT_APPEND  = -flto
+#export DEB_LDFLAGS_MAINT_APPEND = -flto
+#export DEB_CXXFLAGS_MAINT_APPEND  = $(CPPFLAGS)
+# cmake doesn't follow CPPFLAGS, use the workaround from
+# https://wiki.debian.org/Hardening#Notes_for_packages_using_CMake
+export CPPFLAGS:=$(shell dpkg-buildflags --get CPPFLAGS)
+export CFLAGS:=$(shell dpkg-buildflags --get CFLAGS) $(CPPFLAGS)
+export CXXFLAGS:=$(shell dpkg-buildflags --get CXXFLAGS) $(CPPFLAGS)
+export LDFLAGS:=$(shell dpkg-buildflags --get LDFLAGS)
+
 %:
 	dh $@ --parallel --with systemd
 
+override_dh_auto_build:
+	dh_auto_build -- VERBOSE=1
+
 override_dh_install:
-	dh_install $(test -e build/acngfs || echo -Xacngfs)
-	cp systemd/apt-cacher-ng.service debian
+	dh_install $(shell test -e build/acngfs || echo -Xacngfs)
+	sed -e s,^Type=simple,Type=notify, < systemd/apt-cacher-ng.service > debian/apt-cacher-ng.service
+# make sure it has sd_notify support enabled
+	grep -q libsystemd $(TGT)/usr/sbin/apt-cacher-ng
 	cp systemd/apt-cacher-ng.conf debian/apt-cacher-ng.tmpfile
-	install -m 755 expire-caller.pl $(TGT)/usr/lib/apt-cacher-ng
+	install -m 755 scripts/expire-caller.pl $(TGT)/usr/lib/apt-cacher-ng
+	$(MAKE) -C dbgen package DBGENERATOR=dbgenerator
 
 override_dh_installinit:
 	dh_installinit -- defaults 18
@@ -20,7 +36,7 @@ override_dh_compress:
 
 override_dh_clean:
 	dh_clean
-	rm -f debian/apt-cacher-ng.service debian/apt-cacher-ng.tmpfile
+	rm -rf debian/apt-cacher-ng.service debian/apt-cacher-ng.tmpfile dbgen/dbgenerator.* dbgen/dbupdate
 	debconf-updatepo
 
 override_dh_installchangelogs:

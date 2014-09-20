@@ -1,10 +1,11 @@
 build/acngfs /usr/lib/apt-cacher-ng
 build/apt-cacher-ng /usr/sbin
 build/in.acng /usr/lib/apt-cacher-ng
-urlencode-fixer.pl /usr/lib/apt-cacher-ng
-distkill.pl /usr/lib/apt-cacher-ng
+scripts/urlencode-fixer.pl /usr/lib/apt-cacher-ng
+scripts/distkill.pl /usr/lib/apt-cacher-ng
 conf/*mirror* /usr/lib/apt-cacher-ng
 conf/*.html /usr/lib/apt-cacher-ng
 conf/*.css /usr/lib/apt-cacher-ng
 conf/*.conf /etc/apt-cacher-ng
+conf/*gentoo*default /usr/lib/apt-cacher-ng
 contrib/apt-cacher-ng.service /etc/avahi/services
