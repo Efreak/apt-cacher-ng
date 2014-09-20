@@ -224,7 +224,7 @@ void pkgmirror::Action()
 	if (m_bCalcSize)
 	{
 
-		UINT dcount=0;
+		uint dcount=0;
 
 		SendFmt << "<b>Counting downloadable content size..."
 				<< (m_bAsNeeded? " (filtered)" : "")  << "</b><br>";
@@ -288,7 +288,7 @@ inline bool pkgmirror::ConfigDelta(cmstring &sPathRel)
 	if (m_repCutLen != stmiss)
 	{
 		vname.resize(m_repCutLen);
-		const acfg::tRepoData *pRepo = acfg::GetBackendVec(vname);
+		const acfg::tRepoData *pRepo = acfg::GetRepoData(vname);
 #ifdef DEBUG
 		if(acfg::debug & LOG_MORE)
 		{
@@ -364,10 +364,10 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 				{
 					mstring s(split);
 					const char *p = s.c_str();
-					if(!p || !*p || !isdigit(UINT(*p)))
+					if(!p || !*p || !isdigit(uint(*p)))
 						continue;
 					for(++p; *p; ++p)
-						if(!isalnum(UINT(*p)) && !strchr(".-+:~",UINT(*p)))
+						if(!isalnum(uint(*p)) && !strchr(".-+:~",uint(*p)))
 							break;
 					if( !*p && CompDebVerLessThan(s, parts[1]))
 						sorted.push_back(s);
@@ -384,14 +384,15 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 #endif
 			while(!sorted.empty() && !bhaveit)
 			{
-				tSS uri, srcAbs;
-				uri << m_pDeltaSrc->ToURI(false) << entry.sDirectory.substr(m_repCutLen+1)
-						<< parts[0] << "_"
-						<< sorted.back() << "_" <<
-						parts[1] << "_" << parts[2] << "delta";
+				tSS srcAbs;
+				auto uri=*m_pDeltaSrc;
+				uri.sPath+=entry.sDirectory.substr(m_repCutLen+1)
+						+ parts[0] + "_"
+						+ sorted.back() + "_" +
+						parts[1] + "_" + parts[2] + "delta";
 
 #ifdef DEBUG
-				SendFmt << uri << "<br>\n";
+				SendFmt << uri.ToURI(false) << "<br>\n";
 #endif
 				srcAbs << CACHE_BASE << entry.sDirectory<< parts[0] << "_"
 						<< sorted.back() << "_"  << parts[2];
@@ -406,13 +407,13 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 				::unlink(sDeltaPathAbs.c_str());
 				::unlink((sDeltaPathAbs+".head").c_str());
 
-				if(Download(TEMPDELTA, false, eMsgHideAll, NULL, uri.c_str()))
+				if(Download(TEMPDELTA, false, eMsgHideAll, NULL, &uri))
 				{
 					::setenv("delta", SZABSPATH(TEMPDELTA), true);
 					::setenv("from", srcAbs.c_str(), true);
 					::setenv("to", SZABSPATH(TEMPRESULT), true);
 
-				SendFmt << "Fetched: " << uri << "<br>\n";
+				SendFmt << "Fetched: " << uri.ToURI(false) << "<br>\n";
 				if(m_bVerbose)
 				SendFmt << "debpatch " << getenv("delta") << " " << getenv("from")
 						<< " " << getenv("to");

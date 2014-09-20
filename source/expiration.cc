@@ -54,8 +54,6 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 					return true;
 				string sPathAbs(CACHE_BASE+sPathRel);
 
-				off_t lenFromStat = descHave.fpr.size; // original size before uncompressing
-
 				// end line ending starting from a class and add checkbox as needed
 				auto finish_bad = [&]()->bool
 				{
@@ -81,18 +79,20 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				return false;
 			};
 
-			if(lenFromStat<0)
+			Cstat realState(SABSPATH(sPathRel));
+			if(!realState)
 			{
-				SendFmt << ECLASS "file has bad attributes, invalidating " << sPathRel;
-				return finish_bad();
+				SendFmt << WCLASS "File not accessible, ignoring " << sPathRel << CLASSEND;
+				return false;
 			}
+			off_t lenFromStat = realState.st_size;
+			//SendFmt << "DBG-disk-size: " << lenFromStat;
 
 			// those file were not updated by index handling, and are most likely not
 			// matching their parent indexes. The best way is to see them as zero-sized and
 			// handle them the same way.
 			if(GetFlags(sPathRel).parseignore)
 				goto handle_incomplete;
-
 
 			// Basic header checks. Skip if the file was forcibly updated/reconstructed before.
 			if (m_bSkipHeaderChecks || descHave.bNoHeaderCheck)
@@ -172,9 +172,13 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			{
 				// IO error? better keep it for now, not sure how to deal with it
 				SendFmt << ECLASS "An error occurred while checksumming "
-				<< sPathRel << ", leaving as-is for now." CLASSEND;
+				<< sPathRel << ", leaving as-is for now.";
+				if(entry.bInflateForCs)
+					SendFmt << " NOTE: this can be caused by the incomplete compression"
+							" header if the download was not finished.";
 				aclog::err(tSS() << "Error reading " << sPathAbs );
 				AddDelCbox(sPathRel);
+				SendFmt<<CLASSEND;
 				return false;
 			}
 
@@ -215,10 +219,15 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			// ok... considering damaged...
 			if (m_bTruncateDamaged)
 			{
-				ignore_value(::truncate(sPathAbs.c_str(), 0));
-				SendFmt << WCLASS << " incomplete download, truncating (as requested): "
-				<< sPathRel;
-				return finish_good(0);
+				if(lenFromStat >0)
+				{
+					ignore_value(::truncate(sPathAbs.c_str(), 0));
+					SendFmt << WCLASS << " incomplete download, truncating (as requested): "
+					<< sPathRel;
+					return finish_good(0);
+				}
+				// otherwise be quiet and don't care
+				return false;
 			}
 
 			SendFmt << ECLASS << " incomplete download, invalidating (as requested) "<< sPathRel;
@@ -287,7 +296,7 @@ inline void expiration::DropExceptionalVersions()
     			return false;
     		ver=split;
     		for (const char *p = prevArcSufx.c_str(); *p; ++p)
-    			if (!isalnum(UINT(*p)) && !strchr(".-+:~", UINT(*p)))
+    			if (!isalnum(uint(*p)) && !strchr(".-+:~", uint(*p)))
     				return false;
     		if(!split.Next())
     			return false;
@@ -309,9 +318,9 @@ inline void expiration::DropExceptionalVersions()
     auto procGroup = [&]()
 		{
     	// if more than allowed, keep the highest versions for sure, others are expired as usual
-    	if(version2trashGroup.size() > (UINT) acfg::keepnver)
+    	if(version2trashGroup.size() > (uint) acfg::keepnver)
         	std::sort(version2trashGroup.begin(), version2trashGroup.end());
-    	for(UINT i=0; i<version2trashGroup.size() && i<UINT(acfg::keepnver); i++)
+    	for(uint i=0; i<version2trashGroup.size() && i<uint(acfg::keepnver); i++)
     		for(auto& j: * version2trashGroup[i].group)
     			j.second.nLostAt=m_gMaintTimeNow;
     	version2trashGroup.clear();
@@ -642,7 +651,7 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		idesc.uptodate = false;
 //		}
 	}
-	UINT stripLen=0;
+	uint stripLen=0;
     if (endsWithSzAr(sPathRel, ".head"))
 		stripLen=5;
 	else if (AddIFileCandidate(sPathRel))

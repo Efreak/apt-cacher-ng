@@ -72,14 +72,20 @@ struct tDlJob
 #define HINT_KILL_LAST_FILE 128
 #define HINT_TGTCHANGE 256
 
+	const acfg::tRepoData * m_pRepoDesc=nullptr;
+
+	/*!
+	 * Returns a reference to http url where host and port and protocol match the current host
+	 * Other fields in that member have undefined contents. ;-)
+	 */
 	inline const tHttpUrl *GetPeerHost()
 	{
-		return m_pCurBackend ? m_pCurBackend : &m_fileUri;
+		return m_pCurBackend ? m_pCurBackend : &m_remoteUri;
 	}
 
 	inline acfg::tRepoData::IHookHandler * GetConnStateTracker()
 	{
-		return m_pBEdata ? m_pBEdata->m_pHooks : NULL;
+		return m_pRepoDesc ? m_pRepoDesc->m_pHooks : nullptr;
 	}
 
 	typedef enum
@@ -89,12 +95,11 @@ struct tDlJob
 		STATE_FINISHJOB
 	} tDlState;
 
-	const acfg::tRepoData * m_pBEdata=nullptr;
-
-	tHttpUrl m_fileUri;
+	tHttpUrl m_remoteUri;
 	const tHttpUrl *m_pCurBackend=nullptr;
 
 	uint_fast8_t m_eReconnectASAP =0;
+	bool m_bBackendMode=false;
 
 	off_t m_nRest =0;
 
@@ -102,27 +107,30 @@ struct tDlJob
 
 	int m_nRedirRemaining;
 
-	inline void Init()
+	inline tDlJob(dlcon *p, tFileItemPtr pFi,
+			const tHttpUrl *pUri,
+			const acfg::tRepoData * pRepoData,
+			const std::string *psPath,
+			int redirmax) :
+			m_pStorage(pFi),
+			m_parent(*p),
+			m_pRepoDesc(pRepoData),
+			m_nRedirRemaining(redirmax)
 	{
+		LOGSTART("tDlJob::tDlJob");
+		ldbg("uri: " << (pUri ? pUri->ToURI(false) :  sEmptyString )
+				<< ", " << "restpath: " << (psPath?*psPath:sEmptyString)
+		<< "repo: " << uintptr_t(pRepoData)
+		);
 		if (m_pStorage)
 			m_pStorage->IncDlRefCount();
-	}
-
-	inline tDlJob(dlcon *p, tFileItemPtr pFi, const tHttpUrl& uri, int redirmax) :
-			m_pStorage(pFi), m_parent(*p),
-			m_fileUri(uri),
-			m_nRedirRemaining(redirmax)
-	{
-		Init();
-	}
-
-	inline tDlJob(dlcon *p, tFileItemPtr pFi, const acfg::tRepoData * pBackends,
-			const std::string & sPath, int redirmax) :
-			m_pStorage(pFi), m_parent(*p), m_pBEdata(pBackends),
-			m_nRedirRemaining(redirmax)
-	{
-		Init();
-		m_fileUri.sPath=sPath;
+		if(pUri)
+			m_remoteUri=*pUri;
+		else
+		{
+			m_remoteUri.sPath=*psPath;
+			m_bBackendMode=true;
+		}
 	}
 
 	~tDlJob()
@@ -135,10 +143,10 @@ struct tDlJob
 	{
 		if(m_pCurBackend)
 			return m_pCurBackend->ToURI(bUrlEncoded) +
-					( bUrlEncoded ? UrlEscape(m_fileUri.sPath)
-							: m_fileUri.sPath);
+					( bUrlEncoded ? UrlEscape(m_remoteUri.sPath)
+							: m_remoteUri.sPath);
 
-		return m_fileUri.ToURI(bUrlEncoded);
+		return m_remoteUri.ToURI(bUrlEncoded);
 	}
 
 	inline bool RewriteSource(const char *pNewUrl)
@@ -157,9 +165,10 @@ struct tDlJob
 		}
 
 		// start modifying the target URL, point of no return
-
-		m_pBEdata = nullptr;
 		m_pCurBackend = nullptr;
+		bool bWasBeMode = m_bBackendMode;
+		m_bBackendMode = false;
+		sErrorMsg = "500 Bad redirection (path)";
 
 		auto sLocationDecoded = UrlUnescape(pNewUrl);
 
@@ -167,23 +176,34 @@ struct tDlJob
 		if (newUri.SetHttpUrl(sLocationDecoded, false))
 		{
 			dbgline;
-			m_fileUri = newUri;
+			m_remoteUri = newUri;
 			return true;
 		}
 		// ok, some protocol-relative crap? let it parse the hostname but keep the protocol
 		if (startsWithSz(sLocationDecoded, "//"))
 		{
 			stripPrefixChars(sLocationDecoded, "/");
-			return m_fileUri.SetHttpUrl(
-					m_fileUri.GetProtoPrefix() + sLocationDecoded);
+			return m_remoteUri.SetHttpUrl(
+					m_remoteUri.GetProtoPrefix() + sLocationDecoded);
 		}
+
+		// recreate the full URI descriptor matching the last download
+		if(bWasBeMode)
+		{
+			if(!m_pCurBackend)
+				return false;
+			auto sPathBackup=m_remoteUri.sPath;
+			m_remoteUri=*m_pCurBackend;
+			m_remoteUri.sPath+=sPathBackup;
+		}
+
 		if (startsWithSz(sLocationDecoded, "/"))
 		{
-			m_fileUri.sPath = sLocationDecoded;
+			m_remoteUri.sPath = sLocationDecoded;
 			return true;
 		}
 		// ok, must be relative
-		m_fileUri.sPath+=(sPathSepUnix+sLocationDecoded);
+		m_remoteUri.sPath+=(sPathSepUnix+sLocationDecoded);
 		return true;
 	}
 
@@ -192,19 +212,63 @@ struct tDlJob
 		if (!m_parent.m_bProxyTot)
 		{
 			// otherwise consider using proxy
-
-			if (m_pBEdata && m_pBEdata->m_pProxy)
+			if (m_pRepoDesc && m_pRepoDesc->m_pProxy)
 			{
 				// do what the specific entry says
-				if(m_pBEdata->m_pProxy->sHost.empty())
+				if(m_pRepoDesc->m_pProxy->sHost.empty())
 					return make_pair(GetPeerHost(), false);
-				return make_pair(m_pBEdata->m_pProxy, true);
+				return make_pair(m_pRepoDesc->m_pProxy, true);
 			}
 			if (!acfg::proxy_info.sHost.empty())
 				return make_pair(& acfg::proxy_info, true);
 			// ok, no proxy...
 		}
 		return make_pair(GetPeerHost(), false);
+	}
+
+
+	bool SetupJobConfig(mstring& sReasonMsg, decltype(dlcon::m_blacklist) &blacklist)
+	{
+		LOGSTART("dlcon::SetupJobConfig");
+
+		// using backends? Find one which is not blacklisted
+		if (m_bBackendMode)
+		{
+			// keep the existing one if possible
+			if (m_pCurBackend)
+			{
+				LOG(
+						"Checking [" << m_pCurBackend->sHost << "]:" << m_pCurBackend->GetPort());
+				const auto bliter = blacklist.find(
+						make_pair(m_pCurBackend->sHost, m_pCurBackend->GetPort()));
+				if (bliter == blacklist.end())
+					return true;
+			}
+
+			// look in the constant list, either it's usable or it was blacklisted before
+			for (const auto& bend : m_pRepoDesc->m_backends)
+			{
+				const auto bliter = blacklist.find(make_pair(bend.sHost, bend.GetPort()));
+				if (bliter == blacklist.end())
+				{
+					m_pCurBackend = &bend;
+					return true;
+				}
+
+				// uh, blacklisted, remember the last reason
+				sReasonMsg = bliter->second;
+			}
+			return false;
+		}
+
+		// ok, not backend mode. Check the mirror data (vs. blacklist)
+		auto bliter = blacklist.find(
+				make_pair(GetPeerHost()->sHost, GetPeerHost()->GetPort()));
+		if (bliter == blacklist.end())
+			return true;
+
+		sReasonMsg = bliter->second;
+		return false;
 	}
 
 	// needs connectedHost, blacklist, output buffer from the parent, proxy mode?
@@ -225,7 +289,7 @@ struct tDlJob
 			if (m_pCurBackend) // base dir from backend definition
 				head << UrlEscape(m_pCurBackend->sPath);
 
-			head << UrlEscape(m_fileUri.sPath);
+			head << UrlEscape(m_remoteUri.sPath);
 		}
 
 		ldbg(RemoteUri(true));
@@ -254,7 +318,8 @@ struct tDlJob
 		}
 
 		// either by backend or by host in file uri, never both
-		ASSERT( (m_pCurBackend && m_fileUri.sHost.empty()) || (!m_pCurBackend && !m_fileUri.sHost.empty()));
+		//XXX: still needed? Checked while inserting already.
+		// ASSERT( (m_pCurBackend && m_fileUri.sHost.empty()) || (!m_pCurBackend && !m_fileUri.sHost.empty()));
 
 		if (m_pStorage->m_nSizeSeen > 0 || m_pStorage->m_nRangeLimit >=0)
 		{
@@ -365,7 +430,7 @@ struct tDlJob
 	 *
 	 * Process new incoming data and write it down to disk or other receivers.
 	 */
-	UINT ProcessIncomming(acbuf & inBuf, bool bOnlyRedirectionActivity)
+	uint ProcessIncomming(acbuf & inBuf, bool bOnlyRedirectionActivity)
 	{
 		LOGSTART("tDlJob::ProcessIncomming");
 		if (!m_pStorage)
@@ -414,7 +479,7 @@ struct tDlJob
 
 				if (acfg::redirmax) // internal redirection might be disabled
 				{
-					if (st == 301 || st == 302 || st == 307)
+					if (IS_REDIRECT(st))
 					{
 						if (!RewriteSource(h.h[header::LOCATION]))
 							return EFLAG_JOB_BROKEN;
@@ -436,11 +501,11 @@ struct tDlJob
 				}
 
 				// explicitly blacklist mirror if key file is missing
-				if (st >= 400 && m_pBEdata)
+				if (st >= 400 && m_pRepoDesc && m_remoteUri.sHost.empty())
 				{
-					for (const auto& kfile : m_pBEdata->m_keyfiles)
+					for (const auto& kfile : m_pRepoDesc->m_keyfiles)
 					{
-						if (endsWith(m_fileUri.sPath, kfile))
+						if (endsWith(m_remoteUri.sPath, kfile))
 						{
 							sErrorMsg = "500 Keyfile missing, mirror blacklisted";
 							return HINT_DISCON | EFLAG_MIRROR_BROKEN;
@@ -494,7 +559,8 @@ struct tDlJob
 						&& !acfg::badredmime.empty()
 						&& acfg::redirmax != m_nRedirRemaining
 						&& h.h[header::CONTENT_TYPE]
-						&& strstr(h.h[header::CONTENT_TYPE], acfg::badredmime.c_str()))
+						&& strstr(h.h[header::CONTENT_TYPE], acfg::badredmime.c_str())
+						&& h.getStatus() < 300) // contains the final data/response
 				{
 					// this was redirected and the destination is BAD!
 					h.frontLine="HTTP/1.1 501 Redirected to invalid target";
@@ -549,7 +615,7 @@ struct tDlJob
 					inBuf.move();
 					return HINT_MORE;
 				}
-				UINT len(0);
+				uint len(0);
 				if (1 != sscanf(pStart, "%x", &len))
 				{
 					sErrorMsg = "500 Invalid data stream";
@@ -611,31 +677,31 @@ void dlcon::wake()
 #endif
 }
 
-inline void dlcon::EnqJob(tDlJob *todo)
+bool dlcon::AddJob(tFileItemPtr m_pItem, tHttpUrl *pForcedUrl,
+		const acfg::tRepoData *pBackends,
+		cmstring *sPatSuffix)
 {
+	if(!pForcedUrl)
+	{
+		if(!pBackends || pBackends->m_backends.empty())
+			return false;
+		if(!sPatSuffix || sPatSuffix->empty())
+			return false;
+	}
 	setLockGuard;
+/*
+	ASSERT(
+			todo->m_pStorage->m_nRangeLimit < 0
+					|| todo->m_pStorage->m_nRangeLimit >= todo->m_pStorage->m_nSizeSeen);
 
-	ASSERT(todo);
-	ASSERT(todo->m_pStorage->m_nRangeLimit <0
-			|| todo->m_pStorage->m_nRangeLimit >= todo->m_pStorage->m_nSizeSeen);
-
-	LOGSTART2("dlcon::EnqJob", todo->m_fileUri.ToURI(false));
-
-	m_qNewjobs.push_back(tDlJobPtr(todo));
+	LOGSTART2("dlcon::EnqJob", todo->m_remoteUri.ToURI(false));
+*/
+	m_qNewjobs.push_back(
+			tDlJobPtr(
+					new tDlJob(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,
+							m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax)));
 	wake();
-}
-
-void dlcon::AddJob(tFileItemPtr m_pItem, 
-		const acfg::tRepoData *pBackends, const std::string & sPatSuffix)
-{
-	EnqJob(new tDlJob(this, m_pItem, pBackends, sPatSuffix,
-			m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax));
-}
-
-void dlcon::AddJob(tFileItemPtr m_pItem, tHttpUrl hi)
-{
-	EnqJob(new tDlJob(this, m_pItem, hi,
-			m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax));
+	return true;
 }
 
 void dlcon::SignalStop()
@@ -662,7 +728,7 @@ dlcon::~dlcon()
   g_nDlCons--;
 }
 
-inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &inpipe)
+inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &inpipe)
 {
 	LOGSTART2("dlcon::ExchangeData",
 			"qsize: " << inpipe.size() << ", sendbuf size: "
@@ -820,7 +886,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
              m_nLastDlCount=nCntNew;
 
              // well, split the bandwidth
-             auto nSpeedNowKib = UINT(acfg::maxdlspeed) / nCntNew;
+             auto nSpeedNowKib = uint(acfg::maxdlspeed) / nCntNew;
              auto nTakesPerSec = nSpeedNowKib / 32;
              if(!nTakesPerSec)
                 nTakesPerSec=1;
@@ -906,7 +972,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 			{
 
 				ldbg("Processing job for " << inpipe.front()->RemoteUri(false));
-				UINT res = inpipe.front()->ProcessIncomming(m_inBuf, false);
+				uint res = inpipe.front()->ProcessIncomming(m_inBuf, false);
 				ldbg(
 						"... incoming data processing result: " << res
 						<< ", emsg: " << inpipe.front()->sErrorMsg);
@@ -951,7 +1017,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 					auto it = inpipe.begin();
 					for(++it; it != inpipe.end(); ++it)
 					{
-						UINT rr = (**it).ProcessIncomming(m_inBuf, true);
+						uint rr = (**it).ProcessIncomming(m_inBuf, true);
 						// just the internal rewriting applied and nothing else?
 						if( HINT_TGTCHANGE != rr )
 						{
@@ -999,7 +1065,7 @@ void dlcon::WorkLoop()
 
 	tDljQueue inpipe;
 	tTcpHandlePtr con;
-	UINT loopRes=0;
+	uint loopRes=0;
 
 	bool bStopRequesting=false; // hint to stop adding request headers until the connection is restarted
 
@@ -1012,50 +1078,6 @@ void dlcon::WorkLoop()
 				job->GetPeerHost()->ToURI(false));
 		m_blacklist[std::make_pair(job->GetPeerHost()->sHost,
 				job->GetPeerHost()->GetPort())] = sErrorMsg;
-	};
-
-	auto SetupJobConfig = [&](tDlJobPtr &job, mstring *pReasonMsg)
-	{
-		LOGSTART("dlcon::SetupJobConfig");
-
-		// using backends? Find one which is not blacklisted
-
-		if (job->m_pBEdata)
-		{
-			// keep the existing one if possible
-			if (job->m_pCurBackend)
-			{
-				LOG("Checking [" << job->m_pCurBackend->sHost << "]:" << job->m_pCurBackend->GetPort());
-				const auto bliter = m_blacklist.find(make_pair(job->m_pCurBackend->sHost,
-						job->m_pCurBackend->GetPort()));
-				if(bliter == m_blacklist.end())
-					return true;
-			}
-
-			for (const auto& bend : job->m_pBEdata->m_backends)
-			{
-				const auto bliter = m_blacklist.find(make_pair(bend.sHost, bend.GetPort()));
-				if(bliter == m_blacklist.end())
-				{
-					job->m_pCurBackend = &bend;
-					return true;
-				}
-
-				// uh, blacklisted, remember the last reason
-				if(pReasonMsg)
-					*pReasonMsg = bliter->second;
-			}
-			return false;
-		}
-
-		// ok, look for the mirror data itself
-		auto bliter = m_blacklist.find(make_pair(job->GetPeerHost()->sHost, job->GetPeerHost()->GetPort()));
-		if(bliter == m_blacklist.end())
-			return true;
-
-		if(pReasonMsg)
-			*pReasonMsg = bliter->second;
-		return false;
 	};
 
 	while(true) // outer loop: jobs, connection handling
@@ -1094,7 +1116,7 @@ void dlcon::WorkLoop()
 
         		for(tDljQueue::iterator it=m_qNewjobs.begin(); it!=m_qNewjobs.end();)
         		{
-        			if(SetupJobConfig(*it, &sErrorMsg))
+        			if((**it).SetupJobConfig(sErrorMsg, m_blacklist))
         				++it;
         			else
         			{
@@ -1118,6 +1140,7 @@ void dlcon::WorkLoop()
 				sErrorMsg, &bUsed, m_qNewjobs.front()->GetConnStateTracker(), false, t)
 
 #endif
+        		ASSERT(!m_qNewjobs.empty());
         		tHostIsproxy conHost = m_qNewjobs.front()->GetConnectHost();
         		con = doconnect( conHost.first, (conHost.second && acfg::optproxytimeout>0)
         				? acfg::optproxytimeout : acfg::nettimeout);
@@ -1159,7 +1182,7 @@ void dlcon::WorkLoop()
         	{
    				tDlJobPtr &cjob = m_qNewjobs.front();
 
-        		bool bGoodConfig = SetupJobConfig(cjob, NULL);
+        		bool bGoodConfig = cjob->SetupJobConfig(sErrorMsg, m_blacklist);
 
         		/*
         		ldbg("target: " << cjob->GetPeerName() << " vs " << con->GetHostname()
@@ -1230,7 +1253,7 @@ void dlcon::WorkLoop()
 			bStopRequesting = false;
 
 			// no error bits set, not busy -> this connection is still good, recycle properly
-			UINT all_err = HINT_DISCON | EFLAG_JOB_BROKEN | EFLAG_LOST_CON | EFLAG_MIRROR_BROKEN;
+			uint all_err = HINT_DISCON | EFLAG_JOB_BROKEN | EFLAG_LOST_CON | EFLAG_MIRROR_BROKEN;
 			if (con && !(loopRes & all_err))
 			{
 				dbgline;

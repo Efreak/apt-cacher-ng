@@ -69,7 +69,7 @@ class con // : public tRunable
       } logstuff;
 
 #ifdef DEBUG
-      UINT m_nProcessedJobs;
+      uint m_nProcessedJobs;
 #endif
 };
 

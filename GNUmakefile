@@ -40,9 +40,9 @@ fixversion: VERSION
 	cmp include/config.h build/tmp/hh || cp build/tmp/hh include/config.h
 
 VERSION=$(shell cat VERSION)
-TAGVERSION=$(subst pre,_pre,$(VERSION))
+TAGVERSION=$(subst rc,_rc,$(subst pre,_pre,$(VERSION)))
 DISTNAME=apt-cacher-ng-$(VERSION)
-DEBSRCNAME=apt-cacher-ng_$(shell echo $(VERSION) | sed -e "s,pre,~pre,").orig.tar.xz
+DEBSRCNAME=apt-cacher-ng_$(shell echo $(VERSION) | sed -e "s,pre,~pre,;s,rc,~rc,;").orig.tar.xz
 
 tarball: fixversion doc notdebianbranch nosametarball
 	# diff-index is buggy and reports false positives... trying to work around

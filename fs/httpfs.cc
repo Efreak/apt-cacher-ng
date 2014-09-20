@@ -84,18 +84,18 @@ cmstring sDefPortHTTP("3142"), sDefPortHTTPS("80");
 struct tDlDesc
 {
 	cmstring m_path;
-	UINT m_ftype;
+	uint m_ftype;
 
 	virtual int Read(char *retbuf, const char *path, off_t pos, size_t len) =0;
 	virtual int Stat(struct stat &stbuf) =0;
-	tDlDesc(cmstring &p, UINT ftype) : m_path(p), m_ftype(ftype) {};
+	tDlDesc(cmstring &p, uint ftype) : m_path(p), m_ftype(ftype) {};
 	virtual ~tDlDesc() {};
 };
 
 struct tDlDescLocal : public tDlDesc
 {
 	FILE *pFile;
-	tDlDescLocal(cmstring &path, UINT ftype) : tDlDesc(path, ftype), pFile(NULL)
+	tDlDescLocal(cmstring &path, uint ftype) : tDlDesc(path, ftype), pFile(NULL)
 	{
 	};
 
@@ -168,7 +168,7 @@ protected:
 	bool bIsFirst; // hint to catch the validation data when download starts
 
 public:
-	tDlDescRemote(cmstring &p, UINT n) : tDlDesc(p,n), bIsFirst(true)
+	tDlDescRemote(cmstring &p, uint n) : tDlDesc(p,n), bIsFirst(true)
 	{
 		// expire the caches every time, should not cost much anyway
 		tcpconnect::BackgroundCleanup();
@@ -307,7 +307,7 @@ public:
 
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
-		dler.AddJob(spFi, uri);
+		dler.AddJob(spFi, &uri);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		pFi->WaitForFinish(&nHttpCode);
@@ -380,7 +380,7 @@ public:
 			}
 		};
 		tFileItemPtr probe(static_cast<fileitem*>(new tFitemProbe()));
-		dler.AddJob(probe, uri);
+		dler.AddJob(probe, &uri);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);

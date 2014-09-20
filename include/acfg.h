@@ -8,6 +8,8 @@
 #include <atomic>
 
 static const int RESERVED_DEFVAL = -4223;
+#define NUM_PBKDF2_ITERATIONS 1
+// 1757961
 #define ACNG_DEF_PORT "3142"
 
 #define ACFG_REDIRMAX_DEFAULT 5
@@ -60,20 +62,28 @@ struct tRepoData
 		virtual void JobConnect()=0;
 		virtual ~IHookHandler() {
 		}
-	};
-	IHookHandler *m_pHooks;
+	} *m_pHooks = nullptr;
 	tStrVec m_keyfiles;
 	tHttpUrl m_deltasrc;
-	tHttpUrl *m_pProxy;
-	tRepoData() : m_pHooks(NULL), m_pProxy(NULL) {};
+	tHttpUrl *m_pProxy = nullptr;
 	virtual ~tRepoData();
 };
 
-typedef std::map<cmstring, tRepoData>::const_iterator tBackendDataRef;
+struct tRepoResolvResult {
+	cmstring* psRepoName=nullptr;
+	mstring sRestPath;
+	const tRepoData* repodata=nullptr;
+};
 
-bool GetRepNameAndPathResidual(const tHttpUrl & in, mstring & sRetPathResidual, tBackendDataRef &beRef);
+/*
+ * Resolves a repository descriptor for the given URL, returns a reference to its descriptor
+ * (actually a pair with first: name, second: descriptor).
+ *
+ * @return: true IFF a repository was found and the by-reference arguments are set
+ */
+void GetRepNameAndPathResidual(const tHttpUrl & uri, tRepoResolvResult &result);
 
-const tRepoData * GetBackendVec(cmstring &vname);
+const tRepoData * GetRepoData(cmstring &vname);
 
 time_t BackgroundCleanup();
 
@@ -87,6 +97,8 @@ extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 void dump_trace();
 int * GetIntPtr(LPCSTR key);
 mstring * GetStringPtr(LPCSTR key);
+
+int CheckAdminAuth(LPCSTR auth);
 } // namespace acfg
 
 namespace rechecks
@@ -118,5 +130,7 @@ bool CompileExpressions();
 #define CACHE_BASE_LEN (CACHE_BASE.length()) // where the relative paths begin
 #define SZABSPATH(x) (CACHE_BASE+(x)).c_str()
 #define SABSPATH(x) (CACHE_BASE+(x))
+
+bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
 
 #endif

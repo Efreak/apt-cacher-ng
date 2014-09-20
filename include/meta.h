@@ -34,7 +34,6 @@ typedef const std::string cmstring;
 
 typedef mstring::size_type tStrPos;
 const static tStrPos stmiss(cmstring::npos);
-typedef unsigned int UINT;
 typedef unsigned short USHORT;
 typedef unsigned char UCHAR;
 typedef const char * LPCSTR;
@@ -321,7 +320,7 @@ inline mstring ltos(long n)
 inline mstring offttosH(off_t n)
 {
 	LPCSTR  pref[]={"", " KiB", " MiB", " GiB", " TiB", " PiB", " EiB"};
-	for(UINT i=0;i<_countof(pref)-1; i++)
+	for(uint i=0;i<_countof(pref)-1; i++)
 	{
 		if(n<1024)
 			return ltos(n)+pref[i];
@@ -354,7 +353,7 @@ class tSplitWalk
 	LPCSTR m_seps;
 
 public:
-	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, UINT begin=0)
+	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, uint begin=0)
 	: s(*line), start(begin), len(stmiss), oob(line->size()), m_seps(separators) {}
 	inline bool Next()
 	{
@@ -456,7 +455,7 @@ static inline time_t GetTime()
 #define END_OF_TIME (MAX_VAL(time_t)-2)
 #endif
 
-static inline UINT FormatTime(char *buf, const time_t cur)
+static inline uint FormatTime(char *buf, const time_t cur)
 {
 	struct tm tmp;
 	gmtime_r(&cur, &tmp);
@@ -469,7 +468,7 @@ static inline UINT FormatTime(char *buf, const time_t cur)
 struct tCurrentTime
 {
 	char buf[30];
-	UINT len;
+	uint len;
 	inline tCurrentTime() { len=FormatTime(buf, time(NULL)); }
 	inline operator mstring() { return mstring(buf, len); }
 };
@@ -491,9 +490,8 @@ struct tErrnoFmter: public mstring
 	tErrnoFmter(LPCSTR prefix = NULL);
 };
 
-mstring EncodeBase64Auth(cmstring & s);
-
-//extern std::atomic_bool g_degraded;
+mstring EncodeBase64Auth(cmstring &sPwdString);
+mstring EncodeBase64(LPCSTR data, uint len);
 
 #endif // _META_H
 

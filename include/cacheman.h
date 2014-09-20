@@ -108,7 +108,8 @@ protected:
 		eMsgShow
 	};
 	bool Download(const std::string & sFilePathRel, bool bIsVolatileFile,
-			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(), const char *pForcedURL=NULL);
+			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(),
+			tHttpUrl *pForcedURL=NULL);
 
 	// internal helper variables
 	bool m_bErrAbort, m_bVerbose, m_bForceDownload;

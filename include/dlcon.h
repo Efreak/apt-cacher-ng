@@ -30,10 +30,9 @@ class dlcon : public lockable
         
         void SignalStop();
 
-	    void AddJob(tFileItemPtr m_pItem, tHttpUrl hi);
-        void AddJob(tFileItemPtr m_pItem, const acfg::tRepoData *pBackends,
-        		const mstring & sPatSuffix);
-    	void EnqJob(tDlJob *);
+        bool AddJob(tFileItemPtr m_pItem, tHttpUrl *pForcedUrl=nullptr,
+        		const acfg::tRepoData *pRepoDesc=nullptr,
+        		cmstring *sPatSuffix=nullptr);
 
         mstring m_sXForwardedFor;
 
@@ -61,13 +60,13 @@ class dlcon : public lockable
 
     	bool m_bStopASAP;
 
-    	UINT m_bManualMode;
+    	uint m_bManualMode;
 
     	/// blacklist for permanently failing hosts, with error message
     	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
     	tSS m_sendBuf, m_inBuf;
 
-    	UINT ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &qActive);
+    	uint ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &qActive);
 
     	// Disable pipelining for the next # requests. Actually used as crude workaround for the
     	// concept limitation (because of automata over a couple of function) and its
@@ -95,6 +94,8 @@ class dlcon : public lockable
 
       void wake();
 };
+
+#define IS_REDIRECT(st) (st == 301 || st == 302 || st == 307)
 
 #endif
 

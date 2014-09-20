@@ -27,14 +27,14 @@ public:
 	 * 			filename w/o suffix or path prefix back into it
 	 * @param bCriticalOpen Terminate program on failure
 	 */ 
-	bool OpenFile(const mstring & sFilename, bool bNoMagic=false, UINT nFakeTrailingNewlines=0);
+	bool OpenFile(const mstring & sFilename, bool bNoMagic=false, uint nFakeTrailingNewlines=0);
 	
 	//////! Filename with all prepended path and compressed suffix stripped
 	//////void GetBaseFileName(mstring & sOut);
 	//! Returns lines when beginning with non-space, otherwise empty string. 
 	//! @return False on errors.
 	bool GetOneLine(mstring & sOut, bool bForceUncompress=false);
-	UINT GetCurrentLine() const { return m_nCurLine;} ;
+	uint GetCurrentLine() const { return m_nCurLine;} ;
 	bool CheckGoodState(bool bTerminateOnErrors, cmstring *reportFilePath=NULL) const;
 	
 	bool GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *pDumpFile=NULL);
@@ -58,7 +58,7 @@ private:
 	acbuf m_UncompBuf; // uncompressed window
 	
 	// visible position reporting
-	UINT m_nCurLine;
+	uint m_nCurLine;
 	
 	int m_fd;
 	

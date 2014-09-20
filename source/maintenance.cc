@@ -71,7 +71,7 @@ void tSpecialRequest::SendChunkRemoteOnly(const char *data, size_t len)
 	}
 	// send HTTP chunk header
 	char buf[23];
-	int l = sprintf(buf, "%x\r\n", (UINT) len);
+	int l = sprintf(buf, "%x\r\n", (uint) len);
 	SendRawData(buf, l, MSG_MORE | MSG_NOSIGNAL);
 	SendRawData(data, len, MSG_MORE | MSG_NOSIGNAL);
 	SendRawData("\r\n", 2, MSG_NOSIGNAL);
@@ -235,19 +235,12 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 	// not smaller, was already compared, can be only longer, means having parameters,
 	// means needs authorization
 
-/* pointless? if (cmd.at(epos) != '?')
-		return workNotSpecial; // weird, overlength but not cgi parameter
-*/
-
 	// all of the following need authorization if configured, enforce it
-	if (!acfg::adminauth.empty())
+	switch(acfg::CheckAdminAuth(auth))
 	{
-		if(!auth)
-			return workAUTHREQUEST;
-
-		if(acfg::adminauth != auth)
-			return workAUTHREJECT;
-		// else: confirmed
+	case 0: break; // auth is ok or no passwort is set
+	case 1: return workAUTHREQUEST;
+	default: return workAUTHREJECT;
 	}
 
 	struct { LPCSTR trigger; tSpecialRequest::eMaintWorkType type; } matches [] =

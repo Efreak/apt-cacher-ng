@@ -4,7 +4,7 @@
 
 #include "acsyscap.h"
 
-#define ACVERSION "0.8.0pre4"
+#define ACVERSION "0.8.0rc1"
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
