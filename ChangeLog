@@ -1,3 +1,9 @@
+apt-cacher-ng (0.8.0rc2) BETA; urgency=low
+
+  * Merge with 0.7.x branch changes
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 20 Sep 2014 12:14:26 +0200
+
 apt-cacher-ng (0.8.0rc1) BETA; urgency=low
 
   * Systemd changes: sd_notify integration if libsystemd-daemon is available.
