@@ -23,7 +23,7 @@ apt-cacher-ng (0.8.0rc1) BETA; urgency=low
   * Fixed Base64 encoding to work correctly with non-ascii characters (still
     not recommended, better use URL encoding in password settings!)
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Sat, 20 Sep 2014 10:51:05 +0200
 
 apt-cacher-ng (0.8.0~pre3) BETA; urgency=low
 
