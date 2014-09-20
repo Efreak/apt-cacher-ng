@@ -60,6 +60,8 @@
 
 using namespace std;
 
+const string sEmptyString;
+
 #ifdef SPAM
 #define _cerr(x) cerr << x
 #warning printing spam all around
@@ -82,18 +84,18 @@ cmstring sDefPortHTTP("3142"), sDefPortHTTPS("80");
 struct tDlDesc
 {
 	cmstring m_path;
-	UINT m_ftype;
+	uint m_ftype;
 
 	virtual int Read(char *retbuf, const char *path, off_t pos, size_t len) =0;
 	virtual int Stat(struct stat &stbuf) =0;
-	tDlDesc(cmstring &p, UINT ftype) : m_path(p), m_ftype(ftype) {};
+	tDlDesc(cmstring &p, uint ftype) : m_path(p), m_ftype(ftype) {};
 	virtual ~tDlDesc() {};
 };
 
 struct tDlDescLocal : public tDlDesc
 {
 	FILE *pFile;
-	tDlDescLocal(cmstring &path, UINT ftype) : tDlDesc(path, ftype), pFile(NULL)
+	tDlDescLocal(cmstring &path, uint ftype) : tDlDesc(path, ftype), pFile(NULL)
 	{
 	};
 
@@ -149,14 +151,14 @@ struct tDlDescLocal : public tDlDesc
 	}
 };
 
-static lockable mxCache;
 struct tFileId
 { off_t m_size; mstring m_ctime;
 tFileId() : m_size(0) {};
 tFileId(off_t a, mstring b) : m_size(a), m_ctime(b) {};
 bool operator!=(tFileId other) const { return m_size != other.m_size || m_ctime != other.m_ctime;}
 };
-static map<string, tFileId> remote_info_cache;
+static class : public lockable, public map<string, tFileId>
+{} remote_info_cache;
 
 struct tDlDescRemote : public tDlDesc
 {
@@ -166,7 +168,7 @@ protected:
 	bool bIsFirst; // hint to catch the validation data when download starts
 
 public:
-	tDlDescRemote(cmstring &p, UINT n) : tDlDesc(p,n), bIsFirst(true)
+	tDlDescRemote(cmstring &p, uint n) : tDlDesc(p,n), bIsFirst(true)
 	{
 		// expire the caches every time, should not cost much anyway
 		tcpconnect::BackgroundCleanup();
@@ -236,9 +238,7 @@ public:
 					return true; // EOF
 
 				if(bRestarted) // throw the head away, the data should be ok
-				{
 					return true; // XXX, add more checks?
-				}
 
 				if(st != 200 && st != 206)
 				{
@@ -298,7 +298,7 @@ public:
 		};
 
 		{
-			lockguard g(mxCache);
+			lockguard g(remote_info_cache);
 			map<string, tFileId>::const_iterator it = remote_info_cache.find(path);
 			if (it != remote_info_cache.end())
 				fid = it->second;
@@ -307,16 +307,16 @@ public:
 
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
-		dler.AddJob(spFi, uri);
+		dler.AddJob(spFi, &uri);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		pFi->WaitForFinish(&nHttpCode);
 		bIsFirst=false;
 
 
-		if (m_ftype == rechecks::FILE_PKG && fidOrig != fid)
+		if (m_ftype == rechecks::FILE_SOLID && fidOrig != fid)
 		{
-			lockguard g(mxCache);
+			lockguard g(remote_info_cache);
 			remote_info_cache[m_path] = fid;
 		}
 
@@ -331,7 +331,7 @@ public:
 	{
 		stbuf = statTempl;
 		{
-			lockguard g(mxCache);
+			lockguard g(remote_info_cache);
 			map<string, tFileId>::const_iterator it = remote_info_cache.find(m_path);
 			if (it != remote_info_cache.end())
 			{
@@ -360,7 +360,7 @@ public:
 			{
 				return 0;
 			} // nothing to send
-			bool StoreFileData(const char*, unsigned int)
+			bool StoreFileData(const char*, unsigned int) override
 			{
 				return false;
 			}
@@ -368,7 +368,8 @@ public:
 			{
 				m_bHeadOnly = true;
 			}
-			bool DownloadStartedStoreHeader(const header &head, const char*, bool bRestart, bool&)
+			bool DownloadStartedStoreHeader(const header &head, const char*,
+					bool bRestart, bool&) override
 			{
 				if(bRestart)
 					return true;
@@ -379,7 +380,7 @@ public:
 			}
 		};
 		tFileItemPtr probe(static_cast<fileitem*>(new tFitemProbe()));
-		dler.AddJob(probe, uri);
+		dler.AddJob(probe, &uri);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
@@ -391,9 +392,9 @@ public:
 			return -EIO;
 		else if (nHttpCode == 200)
 		{
-			if (m_ftype == rechecks::FILE_PKG) // not caching volatile stuff
+			if (m_ftype == rechecks::FILE_SOLID) // not caching volatile stuff
 			{
-				lockguard g(mxCache);
+				lockguard g(remote_info_cache);
 				remote_info_cache[m_path] =
 						tFileId(stbuf.st_size, probe->GetHeaderUnlocked().h[header::LAST_MODIFIED]);
 			}
@@ -404,170 +405,6 @@ public:
 		}
 		return -ENOENT;
 	}
-
-	bool Act(const char *path, off_t pos, off_t len)
-	{
-		/*
-		_cerr( path << ", from: " << pos << " , " << len << "bytes\n");
-		databuf.clear();
-		h.clear();
-		int nRetries=10;
-		
-		if(bJustProbe)
-			len=100; // fake something more sensible for now
-		
-		mstring sErr;
-		bool bSecondHand=false;
-
-		tTcpHandlePtr con = tcpconnect::CreateConnected(proxyUrl.sHost, proxyUrl.sPort, sErr,
-				&bSecondHand);
-		if(!con)
-			return false;
-		
-		tSS req;
-		req << (bJustProbe?"HEAD ":"GET ");
-		
-		req << baseUrl.ToURI() << path <<
-				" HTTP/1.1\r\n"
-				"Connection: Keep-Alive\r\n"
-				"User-Agent: ACNGFS\r\n"
-				"X-Original-Source: 42\r\n";
-
-		if(!bJustProbe && len>0)
-		{
-			req << "Range: bytes=" << (long unsigned)pos << "-"
-					<< (long unsigned) (pos+len-1) << "\r\n";
-		}
-		req<<"\r\n";
-		_cerr( "requesting: " << req.rptr() );
-		
-		for(bool bRetried=false;!req.empty();)
-		{
-			int n=::send(con->GetFD(), req.c_str(), req.size(), MSG_NOSIGNAL);
-			if(n<0)
-			{
-				if(EAGAIN==errno)
-					continue;
-				return false;
-			}
-			if(n==0)
-			{
-				if(EINTR==errno)
-					continue;
-				
-				// old connection timed out? reconnect, but only once
-				
-				if(bRetried)
-					return false;
-				
-				bRetried=true;
-				
-				// restart the connection once
-				con->Disconnect();
-				if(!con->Connect(proxyUrl.sHost, proxyUrl.sPort, sErr))
-					return false;
-				
-				continue;
-			}
-			req.drop(n);
-		}
-		
-		//_cerr( "init buf for bytes: " << len);
-		databuf.init(len+HEADSZ);
-		_cerr( "capa: " << databuf.freecapa());
-		int64_t remaining(len+HEADSZ); // to be adapted when head arrived
-		while(true)
-		{
-			_cerr( "remaining: " << remaining <<endl);
-			if(remaining<=0)
-				goto com_done_con_idle;
-			
-			int sr=WaitForResponse(con->GetFD());
-			if(sr<0)
-				return false;
-			if(sr==0)
-			{
-				if(--nRetries<0)
-					return false;
-				continue;
-			}
-
-			// drop all stuff read during precaching
-			if(bJustProbe && h.type!=h.INVALID)
-				databuf.clear();
-			
-			int nToRead=MIN(remaining,databuf.freecapa());
-      //assert(nToRead>0);
-			int n=::recv(con->GetFD(), databuf.wptr(), nToRead, 0);
-			_cerr( "got: " << n << " errno: " << errno);
-
-			if(0 == n) // remote host is disconnecting :-(
-				return false;
-
-			if(n<0)
-			{ // no other tolerable errors should appear here
-				if(EINTR==errno || EAGAIN==errno)
-					continue;
-				//perror("ERROR: got <=0 from read: ");
-				con.reset();
-				return false;
-			}
-
-			databuf.got(n);
-			remaining-=n;
-			
-			if(h.type==h.INVALID)
-			{
-				_cerr( "parsing head, free? " << databuf.freecapa()<<endl );
-				
-				int r=h.LoadFromBuf(databuf.rptr(), databuf.size());
-				_cerr( "bufptr: " << (size_t) databuf.rptr() << " result: " << r <<endl);
-				cerr.flush();
-
-#ifdef DEBUG
-				if(r>0)
-					write(fileno(stderr), databuf.rptr(), r);
-#endif
-				
-				if(r>0)
-					databuf.drop(r);
-				
-				if(0==r)
-				{
-					if(databuf.freecapa()<=0)
-						return false; // monster head?
-					continue; // read more
-				}
-				// catch bad or weird stuff
-				if(r<0 || r>=HEADSZ || h.type==h.INVALID)
-					return false;
-				
-				_cerr( "skipped head, " << r << " bytes,  now size: " << databuf.size() <<" rptr: " << size_t(databuf.rptr()) );
-				// got head so far, process data
-				
-				if(! h.h[header::CONTENT_LENGTH] || ! *h.h[header::CONTENT_LENGTH])
-					return false;
-				long contlen=atol(h.h[header::CONTENT_LENGTH]);
-				remaining = contlen - databuf.size();
-				
-				seen_status=h.getStatus();
-				_cerr("HTTP status: " << seen_status <<endl);
-				if(200==seen_status)
-					seen_length=contlen;
-				
-				if(bJustProbe) // just HEAD
-					goto com_done_con_idle;
-			}
-			
-		}
-		com_done_con_idle:
-		tcpconnect::RecycleIdleConnection(con);
-
-		return true;
-		*/
-		return false;
-
-	};
 };
 
 
@@ -580,7 +417,7 @@ static int acngfs_getattr(const char *path, struct stat *stbuf)
 
 	rechecks::eMatchType type = rechecks::GetFiletype(path);
 	_cerr( "type: " << type);
-	if (type == rechecks::FILE_PKG || type == rechecks::FILE_INDEX)
+	if (type == rechecks::FILE_SOLID || type == rechecks::FILE_VOLATILE)
 	{
 		if(0 == tDlDescLocal(path, type).Stat(*stbuf))
 			return 0;
@@ -702,14 +539,14 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 	if (fi->flags & (O_WRONLY|O_RDWR|O_TRUNC|O_CREAT))
 			return -EROFS;
 
-	tDlDesc *p(NULL);
+	tDlDesc *p(nullptr);
 	struct stat stbuf;
 	rechecks::eMatchType ftype = rechecks::GetFiletype(path);
 
 	MYTRY
 	{
 		// ok... if that is a remote object, can we still use local access instead?
-		if(!altPath.empty() && rechecks::FILE_PKG == ftype)
+		if(!altPath.empty() && rechecks::FILE_SOLID == ftype)
 		{
 				p = new tDlDescLocal(path, ftype);
 				if(p)
@@ -746,11 +583,7 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 static int acngfs_read(const char *path, char *buf, size_t size, off_t offset,
       struct fuse_file_info *fi)
 {
-	tDlDesc *p=(tDlDesc*) fi->fh;
-	//_cerr( offset << ":"<<size<<":"<<p->seen_length);
-	//if( off_t(offset+size) > p->seen_length)
-	//	size=p->seen_length-offset;
-		
+	auto p=(tDlDesc*) fi->fh;
 	return p->Read(buf, path, offset, size);
 }
 
@@ -782,7 +615,7 @@ static int acngfs_fsync(const char *path, int isdatasync,
 
 struct fuse_operations_compat25 acngfs_oper;
 
-int my_fuse_main(int argc, char **argv)
+int my_fuse_main(int argc, char const * const * argv)
 {
 #ifdef HAVE_DLOPEN
    void *pLib = dlopen("libfuse.so.2", RTLD_LAZY);
@@ -791,7 +624,7 @@ int my_fuse_main(int argc, char **argv)
       cerr << "Couldn't find libfuse.so.2" <<endl;
       return -1;
    }
-   int (*myFuseMain) (int, char **, const struct fuse_operations_compat25 *, size_t);
+   int (*myFuseMain) (int, char const * const *, const struct fuse_operations_compat25 *, size_t);
    *(void **) (&myFuseMain) = dlsym(pLib, "fuse_main_real_compat25");
 
    if(!myFuseMain)
@@ -812,7 +645,7 @@ void _ExitUsage() {
    << "\t  acngfs http://ftp.uni-kl.de/debian localhost:3142 /var/cache/apt-cacher-ng/debrep /var/local/aptfs\n\n"
         << "FUSE mount options summary:\n\n";
     const char *argv[] = {"...", "-h"};
-    my_fuse_main( 2, const_cast<char**>(argv));
+    my_fuse_main( _countof(argv), argv);
     exit(EXIT_FAILURE);
 }
 

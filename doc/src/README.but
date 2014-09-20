@@ -1258,11 +1258,9 @@ port accordingly).
 
 \b Transparent proxy mode not implemented yet
 
-\b Arbitrary TCP ports on remote side and HTTPS usage only possible with remapping configuration
+\b The metadata update in maintenance jobs (like expiration task) attempts to guess the best source of update based on original source information and current backend configuration. In case of failure, run a "forced" download of index files through the web interface.
 
 \b See TODO file in apt-cacher-ng source for various other notes
-
-\b The index update in expiration task works best if the original URLs are stored in the cache. As fallback solution, it attempts to guess the source URL by evaluating file's location in the cache which should work in most cases but in some cases might fail. In case of failure, a real user should download failing files once through the proxy.
 
 \C{cont} Contact
 

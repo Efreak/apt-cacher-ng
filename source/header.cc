@@ -18,7 +18,7 @@
 
 #include <map>
 
-using namespace MYSTD;
+using namespace std;
 
 #if 1
 struct eHeadPos2label
@@ -61,20 +61,12 @@ struct tHeadLabelMap
 } label_map;
 #endif
 
-header::header()
-:
-	type(INVALID),
-	m_nEstimLength(0)
-{
-	memset(h, 0, sizeof(h));
-}
-
 header::header(const header &s)
 :type(s.type),
  frontLine(s.frontLine),
  m_nEstimLength(s.m_nEstimLength)
 {
-	for (UINT i = 0; i < HEADPOS_MAX; i++)
+	for (uint i = 0; i < HEADPOS_MAX; i++)
 		h[i] = s.h[i] ? strdup(s.h[i]) : NULL;
 }
 
@@ -83,7 +75,7 @@ header& header::operator=(const header& s)
 	type=s.type;
 	frontLine=s.frontLine;
 	m_nEstimLength=s.m_nEstimLength;
-	for (UINT i = 0; i < HEADPOS_MAX; ++i)
+	for (uint i = 0; i < HEADPOS_MAX; ++i)
 	{
 		if (h[i])
 			free(h[i]);
@@ -94,13 +86,13 @@ header& header::operator=(const header& s)
 
 header::~header()
 {
-	for(UINT i=0; i<HEADPOS_MAX; i++)
-		free(h[i]);
+	for(auto& p:h)
+		free(p);
 }
 
 void header::clear()
 {
-	for(UINT i=0; i<HEADPOS_MAX; i++)
+	for(uint i=0; i<HEADPOS_MAX; i++)
 		del((eHeadPos) i);
 	frontLine.clear();
 	type=INVALID;
@@ -113,7 +105,7 @@ void header::del(eHeadPos i)
 	h[i]=0;
 }
 
-inline int header::Load(const char * const in, UINT maxlen)
+inline int header::Load(const char * const in, uint maxlen)
 {
 	if(maxlen<9)
 		return 0;
@@ -137,9 +129,8 @@ inline int header::Load(const char * const in, UINT maxlen)
 
 	while (true)
 	{
-
 		const char *szBegin=posNext;
-		UINT pos=szBegin-in;
+		uint pos=szBegin-in;
 		const char *end=(const char*) memchr(szBegin, '\r', maxlen-pos);
 		if (!end)
 			return 0;
@@ -158,7 +149,7 @@ inline int header::Load(const char * const in, UINT maxlen)
 		}
 		posNext=end+2;
 
-		while (isspace((UINT)*end))	end--;
+		while (isspace((uint)*end))	end--;
 		end++;
 		
 		if (frontLine.empty())
@@ -177,26 +168,25 @@ inline int header::Load(const char * const in, UINT maxlen)
 		size_t keyLen=sep-szBegin;
 
 		sep++;
-		while (sep<end && isspace((UINT)*sep))
+		while (sep<end && isspace((uint)*sep))
 			sep++;
 		
-		for(const eHeadPos2label *pMap=mapId2Headname;
-				pMap<mapId2Headname+_countof(mapId2Headname); ++pMap)
+		for(const auto& id2key : mapId2Headname)
 		{
-			if (strncasecmp(pMap->str, key, keyLen))
+			if (strncasecmp(id2key.str, key, keyLen))
 				continue;
-			UINT l=end-sep;
-			if( ! (h[pMap->pos] = (char*) realloc(h[pMap->pos], l+1)))
+			uint l=end-sep;
+			if( ! (h[id2key.pos] = (char*) realloc(h[id2key.pos], l+1)))
 				continue;
-			memcpy(h[pMap->pos], sep, l);
-			h[pMap->pos][l]='\0';
+			memcpy(h[id2key.pos], sep, l);
+			h[id2key.pos][l]='\0';
 			break;
 		}
 	}
 	return -2;
 }
 
-int header::LoadFromBuf(const char * const in, UINT maxlen)
+int header::LoadFromBuf(const char * const in, uint maxlen)
 {
 	clear();
 	int ret=Load(in, maxlen);
@@ -216,7 +206,6 @@ int header::LoadFromFile(const string &sPath)
 	if(!buf.initFromFile(sPath.c_str()))
 		return -1;
 	return LoadFromBuf(buf.rptr(), buf.size());
-//#endif
 }
 
 
@@ -262,26 +251,14 @@ void header::set(eHeadPos key, off_t nValue)
     set(key, buf, len);
 }
 
-#ifndef MINIBUILD
-
-mstring header::ToString() const
+tSS header::ToString() const
 {
-	string s = frontLine;
-	s+="\r\n";
-	for(const eHeadPos2label *pMap=mapId2Headname;
-			pMap<mapId2Headname+_countof(mapId2Headname); ++pMap)
-	{
-		if (h[pMap->pos])
-		{
-			s += pMap->str;
-			s += ": ";
-			s += h[pMap->pos];
-			s += "\r\n";
-		}
-	}
-	s+= "Date: ";
-	s+= tCurrentTime();
-	s+= "\r\n\r\n";
+	tSS s;
+	s<<frontLine << "\r\n";
+	for(const auto& pos2key : mapId2Headname)
+		if (h[pos2key.pos])
+			s << pos2key.str << ": " << h[pos2key.pos] << "\r\n";
+	s<< "Date: " << tCurrentTime() << "\r\n\r\n";
 	return s;
 }
 
@@ -302,11 +279,11 @@ int header::StoreToFile(cmstring &sPath) const
 			return -errno;
 	}
 	
-	string hstr=ToString();
-	const char *p=hstr.c_str();
+	auto hstr=ToString();
+	const char *p=hstr.rptr();
 	nByteCount=hstr.length();
 	
-	for(string::size_type pos=0; pos<(UINT)nByteCount;)
+	for(string::size_type pos=0; pos<(uint)nByteCount;)
 	{
 		int ret=write(fd, p+pos, nByteCount-pos);
 		if(ret<0)
@@ -332,13 +309,11 @@ int header::StoreToFile(cmstring &sPath) const
 	return nByteCount;
 }
 
-#endif // MINIBUILD
-
-MYSTD::string header::GenInfoHeaders()
+std::string header::GenInfoHeaders()
 {
 	    string ret="Date: ";
 	    ret+=tCurrentTime();
-	    ret+="\r\nServer: Debian Apt-Cacher NG/"ACVERSION"\r\n";
+	    ret+="\r\nServer: Debian Apt-Cacher NG/" ACVERSION "\r\n";
 	    return ret;
 }
 
@@ -353,8 +328,8 @@ bool header::ParseDate(const char *s, struct tm *tm)
 {
 	if(!s || !tm)
 		return false;
-	for(const char **p=fmts; p<fmts+_countof(fmts); ++p)
-		if(::strptime(s, *p, tm))
+	for(const auto& fmt : fmts)
+		if(::strptime(s, fmt, tm))
 			return true;
 
 	return false;

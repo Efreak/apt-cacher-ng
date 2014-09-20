@@ -15,7 +15,7 @@
 #include <unistd.h>
 #include <cstddef>
 
-using namespace MYSTD;
+using namespace std;
 
 
 #ifndef AI_NUMERICSERV

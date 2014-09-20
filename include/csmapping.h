@@ -22,31 +22,30 @@ public:
 	virtual ~csumBase() {};
 	virtual void add(const char *data, size_t size) = 0;
 	virtual void finish(uint8_t* ret) = 0;
-	static MYSTD::auto_ptr<csumBase> GetChecker(CSTYPES);
+	static std::unique_ptr<csumBase> GetChecker(CSTYPES);
 };
 
 // kind of file identity, compares by file size and checksum (MD5 or SHA1)
 struct tFingerprint {
-	off_t size;
-	CSTYPES csType;
+	off_t size =0;
+	CSTYPES csType =CSTYPE_INVALID;
 	uint8_t csum[MAXCSLEN];
 	
-	tFingerprint() : size(0), csType(CSTYPE_INVALID) {};
+	tFingerprint() =default;
 	tFingerprint(const tFingerprint &a) : size(a.size),
 	csType(a.csType)
 	{
-		memcpy(csum, a.csum, 20);
+		memcpy(csum, a.csum, sizeof(csum));
 	};
 	
-	bool Set(const mstring & hexString, CSTYPES eCstype, off_t newsize)
+	bool SetCs(const mstring & hexString, CSTYPES eCstype)
 	{
-		if(newsize<0 || hexString.empty()
+		if(hexString.empty()
 				|| (eCstype!=CSTYPE_MD5 && eCstype!=CSTYPE_SHA1)
 				|| (eCstype==CSTYPE_MD5 && 32 != hexString.length())
 				|| (eCstype==CSTYPE_SHA1 && 40 != hexString.length()))
 			return false;
 
-		size=newsize;
 		csType=eCstype;
 		return CsAsciiToBin(hexString.c_str(), csum, CSTYPE_MD5==csType?16:20);
 	}
@@ -87,11 +86,15 @@ struct tFingerprint {
 	{
 		return GetCsAsString()+"_"+offttos(size);
 	}
+	inline bool csEquals(const tFingerprint& other) const
+	{
+		return 0==memcmp(csum, other.csum, csType==CSTYPE_MD5 ? 16 : 20);
+	}
 	inline bool operator==(const tFingerprint & other) const
 	{
 		if(other.csType!=csType || size!=other.size)
 			return false;
-		return 0==memcmp(csum, other.csum, csType==CSTYPE_MD5 ? 16 : 20);
+		return csEquals(other);
 	}
 	inline bool operator!=(const tFingerprint & other) const
 	{
@@ -119,12 +122,14 @@ struct tFingerprint {
 struct tRemoteFileInfo
 {
 	tFingerprint fpr;
+	bool bInflateForCs = false;
 	mstring sDirectory, sFileName;
 	inline void SetInvalid() {
 		sFileName.clear();
 		sDirectory.clear();
 		fpr.csType=CSTYPE_INVALID;
 		fpr.size=-1;
+		bInflateForCs = false;
 	}
 	inline bool IsUsable() {
 		return (!sFileName.empty() && fpr.csType!=CSTYPE_INVALID && fpr.size>0);
@@ -141,12 +146,12 @@ struct tImpFileInfo
 {
     mstring sPath;
     
-    time_t mtime;
-    bool bFileUsed;
+    time_t mtime = 0;
+    bool bFileUsed = false;
     
     inline tImpFileInfo(const mstring & s, time_t m) :
-        sPath(s), mtime(m), bFileUsed(false) {};
-    inline tImpFileInfo() : mtime(0), bFileUsed(false) {};
+        sPath(s), mtime(m) {};
+    tImpFileInfo() =default;
 };
 struct ltCacheKeyComp
 {
@@ -161,9 +166,7 @@ struct ltCacheKeyComp
   }
 };
 
-typedef MYMAP<tFingerprint, tImpFileInfo> tImportMap;
-typedef MYSTD::deque<MYSTD::pair<tFingerprint, tImpFileInfo> > tImportList;
-typedef MYMAP<tImpFileInfo, tFingerprint, ltCacheKeyComp> tFprCacheMap;
+typedef std::map<tImpFileInfo, tFingerprint, ltCacheKeyComp> tFprCacheMap;
 
 
 #endif /*CSMAPPING_H_*/

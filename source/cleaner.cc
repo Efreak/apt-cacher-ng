@@ -17,7 +17,7 @@
 
 #include <limits>
 #include <cstring>
-using namespace MYSTD;
+using namespace std;
 
 #define TERM_VAL (time_t(-1))
 
@@ -29,7 +29,8 @@ cleaner::cleaner() : m_thr(0)
 }
 void cleaner::Init()
 {
-	for(UINT i=0; i<_countof(stamps); ++i) stamps[i]=END_OF_TIME;
+	for(auto&ts : stamps)
+		ts=END_OF_TIME;
 }
 
 cleaner::~cleaner()
@@ -47,7 +48,7 @@ void cleaner::WorkLoop()
 		{
 			setLockGuard;
 			// ok, who's next?
-			for (UINT i = 0; i < _countof(stamps); ++i)
+			for (uint i = 0; i < _countof(stamps); ++i)
 				if (stamps[i] < stamps[what])
 					what = (eType) i;
 			now=GetTime();
@@ -99,7 +100,7 @@ void cleaner::WorkLoop()
 			stamps[what] = time_nextcand;
 
 		// ok, who's next?
-		for (UINT i = 0; i < _countof(stamps); ++i)
+		for (uint i = 0; i < _countof(stamps); ++i)
 			if (stamps[i] < stamps[what])
 				what = (eType) i;
 	};
@@ -165,5 +166,6 @@ void dump_handler(int) {
 	fileItemMgmt::dump_status();
 	g_victor.dump_status();
 	tcpconnect::dump_status();
+	acfg::dump_trace();
 }
 
