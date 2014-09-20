@@ -65,6 +65,10 @@ release: noremainingwork tarball
 unrelease: tarball-remove
 	git tag -d upstream/$(TAGVERSION)
 
+pristine-commit:
+	pristine-tar commit ../$(DISTNAME).tar.xz $(TAGVERSION)
+	pristine-tar commit ../tarballs/$(DEBSRCNAME) $(TAGVERSION)
+
 noremainingwork:
 	test ! -e TODO.next # the quick reminder for the next release should be empty
 
