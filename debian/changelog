@@ -1,4 +1,4 @@
-apt-cacher-ng (0.8.0~rc2-1) unstable; urgency=low
+apt-cacher-ng (0.8.0~rc3-1) unstable; urgency=low
 
   * New upstream version, first Sid upload of 0.8.x 
     + systemd related changes: startup notification, restart on crashes
@@ -6,7 +6,7 @@ apt-cacher-ng (0.8.0~rc2-1) unstable; urgency=low
     + Now really fixes lookup of .default files in the resource directory
       (closes: #736579)
 
- -- Eduard Bloch <blade@debian.org>  Sat, 20 Sep 2014 12:16:36 +0200
+ -- Eduard Bloch <blade@debian.org>  Sat, 20 Sep 2014 12:53:20 +0200
 
 apt-cacher-ng (0.8.0~pre3-1) experimental; urgency=low
 
