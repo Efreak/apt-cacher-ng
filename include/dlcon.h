@@ -60,13 +60,13 @@ class dlcon : public lockable
 
     	bool m_bStopASAP;
 
-    	UINT m_bManualMode;
+    	uint m_bManualMode;
 
     	/// blacklist for permanently failing hosts, with error message
     	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
     	tSS m_sendBuf, m_inBuf;
 
-    	UINT ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &qActive);
+    	uint ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &qActive);
 
     	// Disable pipelining for the next # requests. Actually used as crude workaround for the
     	// concept limitation (because of automata over a couple of function) and its

@@ -17,10 +17,20 @@
 #include <list>
 #include <unordered_map>
 
+#ifdef HAVE_SSL
+#include <openssl/evp.h>
+#include <openssl/bio.h>
+#include <openssl/sha.h>
+#include <openssl/crypto.h>
+#include <cstring>
+#endif
+
 using namespace std;
 
 // hint to use the main configuration excluding the complex directives
 bool g_testMode=false;
+
+bool bIsHashedPwd=false;
 
 #define BARF(x) {if(!g_testMode){ cerr << x << endl; exit(EXIT_FAILURE); }}
 #define BADSTUFF_PATTERN "\\.\\.($|%|/)"
@@ -93,7 +103,7 @@ MapNameToString n2sTbl[] = {
 		,{  "PfilePatternEx",          &pfilepatEx}
 		,{  "WfilePatternEx",          &wfilepatEx}
 		,{  "SPfilePattern",           &spfilepatEx}
-		,{  "AdminAuth",               &adminauth}
+//		,{  "AdminAuth",               &adminauth}
 		,{  "BindAddress",             &bindaddr}
 		,{  "UserAgent",               &agentname}
 		,{  "DontCache",               &tmpDontcache}
@@ -570,9 +580,9 @@ cmstring & GetMimeType(cmstring &path)
 	if(f.OpenFile(path, true))
 	{
 		size_t maxLen = std::min(size_t(255), f.GetSize());
-		for(UINT i=0; i< maxLen; ++i)
+		for(uint i=0; i< maxLen; ++i)
 		{
-			if(!isascii((UINT) *(f.GetBuffer()+i)))
+			if(!isascii((uint) *(f.GetBuffer()+i)))
 				return os;
 		}
 		return tp;
@@ -648,8 +658,8 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 			return false;
 		}
 	}
-
-	else if(0==strcasecmp(key.c_str(), "Proxy"))
+#define CHECKOPTKEY(x)	0==strcasecmp(key.c_str(),x)
+	else if(CHECKOPTKEY("Proxy"))
 	{
 		if(value.empty())
 			proxy_info=tHttpUrl();
@@ -659,7 +669,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 				BARF("Invalid proxy specification, aborting...");
 		}
 	}
-	else if(0==strcasecmp(key.c_str(), "LocalDirs") && !g_testMode)
+	else if(CHECKOPTKEY("LocalDirs") && !g_testMode)
 	{
 		_ParseLocalDirs(value);
 		return !localdirs.empty();
@@ -700,7 +710,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 		}
 		_AddHooksFile(vname);
 	}
-	else if(0==strcasecmp(key.c_str(), "AllowUserPorts"))
+	else if(CHECKOPTKEY("AllowUserPorts"))
 	{
 		if(!pUserPorts)
 			pUserPorts=new bitset<TCP_PORT_MAX>;
@@ -720,7 +730,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 			pUserPorts->set(n, true);
 		}
 	}
-	else if(0==strcasecmp(key.c_str(), "ConnectProto"))
+	else if(CHECKOPTKEY("ConnectProto"))
 	{
 		int *p = conprotos;
 		for (tSplitWalk split(&value); split.Next(); ++p)
@@ -739,6 +749,19 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 			else
 				BARF("IP protocol not supported: " << val);
 		}
+	}
+	else if(CHECKOPTKEY("AdminAuth"))
+	{
+	   adminauth=EncodeBase64Auth(value);
+#if SUPPWHASH
+	   bIsHashedPwd=false;
+	}
+
+	else if(CHECKOPTKEY("AdminAuthHash"))
+	{
+	   adminauth=value;
+	   bIsHashedPwd=true;
+#endif
 	}
 	else
 	{
@@ -1040,9 +1063,6 @@ void PostProcConfig(bool bDumpConfig)
    if(!acfg::requestapx.empty())
 	   acfg::requestapx = unEscape(acfg::requestapx);
 
-   if(!adminauth.empty())
-	   adminauth=string("Basic ")+EncodeBase64Auth(adminauth);
-   
    // create working paths before something else fails somewhere
    if(!fifopath.empty())
 	   mkbasedir(acfg::fifopath);
@@ -1210,6 +1230,83 @@ time_t BackgroundCleanup()
 	return ret;
 }
 
+#ifdef HAVE_SSL
+bool DecodeBase64(LPCSTR pAscii, acbuf& binData) {
+	if(!pAscii)
+		return false;
+	auto len=::strlen(pAscii);
+	binData.setsize(len);
+	binData.clear();
+	FILE* memStrm = ::fmemopen( (void*) pAscii, len, "r");
+	auto strmBase = BIO_new(BIO_f_base64());
+	auto strmBin = BIO_new_fp(memStrm, BIO_NOCLOSE);
+	strmBin = BIO_push(strmBase, strmBin);
+	BIO_set_flags(strmBin, BIO_FLAGS_BASE64_NO_NL);
+	binData.got(BIO_read(strmBin, binData.wptr(), len));
+	BIO_free_all(strmBin);
+	checkForceFclose(memStrm);
+	return binData.size();
+}
+#endif
+
+lockable authLock;
+
+int CheckAdminAuth(LPCSTR auth)
+{
+	if(acfg::adminauth.empty())
+		return 0;
+	if(!auth || !*auth)
+		return 1; // request it from user
+	if(strncmp(auth, "Basic", 5))
+		return -1; // looks like crap
+	auto p=auth+5;
+	while(*p && isspace((uint) *p)) ++p;
+
+#ifndef SUPPWHASH
+	return adminauth.compare(p) == 0 ? 0 : 1;
+
+#else
+
+	if(!bIsHashedPwd)
+		return adminauth.compare(p) == 0 ? 0 : 1;
+
+#ifndef HAVE_SSL
+#warning You really want to add SSL support in order to support hashed passwords
+	return -1;
+#endif
+	acbuf bufDecoded;
+	if(!DecodeBase64(p, bufDecoded))
+		return -1;
+#if 0
+	// there is always a char reserved
+	cerr << "huhu, user sent: " << bufDecoded.c_str() <<endl;
+#endif
+
+	string usersauth(bufDecoded.rptr(), bufDecoded.size());
+	auto poscol=usersauth.find(':');
+	if(poscol==0 || poscol==stmiss || poscol+1==usersauth.size())
+		return 1;
+
+	// ok, try to match against our hash, first copy user and salt from config
+	// always calculate the thing and compare the user and maybe hash later
+	// attacker should not gain any knowledge from faster abort (side channel...)
+	lockguard g(&authLock);
+	string testHash=adminauth.substr(0, poscol+9);
+	if(!AppendPasswordHash(testHash, usersauth.data()+poscol+1, usersauth.size()-poscol+1))
+		return 1;
+	if(testHash == adminauth)
+	{
+		// great! Cache it!
+		adminauth = p;
+		bIsHashedPwd = false;
+		return 0;
+	}
+	return 1;
+#endif
+}
+
+
+
 #endif // MINIBUILD
 
 } // namespace acfg
@@ -1288,7 +1385,7 @@ inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool 
 
 	if (0!=token.compare(0, 5, "file:")) // pure pattern
 	{
-		UINT pos = patvec.size();
+		uint pos = patvec.size();
 		patvec.resize(pos+1);
 		return 0==regcomp(&patvec[pos], token.c_str(), REG_EXTENDED);
 	}
@@ -1356,7 +1453,7 @@ void mkbasedir(const string & path)
 	if(0==mkdir(GetDirPart(path).c_str(), acfg::dirperms) || EEXIST == errno)
 		return; // should succeed in most cases
 
-	UINT pos=0; // but skip the cache dir components, if possible
+	uint pos=0; // but skip the cache dir components, if possible
 	if(startsWith(path, acfg::cacheDirSlash))
 	{
 		// pos=acfg::cachedir.size();

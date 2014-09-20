@@ -208,7 +208,7 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 		bSSL=true;
 #endif
 	}
-	else if(isalnum((UINT)url[0]))
+	else if(isalnum((uint)url[0]))
 		hStart=0;
 	else if(url[0]=='[')
 	{
@@ -590,39 +590,45 @@ bool UrlUnescapeAppend(cmstring &from, mstring & to)
 	return ret;
 }
 
-
-string EncodeBase64Auth(cmstring & s)
+mstring EncodeBase64Auth(cmstring& sPwdString)
 {
-	int cols=0, bits=0, c=0, char_count=0;
+	auto sNative=UrlUnescape(sPwdString);
+	return EncodeBase64(sNative.data(), sNative.size());
+}
+string EncodeBase64(LPCSTR data, uint len)
+{
+	uint32_t bits=0;
+	uint char_count=0;
 	char alphabet[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	tStrPos pos=0;
 	string out;
-	while ( pos<s.size() )
+	for(auto p=data; p<data+len; ++p)
 	{
-		c=s[pos++];
-		if('%' == c && pos<s.length()-1
-				&& hexmap[(unsigned)s[pos]]<=15
-				&& hexmap[(unsigned)s[pos+1]]<=15)
+		std::cout << pos << std::endl;
+		uint8_t c=*p;
+		/*
+		if('%' == c && p<data+len-1
+				&& hexmap[(uint8_t) *(p+1)]<=15
+				&& hexmap[(uint8_t) *(p+2)]<=15)
 		{
-			c=char(16*hexmap[(unsigned)s[pos]]+hexmap[(unsigned)s[pos+1]]);
-			pos+=2;
+			c=uint8_t(hexmap[(uint8_t) *(p+1)]*16 + hexmap[(uint8_t) *(p+2)]);
+			p+=2;
 		}
+		*/
 		bits += c;
 		char_count++;
 		if (char_count == 3)
 		{
-			out+=(alphabet[bits >> 18]);
-			out+=(alphabet[(bits >> 12) & 0x3f]);
-			out+=(alphabet[(bits >> 6) & 0x3f]);
-			out+=(alphabet[bits & 0x3f]);
-			cols += 4;
+			std::cout << pos << " " << (unsigned(bits) >> 18) << std::endl;
+			out+=(alphabet[unsigned(bits) >> 18]);
+			out+=(alphabet[(unsigned(bits) >> 12) & 0x3f]);
+			out+=(alphabet[(unsigned(bits) >> 6) & 0x3f]);
+			out+=(alphabet[unsigned(bits) & 0x3f]);
 			bits = 0;
 			char_count = 0;
 		}
 		else
-		{
 			bits <<= 8;
-		}
 	}
 	if (char_count != 0)
 	{

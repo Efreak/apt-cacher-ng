@@ -430,7 +430,7 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 	enum { eCurLine, eHistory, ePatches} eSection;
 	eSection=eCurLine;
 
-	UINT peAnz(0);
+	uint peAnz(0);
 
 	// This code should be tolerant to minor changes in the format
 
@@ -1532,7 +1532,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 	case EIDX_ARCHLXDB:
 		LOG("assuming Arch Linux package db");
 		{
-			UINT nStep = 0;
+			uint nStep = 0;
 			enum tExpData
 			{
 				_fname, _csum, _csize, _nthng
@@ -1899,8 +1899,8 @@ void tCacheOperation::PrintStats(cmstring &title)
 {
 	multimap<off_t, cmstring*> sorted;
 	off_t total=0;
-	const UINT nMax = m_bVerbose ? (UINT_MAX-1) : 10;
-	UINT hidden=0;
+	const uint nMax = m_bVerbose ? (UINT_MAX-1) : 10;
+	uint hidden=0;
 	for(auto &f: m_metaFilesRel)
 	{
 		total += f.second.space;

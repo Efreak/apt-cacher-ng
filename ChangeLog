@@ -20,6 +20,8 @@ apt-cacher-ng (0.8.0rc1) BETA; urgency=low
   * Maintenance download code now prefers the original path resolved by
     backend consideration if that option looks more likely
   * Internal refactoring WRT download job management
+  * Fixed Base64 encoding to work correctly with non-ascii characters (still
+    not recommended, better use URL encoding in password settings!)
 
  -- 
 

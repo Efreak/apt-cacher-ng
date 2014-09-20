@@ -66,7 +66,7 @@ header::header(const header &s)
  frontLine(s.frontLine),
  m_nEstimLength(s.m_nEstimLength)
 {
-	for (UINT i = 0; i < HEADPOS_MAX; i++)
+	for (uint i = 0; i < HEADPOS_MAX; i++)
 		h[i] = s.h[i] ? strdup(s.h[i]) : NULL;
 }
 
@@ -75,7 +75,7 @@ header& header::operator=(const header& s)
 	type=s.type;
 	frontLine=s.frontLine;
 	m_nEstimLength=s.m_nEstimLength;
-	for (UINT i = 0; i < HEADPOS_MAX; ++i)
+	for (uint i = 0; i < HEADPOS_MAX; ++i)
 	{
 		if (h[i])
 			free(h[i]);
@@ -92,7 +92,7 @@ header::~header()
 
 void header::clear()
 {
-	for(UINT i=0; i<HEADPOS_MAX; i++)
+	for(uint i=0; i<HEADPOS_MAX; i++)
 		del((eHeadPos) i);
 	frontLine.clear();
 	type=INVALID;
@@ -105,7 +105,7 @@ void header::del(eHeadPos i)
 	h[i]=0;
 }
 
-inline int header::Load(const char * const in, UINT maxlen)
+inline int header::Load(const char * const in, uint maxlen)
 {
 	if(maxlen<9)
 		return 0;
@@ -130,7 +130,7 @@ inline int header::Load(const char * const in, UINT maxlen)
 	while (true)
 	{
 		const char *szBegin=posNext;
-		UINT pos=szBegin-in;
+		uint pos=szBegin-in;
 		const char *end=(const char*) memchr(szBegin, '\r', maxlen-pos);
 		if (!end)
 			return 0;
@@ -149,7 +149,7 @@ inline int header::Load(const char * const in, UINT maxlen)
 		}
 		posNext=end+2;
 
-		while (isspace((UINT)*end))	end--;
+		while (isspace((uint)*end))	end--;
 		end++;
 		
 		if (frontLine.empty())
@@ -168,14 +168,14 @@ inline int header::Load(const char * const in, UINT maxlen)
 		size_t keyLen=sep-szBegin;
 
 		sep++;
-		while (sep<end && isspace((UINT)*sep))
+		while (sep<end && isspace((uint)*sep))
 			sep++;
 		
 		for(const auto& id2key : mapId2Headname)
 		{
 			if (strncasecmp(id2key.str, key, keyLen))
 				continue;
-			UINT l=end-sep;
+			uint l=end-sep;
 			if( ! (h[id2key.pos] = (char*) realloc(h[id2key.pos], l+1)))
 				continue;
 			memcpy(h[id2key.pos], sep, l);
@@ -186,7 +186,7 @@ inline int header::Load(const char * const in, UINT maxlen)
 	return -2;
 }
 
-int header::LoadFromBuf(const char * const in, UINT maxlen)
+int header::LoadFromBuf(const char * const in, uint maxlen)
 {
 	clear();
 	int ret=Load(in, maxlen);
@@ -283,7 +283,7 @@ int header::StoreToFile(cmstring &sPath) const
 	const char *p=hstr.rptr();
 	nByteCount=hstr.length();
 	
-	for(string::size_type pos=0; pos<(UINT)nByteCount;)
+	for(string::size_type pos=0; pos<(uint)nByteCount;)
 	{
 		int ret=write(fd, p+pos, nByteCount-pos);
 		if(ret<0)

@@ -296,7 +296,7 @@ inline void expiration::DropExceptionalVersions()
     			return false;
     		ver=split;
     		for (const char *p = prevArcSufx.c_str(); *p; ++p)
-    			if (!isalnum(UINT(*p)) && !strchr(".-+:~", UINT(*p)))
+    			if (!isalnum(uint(*p)) && !strchr(".-+:~", uint(*p)))
     				return false;
     		if(!split.Next())
     			return false;
@@ -318,9 +318,9 @@ inline void expiration::DropExceptionalVersions()
     auto procGroup = [&]()
 		{
     	// if more than allowed, keep the highest versions for sure, others are expired as usual
-    	if(version2trashGroup.size() > (UINT) acfg::keepnver)
+    	if(version2trashGroup.size() > (uint) acfg::keepnver)
         	std::sort(version2trashGroup.begin(), version2trashGroup.end());
-    	for(UINT i=0; i<version2trashGroup.size() && i<UINT(acfg::keepnver); i++)
+    	for(uint i=0; i<version2trashGroup.size() && i<uint(acfg::keepnver); i++)
     		for(auto& j: * version2trashGroup[i].group)
     			j.second.nLostAt=m_gMaintTimeNow;
     	version2trashGroup.clear();
@@ -651,7 +651,7 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		idesc.uptodate = false;
 //		}
 	}
-	UINT stripLen=0;
+	uint stripLen=0;
     if (endsWithSzAr(sPathRel, ".head"))
 		stripLen=5;
 	else if (AddIFileCandidate(sPathRel))

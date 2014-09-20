@@ -63,13 +63,13 @@ void tMarkupFileSend::Run()
 	while(pr<pend)
 	{
 		auto restlen=pend-pr;
-		auto propStart=(LPCSTR) memchr(pr, (UINT) '$', restlen);
+		auto propStart=(LPCSTR) memchr(pr, (uint) '$', restlen);
 		if (propStart) {
 			if (propStart < lastchar && propStart[1] == '{') {
 				SendChunk(pr, propStart-pr);
 				pr=propStart;
 				// found begin of a new property key
-				auto propEnd = (LPCSTR) memchr(propStart+2, (UINT) '}', pend-propStart+2);
+				auto propEnd = (LPCSTR) memchr(propStart+2, (uint) '}', pend-propStart+2);
 				if(!propEnd)// unclosed, seriously? Just dump the rest at the user
 					goto no_more_props;
 				if(propStart+6<propEnd && ':' == *(propStart+2))
@@ -133,7 +133,7 @@ tDeleter::tDeleter(const tRunParms& parms)
 
 	// do stricter path checks and prepare the query page data
 
-	UINT lfd(1);
+	uint lfd(1);
 	for(const auto path : files)
 	{
 		if(path.find_first_of(BADCHARS)!=stmiss  // what the f..., XSS attempt?
@@ -200,7 +200,7 @@ void tMarkupFileSend::SendIfElse(LPCSTR pszBeginSep, LPCSTR pszEnd)
 	//std::cerr << "got if: " << string(pszBeginSep, pszEnd-pszBeginSep) << std::endl;
 	auto sep = pszBeginSep;
 	auto key=sep+1;
-	auto valYes=(LPCSTR) memchr(key, (UINT) *sep, pszEnd-key);
+	auto valYes=(LPCSTR) memchr(key, (uint) *sep, pszEnd-key);
 	if(!valYes) // heh?
 		return;
 	auto sel=CheckCondition(key, valYes-key);
@@ -208,7 +208,7 @@ void tMarkupFileSend::SendIfElse(LPCSTR pszBeginSep, LPCSTR pszEnd)
 	if(sel<0) // heh?
 		return;
 	valYes++; // now really there
-	auto valNo=(LPCSTR) memchr(valYes, (UINT) *sep, pszEnd-valYes);
+	auto valNo=(LPCSTR) memchr(valYes, (uint) *sep, pszEnd-valYes);
 	//std::cerr << "valNO: " << valNo<< std::endl;
 	if(!valNo) // heh?
 			return;

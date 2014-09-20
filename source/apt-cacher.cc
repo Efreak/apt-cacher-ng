@@ -1,3 +1,16 @@
+#include <acbuf.h>
+#include <aclogger.h>
+#include <fcntl.h>
+#include <openssl/evp.h>
+#include <stddef.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <cstdbool>
+#include <cstdint>
+#include <cstdlib>
+#include <ctime>
+#include <string>
 
 
 #define LOCAL_DEBUG
@@ -24,6 +37,9 @@ using namespace std;
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
 #include "openssl/err.h"
+#include <openssl/rand.h>
+#include <openssl/sha.h>
+#include <openssl/crypto.h>
 #endif
 
 #include "filereader.h"
@@ -75,6 +91,73 @@ inline bool fork_away()
 	return false;
 }
 #endif
+
+#if SUPPWHASH
+
+int hashpwd()
+{
+#ifdef HAVE_SSL
+	string plain;
+	uint32_t salt=0;
+	for(uint i=10; i; --i)
+	{
+		if(RAND_bytes(reinterpret_cast<unsigned char*>(&salt), 4) >0)
+			break;
+		else
+			salt=0;
+		sleep(1);
+	}
+	if(!salt) // ok, whatever...
+	{
+		uintptr_t pval = reinterpret_cast<uintptr_t>(&plain);
+		srandom(uint(time(0)) + uint(pval) +uint(getpid()));
+		salt=random();
+		timespec ts;
+		clock_gettime(CLOCK_BOOTTIME, &ts);
+		for(auto c=(ts.tv_nsec+ts.tv_sec)%1024 ; c; c--)
+			salt=random();
+	}
+	string crypass = BytesToHexString(reinterpret_cast<const uint8_t*>(&salt), 4);
+#ifdef DEBUG
+	plain="moopa";
+#else
+	cin >> plain;
+#endif
+	trimString(plain);
+	if(!AppendPasswordHash(crypass, plain.data(), plain.size()))
+		return EXIT_FAILURE;
+	cout << crypass <<endl;
+	return EXIT_SUCCESS;
+#else
+	cerr << "OpenSSL not available, hashing functionality disabled." <<endl;
+	return EXIT_FAILURE;
+#endif
+}
+
+
+bool AppendPasswordHash(string &stringWithSalt, LPCSTR plainPass, size_t passLen)
+{
+	if(stringWithSalt.length()<8)
+		return false;
+
+	uint8_t sum[20];
+	if(1!=PKCS5_PBKDF2_HMAC_SHA1(plainPass, passLen,
+			(unsigned char*) (stringWithSalt.data()+stringWithSalt.size()-8), 8,
+			NUM_PBKDF2_ITERATIONS,
+			sizeof(sum), (unsigned char*) sum))
+		return false;
+	stringWithSalt+=EncodeBase64((LPCSTR)sum, 20);
+	stringWithSalt+="00";
+#warning dbg
+	// checksum byte
+	uint8_t pCs=0;
+	for(char c : stringWithSalt)
+		pCs+=c;
+	stringWithSalt+=BytesToHexString(&pCs, 1);
+	return true;
+}
+#endif
+
 
 void runDemo()
 {
@@ -145,7 +228,7 @@ auto bt=getenv("BUSTEST");
 		string s(getenv("GETSUM"));
 		off_t resSize;
 		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
-		for (UINT i = 0; i < sizeof(csum); i++)
+		for (uint i = 0; i < sizeof(csum); i++)
 			printf("%02x", csum[i]);
 		printf("\n");
 		if (ok && getenv("REFSUM"))
@@ -241,6 +324,10 @@ int main(int argc, char **argv)
 			bForceCleanup=true;
 			**p=0x0; // ignore it if ever checked anywhere
 		}
+#if SUPPWHASH
+		else if (!strncmp(*p, "-H", 2))
+			exit(hashpwd());
+#endif
 	}
 
 	LPCSTR PRINTCFGVAR=getenv("PRINTCFGVAR");
@@ -339,6 +426,9 @@ static void usage() {
 		"-c: configuration directory\n"
 		"-e: on startup, run expiration once\n"
 		"-p: print configuration and exit\n"
+#if SUPPWHASH
+		"-H: read a password from STDIN and print its hash\n"
+#endif
 		"\n"
 		"Most interesting variables:\n"
 		"ForeGround: Don't detach (default: 0)\n"
@@ -358,8 +448,8 @@ static void SetupCacheDir()
 	{
 		// well, attempt to create it then
 		mstring path=cacheDirSlash+'/';
-		for(UINT pos=0; (pos=path.find(SZPATHSEP, pos)) < path.size(); ++pos)
-			mkdir((const char*) path.substr(0,pos).c_str(), (UINT) dirperms);
+		for(uint pos=0; (pos=path.find(SZPATHSEP, pos)) < path.size(); ++pos)
+			mkdir((const char*) path.substr(0,pos).c_str(), (uint) dirperms);
 	}
 
 	struct timeval tv;

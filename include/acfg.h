@@ -8,6 +8,8 @@
 #include <atomic>
 
 static const int RESERVED_DEFVAL = -4223;
+#define NUM_PBKDF2_ITERATIONS 1
+// 1757961
 #define ACNG_DEF_PORT "3142"
 
 #define ACFG_REDIRMAX_DEFAULT 5
@@ -95,6 +97,8 @@ extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 void dump_trace();
 int * GetIntPtr(LPCSTR key);
 mstring * GetStringPtr(LPCSTR key);
+
+int CheckAdminAuth(LPCSTR auth);
 } // namespace acfg
 
 namespace rechecks
@@ -126,5 +130,7 @@ bool CompileExpressions();
 #define CACHE_BASE_LEN (CACHE_BASE.length()) // where the relative paths begin
 #define SZABSPATH(x) (CACHE_BASE+(x)).c_str()
 #define SABSPATH(x) (CACHE_BASE+(x))
+
+bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
 
 #endif

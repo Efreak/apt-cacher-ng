@@ -548,11 +548,11 @@ void job::PrepareDownload() {
 		LOG("refined path: " << theUrl.sPath << "\n on host: " << theUrl.sHost);
 
 		char *pEnd(0);
-		UINT nPort = 80;
+		uint nPort = 80;
 		LPCSTR sPort=theUrl.GetPort().c_str();
 		if(!*sPort)
 		{
-			nPort = (UINT) strtoul(sPort, &pEnd, 10);
+			nPort = (uint) strtoul(sPort, &pEnd, 10);
 			if('\0' != *pEnd || pEnd == sPort || nPort > TCP_PORT_MAX || !nPort)
 				goto report_invport;
 		}

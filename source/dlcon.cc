@@ -430,7 +430,7 @@ struct tDlJob
 	 *
 	 * Process new incoming data and write it down to disk or other receivers.
 	 */
-	UINT ProcessIncomming(acbuf & inBuf, bool bOnlyRedirectionActivity)
+	uint ProcessIncomming(acbuf & inBuf, bool bOnlyRedirectionActivity)
 	{
 		LOGSTART("tDlJob::ProcessIncomming");
 		if (!m_pStorage)
@@ -615,7 +615,7 @@ struct tDlJob
 					inBuf.move();
 					return HINT_MORE;
 				}
-				UINT len(0);
+				uint len(0);
 				if (1 != sscanf(pStart, "%x", &len))
 				{
 					sErrorMsg = "500 Invalid data stream";
@@ -728,7 +728,7 @@ dlcon::~dlcon()
   g_nDlCons--;
 }
 
-inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &inpipe)
+inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &inpipe)
 {
 	LOGSTART2("dlcon::ExchangeData",
 			"qsize: " << inpipe.size() << ", sendbuf size: "
@@ -886,7 +886,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
              m_nLastDlCount=nCntNew;
 
              // well, split the bandwidth
-             auto nSpeedNowKib = UINT(acfg::maxdlspeed) / nCntNew;
+             auto nSpeedNowKib = uint(acfg::maxdlspeed) / nCntNew;
              auto nTakesPerSec = nSpeedNowKib / 32;
              if(!nTakesPerSec)
                 nTakesPerSec=1;
@@ -972,7 +972,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 			{
 
 				ldbg("Processing job for " << inpipe.front()->RemoteUri(false));
-				UINT res = inpipe.front()->ProcessIncomming(m_inBuf, false);
+				uint res = inpipe.front()->ProcessIncomming(m_inBuf, false);
 				ldbg(
 						"... incoming data processing result: " << res
 						<< ", emsg: " << inpipe.front()->sErrorMsg);
@@ -1017,7 +1017,7 @@ inline UINT dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 					auto it = inpipe.begin();
 					for(++it; it != inpipe.end(); ++it)
 					{
-						UINT rr = (**it).ProcessIncomming(m_inBuf, true);
+						uint rr = (**it).ProcessIncomming(m_inBuf, true);
 						// just the internal rewriting applied and nothing else?
 						if( HINT_TGTCHANGE != rr )
 						{
@@ -1065,7 +1065,7 @@ void dlcon::WorkLoop()
 
 	tDljQueue inpipe;
 	tTcpHandlePtr con;
-	UINT loopRes=0;
+	uint loopRes=0;
 
 	bool bStopRequesting=false; // hint to stop adding request headers until the connection is restarted
 
@@ -1253,7 +1253,7 @@ void dlcon::WorkLoop()
 			bStopRequesting = false;
 
 			// no error bits set, not busy -> this connection is still good, recycle properly
-			UINT all_err = HINT_DISCON | EFLAG_JOB_BROKEN | EFLAG_LOST_CON | EFLAG_MIRROR_BROKEN;
+			uint all_err = HINT_DISCON | EFLAG_JOB_BROKEN | EFLAG_LOST_CON | EFLAG_MIRROR_BROKEN;
 			if (con && !(loopRes & all_err))
 			{
 				dbgline;

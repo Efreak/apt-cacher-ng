@@ -224,7 +224,7 @@ void pkgmirror::Action()
 	if (m_bCalcSize)
 	{
 
-		UINT dcount=0;
+		uint dcount=0;
 
 		SendFmt << "<b>Counting downloadable content size..."
 				<< (m_bAsNeeded? " (filtered)" : "")  << "</b><br>";
@@ -364,10 +364,10 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 				{
 					mstring s(split);
 					const char *p = s.c_str();
-					if(!p || !*p || !isdigit(UINT(*p)))
+					if(!p || !*p || !isdigit(uint(*p)))
 						continue;
 					for(++p; *p; ++p)
-						if(!isalnum(UINT(*p)) && !strchr(".-+:~",UINT(*p)))
+						if(!isalnum(uint(*p)) && !strchr(".-+:~",uint(*p)))
 							break;
 					if( !*p && CompDebVerLessThan(s, parts[1]))
 						sorted.push_back(s);
