@@ -30,7 +30,7 @@
                      the values used to visit this page. For example,
                      edit&nbsp;<i>/etc/apt/apt.conf</i> and add the line:
                      <p />
-            <div class="rawstyle">Acquire::http { Proxy "http://$SERVERIP:$SERVERPORT"; };</div>
+            <div class="rawstyle">Acquire::http { Proxy "http://${serverip}:${cfg:port}"; };</div>
                      <p />
                      </li>
 
@@ -38,32 +38,33 @@
                      <b>OR:</b>
                      Edit the <i>/etc/apt/sources.list</i> file and edit the source lines
                      therein, replacing the mirror hostname with the hostname of this
-                     server machine and the port with $SERVERPORT (adding a port if none
+                     server machine and the port with ${cfg:port} (adding a port if none
                      specified). For example:
                      <p /><div class="rawstyle" style="color:gray;">
                      deb http://ftp.debian.org/debian stable main contrib non-free<br>
                      deb-src http://ftp.debian.org/debian stable main contrib non-free</div><p/>
                      becomes:<p/>
-                     <div class="rawstyle">deb http://$SERVERIP:$SERVERPORT/ftp.debian.org/debian stable main contrib non-free<br/>
-                        deb-src http://$SERVERIP:$SERVERPORT/ftp.debian.org/debian stable main contrib non-free</div><p/>
+                     <div class="rawstyle">deb http://${serverip}:${cfg:port}/ftp.debian.org/debian stable main contrib non-free<br/>
+                        deb-src http://${serverip}:${cfg:port}/ftp.debian.org/debian stable main contrib non-free</div><p/>
                      Depending on the configuration, it might be possible to use a shortcut
                      for the base URLs without knowing the mirror, for example:<p/>
-                     <div class="rawstyle">deb http://$SERVERIP:$SERVERPORT/debian stable main contrib non-free</div><p/>
+                     <div class="rawstyle">deb http://${serverip}:${cfg:port}/debian stable main contrib non-free</div><p/>
                      Ask your system administrator for details.
                      </li>
                   </ul>
                   <h3>Related links</h3>
                   <ul>
-                     <li><a href=$REPAGE>Statistics report and configuration page</a> for this Apt-Cacher NG installation. Also see <b>Notes</b> below.</li>
-                     <li><a href=http://www.unix-ag.uni-kl.de/~bloch/acng/>Project Homepage</a>
+                     <li><a href="${cfg:ReportPage}">Statistics report and configuration page</a> for this Apt-Cacher NG installation. Also see <b>Notes</b> below.</li>
+                     <li><a href="http://www.unix-ag.uni-kl.de/~bloch/acng/">Project Homepage</a>
                   </ul>
                   <h3>Notes</h3>
                   This page is a pre-installed template not customized by the system
-                  administrator. The links given above may contain default or guessed and
-                  therefore incorrect components. Adapt the file <i>userinfo.html</i> in
+                  administrator. The links given above may contain default or guessed (and
+                  therefore incorrect) components. The system administrator could adapt the 
+                  file <i>userinfo.html</i> in
                   Apt-Cacher NG's configuration directory to set the correct contents.
 
-                  $FOOTER
+                  ${footer}
                </div>
             </td>
          </tr>

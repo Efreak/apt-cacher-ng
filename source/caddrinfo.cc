@@ -7,29 +7,25 @@
 #include "lockable.h"
 #include "cleaner.h"
 
-using namespace MYSTD;
+#include <unordered_map>
 
-static map<string, CAddrInfo::SPtr> mapDnsCache;
-static pthread_mutex_t lockDnsCache= PTHREAD_MUTEX_INITIALIZER;
+using namespace std;
 
-CAddrInfo::CAddrInfo() :
-	m_nExpTime(0), m_addrInfo(NULL), m_resolvedInfo(NULL)
-{
-}
+static class : public unordered_map<string, CAddrInfo::SPtr>, public lockable {} mapDnsCache;
 
 bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 		string & sErrorBuf)
 {
 	LOGSTART2("CAddrInfo::Resolve", "Resolving " << sHostname);
 
-	LPCSTR port = sPort.empty() ? NULL : sPort.c_str();
+	LPCSTR port = sPort.empty() ? nullptr : sPort.c_str();
 
 	static struct addrinfo hints =
 	{
 	// we provide numbers, no resolution needed; only supported addresses
-			(port?AI_NUMERICSERV:0) | AI_ADDRCONFIG,
+			(port ? AI_NUMERICSERV:0) | AI_ADDRCONFIG,
 			PF_UNSPEC, SOCK_STREAM, IPPROTO_TCP,
-			0, NULL, NULL, NULL };
+			0, nullptr, nullptr, nullptr };
 
 	// if only one family is specified, filter on this earlier
 	if(acfg::conprotos[0] != PF_UNSPEC && acfg::conprotos[1] == PF_UNSPEC)
@@ -38,7 +34,7 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 	if (m_resolvedInfo)
 	{
 		freeaddrinfo(m_resolvedInfo);
-		m_resolvedInfo=NULL;
+		m_resolvedInfo=nullptr;
 	}
 
 	int r=getaddrinfo(sHostname.c_str(), port, &hints, &m_resolvedInfo);
@@ -53,7 +49,7 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 
 	LOG("Host resolved");
 
-	for (struct addrinfo * pCur=m_resolvedInfo; pCur; pCur = pCur->ai_next)
+	for (auto pCur=m_resolvedInfo; pCur; pCur = pCur->ai_next)
 	{
 		if (pCur->ai_socktype == SOCK_STREAM&& pCur->ai_protocol == IPPROTO_TCP)
 		{
@@ -83,9 +79,8 @@ CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string 
 	mstring dnsKey=sHostname+":"+sPort;
 
 	SPtr p;
-
 	{
-		lockguard g(&lockDnsCache);
+		lockguard g(mapDnsCache);
 		SPtr localEntry;
 		SPtr & cand = acfg::dnscachetime>0 ? mapDnsCache[dnsKey] : localEntry;
 		if(cand && cand->m_nExpTime >= now)
@@ -110,7 +105,7 @@ CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string 
 	else // not good, remove from the cache again
 	{
 		aclog::err( (tSS()<<"Error resolving "<<dnsKey<<": " <<sErrorMsgBuf).c_str());
-		lockguard g(&lockDnsCache);
+		lockguard g(mapDnsCache);
 		mapDnsCache.erase(dnsKey);
 		p->unlock();
 		p.reset();
@@ -121,11 +116,10 @@ CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string 
 
 time_t CAddrInfo::BackgroundCleanup()
 {
-	lockguard g(&lockDnsCache);
+	lockguard g(mapDnsCache);
 	time_t now(GetTime()), ret(END_OF_TIME);
 
-	for(map<string, CAddrInfo::SPtr>::iterator it=mapDnsCache.begin();
-			it!=mapDnsCache.end(); )
+	for(auto it=mapDnsCache.begin(); it!=mapDnsCache.end(); )
 	{
 		if(it->second)
 		{
@@ -143,3 +137,8 @@ time_t CAddrInfo::BackgroundCleanup()
 	return ret;
 }
 
+void DropDnsCache()
+{
+	lockguard g(mapDnsCache);
+	mapDnsCache.clear();
+}

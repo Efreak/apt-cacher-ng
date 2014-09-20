@@ -7,11 +7,7 @@
 #include "acbuf.h"
 #include <sys/types.h>
 #include "fileitem.h"
-
-/*
-class fileitem_base;
-typedef SHARED_PTR<fileitem_base> tFileItemPtr;
-*/
+#include "maintenance.h"
 
 class con;
 
@@ -61,10 +57,9 @@ class job {
       
       eJobState m_state, m_backstate;
       
-      //mstring m_sErrorMsgBuffer;
       tSS m_sendbuf;
       mstring m_sFileLoc; // local_relative_path_to_file
-      mstring m_sMaintCmd;
+      tSpecialRequest::eMaintWorkType m_eMaintWorkType = tSpecialRequest::workNotSpecial;
       mstring m_sOrigUrl; // local SAFE copy of the originating source
       
       header *m_pReqHead; // copy of users requests header
@@ -88,6 +83,12 @@ class job {
       bool ParseRange();
 
       off_t m_nReqRangeFrom, m_nReqRangeTo;
+};
+
+
+class tTraceData: public tStrSet, public lockable {
+public:
+	static tTraceData& getInstance();
 };
 
 #endif

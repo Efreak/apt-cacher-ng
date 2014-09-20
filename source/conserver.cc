@@ -24,9 +24,13 @@
 #include <tcpd.h>
 #endif
 
+#ifdef HAVE_SD_NOTIFY
+#include <systemd/sd-daemon.h>
+#endif
+
 #include "debug.h"
 
-using namespace MYSTD;
+using namespace std;
 
 // for cygwin, incomplete ipv6 support
 #ifndef AF_INET6
@@ -162,7 +166,7 @@ void SetupConAndGo(int fd, const char *szClientName=NULL)
 			LOG("Connection to backlog, total count: " << g_freshConQueue.size());
 
 
-		} catch (MYSTD::bad_alloc&)
+		} catch (std::bad_alloc&)
 		{
 			USRDBG( "Out of memory");
 			goto local_con_failure;
@@ -171,7 +175,7 @@ void SetupConAndGo(int fd, const char *szClientName=NULL)
 	
 	if (!SpawnThreadsAsNeeded())
 	{
-		errnoFmter fer("Cannot start threads, cleaning up. Reason: ");
+		tErrnoFmter fer("Cannot start threads, cleaning up. Reason: ");
 		USRDBG(fer);
 		lockguard g(g_ThreadPoolCondition);
 		while(!g_freshConQueue.empty())
@@ -192,16 +196,23 @@ void SetupConAndGo(int fd, const char *szClientName=NULL)
 
 void CreateUnixSocket() {
 	string & sPath=acfg::fifopath;
-	struct sockaddr_un addr_unx;
-	memset(&addr_unx, 0, sizeof(addr_unx));
+	auto addr_unx = sockaddr_un();
 	
 	int jo=1;
 	size_t size = sPath.length()+1+offsetof(struct sockaddr_un, sun_path);
 	
+	auto die=[]() {
+		cerr << "Error creating Unix Domain Socket, ";
+		cerr.flush();
+		perror(acfg::fifopath.c_str());
+		cerr << "Check socket file and directory permissions" <<endl;
+		exit(EXIT_FAILURE);
+	};
+
 	if(sPath.length()>sizeof(addr_unx.sun_path))
 	{
 		errno=ENAMETOOLONG;
-		goto unx_err;
+		die();
 	}
 	
 	addr_unx.sun_family = AF_UNIX;
@@ -214,28 +225,23 @@ void CreateUnixSocket() {
 	setsockopt(g_sockunix, SOL_SOCKET, SO_REUSEADDR, &jo, sizeof(jo));
 
 	if (g_sockunix<0)
-		goto unx_err;
+		die();
 	
 	if (::bind(g_sockunix, (struct sockaddr *)&addr_unx, size) < 0)
-		goto unx_err;
+		die();
 	
 	if (0==listen(g_sockunix, SO_MAXCONN))
 	{
 		g_vecSocks.push_back(g_sockunix);
 		return;
 	}
-	
-	unx_err:
-	cerr << "Error creating Unix Domain Socket, ";
-	cerr.flush();
-	perror(acfg::fifopath.c_str());
-	cerr << "Check socket file and directory permissions" <<endl;
-	exit(EXIT_FAILURE);
+
 
 }
 
 void Setup()
 {
+	LOGSTART2s("Setup", 0);
 	using namespace acfg;
 	
 	if (fifopath.empty() && port.empty())
@@ -246,8 +252,7 @@ void Setup()
 	
 	if (atoi(port.c_str())>0)
 	{
-		struct addrinfo    hints;
-		memset(&hints, 0, sizeof hints);
+		auto hints = addrinfo();
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE;
 		hints.ai_family = 0;
@@ -255,42 +260,43 @@ void Setup()
 		
 		tStrVec sAdds;
 		if(bindaddr.empty())
-			sAdds.push_back(""); // one dummy entry to get one NULL later
+			sAdds.push_back(sEmptyString); // one dummy entry to get one NULL later
 		else
 			Tokenize(bindaddr, SPACECHARS, sAdds);
-		for(tStrVec::iterator it=sAdds.begin(); it!=sAdds.end(); it++)
+		for(auto& sad : sAdds)
 		{
-			trimString(*it);
+			trimString(sad);
 		    struct addrinfo *res, *p;
 		    
-		    if(0!=getaddrinfo(bindaddr.empty() ? NULL : it->c_str(),
+		    if(0!=getaddrinfo(bindaddr.empty() ? NULL : sad.c_str(),
 				   port.c_str(), &hints, &res))
 			   goto error_getaddrinfo;
 		    
 		    for(p=res; p; p=p->ai_next)
 		    {
-		    	int sockip = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-				if (sockip<0)
+		    	int nSockFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+				if (nSockFd<0)
 					goto error_socket;
 
-          // if we have a dual-stack IP implementation (like on Linux) then
-          // explicitely disable the shadow v4 listener. Otherwise it might be
-          // bound, or maybe not, and then maybe because of the dual-behaviour,
-          // or maybe because of real errors; we just cannot know for sure but
-          // we have to.
+				// if we have a dual-stack IP implementation (like on Linux) then
+				// explicitely disable the shadow v4 listener. Otherwise it might be
+				// bound, or maybe not, and then maybe because of the dual-behaviour,
+				// or maybe because of real errors; we just cannot know for sure but
+				// we have to.
 #if defined(IPV6_V6ONLY) && defined(SOL_IPV6)
-		    	if(p->ai_family==AF_INET6)
-		    		setsockopt(sockip, SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
+				if(p->ai_family==AF_INET6)
+					setsockopt(nSockFd, SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
 #endif		    	
-				setsockopt(sockip, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+				setsockopt(nSockFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 				
 				
-		    	if (::bind(sockip, p->ai_addr, p->ai_addrlen))
+		    	if (::bind(nSockFd, p->ai_addr, p->ai_addrlen))
 		    		goto error_bind;
-		    	if (listen(sockip, SO_MAXCONN))
+		    	if (listen(nSockFd, SO_MAXCONN))
 		    		goto error_listen;
 		    	
-		    	g_vecSocks.push_back(sockip);
+			USRDBG( "created socket, fd: " << nSockFd);// << ", for bindaddr: "<<bindaddr);
+		    	g_vecSocks.push_back(nSockFd);
 		    	
 		    	continue;
 
@@ -318,7 +324,7 @@ void Setup()
 				goto close_socket;
 
 				close_socket:
-				forceclose(sockip);
+				forceclose(nSockFd);
 		    }
 		    freeaddrinfo(res);
 		    continue;
@@ -345,6 +351,11 @@ void Setup()
 int Run()
 {
 	LOGSTART2s("Run", "GoGoGo");
+
+#ifdef HAVE_SD_NOTIFY
+	sd_notify(0, "READY=1");
+#endif
+
 	fd_set rfds, wfds;
 	int maxfd = 1 + *max_element(g_vecSocks.begin(), g_vecSocks.end());
 	USRDBG( "Listening to incoming connections...");
@@ -354,8 +365,7 @@ int Run()
 
 		FD_ZERO(&rfds);
 		FD_ZERO(&wfds);
-		for(vector<int>::iterator it=g_vecSocks.begin(); it!=g_vecSocks.end(); it++)
-			FD_SET(*it, &rfds);
+		for(auto soc: g_vecSocks) FD_SET(soc, &rfds);
 		
 		//cerr << "Polling..." <<endl;
 		int nReady=select(maxfd, &rfds, &wfds, NULL, NULL);
@@ -369,11 +379,11 @@ int Run()
 			exit(EXIT_FAILURE);
 		}
 		
-		for(vector<int>::iterator it=g_vecSocks.begin(); it!=g_vecSocks.end(); it++)
+		for(const auto soc: g_vecSocks)
 		{
-			if(!FD_ISSET(*it, &rfds)) 	continue;
+			if(!FD_ISSET(soc, &rfds)) 	continue;
 
-			if(g_sockunix == *it)
+			if(g_sockunix == soc)
 			{
 				int fd = accept(g_sockunix, NULL, NULL);
 				if (fd>=0)
@@ -393,7 +403,7 @@ int Run()
 				struct sockaddr_storage addr;
 
 				socklen_t addrlen = sizeof(addr);
-				int fd=accept(*it,(struct sockaddr *)&addr, &addrlen);
+				int fd=accept(soc,(struct sockaddr *)&addr, &addrlen);
 //fd_accepted:
 				if (fd>=0)
 				{
@@ -458,8 +468,7 @@ void Shutdown()
 	g_ThreadPoolCondition.notifyAll();
 	
 	printf("Closing listening sockets\n");
-	for(vector<int>::iterator it=g_vecSocks.begin(); it!=g_vecSocks.end(); it++)
-		termsocket_quick(*it);
+	for(auto soc: g_vecSocks) termsocket_quick(soc);
 }
 
 }

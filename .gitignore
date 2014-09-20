@@ -1,0 +1,16 @@
+/Debug
+.*project
+.settings
+*.swp
+*~
+build
+TODO.next
+dbgen/tmp/*
+doc/dev/*
+perfstats/*
+dev/*
+*/.gitignore
+patches
+murks
+dev
+dbgen/dbgenerator.tgz

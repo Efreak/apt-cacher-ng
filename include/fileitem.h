@@ -6,11 +6,12 @@
 
 #include "config.h"
 #include "lockable.h"
-#include <header.h>
+#include "header.h"
+#include <unordered_map>
 
 class fileitem;
 typedef SHARED_PTR<fileitem> tFileItemPtr;
-typedef MYSTD::multimap<mstring, tFileItemPtr> tFiGlobMap;
+class tFiGlobMap : public lockable, public std::unordered_multimap<mstring, tFileItemPtr> {};
 
 //! Base class containing all required data and methods for communication with the download sources
 class fileitem : public condition
@@ -104,10 +105,10 @@ public:
 	inline fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
 	virtual ~fileitem_with_storage();
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
-	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow);
+	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
 	virtual bool DownloadStartedStoreHeader(const header & h, const char *pNextData,
-			bool bForcedRestart, bool&);
-	virtual bool StoreFileData(const char *data, unsigned int size);
+			bool bForcedRestart, bool&) override;
+	virtual bool StoreFileData(const char *data, unsigned int size) override;
 
 	inline static mstring NormalizePath(cmstring &sPathRaw)
 	{
@@ -122,12 +123,16 @@ public:
 class fileItemMgmt
 {
 public:
-	// related to GetRegisteredFileItem but used for registration of custom file item
-	// implementations created elsewhere (which still need to obey regular work flow)
-	static fileItemMgmt RegisterFileItem(tFileItemPtr spCustomFileItem);
 
 	// public constructor wrapper, get a unique object from the map or a new one
-	static fileItemMgmt GetRegisteredFileItem(cmstring &sPathUnescaped, bool bConsiderAltStore);
+	bool PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore);
+
+	// related to GetRegisteredFileItem but used for registration of custom file item
+	// implementations created elsewhere (which still need to obey regular work flow)
+	bool RegisterFileItem(tFileItemPtr spCustomFileItem);
+
+	// deletes global registration and replaces m_ptr with another copy
+	void RegisterFileitemLocalOnly(fileitem* replacement);
 
 	//! @return: true iff there is still something in the pool for later cleaning
 	static time_t BackgroundCleanup();
@@ -137,19 +142,19 @@ public:
 	// when copied around, invalidates the original reference
 	~fileItemMgmt();
 	inline fileItemMgmt() {}
-	fileItemMgmt(const fileItemMgmt &src);
-	fileItemMgmt& operator=(const fileItemMgmt &src);
-
-	inline fileitem* operator->() const {return m_ptr.get();}
-	inline tFileItemPtr & get() {return m_ptr;}
+	inline tFileItemPtr get() {return m_ptr;}
 	inline operator bool() const {return (bool) m_ptr;}
 
-	// deletes global registration and replaces m_ptr with another copy
-	void ReplaceWithLocal(fileitem* replacement);
 
 private:
 	tFileItemPtr m_ptr;
 	void Unreg();
+
+	fileItemMgmt(const fileItemMgmt &src);
+	fileItemMgmt& operator=(const fileItemMgmt &src);
+
+	inline fileitem* operator->() const {return m_ptr.get();}
+
 };
 #else
 #define fileItemMgmt void

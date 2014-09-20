@@ -21,10 +21,10 @@ class CAddrInfo;
 class CAddrInfo : public lockable
 {
 public:
-	time_t m_nExpTime;
-	struct addrinfo * m_addrInfo;
+	time_t m_nExpTime=0;
+	struct addrinfo * m_addrInfo=nullptr;
 	
-	CAddrInfo();
+	CAddrInfo() =default;
 	bool Resolve(const mstring & sHostname, const mstring &sPort, mstring & sErrorBuf);
 	~CAddrInfo();
 
@@ -35,7 +35,7 @@ public:
 	static time_t BackgroundCleanup();
 
 protected:
-	struct addrinfo * m_resolvedInfo; // getaddrinfo excrements, to cleanup
+	struct addrinfo * m_resolvedInfo=nullptr; // getaddrinfo excrements, to cleanup
 
 private:
 	// not to be copied ever

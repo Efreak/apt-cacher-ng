@@ -36,16 +36,16 @@ class header {
       };
 #define ACNGFSMARK XORIG
 
-      eHeadType type;
+      eHeadType type = INVALID;
       mstring frontLine;
-      unsigned int m_nEstimLength;
+      unsigned int m_nEstimLength=0;
       
-      char *h[HEADPOS_MAX];
+      char *h[HEADPOS_MAX] = {0};
                            
-      header();
+      inline header(){};
+      ~header();
       header(const header &);
       header& operator=(const header&); 
-      ~header();
       
       static mstring GenInfoHeaders();
       static bool ParseDate(const char *, struct tm*);
@@ -59,7 +59,7 @@ class header {
        * -1: invalid
        *  >0: length of the processed data
        */
-      int LoadFromBuf(const char *src, UINT length); 
+      int LoadFromBuf(const char *src, uint length); 
       int LoadFromFile(const mstring & sPath);
       
       //! returns byte count or negative errno value
@@ -78,10 +78,10 @@ class header {
       inline int getStatus() const { int r=atoi(getCodeMessage()); return r ? r : 500; }
       void clear();
       
-      mstring ToString() const;
+      tSS ToString() const;
 
    private:
-	   int Load(const char *src, UINT length);
+	   int Load(const char *src, uint length);
 };
 
 inline bool BODYFREECODE(int status)

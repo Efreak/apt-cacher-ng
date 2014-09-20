@@ -1,3 +1,115 @@
+apt-cacher-ng (0.8.0rc1) BETA; urgency=low
+
+  * Systemd changes: sd_notify integration if libsystemd-daemon is available.
+    Service file now can act more precisely if Type is set to notify. Minor
+    tmpfiles config tuning to survive bad permission changes, obsoleting the
+    ExecStartPre command.
+  * Alternative to download thread wake via pipe with eventfd on Linux systems
+    (needs less file descriptors)
+  * Config file lookup code change to found .default files scattered between
+    config and support-data folders
+  * Fix false positive of the bad-auth-page-redirection detector, triggering
+    on multiple redirects with some HTML content (Sourceforge scheme). Also
+    allowed ?&= to be sent unencoded since some server's don't decode the
+    escaped version correctly.
+  * Keep some information in cached headers while reseting the file state
+    (needed to retrive original URL for maintenance tasks)
+  * Rereading disk information in advanced file checks (maintenance), cache
+    cannot be trusted and keeping it fresh is not worth the efforts
+  * Fixed HTTP redirection with backend mode
+  * Maintenance download code now prefers the original path resolved by
+    backend consideration if that option looks more likely
+  * Internal refactoring WRT download job management
+  * Fixed Base64 encoding to work correctly with non-ascii characters (still
+    not recommended, better use URL encoding in password settings!)
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 20 Sep 2014 10:51:05 +0200
+
+apt-cacher-ng (0.8.0~pre3) BETA; urgency=low
+
+  * Special handling for a case where no volatile (meta) data is present in
+    the cache in its original version but the pdiff patches are there. The
+    guessed best version of the base file is fetched automatically.
+  * Internal refactoring, replacement of GCC specific atomic operations in
+    debug code
+  * FIX: potential bottleneck (serialization of connect operations because of
+    too big critical section)
+  * FIX: SSL_connect now running on non-blocking file handle with timeout,
+    hopefully avoiding the sometimes happening freezing for hours
+  * Database update
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 09 Sep 2014 22:52:32 +0200
+
+apt-cacher-ng (0.8.0~pre2) ALPHA; urgency=low
+
+  * Fixed Tracing mode in non-debug build
+  * Added NEWS.Debian to the volatile patterns filter (LP: #1350432)
+  * FIX: premature release of internal file descriptors sometimes causing
+    pointless reconnects (thanks to Kirill Timofeev)
+  * FIX: rare case of premature abortion of a chunked transfer if the source
+    deliveres data to slowly
+  * Added a trick to allow silent handling of arbitrary range requests in a
+    more appropriate way (returning 206) within a limited defined period
+    (configured through MaxInresponsiveDlSize variable; Debian bug #744727)
+  * Stopped using encoded URL strings in the internal processing (pointless
+    code compilications)
+  * Added support for more formats of the Location: URL in redirects
+  * Refactoring of old file item maintaining code
+  * Partial workaround for transparent redirects to WiFi auth sites etc.
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 30 Aug 2014 21:33:14 -0700
+
+apt-cacher-ng (0.8.0~pre1) ALPHA; urgency=low
+
+  * Better reporting of error messages in config file reader (Alioth
+    task 314684)
+  * Source tree cleanup, moving to git
+  * Database update
+  * overall code review and refactoring with C++11 features, now requiring
+    language feature support of GCC 4.7 or newer or equivalent Clang compiler
+  * Admin helper tool for identification of required filename pattern changes
+  * Additional pattern options that extend the current ones, allowing to user
+    to add custom configuration without interference with future updates of
+    default settings
+  * Special file name pattern set which identifies static files before
+    name is checked against volatile file pattern. The feature is now used to
+    identify special .gpg files that are static while volatile rule matches
+    all others .gpg files (Debian bug 720165)
+  * Partial rewrite of internal web page creation code, new syntax for server
+    side includes, with smooth access to configuration options and less
+    computational overhead
+  * better checks for compiler and linker features
+  * CXXFLAGS and LDFLAGS variable passing (for optimizations, see INSTALL)
+  * Using hash maps/sets on various locations for better performance
+  * Portability fixes for systems without zlib or libbz2
+  * Lots of refactoring on maintenance page factory code, including bugfix:
+    Displaying user info page rather than admin page if the admin page site
+    name was not configured in the config at all
+  * On expiration code, review and partial rewrite:
+    + better readability and performance
+    + less memory usage
+    + contents checking for Debian Installer image indexes, no more carte
+      blanche for d-i files unless one adds them manually to the whitelist
+    + better checking file sizes inconsistencies without checksumming
+  * Review and refactoring of repository management:
+    + better readability
+    + now using better tailored containers
+    + stricter size format parsing on certain places
+    + fixed removal checkboxes not appearing sometimes
+  * Helper rules to install database generation scripts, see Debian package
+    for details
+  * If OpenSSL is available, use libcrypto implementations of SHA1 and MD5
+    hashing (much faster on modern CPUs)
+  * Added data download throttling (AKA speed/rate limiting)
+  * Additional care about never truncating files while they might be still
+    open in the maintenance tasks
+  * Rudimentary handling of SIGBUS; only user notification with guessed
+    trouble source (mmap'ed file) in error log and gracefull exit
+  * If OpenSSL is available, use libcrypto implementation of SHA1 and MD5
+    hashing (much faster on modern CPUs)
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 16 Jul 2014 22:00:34 +0200
+
 apt-cacher-ng (0.7.27) BETA; urgency=low
 
   * Starting with this release, this branch goes into maintenance mode and

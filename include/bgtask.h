@@ -13,11 +13,15 @@
 #include <iostream>
 #include <fstream>
 
-class tWuiBgTask : public tWUIPage
+class tSpecOpDetachable : public tSpecialRequest
 {
 public:
-	tWuiBgTask(int);
-	virtual ~tWuiBgTask();
+	// forward all constructors, no specials here
+	// XXX: oh please, g++ 4.7 is not there yet... using tSpecialRequest::tSpecialRequest;
+	inline tSpecOpDetachable(const tSpecialRequest::tRunParms& parms)
+	: tSpecialRequest(parms)	{ };
+
+	virtual ~tSpecOpDetachable();
 
 	 /*!
 	  * This execution implementation makes sure that only one task runs
@@ -25,26 +29,23 @@ public:
 	  *
 	  * Work is to be done the Action() method implemented by the subclasses.
 	  */
-	virtual void Run(const mstring &cmd);
+	virtual void Run() override;
 
 protected:
 	bool CheckStopSignal();
 
 	// to be implemented by subclasses
-	virtual void Action(const mstring &) =0;
+	virtual void Action() =0;
 
-	void AfterSendChunk(const char *data, size_t size);
+	void AfterSendChunk(const char *data, size_t size) override;
 
 	void DumpLog(time_t id);
 
 	time_t GetTaskId();
 
-	bool m_bShowControls;
-	mstring m_sTypeName;
-
 private:
 
-	MYSTD::ofstream m_reportStream;
+	std::ofstream m_reportStream;
 
 	// XXX: this code sucks and needs a full review. It abuses shared_ptr as stupid reference
 	// counter. Originally written with some uber-protective considerations in mind like
@@ -62,6 +63,8 @@ private:
 	typedef SMARTPTR_SPACE::shared_ptr<tProgressTracker> tProgTrackPtr;
 	static SMARTPTR_SPACE::weak_ptr<tProgressTracker> g_pTracker;
 	tProgTrackPtr m_pTracker;
+	protected:
+	tStrSet m_delCboxFilter;
 };
 
 struct tRemoteFileInfo;
@@ -69,7 +72,7 @@ struct tRemoteFileInfo;
 class ifileprocessor
 {
 public:
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressForChecksum) = 0;
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) = 0;
 	virtual ~ifileprocessor() {};
 };
 
@@ -77,15 +80,15 @@ extern pthread_mutex_t abortMx;
 extern bool bSigTaskAbort;
 
 #ifdef DEBUG
-class tBgTester : public tWuiBgTask
+class tBgTester : public tSpecOpDetachable
 {
 public:
-	inline tBgTester(int fd): tWuiBgTask(fd)
+	inline tBgTester(const tSpecialRequest::tRunParms& parms)
+	: tSpecOpDetachable(parms)
 	{
 		m_szDecoFile="maint.html";
-		m_sTypeName="Tick-Tack-Tick-Tack";
 	}
-	void Action(cmstring &);
+	void Action() override;
 };
 #endif // DEBUG
 

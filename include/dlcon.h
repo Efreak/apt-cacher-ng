@@ -18,7 +18,7 @@
 
 struct tDlJob;
 typedef SHARED_PTR<tDlJob> tDlJobPtr;
-typedef MYSTD::list<tDlJobPtr> tDljQueue;
+typedef std::list<tDlJobPtr> tDljQueue;
 
 class dlcon : public lockable
 { 
@@ -30,10 +30,9 @@ class dlcon : public lockable
         
         void SignalStop();
 
-	    void AddJob(tFileItemPtr m_pItem, tHttpUrl hi);
-        void AddJob(tFileItemPtr m_pItem, const acfg::tRepoData *pBackends,
-        		const mstring & sPatSuffix);
-    	void EnqJob(tDlJob *);
+        bool AddJob(tFileItemPtr m_pItem, tHttpUrl *pForcedUrl=nullptr,
+        		const acfg::tRepoData *pRepoDesc=nullptr,
+        		cmstring *sPatSuffix=nullptr);
 
         mstring m_sXForwardedFor;
 
@@ -43,27 +42,31 @@ class dlcon : public lockable
     	dlcon & operator=(const dlcon&);
     	dlcon(const dlcon&);
     	
-    	friend class tDlJob;
+    	friend struct tDlJob;
     	
     	tDljQueue m_qNewjobs;
 
-    	int m_wakepipe[2];
-
+#ifdef HAVE_LINUX_EVENTFD
+    	int m_wakeventfd = -1;
+#define fdWakeRead m_wakeventfd
+#define fdWakeWrite m_wakeventfd
+#else
+    	int m_wakepipe[] = {-1, -1};
+#define fdWakeRead m_wakepipe[0]
+#define fdWakeWrite m_wakepipe[1]
+#endif
     	// flags and local copies for input parsing
     	/// remember being attached to an fitem
 
     	bool m_bStopASAP;
 
-    	UINT m_bManualMode;
+    	uint m_bManualMode;
 
     	/// blacklist for permanently failing hosts, with error message
-    	MYMAP<MYSTD::pair<cmstring,cmstring>, mstring> m_blacklist;
-    	void BlacklistMirror(tDlJobPtr &failJob, cmstring &msg);
-    	bool SetupJobConfig(tDlJobPtr &job, mstring *pReasonMsg);
-
+    	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
     	tSS m_sendBuf, m_inBuf;
 
-    	UINT ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &qActive);
+    	uint ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &qActive);
 
     	// Disable pipelining for the next # requests. Actually used as crude workaround for the
     	// concept limitation (because of automata over a couple of function) and its
@@ -82,7 +85,17 @@ class dlcon : public lockable
     	// the default behavior or using or not using the proxy. Will be set
     	// if access proxies shall no longer be used.
     	bool m_bProxyTot;
+
+    	// this is a binary factor, meaning how many reads from buffer are OK when
+    	// speed limiting is enabled
+    	unsigned m_nSpeedLimiterRoundUp = (unsigned(1)<<16)-1;
+    	unsigned m_nSpeedLimitMaxPerTake = MAX_VAL(unsigned);
+      unsigned m_nLastDlCount=0;
+
+      void wake();
 };
+
+#define IS_REDIRECT(st) (st == 301 || st == 302 || st == 307)
 
 #endif
 

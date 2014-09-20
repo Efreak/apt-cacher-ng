@@ -13,10 +13,10 @@ clean_db_tmp:
 	rm -rf "$(DBTMP)"
 
 $(CONFDIR):
-	mkdir -p $(CONFDIR)
+	mkdir -p "$(CONFDIR)"
 
 $(DBTMP):
-	mkdir -p $(DBTMP)
+	mkdir -p "$(DBTMP)"
 
 # the get_* targets are intended to fetch data, but only change the key file (prerequisite for other rules) if the data has really changed
 # this is the first stage of the gendbs target. 
@@ -86,5 +86,10 @@ $(CONFDIR)/debvol_mirrors.gz: sig-debian deburlgen.pl
 $(CONFDIR)/gentoo_mirrors.gz:
 	cd conf && sh ../gentoo_mirrors.sh
 
-package:
-	tar c $(DBTMP)/sig-* sig-* deburlgen.pl gentoo_mirrors.sh ubuntuscan.sh | gzip -9 > $(DBGENERATOR).tgz
+TGTDIR=dbupdate
+
+package: $(DBTMP)
+	rm -rf $(TGTDIR) && mkdir $(TGTDIR) && cp -l Makefile deburlgen.pl gentoo_mirrors.sh ubuntuscan.sh sig-* $(TGTDIR) && tar --xz -c -f $(DBGENERATOR).tar.xz $(TGTDIR)
+
+install:
+	cp conf/*mirrors* /usr/lib/apt-cacher-ng/
