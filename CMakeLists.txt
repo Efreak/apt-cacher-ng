@@ -206,7 +206,9 @@ int main(int argc, char **argv) { off_t yes(3); return (int) sendfile(1, 2, &yes
 ")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LINUX_SENDFILE)
 
+if("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
 CHECK_CXX_SOURCE_COMPILES("#include \"${CMAKE_SOURCE_DIR}/include/testeventfd.h\"" HAVE_LINUX_EVENTFD)
+endif()
 
 SET(TESTSRC "
 #include <unistd.h>
