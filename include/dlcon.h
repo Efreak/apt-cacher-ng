@@ -51,7 +51,7 @@ class dlcon : public lockable
 #define fdWakeRead m_wakeventfd
 #define fdWakeWrite m_wakeventfd
 #else
-    	int m_wakepipe[] = {-1, -1};
+    	int m_wakepipe[2] = {-1, -1};
 #define fdWakeRead m_wakepipe[0]
 #define fdWakeWrite m_wakepipe[1]
 #endif
