@@ -600,11 +600,9 @@ string EncodeBase64(LPCSTR data, uint len)
 	uint32_t bits=0;
 	uint char_count=0;
 	char alphabet[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-	tStrPos pos=0;
 	string out;
 	for(auto p=data; p<data+len; ++p)
 	{
-		std::cout << pos << std::endl;
 		uint8_t c=*p;
 		/*
 		if('%' == c && p<data+len-1
@@ -619,7 +617,6 @@ string EncodeBase64(LPCSTR data, uint len)
 		char_count++;
 		if (char_count == 3)
 		{
-			std::cout << pos << " " << (unsigned(bits) >> 18) << std::endl;
 			out+=(alphabet[unsigned(bits) >> 18]);
 			out+=(alphabet[(unsigned(bits) >> 12) & 0x3f]);
 			out+=(alphabet[(unsigned(bits) >> 6) & 0x3f]);
@@ -648,5 +645,3 @@ string EncodeBase64(LPCSTR data, uint len)
 	}
 	return out;
 }
-
-//std::atomic_bool g_degraded(false);
