@@ -574,7 +574,7 @@ void job::PrepareDownload() {
 
 		LOG("input uri: "<<theUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode);
 
-		if(!acfg::reportpage.empty())
+		if(!acfg::reportpage.empty() || theUrl.sHost == "style.css")
 		{
 			m_eMaintWorkType = tSpecialRequest::DispatchMaintWork(sReqPath,
 					m_pReqHead->h[header::AUTHORIZATION]);
@@ -599,7 +599,7 @@ void job::PrepareDownload() {
 		// entered directory but not defined as local? Then 404 it with hints
 		if(!theUrl.sPath.empty() && endsWithSzAr(theUrl.sPath, "/"))
 		{
-			LOG("generic user information page");
+			LOG("generic user information page for " << theUrl.sPath);
 			m_eMaintWorkType=tSpecialRequest::workUSERINFO;
 			return;
 		}

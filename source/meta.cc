@@ -311,7 +311,7 @@ string tHttpUrl::ToURI(bool bUrlEscaped) const
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 
-tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted)
+tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
 {
 	tStrDeq srcs;
 #ifdef HAVE_WORDEXP
@@ -322,7 +322,7 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted)
 			srcs.push_back(*s);
 		wordfree(&p);
 	}
-	else
+	else if(!bQuiet)
 		cerr << "Warning: failed to find files for " << pattern <<endl;
 	if(bSorted) std::sort(srcs.begin(), srcs.end());
 #elif defined(HAVE_GLOB)
@@ -334,7 +334,7 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted)
 			srcs.push_back(*s);
 		globfree(&p);
 	}
-	else
+	else if(!bQuiet)
 		cerr << "Warning: failed to find files for " << pattern <<endl;
 #else
 #warning Needs a file name expansion function, wordexp or glob
