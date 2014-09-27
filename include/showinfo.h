@@ -48,7 +48,7 @@ public:
 struct tShowInfo : public tMarkupFileSend
 {
 	tShowInfo(const tRunParms& parms)
-	:tMarkupFileSend(parms, "userinfo.html", "text/html", "404 Usage Information") {};
+	:tMarkupFileSend(parms, "userinfo.html", "text/html", "406 Usage Information") {};
 };
 
 struct tMaintPage : public tMarkupFileSend
