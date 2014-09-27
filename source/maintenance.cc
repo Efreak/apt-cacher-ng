@@ -35,6 +35,8 @@ tSpecialRequest::tSpecialRequest(const tRunParms& parms) :
 
 tSpecialRequest::~tSpecialRequest()
 {
+	if(m_bChunkHeaderSent)
+		SendRawData(WITHLEN("0\r\n\r\n"), MSG_NOSIGNAL);
 }
 
 bool tSpecialRequest::SendRawData(const char *data, size_t len, int flags)
@@ -83,11 +85,6 @@ void tSpecialRequest::SendChunk(const char *data, size_t len)
 	AfterSendChunk(data, len);
 }
 
-void tSpecialRequest::EndTransfer() 
-{
-	SendRawData(WITHLEN("0\r\n\r\n"), MSG_NOSIGNAL);
-}
-
 void tSpecialRequest::SendChunkedPageHeader(const char *httpstatus, const char *mimetype)
 {
 	tSS s(100);
@@ -96,6 +93,7 @@ void tSpecialRequest::SendChunkedPageHeader(const char *httpstatus, const char *
 			"Transfer-Encoding: chunked\r\n"
 			"Content-Type: " << mimetype << "\r\n\r\n";
 	SendRawData(s.data(), s.length(), MSG_MORE);
+	m_bChunkHeaderSent = true;
 }
 
 class tAuthRequest : public tSpecialRequest

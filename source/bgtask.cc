@@ -223,9 +223,6 @@ void tSpecOpDetachable::Run()
 
 	if(!deco.empty())
 		SendChunkRemoteOnly(deco.c_str(), deco.size());
-
-	EndTransfer();
-
 }
 
 void tSpecOpDetachable::tProgressTracker::SetEnd(off_t endSize)

@@ -71,7 +71,7 @@ protected:
 	virtual void AfterSendChunk(const char* /*data*/, size_t /*size*/) {};
 
 	bool SendRawData(const char *data, size_t len, int flags);
-	virtual void EndTransfer();
+
 	mstring & GetHostname();
 	//void SendDecoration(bool bBegin, const char *szDecoFile=NULL);
 	void SendChunkedPageHeader(const char *httpstatus, const char *mimetype);
@@ -83,6 +83,7 @@ private:
 	tSpecialRequest(const tSpecialRequest&);
 	tSpecialRequest& operator=(const tSpecialRequest&);
 	mstring m_sHostname;
+	bool m_bChunkHeaderSent=false;
 
 public:
 	// dirty little RAII helper to send data after formating it, uses a shared buffer presented
