@@ -24,7 +24,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <strings.h>
-#include <stdlib.h>
+#include <cstdlib>
 #include <errno.h>
 
 #define EXTREME_MEMORY_SAVING false
@@ -260,6 +260,7 @@ void StrSubst(mstring &contents, const mstring &from, const mstring &to);
 // let the compiler optimize and keep best variant
 inline off_t atoofft(LPCSTR p)
 {
+	using namespace std;
 	if(sizeof(long long) == sizeof(off_t))
 		return atoll(p);
 	if(sizeof(int) == sizeof(off_t))
@@ -274,7 +275,7 @@ inline off_t atoofft(LPCSTR p, off_t nDefVal)
 
 mstring offttosH(off_t n);
 
-tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted=false);
+tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted=false, bool bQuiet=false);
 
 //void MakeAbsolutePath(mstring &dirToFix, const mstring &reldir);
 

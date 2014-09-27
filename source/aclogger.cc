@@ -332,7 +332,7 @@ void t_logger::Write(const char *pFile, unsigned int nLine)
 	{
 		const char *p=strrchr(pFile, CPATHSEP);
 		pFile=p?(p+1):pFile;
-		m_strm << " [T:" << m_id << " S:" << pFile << ":" << nLine
+		m_strm << " [T:" << m_id << " S:" << pFile << ":" << tSS::dec << nLine
 				<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	}
 	aclog::err(m_strm.c_str());

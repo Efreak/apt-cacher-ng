@@ -1,3 +1,10 @@
+apt-cacher-ng (0.8.0~rc4-1) unstable; urgency=low
+
+  * New upstream version
+    + fixes missing EOF chunk for some generated responses (closes: 765963)
+
+ -- 
+
 apt-cacher-ng (0.8.0~rc3-1) unstable; urgency=low
 
   * New upstream version, first Sid upload of 0.8.x 

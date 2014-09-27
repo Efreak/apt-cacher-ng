@@ -31,6 +31,10 @@ IF(CMAKE_SYSTEM MATCHES "Darwin")
    SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON} -D_DARWIN_C_SOURCE ")
 ENDIF(CMAKE_SYSTEM MATCHES "Darwin")
 
+IF(CMAKE_SYSTEM MATCHES "CYGWIN")
+   SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__  ")
+ENDIF()
+
 SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
 
 # Various feature checks
@@ -206,7 +210,9 @@ int main(int argc, char **argv) { off_t yes(3); return (int) sendfile(1, 2, &yes
 ")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LINUX_SENDFILE)
 
+if("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
 CHECK_CXX_SOURCE_COMPILES("#include \"${CMAKE_SOURCE_DIR}/include/testeventfd.h\"" HAVE_LINUX_EVENTFD)
+endif()
 
 SET(TESTSRC "
 #include <unistd.h>
