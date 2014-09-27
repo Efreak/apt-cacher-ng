@@ -1,6 +1,12 @@
 
 TODO:
 
+Move signal handler to signalfd (on Linux) or a pipe fed from a basic signal
+handler (replacement for non-Linux). Current solution still has potential for dead-locking.
+
+Add custom job trigger with a command file plus fifo file (for output). This
+might be triggered by SIGUSR2.
+
 Fix URL parser to cope with more combinations of encoded chars (specially in user:pass part)
 
 Use Base64 pre-encoded userpass strings in host descriptors and proxy information

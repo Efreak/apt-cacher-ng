@@ -1,3 +1,9 @@
+apt-cacher-ng (0.8.0rc4) BETA; urgency=low
+
+  * Attempt to use eventfd only on Linux
+
+ -- 
+
 apt-cacher-ng (0.8.0rc3) BETA; urgency=low
 
   * Remove some forgotten debug printing which interfered with option parsing
