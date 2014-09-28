@@ -1914,12 +1914,13 @@ void tCacheOperation::PrintStats(cmstring &title)
 	}
 	if(!total)
 		return;
-	SendFmt << "<br>\n<table><tr><td colspan=2><u>" << title
-			<< " (Top " << sorted.size() << ", " << hidden <<  " more not displayed)"
-			<< "</u></td></tr>\n";
+	m_fmtHelper << "<br>\n<table><tr><td colspan=2><u>" << title;
+	if(!m_bVerbose)
+		m_fmtHelper << " (Top " << sorted.size() << ", " << hidden <<  " more not displayed)";
+	m_fmtHelper << "</u></td></tr>\n";
 	for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
 	{
-		SendFmt << "<tr><td><b>" << offttosH(it->first) << "</b></td><td>"
+		m_fmtHelper << "<tr><td><b>" << offttosH(it->first) << "</b></td><td>"
 				<< *(it->second) << "</td></tr>\n";
 	}
 	SendFmt << "</table>";
