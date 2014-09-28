@@ -4,7 +4,10 @@ apt-cacher-ng (0.8.0rc4) BETA; urgency=low
   * Portability fixes for kFreeBSD and Windows (Cygwin)
   * For static generated content respones, make sure to send the EOF chunk
     before closing connection (Debian Bug #762969)
-  * Cosmetic fixes in maint pages
+  * Maintenance page related:
+    + Cosmetic fixes
+    + Fix forced download on aggregated repos without backend spec (now really
+      considering the download URL even from inconsistent header files)
 
  -- 
 
