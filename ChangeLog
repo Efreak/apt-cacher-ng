@@ -8,6 +8,7 @@ apt-cacher-ng (0.8.0rc4) BETA; urgency=low
     + Cosmetic fixes
     + Fix forced download on aggregated repos without backend spec (now really
       considering the download URL even from inconsistent header files)
+  * Reenabled use of LTO (opt-out now with NOLTO=1 flag)
 
  -- 
 
