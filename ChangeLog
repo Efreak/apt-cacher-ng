@@ -1,6 +1,6 @@
 apt-cacher-ng (0.8.0rc4) BETA; urgency=low
 
-  * Attempt to use eventfd only on Linux
+  * Using eventfd only on Linux
   * Portability fixes for kFreeBSD and Windows (Cygwin)
   * For static generated content respones, make sure to send the EOF chunk
     before closing connection (Debian Bug #762969)
