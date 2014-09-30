@@ -133,10 +133,11 @@ void tSpecOpDetachable::Run()
 
 	if(pTracked)
 	{
-		msg << "<font color=\"blue\">A maintenance task is already running!</font><br>\n"
-				"Attempting to attach to the log output... \n";
-		SendChunk(msg);
-		msg.clear();
+		SendChunkSZ("<font color=\"blue\">A maintenance task is already running!</font>\n");
+		SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
+				<< "\">Cancel</a>)";
+		SendChunkSZ("<br>Attempting to attach to the log output... <br>\n");
+
 		off_t nSent(0);
 		int fd(0);
 		acbuf xx;

@@ -190,6 +190,11 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 	fileItemMgmt fiaccess;
 	tHttpUrl parser, *pResolvedDirectUrl=nullptr;
 
+	// header could contained malformed data and be nuked in the process,
+	// try to get the original source whatever happens
+	header hor;
+	hor.LoadFromFile(SABSPATH(sFilePathRel) + ".head");
+
 	if(!pFi)
 	{
 		fiaccess.PrepageRegisteredFileItemWithStorage(sFilePathRel, false);
@@ -201,6 +206,7 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 			SendFmt << "Checking " << sFilePathRel << "...\n"; // just display the name ASAP
 		GOTOREPMSG(" could not create file item handler.");
 	}
+
 	if (bIsVolatileFile && m_bForceDownload)
 	{
 		if (!pFi->SetupClean())
@@ -243,8 +249,6 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 	else
 	{
 		// must have the URL somewhere
-		lockguard(pFi.get());
-		const header &hor=pFi->GetHeaderUnlocked();
 
 		bool bPathOK=parser.SetHttpUrl(sFilePathRel, false);
 		ldbg("Find backend for " << sFilePathRel << " parsed as host: "  << parser.sHost
@@ -1914,12 +1918,13 @@ void tCacheOperation::PrintStats(cmstring &title)
 	}
 	if(!total)
 		return;
-	SendFmt << "<br>\n<table><tr><td colspan=2><u>" << title
-			<< " (Top " << sorted.size() << ", " << hidden <<  " more not displayed)"
-			<< "</u></td></tr>\n";
+	m_fmtHelper << "<br>\n<table><tr><td colspan=2><u>" << title;
+	if(!m_bVerbose)
+		m_fmtHelper << " (Top " << sorted.size() << ", " << hidden <<  " more not displayed)";
+	m_fmtHelper << "</u></td></tr>\n";
 	for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
 	{
-		SendFmt << "<tr><td><b>" << offttosH(it->first) << "</b></td><td>"
+		m_fmtHelper << "<tr><td><b>" << offttosH(it->first) << "</b></td><td>"
 				<< *(it->second) << "</td></tr>\n";
 	}
 	SendFmt << "</table>";
