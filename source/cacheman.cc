@@ -1019,7 +1019,9 @@ void tCacheOperation::UpdateVolatileFiles()
 	if(CheckStopSignal())
 		return;
 
-	// this makes sure that if there is some class of diff index, the related base file must also be available in the cache
+	// this makes sure that if there is some class of diff index
+	// the related base file must also be available in the cache
+	// if not, synthesize a base file entry
 	for(auto& p: eqClasses)
 	{
 		// no diff idx, don't care!
@@ -1054,7 +1056,10 @@ void tCacheOperation::UpdateVolatileFiles()
 				{
 					if(endsWith(path, ps))
 					{
-						m_metaFilesRel[path].vfile_ondisk=true;
+						tIfileAttribs& flags = m_metaFilesRel[path];
+						flags.vfile_ondisk=true;
+						flags.forgiveDlErrors=true;
+						flags.hideDlErrors=true;
 						goto basefile_is_there;
 					}
 				}
