@@ -15,7 +15,7 @@ apt-cacher-ng (0.8.0rc4) BETA; urgency=low
   * Reenabled use of LTO (opt-out now with NOLTO=1 flag)
   * Fixed explicite download error hiding
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Fri, 03 Oct 2014 23:55:02 +0200
 
 apt-cacher-ng (0.8.0rc3) BETA; urgency=low
 
