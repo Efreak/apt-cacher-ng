@@ -185,7 +185,7 @@ void pkgimport::Action()
 	m_bErrAbort=false; // does not f...ing matter, do what we can
 	m_bByPath=true; // should act on all locations
 
-	_LoadKeyCache(SCACHEFILE);
+	_LoadKeyCache();
 	if(!m_precachedList.empty())
 		SendChunk( tSS(100)<<"Loaded "<<m_importMap.size()<<
 				(m_precachedList.size()==1 ? " entry" : " entries")
@@ -376,7 +376,7 @@ void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 }
 
 
-void pkgimport::_LoadKeyCache(const string & sFileName)
+void pkgimport::_LoadKeyCache()
 {
 	std::ifstream in;
 

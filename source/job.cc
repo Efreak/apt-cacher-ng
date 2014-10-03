@@ -205,7 +205,7 @@ ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count)
 		return -1;
 	while(count>0)
 	{
-		ssize_t readcount=read(in_fd, buf, count>sizeof(buf)?sizeof(buf):count);
+		ssize_t readcount=read(in_fd, buf, min(count, sizeof(buf)));
 		if(readcount<=0)
 		{
 			if(errno==EINTR || errno==EAGAIN)
@@ -645,7 +645,7 @@ void job::PrepareDownload() {
 	LOG("Got initial file status: " << fistate);
 
 	if (bPtMode && fistate != fileitem::FIST_COMPLETE)
-		fistate = _SwitchToPtItem(m_sFileLoc);
+		fistate = _SwitchToPtItem();
 
 	ParseRange();
 
@@ -698,7 +698,7 @@ MYTRY
 									+ repoMapping.sRestPath
 							: theUrl.ToURI(false);
 					if (rechecks::MatchUncacheable(testUri, rechecks::NOCACHE_TGT))
-						fistate = _SwitchToPtItem(m_sFileLoc);
+						fistate = _SwitchToPtItem();
 				}
 
 					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.get(),
@@ -752,7 +752,7 @@ report_doubleproxy:
 }
 
 #define THROW_ERROR(x) { if(m_nAllDataCount) return R_DISCON; SetErrorResponse(x); return R_AGAIN; }
-job::eJobResult job::SendData(int confd, int nAllJobCount)
+job::eJobResult job::SendData(int confd)
 {
 	LOGSTART("job::SendData");
 
@@ -1150,7 +1150,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 	return 0;
 }
 
-fileitem::FiStatus job::_SwitchToPtItem(const std::string &fileLoc)
+fileitem::FiStatus job::_SwitchToPtItem()
 {
 	// Changing to local pass-through file item
 	LOGSTART("job::_SwitchToPtItem");

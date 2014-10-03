@@ -64,7 +64,7 @@ protected:
 	struct tIfileAttribs
 	{
 		bool vfile_ondisk=false, uptodate=false, parseignore=false, hideDlErrors=false,
-				forgiveDlErrors=false, alreadyparsed=false;
+				forgiveDlErrors=false, alreadyparsed=false, synthesized=false;
 		enumMetaType eIdxType = EIDX_UNSUPPORTED;
 		const tStrDeq *bros = nullptr;
 		off_t space = 0;
@@ -107,9 +107,9 @@ protected:
 		eMsgHideErrors,
 		eMsgShow
 	};
-	bool Download(const std::string & sFilePathRel, bool bIsVolatileFile,
+	bool Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(),
-			tHttpUrl *pForcedURL=NULL);
+			const tHttpUrl *pForcedURL=NULL);
 
 	// internal helper variables
 	bool m_bErrAbort, m_bVerbose, m_bForceDownload;

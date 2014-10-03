@@ -21,7 +21,7 @@
 
 using namespace std;
 
-bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &stinfo)
+bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &)
 {
 	if (endsWithSzAr(sPath, ".head"))
 		return true;

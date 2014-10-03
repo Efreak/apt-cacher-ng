@@ -56,13 +56,13 @@ tCacheOperation::~tCacheOperation()
 	m_pDlcon=NULL;
 }
 
-bool tCacheOperation::ProcessOthers(const string & sPath, const struct stat &)
+bool tCacheOperation::ProcessOthers(const string &, const struct stat &)
 {
 	// NOOP
 	return true;
 }
 
-bool tCacheOperation::ProcessDirAfter(const string & sPath, const struct stat &)
+bool tCacheOperation::ProcessDirAfter(const string &, const struct stat &)
 {
 	// NOOP
 	return true;
@@ -158,8 +158,9 @@ bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 }
 
 
-bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatileFile,
-		eDlMsgPrio msgVerbosityLevel, tFileItemPtr pFi, tHttpUrl *pForcedURL)
+bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
+		tCacheOperation::eDlMsgPrio msgVerbosityLevel,
+		tFileItemPtr pFi, const tHttpUrl * pForcedURL)
 {
 
 	LOGSTART("tCacheMan::Download");
@@ -185,15 +186,16 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 #define GOTOREPMSG(x) {sErr = x; bSuccess=false; goto rep_dlresult; }
 
 	const acfg::tRepoData *pRepoDesc=nullptr;
-	mstring sPatSuffix;
+	mstring sRemoteSuffix, sFilePathAbs(SABSPATH(sFilePathRel));
 
 	fileItemMgmt fiaccess;
-	tHttpUrl parser, *pResolvedDirectUrl=nullptr;
+	tHttpUrl parserPath, parserHead;
+	const tHttpUrl *pResolvedDirectUrl=nullptr;
 
 	// header could contained malformed data and be nuked in the process,
 	// try to get the original source whatever happens
 	header hor;
-	hor.LoadFromFile(SABSPATH(sFilePathRel) + ".head");
+	hor.LoadFromFile(sFilePathAbs + ".head");
 
 	if(!pFi)
 	{
@@ -236,38 +238,56 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 			<< sFilePathRel	<< "...\n";
 	}
 
-	if (!m_pDlcon)
-		m_pDlcon = new dlcon(true);
+	StartDlder();
 
-	if (!m_pDlcon)
-		GOTOREPMSG("Item busy, cannot reload");
 	if (pForcedURL)
-	{
-		// handle alternative behavior in the first or last cycles
-		pResolvedDirectUrl=&parser;
-	}
+		pResolvedDirectUrl=pForcedURL;
 	else
 	{
 		// must have the URL somewhere
 
-		bool bPathOK=parser.SetHttpUrl(sFilePathRel, false);
-		ldbg("Find backend for " << sFilePathRel << " parsed as host: "  << parser.sHost
-				<< " and path: " << parser.sPath << ", ok? " << bPathOK);
-		if(!acfg::stupidfs && bPathOK
-				&& 0 != (pRepoDesc = acfg::GetRepoData(parser.sHost))
+		bool bCachePathAsUriPlausible=parserPath.SetHttpUrl(sFilePathRel, false);
+		ldbg("Find backend for " << sFilePathRel << " parsed as host: "  << parserPath.sHost
+				<< " and path: " << parserPath.sPath << ", ok? " << bCachePathAsUriPlausible);
+		if(!acfg::stupidfs && bCachePathAsUriPlausible
+				&& 0 != (pRepoDesc = acfg::GetRepoData(parserPath.sHost))
 				&& !pRepoDesc->m_backends.empty())
 		{
-			ldbg("will use backend mode");
-			sPatSuffix=parser.sPath;
+			ldbg("will use backend mode, subdirectory is path suffix relative to backend uri");
+			sRemoteSuffix=parserPath.sPath;
 		}
 		else
 		{
-			if(bPathOK) // remember at least this one as fallback
-				pResolvedDirectUrl=&parser;
+			if(bCachePathAsUriPlausible) // unless other rule matches, this path in cache should represent the remote URI
+				pResolvedDirectUrl=&parserPath;
 
 			// and prefer the source from xorig which is likely to deliver better result
-			if(hor.h[header::XORIG] && parser.SetHttpUrl(hor.h[header::XORIG], false))
-				pResolvedDirectUrl=&parser;
+			if(hor.h[header::XORIG] && parserHead.SetHttpUrl(hor.h[header::XORIG], false))
+				pResolvedDirectUrl=&parserHead;
+			else if(flags.synthesized)
+			{
+				auto xpath=sFilePathAbs;
+				cmstring * pSuf=nullptr;
+				for(auto& suf: compSuffixesAndEmpty)
+				{
+					if(endsWith(xpath, suf))
+					{
+						pSuf = &suf;
+						xpath.replace(xpath.size()-suf.size(), suf.size(),
+								".diff/Index.head");
+						break;
+					}
+				}
+				ldbg("get example url from header " << xpath);
+				if(pSuf && hor.LoadFromFile(xpath)>0 && hor.h[header::XORIG])
+				{
+					xpath=hor.h[header::XORIG];
+					ldbg("sample url is " << xpath);
+					StrSubst(xpath, ".diff/Index.head", *pSuf);
+					if(parserHead.SetHttpUrl(hor.h[header::XORIG], false))
+						pResolvedDirectUrl=&parserHead;
+				}
+			}
 
 			if(!pResolvedDirectUrl)
 			{
@@ -286,11 +306,11 @@ bool tCacheOperation::Download(const std::string & sFilePathRel, bool bIsVolatil
 		if(repinfo.repodata && !repinfo.repodata->m_backends.empty())
 		{
 			pResolvedDirectUrl = nullptr;
-			sPatSuffix = repinfo.sRestPath;
+			sRemoteSuffix = repinfo.sRestPath;
 		}
 	}
 
-	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sPatSuffix);
+	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix);
 
 	m_pDlcon->WorkLoop();
 	if (pFi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
@@ -374,7 +394,7 @@ void DelTree(const string &what)
 {
 	class killa : public IFileHandler
 	{
-		virtual bool ProcessRegular(const mstring &sPath, const struct stat &data)
+		virtual bool ProcessRegular(const mstring &sPath, const struct stat &)
 		{
 			::unlink(sPath.c_str()); // XXX log some warning?
 			return true;
@@ -383,7 +403,7 @@ void DelTree(const string &what)
 		{
 			return ProcessRegular(sPath, x);
 		}
-		bool ProcessDirAfter(const mstring &sPath, const struct stat &x)
+		bool ProcessDirAfter(const mstring &sPath, const struct stat &)
 		{
 			::rmdir(sPath.c_str()); // XXX log some warning?
 			return true;
@@ -664,8 +684,8 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 		{
 		}
 		// noone else should attempt to store file through it
-		virtual bool DownloadStartedStoreHeader(const header & h, const char *pNextData,
-				bool bForcedRestart, bool&) override
+		virtual bool DownloadStartedStoreHeader(const header &, const char *,
+				bool, bool&) override
 		{
 			return false;
 		}
@@ -880,13 +900,15 @@ void tCacheOperation::UpdateVolatileFiles()
 #ifdef DEBUGIDX
 	for (auto& f: m_metaFilesRel)
 		SendFmt << "State of " << f.first << ": "
-		<< f.second.alreadyparsed << "<br>\n"
-		<< f.second.forgiveDlErrors << "<br>\n"
-		<< f.second.hideDlErrors<< "<br>\n"
-		<< f.second.parseignore << "<br>\n"
-		<< f.second.space << "<br>\n"
-		<< f.second.uptodate <<"<br>\n"
-		<< f.second.vfile_ondisk << "<br>\n" "<br>\n";
+			<< f.second.alreadyparsed
+			<< f.second.forgiveDlErrors
+			<< f.second.hideDlErrors
+			<< f.second.parseignore
+			<< f.second.space
+			<< f.second.uptodate
+			<< f.second.vfile_ondisk
+			<< f.second.synthesized
+			<< "<br>\n";
 #endif
 
 	typedef unordered_map<string, tContId> tFile2Cid;
@@ -899,40 +921,50 @@ void tCacheOperation::UpdateVolatileFiles()
 	 */
 	class releaseStuffReceiver : public ifileprocessor
 	{
-	public:
-		tFile2Cid m_file2cid;
-		virtual void HandlePkgEntry(const tRemoteFileInfo &entry)
-		{
-			if(entry.bInflateForCs) // XXX: no usecase yet, ignore
-				return;
+		public:
+			tFile2Cid m_file2cid;
+			virtual void HandlePkgEntry(const tRemoteFileInfo &entry)
+			{
+				if(entry.bInflateForCs) // XXX: no usecase yet, ignore
+					return;
 
-			tStrPos compos=FindCompSfxPos(entry.sFileName);
+				tStrPos compos=FindCompSfxPos(entry.sFileName);
 
-			// skip some obvious junk and its gzip version
-			if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
-				return;
+				// skip some obvious junk and its gzip version
+				if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
+					return;
 
-			auto& cid = m_file2cid[entry.sDirectory+entry.sFileName];
-			cid.first=entry.fpr;
-			tStrPos pos=entry.sDirectory.rfind(dis);
-			// if looking like Debian archive, keep just the part after binary-...
-			if(stmiss != pos)
-				cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
-			else
-				cid.second=entry.sFileName;
-		}
+				auto& cid = m_file2cid[entry.sDirectory+entry.sFileName];
+				cid.first=entry.fpr;
+
+				tStrPos pos=entry.sDirectory.rfind(dis);
+				// if looking like Debian archive, keep just the part after binary-...
+				if(stmiss != pos)
+					cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
+				else
+					cid.second=entry.sFileName;
+			}
 	};
 
-	// iterate over initial *Releases files
+	tStrMap releaseMap;
 	for(auto& iref : m_metaFilesRel)
 	{
-		const string &sPathRel=iref.first;
-
+		auto& sPathRel=iref.first;
 		if(!endsWith(sPathRel, relKey) && !endsWith(sPathRel, inRelKey))
 			continue;
+		auto pos=sPathRel.rfind('/');
+		auto& fname=releaseMap[sPathRel.substr(0,pos)];
+		if(fname.empty())
+			fname=sPathRel.substr(pos);
+	}
+
+	// iterate over initial *Releases files
+	for(auto& relRef : releaseMap)
+	{
+		const string &sPathRel=relRef.first+relRef.second;
 
 		if(!Download(sPathRel, true, m_metaFilesRel[sPathRel].hideDlErrors
-				? eMsgHideErrors : eMsgShow))
+					? eMsgHideErrors : eMsgShow))
 		{
 			m_nErrorCount+=(!m_metaFilesRel[sPathRel].hideDlErrors);
 
@@ -942,10 +974,6 @@ void tCacheOperation::UpdateVolatileFiles()
 			continue;
 		}
 
-		// InRelease comes before Release so we can just drop the other one
-		if(endsWith(sPathRel, inRelKey))
-			m_metaFilesRel.erase(sPathRel.substr(0, sPathRel.size()-inRelKey.size())+relKey);
-
 		m_metaFilesRel[sPathRel].uptodate=true;
 
 		releaseStuffReceiver recvr;
@@ -954,7 +982,32 @@ void tCacheOperation::UpdateVolatileFiles()
 		if(recvr.m_file2cid.empty())
 			continue;
 
-		for(auto& if2cid : recvr.m_file2cid)
+		for(const auto cid : recvr.m_file2cid)
+		{
+			// not diff index or not in cache?
+			if(!endsWith(cid.first, diffIdxSfx) || !GetFlags(cid.first).vfile_ondisk)
+				continue;
+			string sBase=cid.first.substr(0, cid.first.size()-diffIdxSfx.size());
+			for(auto& suf : compSuffixesAndEmptyByRatio)
+			{
+				if(GetFlags(sBase+suf).vfile_ondisk)
+					goto has_base;
+			}
+			// ok, not found, enforce any existing one?
+			for(auto& suf : compSuffixesAndEmptyByRatio)
+			{
+				if(ContHas(recvr.m_file2cid, (sBase+suf)))
+				{
+					SetFlags(sBase+suf).synthesized=true;
+					break;
+				}
+			}
+
+has_base:
+			;
+		}
+
+		for(auto if2cid : recvr.m_file2cid)
 		{
 			string sNativeName=if2cid.first.substr(0, FindCompSfxPos(if2cid.first));
 			tContId sCandId=if2cid.second;
@@ -1003,7 +1056,7 @@ void tCacheOperation::UpdateVolatileFiles()
 				<< "bz2TID:" << cp.second.bz2VersContId.first
 				<< cp.second.bz2VersContId.second<<"<br>\n" << pfx << ": "
 				<< "idxTID:"<<cp.second.diffIdxId.first 
-                                << cp.second.diffIdxId.second <<"<br>\n" << pfx << ": "
+				<< cp.second.diffIdxId.second <<"<br>\n" << pfx << ": "
 				<< "Paths:<br>\n";
 			for(const auto& path : cp.second.paths)
 				printBuf << pfx << ":&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << path <<"<br>\n";
@@ -1018,58 +1071,6 @@ void tCacheOperation::UpdateVolatileFiles()
 
 	if(CheckStopSignal())
 		return;
-
-	// this makes sure that if there is some class of diff index
-	// the related base file must also be available in the cache
-	// if not, synthesize a base file entry
-	for(auto& p: eqClasses)
-	{
-		// no diff idx, don't care!
-		if(p.second.diffIdxId.second.empty())
-			continue;
-		if(p.second.paths.empty())
-			continue; // that's crap, can not fix it anyhow
-		for(auto& path: p.second.paths)
-		{
-			if(GetFlags(path).vfile_ondisk)
-				goto basefile_is_there;
-		}
-		{
-		// ok, no base file is present but an index reference exists... is any index file present?
-		auto xidx = eqClasses.find(p.second.diffIdxId);
-		bool bhaveidx=false;
-		if(xidx != eqClasses.end())
-		{
-			for (auto& idxfilepath: xidx->second.paths)
-			{
-				bhaveidx=GetFlags(idxfilepath).vfile_ondisk;
-				if(bhaveidx)
-					break;
-			}
-		}
-		if(bhaveidx) {
-			// ok, this is the stupid situation. Enforce download of any of those base files...
-			// pickup the version with the best compression, if possible
-			for(auto& ps : compSuffixesAndEmptyByRatio)
-			{
-				for(auto& path: p.second.paths)
-				{
-					if(endsWith(path, ps))
-					{
-						tIfileAttribs& flags = m_metaFilesRel[path];
-						flags.vfile_ondisk=true;
-						flags.forgiveDlErrors=true;
-						flags.hideDlErrors=true;
-						goto basefile_is_there;
-					}
-				}
-			}
-		}
-
-		}
-		basefile_is_there:
-		;
-	}
 
 	/*
 	 * OK, the equiv-classes map is built, now post-process the knowledge
@@ -1087,7 +1088,7 @@ void tCacheOperation::UpdateVolatileFiles()
 		}
 		eqClasses.erase(it++);
 		continue;
-		strip_next_class:
+strip_next_class:
 		++it;
 	}
 	ERRMSGABORT;
@@ -1126,7 +1127,7 @@ void tCacheOperation::UpdateVolatileFiles()
 		DelTree(SABSPATH("_actmp"));
 
 		if (cid2eqcl->second.diffIdxId.second.empty() || eqClasses.end() == (itDiffIdx
-				= eqClasses.find(cid2eqcl->second.diffIdxId)) || itDiffIdx->second.paths.empty())
+					= eqClasses.find(cid2eqcl->second.diffIdxId)) || itDiffIdx->second.paths.empty())
 			goto NOT_PATCHABLE; // no patches available
 
 		// iterate over patch paths and fine a present one which is most likely the most recent one
@@ -1181,7 +1182,7 @@ void tCacheOperation::UpdateVolatileFiles()
 				if(h.LoadFromFile(absPath+ ".head")<=0  || GetFileSize(absPath, -2)
 						!= atoofft(h.h[header::CONTENT_LENGTH], -3))
 				{
-					MTLOGDEBUG("########### Header looks suspicious");
+					MTLOGDEBUG("########### Header looks suspicious on " << absPath << ".head");
 					continue;
 				}
 				MTLOGDEBUG("########### Testing file: " << pathRel << " as patch base candidate");
@@ -1209,7 +1210,7 @@ void tCacheOperation::UpdateVolatileFiles()
 					}
 					// or found at some previous state, try to patch it?
 					else if (patchList.end() != (itPatchStart = find_if(patchList.begin(),
-							patchList.end(), tCompByState(probe))))
+									patchList.end(), tCompByState(probe))))
 					{
 						// XXX for now, construct a replacement header based on some assumptions
 						// tried hard and cannot imagine any case where this would be harmful
@@ -1224,10 +1225,10 @@ void tCacheOperation::UpdateVolatileFiles()
 
 						if (m_bVerbose)
 							SendFmt << "Found patching base candidate, unpacked to "
-							<< sPatchBaseAbs << "<br>";
+								<< sPatchBaseAbs << "<br>";
 
 						if (PatchFile(sPatchBaseAbs, patchidxFileToUse, itPatchStart,
-								patchList.end(), pEndSum))
+									patchList.end(), pEndSum))
 						{
 
 							if(CheckStopSignal())
@@ -1269,11 +1270,11 @@ void tCacheOperation::UpdateVolatileFiles()
 		}
 
 		// ok, now try to get a good version of that file and install this into needed locations
-		NOT_PATCHABLE:
+NOT_PATCHABLE:
 		/*
-		if(m_bVerbose)
-			SendFmt << "Cannot update " << it->first << " by patching, what next?"<<"<br>";
-*/
+		   if(m_bVerbose)
+		   SendFmt << "Cannot update " << it->first << " by patching, what next?"<<"<br>";
+		   */
 		// prefer to download them in that order, no uncompressed versions because
 		// mirrors usually don't have them
 		static const string preComp[] = { ".xz", ".lzma", ".bz2", ".gz"};
@@ -1296,7 +1297,7 @@ void tCacheOperation::UpdateVolatileFiles()
 			}
 		}
 
-		CONTINUE_NEXT_GROUP:
+CONTINUE_NEXT_GROUP:
 
 		if(CheckStopSignal())
 			return;
@@ -1309,8 +1310,11 @@ void tCacheOperation::UpdateVolatileFiles()
 	// fetch all remaining stuff
 	for(auto& idx2att : m_metaFilesRel)
 	{
-		if(idx2att.second.uptodate || idx2att.second.parseignore || !idx2att.second.vfile_ondisk)
+		if (idx2att.second.uptodate || idx2att.second.parseignore
+				|| (!idx2att.second.vfile_ondisk && !idx2att.second.synthesized))
+		{
 			continue;
+		}
 		string sErr;
 		if(Download(idx2att.first, true, idx2att.second.hideDlErrors ? eMsgHideErrors : eMsgShow))
 			continue;
@@ -1953,9 +1957,9 @@ int parseidx_demo(LPCSTR file)
 					<< "Checksum-" << entry.fpr.GetCsName() << ": " << entry.fpr.GetCsAsString()
 					<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
 		}
-		virtual bool ProcessRegular(const mstring &sPath, const struct stat &) {return true;}
-		virtual bool ProcessOthers(const mstring &sPath, const struct stat &) {return true;}
-		virtual bool ProcessDirAfter(const mstring &sPath, const struct stat &) {return true;}
+		virtual bool ProcessRegular(const mstring &, const struct stat &) {return true;}
+		virtual bool ProcessOthers(const mstring &, const struct stat &) {return true;}
+		virtual bool ProcessDirAfter(const mstring &, const struct stat &) {return true;}
 		virtual void Action() override {};
 	}
 	mgr;

@@ -677,7 +677,7 @@ void dlcon::wake()
 #endif
 }
 
-bool dlcon::AddJob(tFileItemPtr m_pItem, tHttpUrl *pForcedUrl,
+bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const acfg::tRepoData *pBackends,
 		cmstring *sPatSuffix)
 {

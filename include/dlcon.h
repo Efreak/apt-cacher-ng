@@ -30,7 +30,7 @@ class dlcon : public lockable
         
         void SignalStop();
 
-        bool AddJob(tFileItemPtr m_pItem, tHttpUrl *pForcedUrl=nullptr,
+        bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl=nullptr,
         		const acfg::tRepoData *pRepoDesc=nullptr,
         		cmstring *sPatSuffix=nullptr);
 
