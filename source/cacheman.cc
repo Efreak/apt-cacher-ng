@@ -32,6 +32,7 @@ using namespace std;
 
 static cmstring oldStylei18nIdx("/i18n/Index");
 static cmstring diffIdxSfx(".diff/Index");
+static cmstring sConstDiffIdxHead(".diff/Index.head");
 static cmstring sPatchBaseRel("_actmp/patch.base");
 static cmstring sPatchResRel("_actmp/patch.result");
 static unsigned int nKillLfd=1;
@@ -267,25 +268,50 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			else if(flags.synthesized)
 			{
 				auto xpath=sFilePathAbs;
-				cmstring * pSuf=nullptr;
-				for(auto& suf: compSuffixesAndEmpty)
+				// what's the usecase? Getting diffs for the index, or getting original file?
+				auto pos = sFilePathAbs.rfind(".diff/");
+				if (pos == stmiss) // usecase: getting original file
 				{
-					if(endsWith(xpath, suf))
+					cmstring * pSuf = nullptr;
+					for (auto& suf : compSuffixesAndEmpty)
 					{
-						pSuf = &suf;
-						xpath.replace(xpath.size()-suf.size(), suf.size(),
-								".diff/Index.head");
-						break;
+						if (endsWith(xpath, suf))
+						{
+							pSuf = &suf;
+							xpath.replace(xpath.size() - suf.size(), suf.size(),
+									sConstDiffIdxHead);
+							break;
+						}
+					}
+					ldbg("get example url from header " << xpath);
+					if (pSuf && hor.LoadFromFile(xpath) > 0 && hor.h[header::XORIG])
+					{
+						xpath = hor.h[header::XORIG];
+						if(endsWith(xpath, diffIdxSfx))
+						{
+							ldbg("sample url is " << xpath);
+							xpath.erase(xpath.size()- diffIdxSfx.size());
+							xpath+=*pSuf;
+							if(parserHead.SetHttpUrl(xpath, false))
+								pResolvedDirectUrl = &parserHead;
+						}
 					}
 				}
-				ldbg("get example url from header " << xpath);
-				if(pSuf && hor.LoadFromFile(xpath)>0 && hor.h[header::XORIG])
+				else // ok, usecase: getting patches
 				{
-					xpath=hor.h[header::XORIG];
-					ldbg("sample url is " << xpath);
-					StrSubst(xpath, ".diff/Index.head", *pSuf);
-					if(parserHead.SetHttpUrl(hor.h[header::XORIG], false))
-						pResolvedDirectUrl=&parserHead;
+					auto xpath=sFilePathAbs.substr(0, pos)+sConstDiffIdxHead;
+					if(hor.LoadFromFile(xpath) > 0 && hor.h[header::XORIG])
+					{
+						xpath = hor.h[header::XORIG];
+						ldbg("sample url is " << xpath);
+						if (endsWith(xpath, diffIdxSfx))
+						{
+							xpath.erase(xpath.size() - diffIdxSfx.size());
+							xpath += sFilePathAbs.substr(pos);
+							if (parserHead.SetHttpUrl(xpath, false))
+								pResolvedDirectUrl = &parserHead;
+						}
+					}
 				}
 			}
 
@@ -355,8 +381,13 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			sErr = "Download error";
 		if (NEEDED_VERBOSITY_EVERYTHING || m_bVerbose)
 		{
-			SendFmt << "<span class=\"ERROR\">" << sErr << "</span>\n";
-			AddDelCbox(sFilePathRel);
+#ifndef DEBUG
+			if(!flags.hideDlErrors)
+#endif
+			{
+				SendFmt << "<span class=\"ERROR\">" << sErr << "</span>\n";
+				AddDelCbox(sFilePathRel);
+			}
 		}
 	}
 
@@ -449,7 +480,7 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 
 	filereader reader;
 	if(!reader.OpenFile(sFilePathAbs))
-		return NULL;
+		return nullptr;
 
 	enum { eCurLine, eHistory, ePatches} eSection;
 	eSection=eCurLine;
@@ -468,16 +499,15 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 			if(tmp[0] == "SHA1-Current:")
 			{
 				otmp=atoofft(tmp[2].c_str(), -2);
-				if(otmp<0 || !ret.SetCs(tmp[1], CSTYPE_SHA1))
-					return NULL;
-				ret.size=otmp;
+				if(otmp<0 || !ret.Set(tmp[1], CSTYPE_SHA1, otmp))
+					return nullptr;
 			}
 			else
 			{
 				tFingerprint fpr;
 				otmp=atoofft(tmp[1].c_str(),-2);
-				if(otmp<0 || !fpr.SetCs(tmp[0], CSTYPE_SHA1))
-					return NULL;
+				if(otmp<0 || !fpr.Set(tmp[0], CSTYPE_SHA1, otmp))
+					return nullptr;
 
 				if(peAnz && retList[peAnz%retList.size()].patchName == tmp[2])
 					// oh great, this is also our target
@@ -513,7 +543,7 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 			return NULL; // error
 	}
 
-	return ret.csType != CSTYPE_INVALID ? &ret : NULL;
+	return ret.csType != CSTYPE_INVALID ? &ret : nullptr;
 }
 
 bool tCacheOperation::PatchFile(const string &srcRel,
@@ -532,6 +562,9 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 	{
 		string pfile(diffIdxPathRel.substr(0, diffIdxPathRel.size()-diffIdxSfx.size()+6)
 				+pit->patchName+".gz");
+		auto& flags=SetFlags(pfile);
+		flags.synthesized=true;
+		flags.hideDlErrors=true;
 		if(!Download(pfile, false, eMsgShow))
 		{
 			m_metaFilesRel.erase(pfile); // remove the mess for sure
@@ -1182,10 +1215,11 @@ strip_next_class:
 				if(h.LoadFromFile(absPath+ ".head")<=0  || GetFileSize(absPath, -2)
 						!= atoofft(h.h[header::CONTENT_LENGTH], -3))
 				{
+					// only use sources that look like consistent downloads
 					MTLOGDEBUG("########### Header looks suspicious on " << absPath << ".head");
 					continue;
 				}
-				MTLOGDEBUG("########### Testing file: " << pathRel << " as patch base candidate");
+				MTLOGDEBUG("#### Testing file: " << pathRel << " as patch base candidate");
 				if (probe.ScanFile(absPath, CSTYPE_SHA1, true, df.p))
 				{
 					df.close(); // write the whole file to disk ASAP!
@@ -1193,6 +1227,16 @@ strip_next_class:
 					if(CheckStopSignal())
 						return;
 
+#ifdef DEBUG
+					MTLOGDEBUG("## Looking for a patch for " << probe.GetCsAsString()
+							<< "_" << probe.size
+							<< " and latest version: "
+							<< pEndSum->GetCsAsString() << "_" << pEndSum->size
+							<< " or in ... "
+					);
+					for(auto patch:patchList)
+						SendFmt << patch.fprPatch << " for version " << patch.fprState<<"<br>";
+#endif
 					// Hit the current state, no patching needed for it?
 					if(probe == *pEndSum)
 					{

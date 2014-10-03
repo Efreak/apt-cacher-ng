@@ -387,7 +387,7 @@ struct tDlJob
 		if (acfg::exporigin && !xff.empty())
 			head << "X-Forwarded-For: " << xff << "\r\n";
 
-		head << acfg::requestapx << "Accept: */*\r\nConnection: "
+		head << acfg::requestapx << "Accept: */*\r\nAccept-Encoding: identity\r\nConnection: "
 				<< (acfg::persistoutgoing ? "keep-alive\r\n\r\n" : "close\r\n\r\n");
 
 #ifdef SPAM

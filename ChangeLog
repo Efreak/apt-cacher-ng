@@ -8,10 +8,12 @@ apt-cacher-ng (0.8.0rc4) BETA; urgency=low
     + Cosmetic fixes
     + Fix enforced download on aggregated repos without backend spec (now
       really considering the download URL even from inconsistent header files)
-    + Added proper reconstruction of URL for enforced downloads from their
-      .diff/Index counterpart
-    + Fixed some undefined behavior in volatile file refreshing
+    + Added proper reconstruction of URL for enforced downloads relatively
+      to the associated .diff/Index file
+    + Fixed some undefined behavior in volatile file refreshing, improved some
+      "optimistic" code
   * Reenabled use of LTO (opt-out now with NOLTO=1 flag)
+  * Fixed explicite download error hiding
 
  -- 
 
