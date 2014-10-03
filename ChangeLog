@@ -6,11 +6,16 @@ apt-cacher-ng (0.8.0rc4) BETA; urgency=low
     before closing connection (Debian Bug #762969)
   * Maintenance page related:
     + Cosmetic fixes
-    + Fix forced download on aggregated repos without backend spec (now really
-      considering the download URL even from inconsistent header files)
+    + Fix enforced download on aggregated repos without backend spec (now
+      really considering the download URL even from inconsistent header files)
+    + Added proper reconstruction of URL for enforced downloads relatively
+      to the associated .diff/Index file
+    + Fixed some undefined behavior in volatile file refreshing, improved some
+      "optimistic" code
   * Reenabled use of LTO (opt-out now with NOLTO=1 flag)
+  * Fixed explicite download error hiding
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Fri, 03 Oct 2014 23:55:02 +0200
 
 apt-cacher-ng (0.8.0rc3) BETA; urgency=low
 

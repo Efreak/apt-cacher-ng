@@ -353,7 +353,7 @@ void con::WorkLoop() {
 
 		if(FD_ISSET(m_confd, &wfds) && pjSender)
 		{
-			switch(pjSender->SendData(m_confd, m_jobs2send.size()))
+			switch(pjSender->SendData(m_confd))
 			{
 				case(job::R_DISCON):
 				{

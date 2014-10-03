@@ -38,6 +38,8 @@ bool open()
 	
 	string apath(acfg::logdir+"/apt-cacher.log"), epath(acfg::logdir+"/apt-cacher.err");
 	
+	mkbasedir(apath);
+
 	if(fErr.is_open())
 		fErr.close();
 	if(fStat.is_open())

@@ -56,6 +56,14 @@ struct tFingerprint {
 		if(pData)
 			memcpy(csum, pData, CSTYPE_MD5==csType?16:20);
 	}
+
+	inline bool Set(cmstring & hexString, CSTYPES eCstype, off_t newsize)
+	{
+		if(!SetCs(hexString, eCstype))
+			return false;
+		size=newsize;
+		return true;
+	}
 	bool ScanFile(const mstring & path, const CSTYPES eCstype, bool bUnpack, FILE *fDump=NULL)
 	{
 		if(eCstype != CSTYPE_MD5 && CSTYPE_SHA1 != eCstype)
