@@ -2,8 +2,12 @@ apt-cacher-ng (0.8.0~rc4-1) unstable; urgency=low
 
   * New upstream version
     + fixes missing EOF chunk for some generated responses (closes: 765963)
+    + deep review and fixing of extra file download code acting in
+      repository space without backend specification (closes: #737069)
+    + fixes FTBFS for non-Linux targets (closes: #763685), and debian/rules
+      now detects the usage of sd_notify by looking at build system state
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Sat, 04 Oct 2014 00:01:06 +0200
 
 apt-cacher-ng (0.8.0~rc3-1) unstable; urgency=low
 
