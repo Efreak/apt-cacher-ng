@@ -4,6 +4,10 @@ ifneq ($(DEBUG),)
 	 CMAKEOPTS += -DADDDEBUGSRC=1 --debug-trycompile --debug-output
 endif
 
+ifneq ($(NOLTO),)
+	CMAKEOPTS += -DNOLTO=1
+endif
+
 export CXXFLAGS
 export LDFLAGS
 

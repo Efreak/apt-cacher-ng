@@ -23,7 +23,7 @@ protected:
 	bool ProcessRegular(const mstring &sPath, const struct stat &);
 	//bool ProcessOthers(const mstring &sPath, const struct stat &);
 	virtual void HandlePkgEntry(const tRemoteFileInfo &entry);
-	void _LoadKeyCache(const mstring & sFileName);
+	void _LoadKeyCache();
 
 private:
 

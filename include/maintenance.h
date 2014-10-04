@@ -112,6 +112,7 @@ public:
 
 #define SendFmt tFmtSendObj(this, false).m_parent.m_fmtHelper
 #define SendFmtRemote tFmtSendObj(this, true).m_parent.m_fmtHelper
+#define SendChunkSZ(x) SendChunk(WITHLEN(x))
 
 	tSS m_fmtHelper;
 
