@@ -1,0 +1,16 @@
+diff --git a/source/acfg.cc b/source/acfg.cc
+index 4619a48..8b8e800 100644
+--- a/source/acfg.cc
++++ b/source/acfg.cc
+@@ -386,7 +386,10 @@ tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
+ 					auto nam(GetBaseName(s));
+ 					if(bAddDefault)
+ 						nam.erase(nam.size()-8);
+-					bname2path.emplace(nam, s);
++					// XXX: should use emplace but it's not available in gcc 4.7
++					//bname2path.emplace(nam, s);
++					if(bname2path.find(nam) == bname2path.end())
++						bname2path[nam]=s;
+ 				}
+ 
+ 			}
