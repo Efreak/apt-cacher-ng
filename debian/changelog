@@ -1,3 +1,69 @@
+apt-cacher-ng (0.8.0~rc4-2) wheezy-backports; urgency=low
+
+  * Wheezy backport
+
+ -- 
+
+apt-cacher-ng (0.8.0~rc4-1) unstable; urgency=low
+
+  * New upstream version
+    + fixes missing EOF chunk for some generated responses (closes: 765963)
+    + deep review and fixing of extra file download code acting in
+      repository space without backend specification (closes: #737069)
+    + fixes FTBFS for non-Linux targets (closes: #763685), and debian/rules
+      now detects the usage of sd_notify by looking at build system state
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 04 Oct 2014 00:01:06 +0200
+
+apt-cacher-ng (0.8.0~rc3-1) unstable; urgency=low
+
+  * New upstream version, first Sid upload of 0.8.x 
+    + systemd related changes: startup notification, restart on crashes
+      (closes: #752255)
+    + Now really fixes lookup of .default files in the resource directory
+      (closes: #736579)
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 20 Sep 2014 12:53:20 +0200
+
+apt-cacher-ng (0.8.0~pre3-1) experimental; urgency=low
+
+  * New upstream prerelease version
+  * Corrected passing of hardening flags from CPPFLAGS down to cmake
+    (workaround from wiki, exporting variables manually and adding CPPFLAGS to
+    CXXFLAGS, closes: #760699)
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 09 Sep 2014 22:54:01 +0200
+
+apt-cacher-ng (0.8.0~pre2-1) experimental; urgency=low
+
+  * New upstream prerelease version
+    + Added NEWS.Debian to the volatile patterns filter (LP: #1350432)
+    + Special workaround for clients cutting parts of the file header with
+      partial request (closes: #744727)
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 30 Aug 2014 21:41:24 -0700
+
+apt-cacher-ng (0.8.0~pre1-1) experimental; urgency=low
+
+  * New upstream prerelease version
+    + handles side effects on mmaped files more carefully (maybe a fix
+      for #722360)
+    + adds special handling for .gpg files without impact on static file
+      patterns (closes: #720165)
+  * Fixed links to gentoo_mirrors.default (closes: #736579)
+  * Added Russian translation (closes: #736252)
+  * Moved avahi-daemon to Suggests (LP: #1259191)
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 17 Jul 2014 22:40:25 +0200
+
+apt-cacher-ng (0.7.27-1) unstable; urgency=medium
+
+  * New upstream release
+    + Includes fix of CVE-2014-4510, package patch dropped
+  * Moved avahi-daemon to Suggests (LP: #1259191)
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 17 Jul 2014 21:10:25 +0200
+
 apt-cacher-ng (0.7.26-2~bpo70+2) wheezy-backports; urgency=low
 
   * Fixed target branch

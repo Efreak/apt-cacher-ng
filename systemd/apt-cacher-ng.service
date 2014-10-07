@@ -1,15 +1,15 @@
 [Unit]
 Description=Apt-Cacher NG software download proxy
-After=local-fs.target
 After=network.target
 
 [Service]
+# the SocketPath option can be removed if the inetd bridge functionality is not needed
 ExecStart=/usr/sbin/apt-cacher-ng SocketPath=/var/run/apt-cacher-ng/socket -c /etc/apt-cacher-ng ForeGround=1
-# this ExecStopPost command can be removed together with the SocketPath option
-# above if the bridge functionality is not needed
-ExecStopPost=/bin/rm -f /var/run/apt-cacher-ng/*
 User=apt-cacher-ng
 Group=apt-cacher-ng
+# this can be changed to notify if the support was enabled at build time
+Type=simple
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target

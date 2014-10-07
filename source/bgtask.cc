@@ -16,7 +16,7 @@
 #include <limits.h>
 #include <errno.h>
 
-using namespace MYSTD;
+using namespace std;
 using namespace SMARTPTR_SPACE;
 
 #define LOG_DECO_START "<html><head><style type=\"text/css\">" \
@@ -27,11 +27,7 @@ using namespace SMARTPTR_SPACE;
 bool bSigTaskAbort=false;
 pthread_mutex_t abortMx=PTHREAD_MUTEX_INITIALIZER;
 
-tWuiBgTask::tWuiBgTask(int fd) : tWUIPage(fd), m_bShowControls(false)
-{
-}
-
-tWuiBgTask::~tWuiBgTask()
+tSpecOpDetachable::~tSpecOpDetachable()
 {
 	if(m_pTracker)
 		m_pTracker->SetEnd(m_reportStream.is_open() ? off_t(m_reportStream.tellp()) : off_t(0));
@@ -44,39 +40,44 @@ tWuiBgTask::~tWuiBgTask()
 }
 
 // the obligatory definition of static members :-(
-SMARTPTR_SPACE::weak_ptr<tWuiBgTask::tProgressTracker> tWuiBgTask::g_pTracker;
+SMARTPTR_SPACE::weak_ptr<tSpecOpDetachable::tProgressTracker> tSpecOpDetachable::g_pTracker;
 
-void _AddFooter(tSS &msg)
+cmstring& GetFooter()
 {
-	msg << "<hr><address>Server: " << acfg::agentname
-			<<" | <a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">"
+	static mstring footer;
+	if(footer.empty())
+	{
+		footer = string("<hr><address>Server: ") + acfg::agentname +
+		" | <a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">"
 			"Flattr it!</a> | <a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">"
 			"Apt-Cacher NG homepage</a></address>";
+	}
+	return footer;
 }
 
 /*
  *  TODO: this is kept in expiration class for historical reasons. Should be moved to some shared upper
  * class, like "detachedtask" or something like that
  */
-void tWuiBgTask::Run(const string &cmd)
+void tSpecOpDetachable::Run()
 {
 
-	if (cmd.find("&sigabort")!=stmiss)
+	if (m_parms.cmd.find("&sigabort")!=stmiss)
 	{
 		lockguard g(&abortMx);
 		bSigTaskAbort=true;
-		tStrPos nQuest=cmd.find("?");
+		tStrPos nQuest=m_parms.cmd.find("?");
 		if(nQuest!=stmiss)
 		{
 			tSS buf(255);
 			buf << "HTTP/1.1 302 Redirect\r\nLocation: "
-				<< cmd.substr(0,nQuest)<< "\r\nConnection: close\r\n\r\n";
+				<< m_parms.cmd.substr(0,nQuest)<< "\r\nConnection: close\r\n\r\n";
 			SendRawData(buf.data(), buf.size(), 0);
 		}
 		return;
 	}
 
-	SendChunkedPageHeader("200");
+	SendChunkedPageHeader("200 OK", "text/html");
 
 	tSS deco;
 	const char *mark(NULL);
@@ -89,13 +90,13 @@ void tWuiBgTask::Run(const string &cmd)
 		if(mark)
 		{
 			// send fancy header only to the remote caller
-			SendChunk(deco.rptr(), mark-deco.rptr(), true);
+			SendChunkRemoteOnly(deco.rptr(), mark-deco.rptr());
 			deco.drop((mark-deco.rptr())+1);
 		}
 		else
 		{
 			// send fancy header only to the remote caller
-			SendChunk(deco, true);
+			SendChunkRemoteOnly(deco.c_str(), deco.size());
 			deco.clear();
 		}
 	}
@@ -132,10 +133,11 @@ void tWuiBgTask::Run(const string &cmd)
 
 	if(pTracked)
 	{
-		msg << "<font color=\"blue\">A maintenance task is already running!</font><br>\n"
-				"Attempting to attach to the log output... \n";
-		SendChunk(msg);
-		msg.clear();
+		SendChunkSZ("<font color=\"blue\">A maintenance task is already running!</font>\n");
+		SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
+				<< "\">Cancel</a>)";
+		SendChunkSZ("<br>Attempting to attach to the log output... <br>\n");
+
 		off_t nSent(0);
 		int fd(0);
 		acbuf xx;
@@ -193,51 +195,38 @@ void tWuiBgTask::Run(const string &cmd)
 				bSigTaskAbort=false;
 			}
 
-			if(m_sTypeName.empty())
-				m_sTypeName="starting";
-			else
-				m_sTypeName.insert(0, "(<b>").append("</b>)");
+			SendFmt << "Maintenance task <b>" << GetTaskName()
+					<< "</b>, apt-cacher-ng version: " ACVERSION;
+			SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
+					<< "\">Cancel</a>)";
+			SendFmt << "<br>\n";
+			SendChunkRemoteOnly(WITHLEN("<form id=\"mainForm\" action=\"#top\">\n"));
 
-			SendFmt << "Maintenance task " << m_sTypeName
-					<< ", apt-cacher-ng version: " ACVERSION;
-			SendFmtRemote << " (<a href=" << cmd <<
-					"&sigabort>Cancel</a>)";
-			SendFmt << "<br>";
-			SendFmtRemote << "<form id=\"mainForm\" action=\"#top\">\n";
+			Action();
 
-			Action(cmd);
-
-			// format the footer for the Web rendering only
-			msg.clear();
-			msg<<"<br>\n<a href=\"/"<<acfg::reportpage<<"\">Return to main page</a>"
-					"</form>";
-
-			if (m_bShowControls)
-			{
-				SendChunk("<br><hr><b>Action(s):</b> "
+			if (!m_delCboxFilter.empty())
+				SendChunkRemoteOnly(WITHLEN(
+				"<br><b>Action(s):</b><br>"
 					"<input type=\"submit\" name=\"doDelete\""
 					" value=\"Delete selected files\">"
 					"|<button type=\"button\" onclick=\"checkOrUncheck(true);\">Check all</button>"
-					"<button type=\"button\" onclick=\"checkOrUncheck(false);\">Uncheck all</button><br><hr>",
-					true);
-			}
+					"<button type=\"button\" onclick=\"checkOrUncheck(false);\">Uncheck all</button><br>"));
 
 
+			SendFmtRemote << "<br>\n<a href=\"/"<< acfg::reportpage<<"\">Return to main page</a>"
+					"</form>";
+			auto& f(GetFooter());
+						SendChunkRemoteOnly(f.data(), f.size());
 
-			_AddFooter(msg);
-			SendChunk(msg, true);
 	}
 
 	finish_action:
 
 	if(!deco.empty())
-		SendChunk(deco, true);
-
-	EndTransfer();
-
+		SendChunkRemoteOnly(deco.c_str(), deco.size());
 }
 
-void tWuiBgTask::tProgressTracker::SetEnd(off_t endSize)
+void tSpecOpDetachable::tProgressTracker::SetEnd(off_t endSize)
 {
 	lockguard g(this);
 	//lockguard g2(&abortMx); // the master may go out of scope, protect weak_ptr
@@ -248,13 +237,13 @@ void tWuiBgTask::tProgressTracker::SetEnd(off_t endSize)
 	notifyAll();
 }
 
-bool tWuiBgTask::CheckStopSignal()
+bool tSpecOpDetachable::CheckStopSignal()
 {
 	lockguard g(&abortMx);
 	return bSigTaskAbort;
 }
 
-void tWuiBgTask::DumpLog(time_t id)
+void tSpecOpDetachable::DumpLog(time_t id)
 {
 	filereader reader;
 
@@ -264,12 +253,12 @@ void tWuiBgTask::DumpLog(time_t id)
 	tSS path(acfg::logdir.length()+24);
 	path<<acfg::logdir<<CPATHSEP<<MAINT_PFX << id << ".log.html";
 	if (!reader.OpenFile(path))
-		SendChunk(_SZ2PS("Log not available"), true);
+		SendChunkRemoteOnly(WITHLEN("Log not available"));
 	else
-		SendChunk(reader.GetBuffer(), reader.GetSize(), true);
+		SendChunkRemoteOnly(reader.GetBuffer(), reader.GetSize());
 }
 
-void tWuiBgTask::AfterSendChunk(const char *data, size_t len)
+void tSpecOpDetachable::AfterSendChunk(const char *data, size_t len)
 {
 	if(m_reportStream.is_open())
 	{
@@ -280,7 +269,7 @@ void tWuiBgTask::AfterSendChunk(const char *data, size_t len)
 	}
 }
 
-time_t tWuiBgTask::GetTaskId()
+time_t tSpecOpDetachable::GetTaskId()
 {
 	lockguard guard(&abortMx);
 	tProgTrackPtr pTracked = g_pTracker.lock();
@@ -288,7 +277,7 @@ time_t tWuiBgTask::GetTaskId()
 }
 
 #ifdef DEBUG
-void tBgTester::Action(cmstring &)
+void tBgTester::Action()
 {
 	for (int i = 0; i < 10 && !CheckStopSignal(); i++, sleep(1))
 	{

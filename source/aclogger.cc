@@ -20,7 +20,7 @@
 #include <iostream>
 #include <fstream>
 
-using namespace MYSTD;
+using namespace std;
 
 namespace aclog
 {
@@ -38,6 +38,8 @@ bool open()
 	
 	string apath(acfg::logdir+"/apt-cacher.log"), epath(acfg::logdir+"/apt-cacher.err");
 	
+	mkbasedir(apath);
+
 	if(fErr.is_open())
 		fErr.close();
 	if(fStat.is_open())
@@ -127,130 +129,70 @@ void close(bool bReopen)
 #define WEEKSECONDS (DAYSECONDS * 7)
 
 #ifndef MINIBUILD
-void GetStats(deque<tRowData> & out)
+inline deque<tRowData> GetStats()
 {
 	string sDataFile=acfg::cachedir+SZPATHSEP"_stats_dat";
+	deque<tRowData> out;
+	
+	time_t now = time(NULL);
 
-	
-	out.clear();
-	time_t now=time(NULL);
-	
-	for(int i=0; i<7; i++)
+	for (int i = 0; i < 7; i++)
 	{
 		tRowData d;
-		d.to=now - i*DAYSECONDS;
-		d.from=d.to - DAYSECONDS;
+		d.to = now - i * DAYSECONDS;
+		d.from = d.to - DAYSECONDS;
 		out.push_back(d);
 	}
-	
-//#warning stats cache disabled, restore it later?
-#if 0
-	struct stat statbuf;
-	
-	if ( 0!= stat(sDataFile.c_str(), &statbuf) 
-			|| statbuf.st_mtime < time(NULL)-86000
-	   )
 
-	{ // needs to be created/updated
-		
-#endif
-
-		tStrDeq logs=ExpandFilePattern(acfg::logdir +
-				SZPATHSEP "apt-cacher*.log", false);
-
-		for (tStrDeq::const_iterator it=logs.begin();it!=logs.end();it++)
-		{
-			if(acfg::debug>=LOG_MORE)
-				cerr << "Reading log file: " << *it <<endl;
-			filereader reader;
-			if (!reader.OpenFile(*it))
-			{
-				aclog::err("Error opening a log file");
-				continue;
-			}
-			string sLine;
-			tStrVec tokens;
-
-			while(reader.GetOneLine(sLine))
-			{
-				// cout << "got line: " << sLine <<endl;
-				tokens.clear();
-				if(Tokenize(sLine, "|", tokens)<3)
-					 continue;
-				 
-				 // cout << "having: " << tokens[0] << ", " << tokens[1] << ", " << tokens[2]<<endl;
-				 
-				 time_t when=strtoul(tokens[0].c_str(),0,10);
-				 if(when > out.front().to || when < out.back().from)
-					 continue;
-				 
-				 for(deque<tRowData>::reverse_iterator it=out.rbegin();
-				 it!=out.rend(); 
-				 it++)
-				 {
-					  if(when < it->from || when > it->to)
-						  continue;
-
-						 unsigned long dcount=strtoul(tokens[2].c_str(),0,10);
-						 switch(* tokens[1].c_str()) {
-						 case('I'): 
-							 it->byteIn+=dcount;
-						 it->reqIn++;
-						 break;
-						 case('O'): 
-							 it->byteOut+=dcount;
-						 it->reqOut++;
-						 break;
-						 default:
-							 continue;
-						 }
-				 }
-			}
-		}
-		
-#if 0
-		// Normalize data and repack for user 
-		
-		map<time_t,tempCounts>::iterator it;
-		for(it=mapPeriod2InOut.begin(); it!=mapPeriod2InOut.end(); it++)
-		{
-			tRowData data;
-			data.count=it->second.first+it->second.second;
-			data.ratioSent=double(it->second.second)/double(data.count);
-			if(it->first < RANGEMARK)
-				data.from=data.to= now - it->first * 24 * 3600;
-			else
-			{
-				data.to = now - (it->first-RANGEMARK)*7*24*3600;
-				data.from=data.to-7*24*3600;
-			}
-			out.push_back(data);
-			
-		}
-	}
-	else
-	{ // deserialize
+	for (auto& log : ExpandFilePattern(acfg::logdir + SZPATHSEP "apt-cacher*.log", false))
+	{
+		if (acfg::debug >= LOG_MORE)
+			cerr << "Reading log file: " << log << endl;
 		filereader reader;
+		if (!reader.OpenFile(log))
+		{
+			aclog::err("Error opening a log file");
+			continue;
+		}
 		string sLine;
 		tStrVec tokens;
-		
-		if(!reader.OpenFile(sDataFile))
+
+		while (reader.GetOneLine(sLine))
 		{
-			aclog::err("Error opening stats file");
-			return;
-		}
-		while(reader.GetOneLine(sLine) && Tokenize(sLine, SPACECHARS, tokens)==4)
-		{
-			tRowData data;
-			data.from=strtoul(tokens[0].c_str(),0,10);
-			data.to=strtoul(tokens[1].c_str(),0,10);
-			data.count=atof(tokens[2].c_str());
-			data.ratioSent=atof(tokens[3].c_str());
-			out.push_back(data);
+			// cout << "got line: " << sLine <<endl;
 			tokens.clear();
+			if (Tokenize(sLine, "|", tokens) < 3)
+				continue;
+
+			// cout << "having: " << tokens[0] << ", " << tokens[1] << ", " << tokens[2]<<endl;
+
+			time_t when = strtoul(tokens[0].c_str(), 0, 10);
+			if (when > out.front().to || when < out.back().from)
+				continue;
+
+			for (auto it = out.rbegin(); it != out.rend(); it++)
+			{
+				if (when < it->from || when > it->to)
+					continue;
+
+				unsigned long dcount = strtoul(tokens[2].c_str(), 0, 10);
+				switch (*tokens[1].c_str())
+				{
+				case ('I'):
+					it->byteIn += dcount;
+					it->reqIn++;
+					break;
+				case ('O'):
+					it->byteOut += dcount;
+					it->reqOut++;
+					break;
+				default:
+					continue;
+				}
+			}
 		}
 	}
-#endif
+	return out;
 }
 
 
@@ -258,30 +200,27 @@ string GetStatReport()
 {
 	string ret;
 	vector<char> buf(1024);
-	deque<aclog::tRowData> data;
-	aclog::GetStats(data);
-	for (deque<aclog::tRowData>::iterator it = data.begin(); it != data.end(); it++)
+	for (auto& entry : aclog::GetStats())
 	{
-
-		unsigned long reqMax = max(it->reqIn, it->reqOut);
-		uint64_t dataMax = max(it->byteIn, it->byteOut);
+		auto reqMax = std::max(entry.reqIn, entry.reqOut);
+		auto dataMax = std::max(entry.byteIn, entry.byteOut);
 
 		if (0 == dataMax || 0 == reqMax)
 			continue;
 
 		char tbuf[50];
 		size_t zlen(0);
-		ctime_r(&it->from, tbuf);
-		struct tm *tmp = localtime(&it->from);
+		ctime_r(&entry.from, tbuf);
+		struct tm *tmp = localtime(&entry.from);
 		if (!tmp)
 			goto time_error;
 		zlen = strftime(tbuf, sizeof(tbuf), TIMEFORMAT, tmp);
 		if (!zlen)
 			goto time_error;
 
-		if (it->from != it->to)
+		if (entry.from != entry.to)
 		{
-			tmp = localtime(&it->to);
+			tmp = localtime(&entry.to);
 			if (!tmp)
 				goto time_error;
 			if (0 == strftime(tbuf + zlen, sizeof(tbuf) - zlen,
@@ -303,18 +242,18 @@ string GetStatReport()
 			"<td class=\"colcont\">%2.2f MiB (%2.2f%%)</td>"
 			"<td class=\"colcont\">%2.2f MiB (%2.2f%%)</td>"
 			"<td class=\"colcont\">%2.2f MiB</td>"
-			"</tr>", tbuf, reqMax - it->reqIn, double(reqMax - it->reqIn)
+			"</tr>", tbuf, reqMax - entry.reqIn, double(reqMax - entry.reqIn)
 				/ reqMax * 100, // hitcount
-				it->reqIn, double(it->reqIn) / reqMax * 100, // misscount
+				entry.reqIn, double(entry.reqIn) / reqMax * 100, // misscount
 				reqMax,
 
-				double(dataMax - it->byteIn) / 1048576, double(dataMax
-						- it->byteIn) / dataMax * 100, // hitdata
-				double(it->byteIn) / 1048576, double(it->byteIn) / dataMax
+				double(dataMax - entry.byteIn) / 1048576, double(dataMax
+						- entry.byteIn) / dataMax * 100, // hitdata
+				double(entry.byteIn) / 1048576, double(entry.byteIn) / dataMax
 						* 100, // missdata
 				double(dataMax) / 1048576
 
-		); //, int(it->ratioSent*nRatWid), int((1.0-it->ratioSent)*nRatWid));
+		); //, int(entry.ratioSent*nRatWid), int((1.0-entry.ratioSent)*nRatWid));
 		ret += &buf[0];
 		continue;
 		time_error: ret
@@ -329,7 +268,7 @@ string GetStatReport()
 
 
 
-errnoFmter::errnoFmter(const char *prefix)
+tErrnoFmter::tErrnoFmter(const char *prefix)
 {
 	char buf[32];
 	buf[0]=buf[31]=0x0;
@@ -351,19 +290,20 @@ errnoFmter::errnoFmter(const char *prefix)
 
 #ifdef DEBUG
 
-static lockable mx_dbgStackMark;
-MYMAP<pthread_t, int> stackDepths;
+static class : public lockable, public std::map<pthread_t, int>
+{} stackDepths;
+
 t_logger::t_logger(const char *szFuncName,  const void * ptr)
 {
 	m_id = pthread_self();
 	m_szName = szFuncName;
 	callobj = uintptr_t(ptr);
 	{
-		lockguard __lockguard(&mx_dbgStackMark);
+		lockguard __lockguard(stackDepths);
 		m_nLevel = stackDepths[m_id]++;
 	}
 	// writing to the level of parent since it's being "created there"
-	GetFmter() << ">> " << szFuncName << " ["<<m_id<<" | "<<callobj <<"]";
+	GetFmter() << ">> " << szFuncName << " [T:"<<m_id<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	Write();
 	m_nLevel++;
 }
@@ -371,9 +311,9 @@ t_logger::t_logger(const char *szFuncName,  const void * ptr)
 t_logger::~t_logger()
 {
 	m_nLevel--;
-	GetFmter() << "<< " << m_szName << " ["<<m_id<<" | "<<callobj <<"]";
+	GetFmter() << "<< " << m_szName << " [T:"<<m_id<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	Write();
-	lockguard __lockguard(&mx_dbgStackMark);
+	lockguard __lockguard(stackDepths);
 	stackDepths[m_id]--;
 	if(0 == stackDepths[m_id])
 		stackDepths.erase(m_id);
@@ -382,7 +322,7 @@ t_logger::~t_logger()
 tSS & t_logger::GetFmter()
 {
 	m_strm.clear();
-	for(UINT i=0;i<m_nLevel;i++)
+	for(uint i=0;i<m_nLevel;i++)
 		m_strm << "\t";
 	m_strm<< " - ";
 	return m_strm;
@@ -394,7 +334,8 @@ void t_logger::Write(const char *pFile, unsigned int nLine)
 	{
 		const char *p=strrchr(pFile, CPATHSEP);
 		pFile=p?(p+1):pFile;
-		m_strm << " [" << m_id << "@" << pFile << ":" << nLine <<"|"<<callobj <<"]";
+		m_strm << " [T:" << m_id << " S:" << pFile << ":" << tSS::dec << nLine
+				<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	}
 	aclog::err(m_strm.c_str());
 }

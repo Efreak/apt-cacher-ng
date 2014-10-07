@@ -5,6 +5,8 @@
  *      Author: ed
  */
 
+#include <sys/select.h>
+
 #define LOCAL_DEBUG
 #include "debug.h"
 
@@ -18,13 +20,14 @@
 #include "fileitem.h"
 #include "cleaner.h"
 
-using namespace MYSTD;
+using namespace std;
 
 //#warning FIXME, hack
 //#define NOCONCACHE
 
 #ifdef DEBUG
-volatile int nConCount(0), nDisconCount(0), nReuseCount(0);
+#include <atomic>
+atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 #endif
 
 #ifdef HAVE_SSL
@@ -33,17 +36,20 @@ volatile int nConCount(0), nDisconCount(0), nReuseCount(0);
 #include <openssl/err.h>
 #endif
 
-tcpconnect::tcpconnect() :	m_conFd(-1), m_pConnStateObserver(NULL)
-#ifdef HAVE_SSL
-,m_bio(NULL), m_ctx(NULL), m_ssl(NULL)
-#endif
+std::atomic_uint tcpconnect::g_nconns(0);
+
+tcpconnect::tcpconnect()
 {
+	if(acfg::maxdlspeed != RESERVED_DEFVAL)
+		g_nconns.fetch_add(1);
 }
 
 tcpconnect::~tcpconnect()
 {
 	LOGSTART("tcpconnect::~tcpconnect, terminating outgoing connection class");
 	Disconnect();
+	if(acfg::maxdlspeed != RESERVED_DEFVAL)
+		g_nconns.fetch_add(-1);
 #ifdef HAVE_SSL
 	if(m_ctx)
 		SSL_CTX_free(m_ctx);
@@ -167,7 +173,7 @@ inline bool tcpconnect::Connect(string & sErrorMsg, int timeout)
 	::signal(SIGPIPE, SIG_IGN);
 
 	// always consider first family, afterwards stop when no more specified
-	for (UINT i=0; i< _countof(acfg::conprotos) && (0==i || acfg::conprotos[i]!=PF_UNSPEC); ++i)
+	for (uint i=0; i< _countof(acfg::conprotos) && (0==i || acfg::conprotos[i]!=PF_UNSPEC); ++i)
 	{
 		for (struct addrinfo *pInfo = dns->m_addrInfo; pInfo; pInfo = pInfo->ai_next)
 		{
@@ -200,7 +206,7 @@ inline bool tcpconnect::Connect(string & sErrorMsg, int timeout)
 				continue;
 			}
 #ifdef DEBUG
-			__sync_fetch_and_add(&nConCount, 1);
+			nConCount.fetch_add(1);
 #endif
 			ldbg("connect() ok");
 			set_nb(m_conFd);
@@ -212,7 +218,7 @@ inline bool tcpconnect::Connect(string & sErrorMsg, int timeout)
 	sErrorMsg = "500 Connection failure";
 #else
 	// format the last available error message for the user
-	sErrorMsg=errnoFmter("500 Connection failure: ");
+	sErrorMsg=tErrnoFmter("500 Connection failure: ");
 #endif
 	ldbg("Force reconnect, con. failure");
 	Disconnect();
@@ -224,8 +230,7 @@ void tcpconnect::Disconnect()
 	LOGSTART("tcpconnect::_Disconnect");
 
 #ifdef DEBUG
-	if(m_conFd >=0)
-		__sync_fetch_and_add(&nDisconCount, 1);
+	nDisconCount.fetch_add(m_conFd >=0);
 #endif
 
 #ifdef HAVE_SSL
@@ -242,8 +247,7 @@ void tcpconnect::Disconnect()
 	termsocket_quick(m_conFd);
 }
 
-lockable conPoolMx;
-using namespace MYSTD;
+using namespace std;
 struct tHostHint // could derive from pair but prefer to save some bytes with references
 {
 	cmstring pHost, pPort;
@@ -271,8 +275,8 @@ struct tHostHint // could derive from pair but prefer to save some bytes with re
 #endif
 
 };
-typedef multimap<tHostHint, MYSTD::pair<tTcpHandlePtr, time_t> > tConPool;
-tConPool spareConPool;
+class : public lockable, public multimap<tHostHint, std::pair<tTcpHandlePtr, time_t> >
+{} spareConPool;
 
 tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, acfg::tRepoData::IHookHandler *pStateTracker
@@ -303,42 +307,44 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		p.reset();
 #else
 	{ // mutex context
-		lockguard __g(conPoolMx);
-		tConPool::iterator it=spareConPool.find(key);
-		if(spareConPool.end() == it)
-		{
-			p.reset(new tcpconnect);
-			if(p)
-			{
-				p->m_sHostName=sHostname;
-				p->m_sPort=sPort;
-			}
-
-			if(!p || !p->Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
-				p.reset();
-#ifdef HAVE_SSL
-			else if(bSsl)
-			{
-				if(!p->SSLinit(sErrOut, sHostname, sPort))
-				{
-					p.reset();
-					LOG("ssl init error");
-				}
-			}
-#endif
-		}
-		else
+		lockguard __g(spareConPool);
+		auto it=spareConPool.find(key);
+		if(spareConPool.end() != it)
 		{
 			p=it->second.first;
 			spareConPool.erase(it);
 			bReused = true;
 			ldbg("got connection " << p.get() << " from the idle pool");
 #ifdef DEBUG
-			__sync_fetch_and_add(&nReuseCount, 1);
+			nReuseCount.fetch_add(1);
 #endif
 		}
 	}
 #endif
+
+	if(!p)
+	{
+		p.reset(new tcpconnect);
+		if(p)
+		{
+			p->m_sHostName=sHostname;
+			p->m_sPort=sPort;
+		}
+
+		if(!p || !p->Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
+			p.reset();
+#ifdef HAVE_SSL
+		else if(bSsl)
+		{
+			if(!p->SSLinit(sErrOut, sHostname, sPort))
+			{
+				p.reset();
+				LOG("ssl init error");
+			}
+		}
+#endif
+	}
+
 
 	if(p && pStateTracker)
 	{
@@ -384,7 +390,7 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 
 #ifndef NOCONCACHE
 	time_t now=GetTime();
-	lockguard __g(conPoolMx);
+	lockguard __g(spareConPool);
 	ldbg("caching connection " << handle.get());
 
 	// a DOS?
@@ -408,7 +414,7 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 
 time_t tcpconnect::BackgroundCleanup()
 {
-	lockguard __g(conPoolMx);
+	lockguard __g(spareConPool);
 	time_t now=GetTime();
 
 	fd_set rfds;
@@ -416,7 +422,7 @@ time_t tcpconnect::BackgroundCleanup()
 	int nMaxFd=0;
 
 	// either drop the old ones, or stuff them into a quick select call to find the good sockets
-	for (tConPool::iterator it = spareConPool.begin(); it != spareConPool.end();)
+	for (auto it = spareConPool.begin(); it != spareConPool.end();)
 	{
 		if (now >= (it->second.second + TIME_SOCKET_EXPIRE_CLOSE))
 			spareConPool.erase(it++);
@@ -434,7 +440,7 @@ time_t tcpconnect::BackgroundCleanup()
 	tv.tv_usec = 1;
 	int r=select(nMaxFd + 1, &rfds, NULL, NULL, &tv);
 	// on error, also do nothing, or stop when r fds are processed
-	for (tConPool::iterator it = spareConPool.begin(); r>0 && it != spareConPool.end(); r--)
+	for (auto it = spareConPool.begin(); r>0 && it != spareConPool.end(); r--)
 	{
 		if(FD_ISSET(it->second.first->GetFD(), &rfds))
 			spareConPool.erase(it++);
@@ -457,25 +463,25 @@ void tcpconnect::KillLastFile()
 
 void tcpconnect::dump_status()
 {
-	lockguard __g(conPoolMx);
+	lockguard __g(spareConPool);
 	tSS msg;
 	msg << "TCP connection cache:\n";
-	for (tConPool::iterator it = spareConPool.begin(); it != spareConPool.end();++it)
+	for (auto& x : spareConPool)
 	{
-		if(! it->second.first)
+		if(! x.second.first)
 		{
-			msg << "[BAD HANDLE] recycle at " << it->second.second << "\n";
+			msg << "[BAD HANDLE] recycle at " << x.second.second << "\n";
 			continue;
 		}
 
-		msg << it->second.first->m_conFd << ": for "
-				<< it->first.pHost << ":" << it->first.pPort
-				<< ", recycled at " << it->second.second << "\n";
+		msg << x.second.first->m_conFd << ": for "
+				<< x.first.pHost << ":" << x.first.pPort
+				<< ", recycled at " << x.second.second << "\n";
 	}
 #ifdef DEBUG
-	msg << "dbg counts, con: " << __sync_fetch_and_add(&nConCount, 0)
-			<< " , discon: " << __sync_fetch_and_add(&nDisconCount, 0)
-			<< " , reuse: " << __sync_fetch_and_add(&nReuseCount, 0) << "\n";
+	msg << "dbg counts, con: " << nConCount.load()
+			<< " , discon: " << nDisconCount.load()
+			<< " , reuse: " << nReuseCount.load() << "\n";
 #endif
 
 	aclog::err(msg);
@@ -486,6 +492,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	SSL * ssl(NULL);
 	int hret(0);
 	LPCSTR perr(0);
+	mstring ebuf;
 
 	// cleaned up in the destructor on EOL
 	if(!m_ctx)
@@ -509,13 +516,51 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  			| SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
  			| SSL_MODE_ENABLE_PARTIAL_WRITE);
 
- 	// make it blocking for sure otherwise SSL_connect would become messy
-	set_block(m_conFd);
-
  	if((hret=SSL_set_fd(ssl, m_conFd)) != 1)
  		goto ssl_init_fail_retcode;
-	if((hret=SSL_connect(ssl)) != 1)
-		goto ssl_init_fail_retcode;
+
+ 	while(true)
+ 	{
+ 		hret=SSL_connect(ssl);
+ 		if(hret == 1 )
+ 			break;
+ 		if(hret == 0)
+ 			goto ssl_init_fail_retcode;
+
+		fd_set rfds, wfds;
+		FD_ZERO(&rfds);
+		FD_ZERO(&wfds);
+ 		switch(SSL_get_error(ssl, hret))
+ 		{
+ 		case SSL_ERROR_WANT_READ:
+ 			FD_SET(m_conFd, &rfds);
+ 			break;
+ 		case SSL_ERROR_WANT_WRITE:
+ 			FD_SET(m_conFd, &wfds);
+ 			break;
+ 		default:
+ 			goto ssl_init_fail_retcode;
+ 		}
+ 		struct timeval tv;
+ 		tv.tv_sec = acfg::nettimeout;
+ 		tv.tv_usec = 0;
+		int nReady=select(m_conFd+1, &rfds, &wfds, NULL, &tv);
+		if(!nReady)
+		{
+			perr="Socket timeout";
+			goto ssl_init_fail;
+		}
+		if (nReady<0)
+		{
+#ifndef MINIBUILD
+			ebuf=tErrnoFmter("Socket error");
+			perr=ebuf.c_str();
+#else
+			perr="Socket error";
+#endif
+			goto ssl_init_fail;
+		}
+ 	}
 
  	m_bio = BIO_new(BIO_f_ssl());
  	if(!m_bio)
@@ -549,7 +594,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 
 	if(!perr)
 		perr=ERR_reason_error_string(ERR_get_error());
-	sErr="SSL error: ";
+	sErr="500 SSL error: ";
 	sErr+=(perr?perr:"Generic SSL failure");
 	return false;
 }

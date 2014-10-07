@@ -1,12 +1,27 @@
 
 TODO:
 
-Add expiration for installer images using SHA256SUMS or MD5SUMS (whichever is covered by the Release file)
+Move signal handler to signalfd (on Linux) or a pipe fed from a basic signal
+handler (replacement for non-Linux). Current solution still has potential for dead-locking.
+
+Add custom job trigger with a command file plus fifo file (for output). This
+might be triggered by SIGUSR2.
+
+Fix URL parser to cope with more combinations of encoded chars (specially in user:pass part)
+
+Use Base64 pre-encoded userpass strings in host descriptors and proxy information
+
+Make better secure mechanism to trigger maint jobs. The current one requires faked website authentication, etc.
+Should use local methods instead, maybe passing a config file with commands via
+filesystem which is only readable/writtable to apt-cacher-ng and push it via
+signal?
+
+No cancel button in attached mode of maint pages
 
 Use cache control headers where possible
 
 [for s.] root startup and EUID changing for privileged port use
-[maybe] Don't die if at leat one socket was open on start. Plus, retry to open sockets on HUP. document this... ifup can send hups?!
+[maybe, what was the urgent reason again...?!] Don't die if at leat one socket was open on start. Plus, retry to open sockets on HUP. document this... ifup can send hups?!
 [debian] don't install acngfs manpage on hurd... or finally fix and build acngfs for hurd
 
 > And after a code review yesterday I think the html log is still not a
@@ -47,7 +62,6 @@ For 0.9:
 
  - For import, make it more controlable. Control page should offer checkboxes:
 [] Thrust old apt-cacher metadata if found (skip file verification)
-[] Learn index files locations from old metadata
 [] Forced copy of imported index files (overwrites existing!)
 [] Optimistic Precaching Strategy
 

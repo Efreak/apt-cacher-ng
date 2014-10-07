@@ -3,13 +3,14 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <string.h>
+//#include "aclogger.h"
 
 #include <set>
 
 #include "meta.h"
 #include "dirwalk.h"
 
-using namespace MYSTD;
+using namespace std;
 namespace acfg
 {
 extern int stupidfs;
@@ -35,7 +36,7 @@ struct dnode
 	dnode(dnode *parent) : m_parent(parent) {};
 	bool Walk(IFileHandler *, tDupeFilter*, bool bFollowSymlinks);
 
-	MYSTD::string sPath;
+	std::string sPath;
 	dnode *m_parent;
 	struct stat m_stinfo;
 
@@ -50,25 +51,37 @@ private:
 
 bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymlinks)
 {
+//	bool bNix=StrHas(sPath, "somehost");
+
 	if(bFollowSymlinks)
 	{
-		if(stat(sPath.c_str(), &m_stinfo)<0)
+		if(stat(sPath.c_str(), &m_stinfo))
 			return true; // slight risk of missing information here... bug ignoring is safer
 	}
 	else
 	{
-		if(lstat(sPath.c_str(), &m_stinfo)<0)
+		auto r=lstat(sPath.c_str(), &m_stinfo);
+		if(r)
+		{
+	/*		errnoFmter f;
+				aclog::err(tSS() << sPath <<
+						" IO error [" << f<<"]");
+						*/
 			return true; // slight risk of missing information here... bug ignoring is safer
+		}
+		// dangling symlink?
 		if(S_ISLNK(m_stinfo.st_mode))
 			return true;
 	}
 	
-	if(S_ISREG(m_stinfo.st_mode))
+	if(S_ISREG(m_stinfo.st_mode)
+#ifdef DEBUG
+			|| S_ISBLK(m_stinfo.st_mode)
+#endif
+	)
 		return h->ProcessRegular(sPath, m_stinfo);
 	else if(! S_ISDIR(m_stinfo.st_mode))
-	{
 		return h->ProcessOthers(sPath, m_stinfo);
-	}
 	
 	// ok, we are a directory, scan it and descend where needed
 

@@ -17,21 +17,11 @@
 
 #include <fnmatch.h>
 #include <algorithm>
+#include <list>
 
-using namespace MYSTD;
+using namespace std;
 
-pkgmirror::pkgmirror(int fd): tCacheMan(fd),
-m_bCalcSize(false), m_bSkipIxUpdate(false), m_bDoDownload(false), m_bAsNeeded(false),
-m_bUseDelta(false), m_totalSize(0), m_totalHave(0), m_pDeltaSrc(NULL), m_repCutLen(0)
-{
-	m_sTypeName="Mirroring";
-}
-
-pkgmirror::~pkgmirror()
-{
-}
-
-bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &stinfo)
+bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &)
 {
 	if (endsWithSzAr(sPath, ".head"))
 		return true;
@@ -70,28 +60,7 @@ bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &stinfo)
 	return ! CheckStopSignal();
 }
 
-tStrDeq GetVariants(cmstring &mine)
-{
-	tStrDeq ret;
-	string base;
-	for(cmstring *p=suxeWempty; p<suxeWempty+_countof(suxeWempty); p++)
-	{
-		if(endsWith(mine, *p))
-		{
-			base=mine.substr(0, mine.size()-p->size());
-			break;
-		}
-	}
-	for(cmstring *p=suxeWempty; p<suxeWempty+_countof(suxeWempty); p++)
-	{
-		string cand=base+*p;
-		if(cand!=mine)
-			ret.push_back(cand);
-	}
-	return ret;
-}
-
-void pkgmirror::Action(const string &cmd)
+void pkgmirror::Action()
 {
 	if(acfg::mirrorsrcs.empty())
 	{
@@ -101,14 +70,14 @@ void pkgmirror::Action(const string &cmd)
 
 	SendChunk("<b>Locating index files, scanning...</b><br>\n");
 
-	SetCommonUserFlags(cmd);
+	SetCommonUserFlags(m_parms.cmd);
 	m_bErrAbort=false; // does not f...ing matter, do what we can
 
-	m_bCalcSize=(cmd.find("calcSize=cs")!=stmiss);
-	m_bDoDownload=(cmd.find("doDownload=dd")!=stmiss);
-	m_bSkipIxUpdate=(cmd.find("skipIxUp=si")!=stmiss);
-	m_bAsNeeded=(cmd.find("asNeeded=an")!=stmiss);
-	m_bUseDelta=(cmd.find("useDebDelta=ud")!=stmiss);
+	m_bCalcSize=(m_parms.cmd.find("calcSize=cs")!=stmiss);
+	m_bDoDownload=(m_parms.cmd.find("doDownload=dd")!=stmiss);
+	m_bSkipIxUpdate=(m_parms.cmd.find("skipIxUp=si")!=stmiss);
+	m_bAsNeeded=(m_parms.cmd.find("asNeeded=an")!=stmiss);
+	m_bUseDelta=(m_parms.cmd.find("useDebDelta=ud")!=stmiss);
 
 	if(m_bUseDelta)
 	{
@@ -131,7 +100,7 @@ void pkgmirror::Action(const string &cmd)
 	if(CheckStopSignal())
 		return;
 
-	if(m_indexFilesRel.empty())
+	if(m_metaFilesRel.empty())
 	{
 		SendChunk("<div class=\"ERROR\">No index files detected. Unable to continue, cannot map files to internal locations.</div>");
 		return;
@@ -141,7 +110,7 @@ void pkgmirror::Action(const string &cmd)
 		return;
 
 	if(!m_bSkipIxUpdate)
-		UpdateIndexFiles();
+		UpdateVolatileFiles();
 
 	if(CheckStopSignal())
 		return;
@@ -159,14 +128,14 @@ void pkgmirror::Action(const string &cmd)
 		};
 		void TryAdd(cmstring &s)
 		{
-			for(tStrVecIterConst it=matchList.begin(); it!=matchList.end(); it++)
-				if(0==fnmatch(it->c_str(), s.c_str(), FNM_PATHNAME))
+			for(const auto& match : matchList)
+				if(0==fnmatch(match.c_str(), s.c_str(), FNM_PATHNAME))
 				{
 					pSrcs->insert(s);
 					break;
 				}
 		}
-		void HandlePkgEntry(const tRemoteFileInfo &entry, bool)
+		void HandlePkgEntry(const tRemoteFileInfo &entry)
 		{
 			TryAdd(entry.sDirectory+entry.sFileName);
 		}
@@ -176,71 +145,74 @@ void pkgmirror::Action(const string &cmd)
 
 	SendChunk("<b>Identifying relevant index files...</b><br>");
 	// ok, now go through all release files and pickup all appropriate index files
-	for(tS2IDX::iterator it=m_indexFilesRel.begin(); it!=m_indexFilesRel.end();it++)
+	for(auto& path2x: m_metaFilesRel)
 	{
-		if(endsWithSzAr(it->first, "Release"))
+		if(endsWithSzAr(path2x.first, "Release"))
 		{
-			if(!m_bSkipIxUpdate && !GetFlags(it->first).uptodate)
-				Download(it->first, true, VERB_SHOW);
-			ParseAndProcessIndexFile(picker, it->first, EIDX_RELEASE);
+			if(!m_bSkipIxUpdate && !GetFlags((cmstring)path2x.first).uptodate)
+				Download((cmstring)path2x.first, true, eMsgShow);
+			ParseAndProcessMetaFile(picker, (cmstring) path2x.first, EIDX_RELEASE);
 		}
 		else
-			picker.TryAdd(it->first);
+			picker.TryAdd((cmstring)path2x.first);
 	}
 
 	SendChunk("<b>Identifying more index files in cache...</b><br>");
 	// unless found in release files, get the from the local system
-	for (tStrVecIterConst it = picker.matchList.begin(); it != picker.matchList.end(); it++)
-	{
-		tStrDeq paths(ExpandFilePattern(CACHE_BASE+it->c_str(), false));
-		for(tStrDeq::iterator j=paths.begin(); j!=paths.end(); j++)
-			picker.TryAdd(*j);
-	}
+	for (const auto& match: picker.matchList)
+		for(const auto& path : ExpandFilePattern(CACHE_BASE+match, false))
+			picker.TryAdd(path);
 
-	restart_clean: // start over if the set changed while having a hot iterator
-	for(tStrSet::iterator it=srcs.begin(); it!=srcs.end(); it++)
+	auto delBros = [&srcs](cmstring& mine)
 	{
-		if(GetFlags(*it).uptodate) // this is the one
+		string base;
+		int nDeleted = 0;
+		cmstring* pMySuf=nullptr;
+		for(const auto& suf: compSuffixesAndEmpty)
 		{
-		tStrDeq bros(GetVariants(*it));
-		int nDeleted=0;
-		for(tStrDeq::iterator b=bros.begin(); b!=bros.end(); b++)
-			nDeleted+=srcs.erase(*b);
-		if(nDeleted)
-			goto restart_clean;
-		}
-	}
-
-	// now there may still be something like Sources and Sources.bz2 if they
-	// were added by Release file scan. Choose the prefered simply by extension.
-
-	restart_clean2: // start over if the set changed while having a hot iterator
-	for (const string *p = suxeByCompSize; p < suxeByCompSize
-	+ _countof(suxeByCompSize); p++)
-	{
-		for (tStrSet::iterator it = srcs.begin(); it != srcs.end(); it++)
-		{
-			if(endsWith(*it, *p))
+			if(endsWith(mine, suf))
 			{
-				tStrDeq bros(GetVariants(*it));
-			int nDeleted=0;
-			for(tStrDeq::iterator b=bros.begin(); b!=bros.end(); b++)
-				nDeleted+=srcs.erase(*b);
-			if(nDeleted)
-				goto restart_clean2;
+				base=mine.substr(0, mine.length()-suf.length());
+				pMySuf=&suf;
+				break;
 			}
 		}
-	}
+		for(const auto& suf : compSuffixesAndEmpty)
+		{
+			if(&suf == pMySuf)
+				continue;
+			nDeleted += srcs.erase(base+suf);
+		}
+		return nDeleted;
+	};
 
-	for (tStrSet::iterator it=srcs.begin(); it!=srcs.end(); it++)
+	// ok, if there are still multiple variants of certain files, strip the
+	// ones which are equivalent to some file which we have on disk
+
+	// start over if the set changed while having a hot iterator
+	// XXX: this is still O(n^2) but good enough for now
+	restart_clean:
+	for(const auto& src : srcs)
+		if (GetFlags(src).uptodate && delBros(src)) // this is the one
+			goto restart_clean;
+
+	// now there may still be something like Sources and Sources.bz2 if they
+	// were added by Release file scan. Choose the preferred one simply by extension.
+	restart_clean2: // start over if the set changed while having a hot iterator
+	for (const auto& s: compSuffixesAndEmptyByRatio)
+		for (const auto& src : srcs)
+			if (endsWith(src, s)&& delBros(src)) // this is the one
+				goto restart_clean2;
+
+	for (auto& src: srcs)
 	{
-		SendFmt << "File list: " << *it<< "<br>";
+		SendFmt << "File list: " << src << "<br>\n";
 
 		if(m_bSkipIxUpdate)
 			continue;
 
-		if(!GetFlags(*it).uptodate)
-			Download(*it, true);
+		if(!GetFlags(src).uptodate)
+			Download(src, true, eMsgShow);
 
 		if(CheckStopSignal())
 			return;
@@ -252,27 +224,27 @@ void pkgmirror::Action(const string &cmd)
 	if (m_bCalcSize)
 	{
 
-		UINT dcount=0;
+		uint dcount=0;
 
 		SendFmt << "<b>Counting downloadable content size..."
 				<< (m_bAsNeeded? " (filtered)" : "")  << "</b><br>";
 
-		for (tStrSet::iterator it = srcs.begin(); it != srcs.end(); it++)
+		for (auto& src : srcs)
 		{
 #ifdef DEBUG
 			if(LOG_MORE&acfg::debug)
-				SendFmt << "mirror check: " << *it;
+				SendFmt << "mirror check: " << src;
 #endif
 			off_t needBefore=(m_totalSize-m_totalHave);
 
-			ParseAndProcessIndexFile(*this, *it, GuessIndexTypeFromURL(*it));
+			ParseAndProcessMetaFile(*this, src, GuessMetaTypeFromURL(src));
 
-			SendFmt << *it << ": "
+			SendFmt << src << ": "
 					<< offttosH((m_totalSize-m_totalHave)-needBefore)
 					<< " to download<br>\n";
 
 			if(m_bUseDelta)
-				dcount+=ConfigDelta(*it);
+				dcount+=ConfigDelta(src);
 
 			if(CheckStopSignal())
 				return;
@@ -290,14 +262,12 @@ void pkgmirror::Action(const string &cmd)
 
 		m_bCalcSize=false;
 
-		for (tStrSet::iterator it=srcs.begin(); it!=srcs.end(); it++)
+		for (auto& src: srcs)
 		{
 			if(CheckStopSignal())
 				return;
-
-			ConfigDelta(*it);
-
-			ParseAndProcessIndexFile(*this, *it, GuessIndexTypeFromURL(*it));
+			ConfigDelta(src);
+			ParseAndProcessMetaFile(*this, src, GuessMetaTypeFromURL(src));
 		}
 	}
 }
@@ -318,7 +288,7 @@ inline bool pkgmirror::ConfigDelta(cmstring &sPathRel)
 	if (m_repCutLen != stmiss)
 	{
 		vname.resize(m_repCutLen);
-		const acfg::tRepoData *pRepo = acfg::GetBackendVec(vname);
+		const acfg::tRepoData *pRepo = acfg::GetRepoData(vname);
 #ifdef DEBUG
 		if(acfg::debug & LOG_MORE)
 		{
@@ -334,30 +304,13 @@ inline bool pkgmirror::ConfigDelta(cmstring &sPathRel)
 	return m_pDeltaSrc;
 }
 
-void pkgmirror::UpdateFingerprint(const mstring &sPathRel, off_t nOverrideSize,
-			uint8_t *pOverrideSha1, uint8_t *pOverrideMd5)
-{
-
-}
-
-/*
-struct CompDebVerLessThan
-{
-	bool operator()(cmstring &s1, cmstring s2) const
-	{
-		int r=::system(string("dpkg --compare-versions "+s1+" lt "+s2).c_str());
-		return 0==r;
-	}
-};
-*/
-
 bool CompDebVerLessThan(cmstring &s1, cmstring s2)
 {
 	int r=::system(string("dpkg --compare-versions "+s1+" lt "+s2).c_str());
 	return 0==r;
 };
 
-void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressForChecksum)
+void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
 	if (m_bAsNeeded)
 	{
@@ -392,7 +345,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 		{
 			tStrDeq oldebs, sorted;
 
-			//MYSTD::set<mstring, CompDebVerLessThan> sortedVersions;
+			//std::set<mstring, CompDebVerLessThan> sortedVersions;
 
 			tStrVec parts;
 			Tokenize(entry.sFileName, "_", parts);
@@ -400,20 +353,21 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 				goto cannot_debpatch;
 
 			// pick only the same architecture
-			oldebs = ExpandFilePattern(CACHE_BASE + entry.sDirectory + parts[0] + "_*_" + parts[2], false);
+			oldebs = ExpandFilePattern(CACHE_BASE +
+					entry.sDirectory + parts[0] + "_*_" + parts[2], false);
 
 			// filter dangerous strings, invalid version strings, higher/same version
-			for(UINT i=0; i<oldebs.size();++i)
+			for(const auto& oldeb: oldebs)
 			{
-				tSplitWalk split(&oldebs[i], "_");
+				tSplitWalk split(&oldeb, "_");
 				if(split.Next() && split.Next())
 				{
 					mstring s(split);
 					const char *p = s.c_str();
-					if(!p || !*p || !isdigit(UINT(*p)))
+					if(!p || !*p || !isdigit(uint(*p)))
 						continue;
 					for(++p; *p; ++p)
-						if(!isalnum(UINT(*p)) && !strchr(".-+:~",UINT(*p)))
+						if(!isalnum(uint(*p)) && !strchr(".-+:~",uint(*p)))
 							break;
 					if( !*p && CompDebVerLessThan(s, parts[1]))
 						sorted.push_back(s);
@@ -430,14 +384,15 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 #endif
 			while(!sorted.empty() && !bhaveit)
 			{
-				tSS uri, srcAbs;
-				uri << m_pDeltaSrc->ToURI(false) << entry.sDirectory.substr(m_repCutLen+1)
-						<< parts[0] << "_"
-						<< sorted.back() << "_" <<
-						parts[1] << "_" << parts[2] << "delta";
+				tSS srcAbs;
+				auto uri=*m_pDeltaSrc;
+				uri.sPath+=entry.sDirectory.substr(m_repCutLen+1)
+						+ parts[0] + "_"
+						+ sorted.back() + "_" +
+						parts[1] + "_" + parts[2] + "delta";
 
 #ifdef DEBUG
-				SendFmt << uri << "<br>\n";
+				SendFmt << uri.ToURI(false) << "<br>\n";
 #endif
 				srcAbs << CACHE_BASE << entry.sDirectory<< parts[0] << "_"
 						<< sorted.back() << "_"  << parts[2];
@@ -452,14 +407,15 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 				::unlink(sDeltaPathAbs.c_str());
 				::unlink((sDeltaPathAbs+".head").c_str());
 
-				if(Download(TEMPDELTA, false, VERB_QUIET, NULL, uri.c_str()))
+				if(Download(TEMPDELTA, false, eMsgHideAll, NULL, &uri))
 				{
 					::setenv("delta", SZABSPATH(TEMPDELTA), true);
 					::setenv("from", srcAbs.c_str(), true);
 					::setenv("to", SZABSPATH(TEMPRESULT), true);
 
-				SendFmt << "Fetched: " << uri << "<br>\n";
-				cerr << "debpatch " << getenv("delta") << " " << getenv("from")
+				SendFmt << "Fetched: " << uri.ToURI(false) << "<br>\n";
+				if(m_bVerbose)
+				SendFmt << "debpatch " << getenv("delta") << " " << getenv("from")
 						<< " " << getenv("to");
 
 					if (0 == ::system("debpatch \"$delta\" \"$from\" \"$to\""))
@@ -491,7 +447,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 							}
 						}
 
-						bhaveit = Inject(TEMPRESULT, tgtRel, false, false, &h, true);
+						bhaveit = Inject(TEMPRESULT, tgtRel, false, &h, true);
 
 						if(bhaveit)
 						{
@@ -501,7 +457,6 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 									<< ":" << entry.fpr.size / 1024
 									<< "KiB)</i>\n<br>\n";
 						}
-
 					}
 					else
 						SendFmt << "Debpatch couldn't rebuild " << tgtRel<<"<br>\n";
@@ -512,7 +467,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry, bool bUncompressFor
 		cannot_debpatch:
 
 		if(!bhaveit)
-			Download(entry.sDirectory + entry.sFileName, false);
+			Download(entry.sDirectory + entry.sFileName, false, eMsgShow);
 
 		if (m_bVerbose && m_totalSize)
 		{

@@ -7,11 +7,7 @@
 #include "acbuf.h"
 #include <sys/types.h>
 #include "fileitem.h"
-
-/*
-class fileitem_base;
-typedef SHARED_PTR<fileitem_base> tFileItemPtr;
-*/
+#include "maintenance.h"
 
 class con;
 
@@ -47,7 +43,7 @@ class job {
       /*
        * Start or continue returning the file.
        */
-      eJobResult SendData(int confd, int nAllJobCount);
+      eJobResult SendData(int confd);
   
    private:
       
@@ -61,10 +57,9 @@ class job {
       
       eJobState m_state, m_backstate;
       
-      //mstring m_sErrorMsgBuffer;
       tSS m_sendbuf;
       mstring m_sFileLoc; // local_relative_path_to_file
-      mstring m_sMaintCmd;
+      tSpecialRequest::eMaintWorkType m_eMaintWorkType = tSpecialRequest::workNotSpecial;
       mstring m_sOrigUrl; // local SAFE copy of the originating source
       
       header *m_pReqHead; // copy of users requests header
@@ -80,14 +75,20 @@ class job {
       job & operator=(const job&);
 
       const char * BuildAndEnqueHeader(const fileitem::FiStatus &fistate, const off_t &nGooddataSize, header& respHead);
-      fileitem::FiStatus _SwitchToPtItem(const mstring &fileLoc);
-      void SetErrorResponse(const char * errorLine, const char *szLocation=NULL);
+      fileitem::FiStatus _SwitchToPtItem();
+      void SetErrorResponse(const char * errorLine, const char *szLocation=NULL, const char *bodytext=NULL);
       void HandleLocalDownload(const mstring &visPath,
     			const mstring &fsBase, const mstring &fsSubpath);
 
       bool ParseRange();
 
       off_t m_nReqRangeFrom, m_nReqRangeTo;
+};
+
+
+class tTraceData: public tStrSet, public lockable {
+public:
+	static tTraceData& getInstance();
 };
 
 #endif

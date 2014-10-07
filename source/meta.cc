@@ -16,7 +16,7 @@
 #include <glob.h>
 #endif
 
-using namespace MYSTD;
+using namespace std;
 
 cmstring sPathSep(SZPATHSEP);
 cmstring sPathSepUnix(SZPATHSEPUNIX);
@@ -47,7 +47,7 @@ void set_block(int fd) {
 
 
 /*
-inline tStrPos findHostStart(const MYSTD::string & sUri)
+inline tStrPos findHostStart(const std::string & sUri)
 {
 	tStrPos p=0, l=sUri.size();
 	if (0==sUri.compare(0, 7, "http://"))
@@ -56,7 +56,7 @@ inline tStrPos findHostStart(const MYSTD::string & sUri)
 	return p;
 }
 
-void trimProto(MYSTD::string & sUri)
+void trimProto(std::string & sUri)
 {
 	sUri.erase(findHostStart(sUri));
 }
@@ -66,7 +66,7 @@ void trimProto(MYSTD::string & sUri)
 mstring GetBaseName(const string &in)
 {
 	if(in.empty())
-		return "";
+		return sEmptyString;
 
 	tStrPos end = in.find_last_not_of(CPATHSEP); // must be the last char of basename
 	if(end == stmiss) // empty, or just a slash?
@@ -117,7 +117,7 @@ void find_base_name(const char *in, const char * &pos, UINT &len)
  * \brief Simple split function, outputs resulting tokens into a string vector, with or without purging the previous contents
  */
 tStrVec::size_type Tokenize(const string & in, const char *sep,
-		tStrVec & out, bool bAppend, MYSTD::string::size_type nStartOffset)
+		tStrVec & out, bool bAppend, std::string::size_type nStartOffset)
 {
 	if(!bAppend)
 		out.clear();
@@ -147,18 +147,6 @@ void StrSubst(string &contents, const string &from, const string &to)
 		contents.replace(pos, from.length(), to);
 		pos+=to.length();
 	}
-}
-
-
-void Join(MYSTD::string &out, const MYSTD::string & sep, const tStrVec & tokens)
-{
-	out.clear();
-	if(tokens.empty())
-		return;
-	
-	for(tStrVec::const_iterator it=tokens.begin(); it!=tokens.end(); it++)
-		out+=(sep + *it);
-			
 }
 
 bool ParseKeyValLine(const string & sIn, string & sOutKey, string & sOutVal)
@@ -196,15 +184,7 @@ bool ParseKeyValLine(const string & sIn, string & sOutKey, string & sOutVal)
 
 bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 {
-	sPort.clear();
-	sHost.clear();
-	sPath.clear();
-	sUserPass.clear();
-#ifdef HAVE_SSL
-	bSSL=false;
-#endif
-	bIsTransferlEncoded=false;
-	
+	clear();
 	mstring url = unescape ? UrlUnescape(sUrlRaw) : sUrlRaw;
 
 	trimBack(url);
@@ -228,7 +208,7 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 		bSSL=true;
 #endif
 	}
-	else if(isalnum((UINT)url[0]))
+	else if(isalnum((uint)url[0]))
 		hStart=0;
 	else if(url[0]=='[')
 	{
@@ -304,13 +284,9 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 
 string tHttpUrl::ToURI(bool bUrlEscaped) const
 {
-#ifdef HAVE_SSL
-	mstring s(bSSL ? "https://" : "http://");
-#else
-	mstring s("http://");
-#endif
+	auto s(GetProtoPrefix());
 	// if needs transfer escaping and is not internally escaped
-	if (bUrlEscaped && !bIsTransferlEncoded)
+	if (bUrlEscaped)
 	{
 		UrlEscapeAppend(sHost, s);
 		if (!sPort.empty())
@@ -335,29 +311,31 @@ string tHttpUrl::ToURI(bool bUrlEscaped) const
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 
-tStrDeq ExpandFilePattern(const string &pattern, bool bSorted)
+tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
 {
 	tStrDeq srcs;
 #ifdef HAVE_WORDEXP
-	wordexp_t p;
-	memset(&p, 0, sizeof(p));
-    if(0==wordexp(pattern.c_str(), &p, 0))
-    {
-    	for(char **s=p.we_wordv; s<p.we_wordv+p.we_wordc;s++)
-    		srcs.push_back(*s);
-    	wordfree(&p);
-    }
-    if(bSorted) MYSTD::sort(srcs.begin(), srcs.end());
+	auto p=wordexp_t();
+	if(0==wordexp(pattern.c_str(), &p, 0))
+	{
+		for(char **s=p.we_wordv; s<p.we_wordv+p.we_wordc;s++)
+			srcs.push_back(*s);
+		wordfree(&p);
+	}
+	else if(!bQuiet)
+		cerr << "Warning: failed to find files for " << pattern <<endl;
+	if(bSorted) std::sort(srcs.begin(), srcs.end());
 #elif defined(HAVE_GLOB)
-	glob_t p;
-	memset(&p, 0, sizeof(p));
+	auto p=glob_t();
 	if(0==glob(pattern.c_str(), GLOB_DOOFFS | (bSorted ? 0 : GLOB_NOSORT),
-			NULL, &p))
+				NULL, &p))
 	{
 		for(char **s=p.gl_pathv; s<p.gl_pathv+p.gl_pathc;s++)
 			srcs.push_back(*s);
 		globfree(&p);
 	}
+	else if(!bQuiet)
+		cerr << "Warning: failed to find files for " << pattern <<endl;
 #else
 #warning Needs a file name expansion function, wordexp or glob
 	srcs.push_back(pattern);
@@ -383,7 +361,7 @@ bool IsAbsolute(cmstring &dirToFix)
 }
 
 /*
-void MakeAbsolutePath(MYSTD::string &dirToFix, const MYSTD::string &reldir)
+void MakeAbsolutePath(std::string &dirToFix, const std::string &reldir)
 {
 	if(!IsAbsolute(dirToFix))
 		dirToFix=reldir+CPATHSEP+dirToFix;
@@ -474,6 +452,7 @@ inline bool is_safe_url_char(char c)
 {
 // follows rfc3986 except of ~ which some servers seem to handle incorrectly,
 	// https://alioth.debian.org/tracker/?func=detail&aid=314030&group_id=100566&atid=413111
+	// and the $?= which some SF servers cannot decode in their forwarding scheme
 	switch (c)
 	{
 	case '/':
@@ -542,6 +521,9 @@ inline bool is_safe_url_char(char c)
 	case '-':
 	case '.':
 	case '_':
+	case '?':
+	case '&':
+	case '=':
 		return true;
 	default:
 		return false;
@@ -550,13 +532,13 @@ inline bool is_safe_url_char(char c)
 
 void UrlEscapeAppend(cmstring &s, mstring &sTarget)
 {
-	for(cmstring::const_iterator it=s.begin(); it!=s.end();++it)
+	for(const auto& c: s)
 	{
-		if(is_safe_url_char(*it))
-			sTarget+=*it;
+		if(is_safe_url_char(c))
+			sTarget+=c;
 		else
 		{
-			char buf[4] = { '%', h2t_map[uint8_t(*it) >> 4], h2t_map[uint8_t(*it) & 0x0f],'\0'};
+			char buf[4] = { '%', h2t_map[uint8_t(c) >> 4], h2t_map[uint8_t(c) & 0x0f],'\0'};
 			sTarget+=buf;
 		}
 	}
@@ -571,15 +553,15 @@ mstring UrlEscape(cmstring &s)
 mstring DosEscape(cmstring &s)
 {
 	mstring ret;
-	for(cmstring::const_iterator it=s.begin(); it!=s.end();++it)
+	for(const auto& c: s)
 	{
-		if('/' == *it)
+		if('/' == c)
 			ret+=SZPATHSEP;
-		else if(is_safe_url_char(*it))
-			ret+=*it;
+		else if(is_safe_url_char(c))
+			ret+=c;
 		else
 		{
-			char buf[4] = { '%', h2t_map[uint8_t(*it) >> 4], h2t_map[uint8_t(*it) & 0x0f],'\0'};
+			char buf[4] = { '%', h2t_map[uint8_t(c) >> 4], h2t_map[uint8_t(c) & 0x0f],'\0'};
 			ret += buf;
 		}
 	}
@@ -589,7 +571,7 @@ mstring DosEscape(cmstring &s)
 bool UrlUnescapeAppend(cmstring &from, mstring & to)
 {
 	bool ret=true;
-	for(string::size_type i=0; i<from.length(); i++)
+	for(tStrPos i=0; i<from.length(); i++)
 	{
 		if(from[i] != '%')
 			to+=from[i];
@@ -608,39 +590,42 @@ bool UrlUnescapeAppend(cmstring &from, mstring & to)
 	return ret;
 }
 
-
-string EncodeBase64Auth(cmstring & s)
+mstring EncodeBase64Auth(cmstring& sPwdString)
 {
-	int cols=0, bits=0, c=0, char_count=0;
+	auto sNative=UrlUnescape(sPwdString);
+	return EncodeBase64(sNative.data(), sNative.size());
+}
+string EncodeBase64(LPCSTR data, uint len)
+{
+	uint32_t bits=0;
+	uint char_count=0;
 	char alphabet[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-	tStrPos pos=0;
 	string out;
-	while ( pos<s.size() )
+	for(auto p=data; p<data+len; ++p)
 	{
-		c=s[pos++];
-		if('%' == c && pos<s.length()-1
-				&& hexmap[(unsigned)s[pos]]<=15
-				&& hexmap[(unsigned)s[pos+1]]<=15)
+		uint8_t c=*p;
+		/*
+		if('%' == c && p<data+len-1
+				&& hexmap[(uint8_t) *(p+1)]<=15
+				&& hexmap[(uint8_t) *(p+2)]<=15)
 		{
-			c=char(16*hexmap[(unsigned)s[pos]]+hexmap[(unsigned)s[pos+1]]);
-			pos+=2;
+			c=uint8_t(hexmap[(uint8_t) *(p+1)]*16 + hexmap[(uint8_t) *(p+2)]);
+			p+=2;
 		}
+		*/
 		bits += c;
 		char_count++;
 		if (char_count == 3)
 		{
-			out+=(alphabet[bits >> 18]);
-			out+=(alphabet[(bits >> 12) & 0x3f]);
-			out+=(alphabet[(bits >> 6) & 0x3f]);
-			out+=(alphabet[bits & 0x3f]);
-			cols += 4;
+			out+=(alphabet[unsigned(bits) >> 18]);
+			out+=(alphabet[(unsigned(bits) >> 12) & 0x3f]);
+			out+=(alphabet[(unsigned(bits) >> 6) & 0x3f]);
+			out+=(alphabet[unsigned(bits) & 0x3f]);
 			bits = 0;
 			char_count = 0;
 		}
 		else
-		{
 			bits <<= 8;
-		}
 	}
 	if (char_count != 0)
 	{

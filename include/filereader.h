@@ -5,6 +5,7 @@
 #include "config.h"
 #include "acbuf.h"
 #include "fileio.h"
+#include "filelocks.h"
 
 class IDecompressor;
 
@@ -26,16 +27,14 @@ public:
 	 * 			filename w/o suffix or path prefix back into it
 	 * @param bCriticalOpen Terminate program on failure
 	 */ 
-	bool OpenFile(const mstring & sFilename, bool bNoMagic=false);
-	
-	//mstring GetPureFilename();
+	bool OpenFile(const mstring & sFilename, bool bNoMagic=false, uint nFakeTrailingNewlines=0);
 	
 	//////! Filename with all prepended path and compressed suffix stripped
 	//////void GetBaseFileName(mstring & sOut);
 	//! Returns lines when beginning with non-space, otherwise empty string. 
 	//! @return False on errors.
 	bool GetOneLine(mstring & sOut, bool bForceUncompress=false);
-	UINT GetCurrentLine() const { return m_nCurLine;} ;
+	uint GetCurrentLine() const { return m_nCurLine;} ;
 	bool CheckGoodState(bool bTerminateOnErrors, cmstring *reportFilePath=NULL) const;
 	
 	bool GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *pDumpFile=NULL);
@@ -44,31 +43,34 @@ public:
 
 	inline const char *GetBuffer() const { return m_szFileBuf; };
 	inline size_t GetSize() const { return m_nBufSize; };
-	void Close();
 
-	//! @brief Helper to make GetOneLine assume that there is newline(s) when file ends
-	inline void AddEofLines(UINT nCount=1) { m_nEofLines=nCount; }
+	void Close();
 
 private:
 
 	bool m_bError, m_bEof;
+	// XXX: not totally happy, this could be a simple const char* for most usecases
+	mstring m_sErrorString;
+
 	char *m_szFileBuf;
 	size_t m_nBufSize, m_nBufPos;
 	
 	acbuf m_UncompBuf; // uncompressed window
 	
 	// visible position reporting
-	UINT m_nCurLine;
+	uint m_nCurLine;
 	
 	int m_fd;
 	
 	int m_nEofLines;
 
-	MYSTD::auto_ptr<IDecompressor> m_Dec;
+	std::auto_ptr<IDecompressor> m_Dec;
 
 	// not to be copied
 	filereader& operator=(const filereader&);
 	filereader(const filereader&);
+
+	std::unique_ptr<filelocks::flock> m_mmapLock;
 };
 
 extern uint_fast16_t hexmap[];

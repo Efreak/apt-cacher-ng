@@ -10,7 +10,8 @@
    </head>
    <body>
       <div align="center">
-      <div class="title maxwid"><span>Apt-Cacher NG maintenance page for @H</span></div>
+         <div class="title maxwid"><span>Apt-Cacher NG maintenance page for ${hostname}</span></div>
+         <a name="stats"></a>
       <div class="visarea maxwid" style="text-align:left">
          <h2>Transfer statistics</h2>
          <table border=0 cellpadding=2 cellspacing=1 bgcolor="black">
@@ -35,7 +36,7 @@
                <td class="coltitle">Total</td>
             
             </tr>
-            @T
+            ${statsRow}
          </table>
          <br>
          Note: data table is created based on the current log file. Deviation from real request count is possible due to previous log file optimization.
@@ -44,7 +45,7 @@
             instructions</a> for users. For system administrators, read the <a
             href="/acng-doc/html/index.html">manual</a> (or see system
          documentation <a
-            href="http://$SERVERIP/doc/apt-cacher-ng/html/index.html">online</a>
+            href="http://${serverip}/doc/apt-cacher-ng/html/index.html">online</a>
          resp. in the <a
             href="file:///usr/share/doc/apt-cacher-ng/html/index.html">local
             filesystem</a>).
@@ -56,7 +57,7 @@
          configuration can set in this user interface. They are only relevant
          to expiration and import features triggered below.
          <br />
-         <label><input type="checkbox" name="abortOnErrors" value="aOe" @A> Stop the work on errors during index update step</label>
+         <label><input type="checkbox" name="abortOnErrors" value="aOe" ${aOeDefaultChecked}> Stop the work on errors during index update step</label>
                <br>
          <label>      <input type="checkbox" name="beVerbose" value="bV"> More verbosity</label>
                <br>
@@ -96,7 +97,7 @@
             <td valign=top-->
                <label><input type="checkbox" name="skipHeadChecks" value="sHC"> Skip header checks (faster, not detecting bad metadata)</label>
                <br>
-               <label><input type="checkbox" name="byPath" value="bP" id="idBP" onChange="endis();"> <i>Validate by file name AND file directory (<font color=red>not recommended</font>),</i></label>
+               <label><input type="checkbox" name="byPath" value="bP" id="idBP" onChange="endis();"> <i>Validate by file name AND file directory (use with care),</i></label>
                <br>
                <label><input type="checkbox" name="byChecksum" value="bS" id="idBS" onChange="endis();">
                   <i>then validate file contents through checksum (<font color=red>SLOW</font>), also detecting corrupt files,</i>
@@ -152,7 +153,7 @@ function endisCb(idCon, idWhat)
             <h2>Import</h2>
             <p>
             Importing package files from foreign sources works in following case:
-            <p>
+	    <p>
             Files can be assigned to <b>known</b> download locations. The
             locations become known when they are found in index files. However,
             this index files must exist in the package cache, therefore at least
@@ -195,7 +196,37 @@ function endisCb(idCon, idWhat)
             </p>
 
          </form>
-         $FOOTER
+
+            <h2>File Type Pattern Tracing</h2>
+            <p>
+            This section provides a simple tool useful to identify new file name patterns which might be needed to configuration in order to handle new file types correctly. Please provide your findings to apt-cacher-ng author if they might be useful for other users.
+            <a name="trace"></a>
+            Current value of pattern extensions:
+            <br>
+            <pre>SPfilePatternEx: ${cfg:SPfilePatternEx}
+VfilePatternEx: ${cfg:VfilePatternEx}
+PfilePatternEx: ${cfg:PfilePatternEx}</pre>
+	    <form action="#trace" method="get">
+               <span style="white-space:nowrap;">
+                  Current mode:
+                  <font style="display:${:/cfg:patrace/inline/none};white-space:nowrap;">
+                     <font style="color:red;font-weight:bold;white-space:nowrap;">Active</font>
+                     (watching download activity)
+                  </font>
+                  <font style="display:${:/cfg:patrace/none/inline};white-space:nowrap;">not tracing
+                  </font>
+               </span>
+               <span>
+		    <input type="submit" name="doTraceStart" value="Start Tracing" ${:/cfg:patrace/disabled/}>
+                    <input type="submit" name="doTraceStop" value="Stop Tracing" ${:/cfg:patrace//disabled}>
+                    <input type="submit" name="doTraceClear" value="Clear Trace Data">
+                 </span>
+                    <p>Currently collected file paths not covered by the configured patterns:
+                    <input type="submit" name="doTraceRefresh${random}" value="Refresh">
+                    <pre><br>${curPatTraceCol}</pre>
+	    </form>
+</tr>
+         ${footer}
       </div>
    </div>
    </body>

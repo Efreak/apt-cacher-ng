@@ -8,60 +8,113 @@ INCLUDE (CheckIncludeFiles)
 
 INCLUDE_DIRECTORIES(. ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
+FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
+
 # minimum prqs
-list(APPEND AcngLdList pthread z bz2)
+list(APPEND AcngLdList pthread)
 
 INCLUDE(CheckIncludeFiles)
 INCLUDE(CheckCXXSourceCompiles)
 INCLUDE(CheckCXXSourceRuns)
 INCLUDE(CheckIncludeFiles)
 
-# I don't need -rdynamic, thanks!
-SET(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
-SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
+# common required flags to be used later for CMAKE_REQUIRED_FLAGS and the build,
+# CXXFLAGS (via initial CMAKE_CXX_FLAGS) can override them
+SET(ACNG_CXXFLAGS_COMMON " -pthread -g -O2 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
+# same for linker flags, imported from LDFLAGS environment var
+SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
 
-# common required flags
-SET(FLAGS_MIN " -pthread -Wall -D_FILE_OFFSET_BITS=64 ")
+message("Initial CXX flags: ${ACNG_CXXFLAGS_COMMON}")
+message("Initial linker flags: ${LDFLAGS_MIN}")
 
 IF(CMAKE_SYSTEM MATCHES "Darwin")
-   SET(FLAGS_MIN " ${FLAGS_MIN} -D_DARWIN_C_SOURCE ")
+   SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON} -D_DARWIN_C_SOURCE ")
 ENDIF(CMAKE_SYSTEM MATCHES "Darwin")
+
+IF(CMAKE_SYSTEM MATCHES "CYGWIN")
+   SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__  ")
+ENDIF()
+
+SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
+
+# Various feature checks
 CHECK_INCLUDE_FILES ("sys/param.h;sys/mount.h" HAVE_SYS_MOUNT_H)
 CHECK_INCLUDE_FILES ("sys/vfs.h" HAVE_SYS_VFS_H)
 
-#SET(CMAKE_REQUIRED_FLAGS " -std=gnu++0x ")
-#CHECK_CXX_SOURCE_COMPILES("int main() {return 0;}" NEEDS_GNU_0x)
-#if(NEEDS_GNU_0x)
-#   SET(FLAGS_MIN " ${FLAGS_MIN} -std=gnu++0x ")
-#endif(NEEDS_GNU_0x)
+# if the compiler knows the switch, use it, otherwise try to work without it
+SET(CXX11_TESTSRC "struct z{int a=3;}; int main(){int a[3];for(auto x:a) return x;}")
 
+# if the compiler knows the switch, use it, otherwise try to work without it
+SET(CMAKE_REQUIRED_FLAGS " ${ACNG_CXXFLAGS_COMMON} -std=c++11 ")
+CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" SET_CXX11_FLAGS)
+if(SET_CXX11_FLAGS)
+   SET(ACNG_CXXFLAGS_COMMON ${CMAKE_REQUIRED_FLAGS})
+
+# also look for a very specific cygwin bug
+SET(GNU11_BUGSRC "
+#include <cstdio>
+int main() { char buf[20]; return snprintf(buf,3,0); }
+")
+CHECK_CXX_SOURCE_COMPILES("${GNU11_BUGSRC}" HAS_NOGNU11BUG)
+if(NOT HAS_NOGNU11BUG)
+message("!! WARNING: this compiler seems to have an old bug with missing definitions, trying to workaround. See http://cygwin.com/ml/cygwin/2012-04/msg00140.html for details.")
+   SET(ACNG_CXXFLAGS_COMMON " ${CMAKE_REQUIRED_FLAGS} -std=gnu++11 " )
+endif(NOT HAS_NOGNU11BUG)
+
+
+else(SET_CXX11_FLAGS)
+   SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
+   CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" CXX11_IS_DEFAULT)
+   IF(NOT CXX11_IS_DEFAULT)
+      message(FATAL_ERROR "!! Error: failed to configure compiler for C++11 support. For GCC, version 4.7 or newer is required.")
+   ENDIF(NOT CXX11_IS_DEFAULT)
+endif(SET_CXX11_FLAGS)
+
+if(NOLTO)
+	message("++ Link Time Optimization disabled by user")
+else()
+SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} -flto")
+SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN} -flto ")
+CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_LTO)
+if(USE_LTO)
+   SET(ACNG_CXXFLAGS_COMMON ${CMAKE_REQUIRED_FLAGS})
+   SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
+else(USE_LTO)
+   SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
+endif(USE_LTO)
+endif()
+
+SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
+SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}  -Wl,--as-needed ")
+CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_WLASNEEDED)
+if(USE_WLASNEEDED)
+   SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
+else(USE_WLASNEEDED)
+   SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
+endif(USE_WLASNEEDED)
 
 #INCLUDE(FindZLIB) # broken, hangs for 10 seconds
 # header check should be enough, gzip should be everywhere nowadays
 #CHECK_INCLUDE_FILES("gzip.h" HAVE_ZLIB)
 FIND_PATH(HAVE_ZLIB zlib.h )
-if(NOT HAVE_ZLIB)
-   message(FATAL_ERROR "apt-cacher-ng requires gzip library and development files ${HAVE_ZLIB}")
-endif(NOT HAVE_ZLIB)
+if(HAVE_ZLIB)
+	list(APPEND AcngLdList z)
+	INCLUDE_DIRECTORIES(${HAVE_ZLIB})
+else(HAVE_ZLIB)
+   message(FATAL_ERROR "!! apt-cacher-ng requires gzip library and development files ${HAVE_ZLIB}")
+endif(HAVE_ZLIB)
 
 INCLUDE(FindBZip2)
 if (BZIP2_FOUND)
    SET(HAVE_LIBBZ2 1)
    MARK_AS_ADVANCED(HAVE_LIBBZ2)
+	INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIR})
+	list(APPEND AcngLdList bz2)
 else (BZIP2_FOUND)
-   message(FATAL_ERROR "apt-cacher-ng requires bzip2 library and development files")
+   message("!! apt-cacher-ng requires bzip2 library and development files for bz2 format support")
 endif (BZIP2_FOUND)
 
-INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIR})
-
-SET(CMAKE_REQUIRED_FLAGS " ${FLAGS_MIN} -Wl,--as-needed")
-SET(TESTSRC "int main() {return 0;}")
-CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_WL_AS_NEEDED)
-
-# this flags are set to common base for the rest of the tests
-SET(CMAKE_REQUIRED_FLAGS " ${FLAGS_MIN} ")
-
-
+SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
 SET(CMAKE_REQUIRED_LIBRARIES lzma)
 SET(TESTSRC "
 #include <lzma.h>
@@ -71,7 +124,7 @@ CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LZMA)
 IF(HAVE_LZMA)
    list(APPEND AcngLdList lzma)
 ELSE(HAVE_LZMA)
-   MESSAGE("XZ (liblzma) not found or not working, disabling support")
+   MESSAGE("!! XZ (liblzma) not found or not working, disabling support")
    SET(HAVE_LZMA )
 ENDIF(HAVE_LZMA)
 SET(CMAKE_REQUIRED_LIBRARIES "")
@@ -82,8 +135,10 @@ SET(TESTSRC "#include \"${CMAKE_SOURCE_DIR}/include/testssl.h\"")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_SSL)
 IF(HAVE_SSL)
    list(APPEND AcngLdList "${SSL_LIB_LIST}")
+   LIST(REMOVE_ITEM SRCS "${CMAKE_SOURCE_DIR}/source/sha1.cc")
+   LIST(REMOVE_ITEM SRCS "${CMAKE_SOURCE_DIR}/source/md5.cc")
 ELSE(HAVE_SSL)
-   MESSAGE("OpenSSL not found or not working, disabling support")
+   MESSAGE("!! OpenSSL not found or not working, disabling support")
    SET(HAVE_SSL )
    SET(SSL_LIB_LIST )
 ENDIF(HAVE_SSL)
@@ -98,17 +153,21 @@ CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LIBWRAP)
 IF(HAVE_LIBWRAP)
    list(APPEND AcngLdList wrap)
 ELSE(HAVE_LIBWRAP)
-   MESSAGE("libwrap development files not usable, disabling support")
+   MESSAGE("!! libwrap development files not usable, disabling support")
    SET(HAVE_LIBWRAP)
 ENDIF(HAVE_LIBWRAP)
 SET(CMAKE_REQUIRED_LIBRARIES "")
 
-
+if(CYGWIN)
+message("!! Not using wordexp on Cygwin, not reliable")
+set(HAVE_WORDEXP FALSE)
+else()
 SET(TESTSRC "
 #include <wordexp.h>
 int main(int argc, char **argv) { wordexp_t p; return wordexp(*argv, &p, 0); }
 ")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_WORDEXP)
+endif()
 
 SET(TESTSRC "
 #include <glob.h>
@@ -151,6 +210,10 @@ int main(int argc, char **argv) { off_t yes(3); return (int) sendfile(1, 2, &yes
 ")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LINUX_SENDFILE)
 
+if("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+CHECK_CXX_SOURCE_COMPILES("#include \"${CMAKE_SOURCE_DIR}/include/testeventfd.h\"" HAVE_LINUX_EVENTFD)
+endif()
+
 SET(TESTSRC "
 #include <unistd.h>
 int main() { return pread(0, NULL, 0, 0); }
@@ -175,14 +238,13 @@ if(HAVE_SOCKETLIB)
    link_libraries(socket nsl)
 endif(HAVE_SOCKETLIB)
 
-#CHECK_INCLUDE_FILES(tcpd.h HAVE_LIBWRAP)
-#if(HAVE_LIBWRAP)
-## also check its library
-#  FIND_LIBRARY(tempvar wrapi)
-#  if(NOT tempvar)
-#     SET(HAVE_LIBWRAP "")
-#  endif(NOT tempvar)
-#endif(HAVE_LIBWRAP)
+INCLUDE(FindPkgConfig)
+
+pkg_check_modules(lsd libsystemd-daemon)
+string(REPLACE ";" " " lsd_LDFLAGS "${lsd_LDFLAGS}")
+string(REPLACE ";" " " lsd_CFLAGS "${lsd_CFLAGS}")
+set(HAVE_SD_NOTIFY ${lsd_FOUND})
+#message("sd? ${HAVE_SD_NOTIFY} ${lsd_LDFLAGS}")
 
 INCLUDE(CheckTypeSize)
 CHECK_TYPE_SIZE(int SIZE_INT)
@@ -222,27 +284,36 @@ endif(NOT HAVE_BOOST_SMARTPTR)
 
 SET(CMAKE_REQUIRED_LIBRARIES dl)
 CHECK_CXX_SOURCE_COMPILES("#include \"${CMAKE_SOURCE_DIR}/include/testdlopen.h\"" HAVE_DLOPEN)
-SET(CMAKE_REQUIRED_LIBRARIES "")
 
 # maybe enable workaround for platforms with a weird implementation
 SET(CMAKE_REQUIRED_LIBRARIES pthread)
 CHECK_CXX_SOURCE_RUNS("#include \"${CMAKE_SOURCE_DIR}/include/testpthread.h\"" PTHREAD_COND_TIMEDWAIT_TIME_RANGE_OK)
+
+
+##################################
+# All checks done, start building
+
+message("Common CXX flags: ${ACNG_CXXFLAGS_COMMON}")
+message("Common linker flags: ${LDFLAGS_MIN}")
+
 SET(CMAKE_REQUIRED_LIBRARIES "")
+SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
 
+# I don't need -rdynamic, thanks!
+SET(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
+SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
-FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
 ADD_EXECUTABLE(apt-cacher-ng ${SRCS})
 list(REMOVE_DUPLICATES AcngLdList)
-TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList})
-
-SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES COMPILE_FLAGS ${FLAGS_MIN})
-
+TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList}  "${lsd_LDFLAGS}")
+# I'd like this method more but apparently LINK_FLAGS is always prepended, no way to append it
+#SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES LINK_FLAGS "${lsd_LDFLAGS}")
+SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} ${lsd_CFLAGS}")
 
 ADD_EXECUTABLE(in.acng client/client.cc)
-SET_TARGET_PROPERTIES(in.acng PROPERTIES COMPILE_FLAGS ${FLAGS_MIN})
+SET_TARGET_PROPERTIES(in.acng PROPERTIES COMPILE_FLAGS ${ACNG_CXXFLAGS_COMMON})
 
-IF(HAVE_WL_AS_NEEDED)
-SET_TARGET_PROPERTIES(in.acng apt-cacher-ng PROPERTIES LINK_FLAGS  -Wl,--as-needed)
+#IF(HAVE_WL_AS_NEEDED)
 # funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used
 # there). However, it needs to be investigated - the alternative linking makes
 # the binary 40kb larger, might include higher relocation costs and bigger
@@ -250,22 +321,16 @@ SET_TARGET_PROPERTIES(in.acng apt-cacher-ng PROPERTIES LINK_FLAGS  -Wl,--as-need
 # server process.
 #TARGET_LINK_LIBRARIES(in.acng supc++)
 #SET_TARGET_PROPERTIES(in.acng PROPERTIES LINKER_LANGUAGE C)
-ENDIF(HAVE_WL_AS_NEEDED)
+#ENDIF(HAVE_WL_AS_NEEDED)
 
 
 ############################################
 ## Attempt to build acngfs where possible ##
 ############################################
 
-include(FindPkgConfig)
 pkg_check_modules(fuse fuse)
 
-set(acngfs_cflags "${FLAGS_MIN} -DMINIBUILD")
-# what a mess... convert sepator back to space
-foreach(arg ${fuse_CFLAGS})
-   set(fuse_cflags "${fuse_cflags} ${arg}")
-   set(acngfs_cflags "${acngfs_cflags} ${arg}")
-endforeach(arg ${fuse_CFLAGS})
+string(REPLACE ";" " " acngfs_cflags "${ACNG_CXXFLAGS_COMMON};-DMINIBUILD;${fuse_CFLAGS}")
 
 # double-check and make sure it compiles
 SET(TESTSRC "
@@ -274,7 +339,7 @@ SET(TESTSRC "
 #include <fuse.h>
 int main() { return 0; }
 ")
-SET(CMAKE_REQUIRED_FLAGS ${fuse_cflags})
+SET(CMAKE_REQUIRED_FLAGS " ${ACNG_CXXFLAGS_COMMON} ${acngfs_cflags}")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_FUSE_25)
 
 if(fuse_FOUND AND HAVE_FUSE_25)
@@ -284,7 +349,7 @@ if(fuse_FOUND AND HAVE_FUSE_25)
       ADD_EXECUTABLE(acngfs fs/httpfs.cc source/lockable.cc source/header.cc source/caddrinfo.cc source/acbuf.cc source/acfg.cc source/acfg_defaults.cc source/tcpconnect.cc source/dlcon.cc source/fileitem.cc source/meta.cc)
    endif(ADDDEBUGSRC)
 
-   # message("uhm: ${acngfs_cflags} -- ${fuse_LDFLAGS} -- ${HAVE_DLOPEN}")
+   #message("uhm: ${fuse_CFLAGS} -- ${acngfs_cflags} -- ${fuse_LDFLAGS} -- ${HAVE_DLOPEN}")
    SET_TARGET_PROPERTIES(acngfs PROPERTIES COMPILE_FLAGS "${acngfs_cflags}" )
    if(HAVE_DLOPEN)
       TARGET_LINK_LIBRARIES(acngfs dl pthread ${SSL_LIB_LIST})
@@ -292,13 +357,8 @@ if(fuse_FOUND AND HAVE_FUSE_25)
       TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS} ${SSL_LIB_LIST})
    endif(HAVE_DLOPEN)
 
-   IF(HAVE_WL_AS_NEEDED)
-      SET_TARGET_PROPERTIES(acngfs PROPERTIES LINK_FLAGS  -Wl,--as-needed)
-   ENDIF(HAVE_WL_AS_NEEDED)
-
-
 else(fuse_FOUND AND HAVE_FUSE_25)
-   message("FUSE not found or incompatible, not building acngfs")
+   message("- FUSE not found or not compatible, not building acngfs")
 endif(fuse_FOUND AND HAVE_FUSE_25)
 
 

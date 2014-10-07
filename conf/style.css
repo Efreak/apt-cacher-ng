@@ -61,3 +61,14 @@ table.center {margin-left:auto; margin-right:auto;}
    color: red;
    font-weight: bold
 }
+
+.GOOD
+{
+   color: green;
+}
+
+pre
+{
+   background-color: #cccccc;
+   border: 1px solid;
+}

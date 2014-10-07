@@ -8,26 +8,22 @@
 #include <cstring>
 #include "csmapping.h"
 
-
-class pkgimport : public tCacheMan, ifileprocessor
+class pkgimport : public tCacheOperation, ifileprocessor
 {
 
 public:
-	
-	pkgimport(int);
-	
-	void Action(const mstring & src);
+	// XXX: c++11 using tCacheOperation::tCacheOperation;
+	inline pkgimport(const tSpecialRequest::tRunParms& parms)
+	: tCacheOperation(parms) {};
+
+	void Action() override;
 	
 protected:
 	// FileHandler
 	bool ProcessRegular(const mstring &sPath, const struct stat &);
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry, bool bUnpackForCsumming);
-	void _LoadKeyCache(const mstring & sFileName);
-
-	// NOOP, our files are not changed
-	void UpdateFingerprint(cmstring &s, off_t n, uint8_t *p, uint8_t *p2)
-	{
-	}
+	//bool ProcessOthers(const mstring &sPath, const struct stat &);
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry);
+	void _LoadKeyCache();
 
 private:
 
@@ -38,13 +34,13 @@ private:
 	 	-	when reusing old fingerprints, a file info description is mapped
 	 		to stored fingerprint (cacheMap from tCacheProcessor)
 	*/
-	tImportMap m_importMap;
-	tImportList m_importRest;
-	MYSTD::set<mstring> m_precachedList;
+	std::map<tFingerprint, tImpFileInfo> m_importMap;
+	std::deque<std::pair<tFingerprint, tImpFileInfo> > m_importRest;
+	std::set<mstring> m_precachedList;
 	/* tFprCacheMap m_cacheMap;*/
 	
 
-	bool m_bLookForIFiles;
+	bool m_bLookForIFiles = false;
 	mstring m_sSrcPath;
 		
 	//void _ExtractLocationsFromVolFiles();

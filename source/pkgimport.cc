@@ -18,7 +18,7 @@
 #include <cstdio>
 #include <errno.h>
 
-using namespace MYSTD;
+using namespace std;
 
 #define SCACHEFILE (CACHE_BASE+"_impkeycache")
 #define FMTSIG "FMT5"
@@ -33,11 +33,6 @@ using namespace MYSTD;
  * Parse the vol. files, do work, and mark used file with bUsed
  *
 */
-
-pkgimport::pkgimport(int fd) : tCacheMan(fd), m_bLookForIFiles(false)
-{
-	m_sTypeName="File Import";
-}
 
 /*
 inline bool IsIndexDiff(const string & sPath)
@@ -127,7 +122,7 @@ bool pkgimport::ProcessRegular(cmstring &sPath, const struct stat &stinfo)
 	return true;
 }
 
-bool LinkOrCopy(const MYSTD::string &from, const MYSTD::string &to)
+bool LinkOrCopy(const std::string &from, const std::string &to)
 {
 	mkbasedir(to);
 	
@@ -179,25 +174,25 @@ bool LinkOrCopy(const MYSTD::string &from, const MYSTD::string &to)
 }
 
 			
-void pkgimport::Action(const string &cmd) 
+void pkgimport::Action()
 {
 // TODO: import path from cmd?
 	m_sSrcPath=CACHE_BASE+"_import";
 	
 	SendFmt << "Importing from " << m_sSrcPath << " directory.<br>Scanning local files...<br>";
 	
-	SetCommonUserFlags(cmd);
+	SetCommonUserFlags(m_parms.cmd);
 	m_bErrAbort=false; // does not f...ing matter, do what we can
 	m_bByPath=true; // should act on all locations
 
-	_LoadKeyCache(SCACHEFILE);
+	_LoadKeyCache();
 	if(!m_precachedList.empty())
 		SendChunk( tSS(100)<<"Loaded "<<m_importMap.size()<<
 				(m_precachedList.size()==1 ? " entry" : " entries")
 				<<" from the fingerprint cache<br>\n");
 	
 	m_bLookForIFiles=true;
-	DirectoryWalk(acfg::cachedir, this);
+	DirectoryWalk(acfg::cachedir, this, true);
 
 	{
 		lockguard g(&abortMx);
@@ -205,14 +200,14 @@ void pkgimport::Action(const string &cmd)
 			return;
 	}
 	
-	if(m_indexFilesRel.empty())
+	if(m_metaFilesRel.empty())
 	{
 		SendChunk("<span class=\"ERROR\">No index files detected. Unable to continue, cannot map files to internal locations.</span>");
 		return;
 	}
 
 
-	UpdateIndexFiles();
+	UpdateVolatileFiles();
 
 	{
 		lockguard g(&abortMx);
@@ -222,12 +217,13 @@ void pkgimport::Action(const string &cmd)
 	
 	if(m_bErrAbort && m_nErrorCount>0)
 	{
-		SendChunk("Found errors during processing, aborting as requested.");
+		SendChunk(sAbortMsg);
 		return;
 	}
 	
 	m_bLookForIFiles=false;
-	DirectoryWalk(m_sSrcPath, this);
+	DBGQLOG("building contents map for " << m_sSrcPath);
+	DirectoryWalk(m_sSrcPath, this, true);
 
 	{
 		lockguard g(&abortMx);
@@ -241,7 +237,7 @@ void pkgimport::Action(const string &cmd)
 		return;
 	}
 	
-	ProcessSeenIndexFiles(*this);
+	ProcessSeenMetaFiles(*this);
 
 	{
 		lockguard g(&abortMx);
@@ -264,37 +260,35 @@ void pkgimport::Action(const string &cmd)
 	
 	off_t remaining=0;
 
-	for(tImportMap::const_iterator it=m_importMap.begin();
-	it!=m_importMap.end();it++)
+	for(const auto& fpr2info: m_importMap)
 	{
 		// delete imported stuff, and cache the fingerprint only when file was deleted
 		
-		if(it->second.bFileUsed && 0==unlink(it->second.sPath.c_str()))
+		if(fpr2info.second.bFileUsed && 0==unlink(fpr2info.second.sPath.c_str()))
 			continue;
 		if(!fList.is_open())
 			continue;
 
 #define ENDL "\n" // don't flush all the time
-		fList << it->first.size << ENDL
-				<< (int)it->first.csType << ENDL
-				<< it->first.GetCsAsString() << ENDL
-				<< it->second.sPath.substr(m_sSrcPath.size()+1) <<ENDL
-				<< it->second.mtime	<<ENDL;
+		fList << fpr2info.first.size << ENDL
+				<< (int)fpr2info.first.csType << ENDL
+				<< fpr2info.first.GetCsAsString() << ENDL
+				<< fpr2info.second.sPath.substr(m_sSrcPath.size()+1) <<ENDL
+				<< fpr2info.second.mtime	<<ENDL;
 
-		remaining+=it->first.size;
+		remaining+=fpr2info.first.size;
 	}
 
 	// deal with the rest, never double-examine that stuff
 	// copy&paste FTW
-	for(tImportList::const_iterator it=m_importRest.begin();
-	it!=m_importRest.end();it++)
+	for(const auto& fpr2info : m_importRest)
 	{
-		fList << it->first.size << ENDL
-				<< (int)it->first.csType << ENDL
-				<< it->first.GetCsAsString() << ENDL
-				<< it->second.sPath.substr(m_sSrcPath.size()+1) <<ENDL
-				<< it->second.mtime	<<ENDL;
-		remaining+=it->first.size;
+		fList << fpr2info.first.size << ENDL
+				<< (int)fpr2info.first.csType << ENDL
+				<< fpr2info.first.GetCsAsString() << ENDL
+				<< fpr2info.second.sPath.substr(m_sSrcPath.size()+1) <<ENDL
+				<< fpr2info.second.mtime	<<ENDL;
+		remaining+=fpr2info.first.size;
 	}
 	fList.flush();
 	fList.close();
@@ -307,10 +301,10 @@ void pkgimport::Action(const string &cmd)
 		<< offttosH(remaining) << ") left behind";
 }
 
-void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry, bool)
+void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
-	//typedef MYMAP<tFingerprint, tImpFileInfo, ltfingerprint> tImportMap;
-	tImportMap::iterator hit = m_importMap.find(entry.fpr);
+	//typedef std::map<tFingerprint, tImpFileInfo, ltfingerprint> tImportMap;
+	auto hit = m_importMap.find(entry.fpr);
 	if (hit==m_importMap.end())
 		return;
 	
@@ -321,7 +315,7 @@ void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry, bool)
 		sDestAbs+=(entry.sDirectory+entry.sFileName);
 
 	string sDestHeadAbs=sDestAbs+".head";
-	const string &sFromAbs=hit->second.sPath;
+	cmstring& sFromAbs=hit->second.sPath;
 
 	SendChunk(string("<font color=green>HIT: ")+sFromAbs
 			+ "<br>\nDESTINATION: "+sDestAbs+"</font><br>\n");
@@ -382,9 +376,9 @@ void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry, bool)
 }
 
 
-void pkgimport::_LoadKeyCache(const string & sFileName)
+void pkgimport::_LoadKeyCache()
 {
-	MYSTD::ifstream in;
+	std::ifstream in;
 
 	tImpFileInfo info;
 	tFingerprint fpr;
@@ -394,7 +388,7 @@ void pkgimport::_LoadKeyCache(const string & sFileName)
 	if(!in.is_open())
 		return;
 
-	MYSTD::getline(in, cs);
+	std::getline(in, cs);
 	if(cs!=FMTSIG)
 		return;
 
@@ -409,19 +403,20 @@ void pkgimport::_LoadKeyCache(const string & sFileName)
 		info.bFileUsed=false;
 
 		in>>sz;
-		MYSTD::getline(in, cs); // newline
+		std::getline(in, cs); // newline
+		fpr.size=sz;
 
 		in>>csType;
-		MYSTD::getline(in, cs); // newline
+		std::getline(in, cs); // newline
 
-		MYSTD::getline(in, cs); // checksum line
-		fpr.Set(cs, (CSTYPES)csType, sz);
+		std::getline(in, cs); // checksum line
+		fpr.SetCs(cs, (CSTYPES)csType);
 
-		MYSTD::getline(in, info.sPath);
+		std::getline(in, info.sPath);
 		info.sPath.insert(0, m_sSrcPath+SZPATHSEP);
 
 		in>>info.mtime;
-		MYSTD::getline(in, cs); // newline
+		std::getline(in, cs); // newline
 
 #ifdef DEBUG_FLAGS
 		bool bNix=(stmiss != info.sPath.find("cabextract"));
@@ -445,8 +440,12 @@ void pkgimport::_LoadKeyCache(const string & sFileName)
 		*/
 }
 
-
 /*
+bool pkgimport::ProcessOthers(const mstring& sPath, const struct stat&)
+{
+	if(S_ISLNK())
+}
+
 void tFInfo::Dump(FILE *fh, const string & second)
 {
 	fprintf(fh, "%s;%lu;%lu\n%s\n", sPath.c_str(), nSize, nTime, second.c_str());

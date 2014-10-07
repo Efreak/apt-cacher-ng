@@ -16,6 +16,7 @@
 #include <vector>
 #include <deque>
 #include <limits>
+#include <atomic>
 #include <cstdio>
 #include <ctime>
 #include <cstring>
@@ -23,17 +24,16 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <strings.h>
-#include <stdlib.h>
+#include <cstdlib>
 #include <errno.h>
 
 #define EXTREME_MEMORY_SAVING false
 
-typedef MYSTD::string mstring;
-typedef const MYSTD::string cmstring;
+typedef std::string mstring;
+typedef const std::string cmstring;
 
 typedef mstring::size_type tStrPos;
 const static tStrPos stmiss(cmstring::npos);
-typedef unsigned int UINT;
 typedef unsigned short USHORT;
 typedef unsigned char UCHAR;
 typedef const char * LPCSTR;
@@ -86,7 +86,7 @@ int getUUID();
 
 #define SPACECHARS " \f\n\r\t\v"
 
-typedef MYMAP<mstring, mstring> tStrMap;
+typedef std::map<mstring, mstring> tStrMap;
 
 inline void trimFront(mstring &s, LPCSTR junk=SPACECHARS)
 {
@@ -116,6 +116,7 @@ inline void trimString(mstring &s, LPCSTR junk=SPACECHARS)
 #define endsWithSzAr(where, what) ((where).size()>=(sizeof((what))-1) && \
 		0==(where).compare((where).size()-(sizeof((what))-1), (sizeof((what))-1), (what)))
 #define stripSuffix(where, what) if(endsWithSzAr(where, what)) where.erase(where.size()-sizeof(what)+1);
+#define stripPrefixChars(where, what) where.erase(0, where.find_first_not_of(what))
 
 #define setIfNotEmpty(where, cand) { if(where.empty() && !cand.empty()) where = cand; }
 #define setIfNotEmpty2(where, cand, alt) { if(where.empty()) { if(!cand.empty()) where = cand; else where = alt; } }
@@ -130,7 +131,7 @@ tStrPos findHostStart(const mstring & sUri);
 #define _countof(x) sizeof(x)/sizeof(x[0])
 #endif
 
-#define NAMEWLEN(x) x, (_countof(x)-1)
+#define WITHLEN(x) x, (_countof(x)-1)
 
 //extern mstring sPathSep, sPathSepUnix, sCR, sCRLF;
 
@@ -144,15 +145,15 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
    return NULL;
 }
 
-typedef MYSTD::vector<mstring> tStrVec;
-typedef MYSTD::set<mstring> tStrSet;
-typedef MYSTD::deque<mstring> tStrDeq;
-typedef MYSTD::vector<mstring>::iterator tStrVecIter;
-typedef MYSTD::vector<mstring>::const_iterator tStrVecIterConst;
+typedef std::vector<mstring> tStrVec;
+typedef std::set<mstring> tStrSet;
+typedef std::deque<mstring> tStrDeq;
 
 // Sometimes I miss Perl...
 tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
-void Join(mstring &out, const mstring & sep, const tStrVec & tokens);
+/*inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
+{out.clear(); if(tokens.empty()) return; for(const auto& tok: tokens)out+=(sep + tok);}
+*/
 
 // TODO: __attribute__((externally_visible))
 bool ParseKeyValLine(const mstring & sIn, mstring & sOutKey, mstring & sOutVal);
@@ -165,10 +166,17 @@ public:
 	bool SetHttpUrl(cmstring &uri, bool unescape = true);
 	mstring ToURI(bool bEscaped) const;
 	mstring sHost, sPath, sUserPass;
-	bool bIsTransferlEncoded;
 #ifdef HAVE_SSL
-	bool bSSL;
+	bool bSSL=false;
 #endif
+	inline cmstring GetProtoPrefix() const
+	{
+		return
+#ifdef HAVE_SSL
+			bSSL ? "https://" :
+#endif
+					"http://";
+	}
 
 	tHttpUrl & operator=(const tHttpUrl &a) 
 	{
@@ -176,7 +184,6 @@ public:
 #ifdef HAVE_SSL
 		bSSL=a.bSSL;
 #endif
-		bIsTransferlEncoded=a.bIsTransferlEncoded;
 		return *this;
 	};
 	bool operator==(const tHttpUrl &a) const
@@ -186,7 +193,6 @@ public:
 #ifdef HAVE_SSL
 				&& a.bSSL == bSSL
 #endif
-				&& a.bIsTransferlEncoded == bIsTransferlEncoded
 				;
 	};
 	bool operator!=(const tHttpUrl &a) const
@@ -198,30 +204,25 @@ public:
 #ifdef HAVE_SSL
 	bSSL=false;
 #endif
-	bIsTransferlEncoded=false;
 	}
-	inline tHttpUrl()
-	: bIsTransferlEncoded(false)
-#ifdef HAVE_SSL
-	, bSSL(false)
-#endif
-	{};
 
-	inline cmstring& GetPort() const { return !sPort.empty() ? sPort :
+
+	inline cmstring& GetDefaultPortForProto() const { return
 #ifdef HAVE_SSL
-			(bSSL ? sDefPortHTTPS : sDefPortHTTP);
+			bSSL ? sDefPortHTTPS : sDefPortHTTP;
 #else
 	sDefPortHTTP;
 #endif
 	}
+	inline cmstring& GetPort() const { return !sPort.empty() ? sPort : GetDefaultPortForProto(); }
 private:
 	mstring sPort;
 };
 
 #define POKE(x) for(;;) { ssize_t n=write(x, "", 1); if(n>0 || (EAGAIN!=errno && EINTR!=errno)) break;  }
 
-#define MIN_VAL(x) (MYSTD::numeric_limits<x>::min()) 
-#define MAX_VAL(x) (MYSTD::numeric_limits<x>::max()) 
+#define MIN_VAL(x) (std::numeric_limits<x>::min()) 
+#define MAX_VAL(x) (std::numeric_limits<x>::max()) 
 
 void appendLong(mstring &s, long val);
 
@@ -237,17 +238,17 @@ void StrSubst(mstring &contents, const mstring &from, const mstring &to);
 #if _FILE_OFFSET_BITS == 32
 #error Unsupported: _FILE_OFFSET_BITS == 32 with large long size
 #else
-#define OFF_T_FMT "%"PRId64
+#define OFF_T_FMT "%" PRId64
 #endif
 
 #else // not a 64bit arch?
 
 #if 64 == _FILE_OFFSET_BITS
-#define OFF_T_FMT "%"PRId64
+#define OFF_T_FMT "%" PRId64
 #endif
 
 #if 32 == _FILE_OFFSET_BITS
-#define OFF_T_FMT "%"PRId32
+#define OFF_T_FMT "%" PRId32
 #endif
 
 #endif // !64bit arch
@@ -259,6 +260,7 @@ void StrSubst(mstring &contents, const mstring &from, const mstring &to);
 // let the compiler optimize and keep best variant
 inline off_t atoofft(LPCSTR p)
 {
+	using namespace std;
 	if(sizeof(long long) == sizeof(off_t))
 		return atoll(p);
 	if(sizeof(int) == sizeof(off_t))
@@ -273,7 +275,7 @@ inline off_t atoofft(LPCSTR p, off_t nDefVal)
 
 mstring offttosH(off_t n);
 
-tStrDeq ExpandFilePattern(const mstring &pattern, bool bSorted=false);
+tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted=false, bool bQuiet=false);
 
 //void MakeAbsolutePath(mstring &dirToFix, const mstring &reldir);
 
@@ -298,6 +300,7 @@ mstring DosEscape(cmstring &s);
 #define ContHas(stlcont, needle) ((stlcont).find(needle) != (stlcont).end())
 
 #define StrHas(haystack, needle) (haystack.find(needle) != stmiss)
+#define StrHasFrom(haystack, needle, startpos) (haystack.find(needle, startpos) != stmiss)
 
 off_t GetFileSize(cmstring & path, off_t defret);
 
@@ -318,7 +321,7 @@ inline mstring ltos(long n)
 inline mstring offttosH(off_t n)
 {
 	LPCSTR  pref[]={"", " KiB", " MiB", " GiB", " TiB", " PiB", " EiB"};
-	for(UINT i=0;i<_countof(pref)-1; i++)
+	for(uint i=0;i<_countof(pref)-1; i++)
 	{
 		if(n<1024)
 			return ltos(n)+pref[i];
@@ -351,8 +354,8 @@ class tSplitWalk
 	LPCSTR m_seps;
 
 public:
-	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS)
-	: s(*line), start(0), len(stmiss), oob(line->size()), m_seps(separators) {}
+	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, uint begin=0)
+	: s(*line), start(begin), len(stmiss), oob(line->size()), m_seps(separators) {}
 	inline bool Next()
 	{
 		if(len != stmiss) // not initial state, find the next position
@@ -434,7 +437,7 @@ inline mstring unEscape(cmstring &s)
 	return ret;
 }
 
-MYSTD::string BytesToHexString(const uint8_t sum[], unsigned short lengthBin);
+std::string BytesToHexString(const uint8_t sum[], unsigned short lengthBin);
 
 // STFU helpers, (void) casts are not effective for certain functions
 static inline void ignore_value (int i) { (void) i; }
@@ -453,7 +456,7 @@ static inline time_t GetTime()
 #define END_OF_TIME (MAX_VAL(time_t)-2)
 #endif
 
-static inline UINT FormatTime(char *buf, const time_t cur)
+static inline uint FormatTime(char *buf, const time_t cur)
 {
 	struct tm tmp;
 	gmtime_r(&cur, &tmp);
@@ -466,7 +469,7 @@ static inline UINT FormatTime(char *buf, const time_t cur)
 struct tCurrentTime
 {
 	char buf[30];
-	UINT len;
+	uint len;
 	inline tCurrentTime() { len=FormatTime(buf, time(NULL)); }
 	inline operator mstring() { return mstring(buf, len); }
 };
@@ -483,12 +486,13 @@ struct extended_bool
 
 void DelTree(cmstring &what);
 
-struct errnoFmter: public mstring
+struct tErrnoFmter: public mstring
 {
-	errnoFmter(LPCSTR prefix = NULL);
+	tErrnoFmter(LPCSTR prefix = NULL);
 };
 
-mstring EncodeBase64Auth(cmstring & s);
+mstring EncodeBase64Auth(cmstring &sPwdString);
+mstring EncodeBase64(LPCSTR data, uint len);
 
 #endif // _META_H
 

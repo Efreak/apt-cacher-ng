@@ -59,7 +59,7 @@ class acbuf
          * \param fd File descriptor
          * \return Number of read bytes, negative on failures, see read(2)
          */
-        int sysread(int fd);
+        int sysread(int fd, unsigned int maxlen=MAX_VAL(unsigned int));
 
 
     protected:
@@ -81,7 +81,6 @@ class tSS : public acbuf
 {
 public:
 // map char array to buffer pointer and size
-#define _SZ2PS(x) x, (sizeof(x)-1)
 	inline tSS & operator<<(const char *val) { return add(val); }
 	inline tSS & operator<<(const mstring& val) { return add(val); };
 	inline tSS & operator<<(const acbuf& val) { return add(val.rptr(), val.size()); };
@@ -106,17 +105,18 @@ public:
 
     inline tSS() : m_fmtmode(dec){}
     inline tSS(size_t sz) : m_fmtmode(dec) { setsize(sz); }
-    inline tSS(const tSS &src) : m_fmtmode(src.m_fmtmode) { add(src.data(), src.size()); }
+    inline tSS(const tSS &src) : acbuf(), m_fmtmode(src.m_fmtmode) { add(src.data(), src.size()); }
     tSS & addEscaped(const char *fmt);
     inline tSS & operator<<(const char c) { reserve(size()+1); *(wptr())=c; got(1); return *this;}
-
+    inline tSS & clean() { clear(); return *this;}
+    inline tSS & append(const char *data, size_t len) { add(data,len); return *this; }
 
 protected:
     char fmtbuf[22];
 	fmtflags m_fmtmode;
 	inline void reserve(size_t minCapa) { minCapa+=(r+1); if(m_nCapacity>=minCapa) return;
-	char *p=(char*)realloc(m_buf, MYSTD::max(m_nCapacity, minCapa*2));
-	if(!p) throw MYSTD::bad_alloc(); m_nCapacity=minCapa*2; m_buf=p; }
+	char *p=(char*)realloc(m_buf, std::max(m_nCapacity, minCapa*2));
+	if(!p) throw std::bad_alloc(); m_nCapacity=minCapa*2; m_buf=p; }
 
 	inline tSS & add(const mstring& val) { return add(val.data(), val.size());}
 	inline tSS & appDosNL() { return add("\r\n", 2);}
@@ -127,6 +127,6 @@ protected:
 
 };
 
-void _AddFooter(tSS &msg);
+cmstring& GetFooter();
 
 #endif
