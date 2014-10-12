@@ -90,6 +90,7 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 	return false;
 }
 
+// defensive getter/setter methods, don't create non-existing entries
 const tCacheOperation::tIfileAttribs & tCacheOperation::GetFlags(cmstring &sPathRel) const
 {
 	auto it=m_metaFilesRel.find(sPathRel);
@@ -97,7 +98,6 @@ const tCacheOperation::tIfileAttribs & tCacheOperation::GetFlags(cmstring &sPath
 		return attr_dummy_pure;
 	return it->second;
 }
-
 tCacheOperation::tIfileAttribs &tCacheOperation::SetFlags(cmstring &sPathRel)
 {
 	ASSERT(!sPathRel.empty());
@@ -1023,7 +1023,8 @@ void tCacheOperation::UpdateVolatileFiles()
 			string sBase=cid.first.substr(0, cid.first.size()-diffIdxSfx.size());
 			for(auto& suf : compSuffixesAndEmptyByRatio)
 			{
-				if(GetFlags(sBase+suf).vfile_ondisk)
+				const auto& flags=GetFlags(sBase+suf);
+				if(flags.vfile_ondisk)
 					goto has_base;
 			}
 			// ok, not found, enforce any existing one?
