@@ -174,6 +174,7 @@ static cmstring compSuffixes[] = { ".bz2", ".gz", ".lzma", ".xz"};
 static cmstring compSuffixesAndEmpty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
 static cmstring compSuffixesAndEmptyByLikelyhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
 static cmstring compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
+static cmstring compSuffixesByRatio[] = { ".xz", ".lzma", ".bz2", ".gz"};
 
 bool CompDebVerLessThan(cmstring &s1, cmstring s2);
 extern time_t m_gMaintTimeNow;

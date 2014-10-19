@@ -807,7 +807,7 @@ void GetRepNameAndPathResidual(const tHttpUrl & in, tRepoResolvResult &result)
 const tRepoData * GetRepoData(cmstring &vname)
 {
 	auto it=repoparms.find(vname);
-	if(it==repoparms.end() || it->second.m_backends.empty())
+	if(it==repoparms.end())
 		return nullptr;
 	return & it->second;
 }
@@ -1160,7 +1160,7 @@ void PostProcConfig(bool bDumpConfig)
 
 #ifndef DEBUG
    if(acfg::debug >= LOG_DEBUG)
-	   cerr << "\n\nAdditional debugging information not compiled in." << endl << endl;
+	   cerr << "\n\nAdditional debugging information not compiled in.\n\n";
 #endif
    
 #if 0 //def DEBUG
