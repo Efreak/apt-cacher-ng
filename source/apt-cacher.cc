@@ -537,22 +537,22 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 				m_bAllowStoreData=false;
 				m_nSizeChecked = m_nSizeSeen = 0;
 			};
-			virtual FiStatus Setup(bool)
+			virtual FiStatus Setup(bool) override
 			{
 				m_nSizeChecked = m_nSizeSeen = 0;
 				return m_status = FIST_INITED;
 			}
-			virtual int GetFileFd() { return 1; }; // something, don't care for now
-			virtual bool DownloadStartedStoreHeader(const header & h, const char *,
-					bool, bool&)
+			virtual int GetFileFd() override { return 1; }; // something, don't care for now
+			virtual bool DownloadStartedStoreHeader(const header &, const char *,
+					bool, bool&) override
 			{
 				return true;
 			}
-			virtual bool StoreFileData(const char *data, unsigned int size)
+			virtual bool StoreFileData(const char *data, unsigned int size) override
 			{
 				return (size==fwrite(data, sizeof(char), size, stdout));
 			}
-			ssize_t SendData(int , int, off_t &, size_t )
+			ssize_t SendData(int , int, off_t &, size_t ) override
 			{
 				return 0;
 			}
