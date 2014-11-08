@@ -3,8 +3,19 @@ set(CMAKE_LEGACY_CYGWIN_WIN32 0)
 
 PROJECT(ACNG CXX C)
 
-INCLUDE (CheckIncludeFiles) 
+INCLUDE(CheckIncludeFiles) 
+INCLUDE(CheckCXXSourceCompiles)
+INCLUDE(CheckCXXSourceRuns)
+INCLUDE(CheckTypeSize)
+INCLUDE(TestBigEndian)
 #INCLUDE (CheckLibraryExists)
+
+# Various feature checks
+CHECK_INCLUDE_FILES ("sys/param.h;sys/mount.h" HAVE_SYS_MOUNT_H)
+CHECK_INCLUDE_FILES ("sys/vfs.h" HAVE_SYS_VFS_H)
+CHECK_TYPE_SIZE(int SIZE_INT)
+CHECK_TYPE_SIZE(long SIZE_LONG)
+TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
 
 INCLUDE_DIRECTORIES(. ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
@@ -12,11 +23,6 @@ FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
 
 # minimum prqs
 list(APPEND AcngLdList pthread)
-
-INCLUDE(CheckIncludeFiles)
-INCLUDE(CheckCXXSourceCompiles)
-INCLUDE(CheckCXXSourceRuns)
-INCLUDE(CheckIncludeFiles)
 
 # common required flags to be used later for CMAKE_REQUIRED_FLAGS and the build,
 # CXXFLAGS (via initial CMAKE_CXX_FLAGS) can override them
@@ -36,10 +42,6 @@ IF(CMAKE_SYSTEM MATCHES "CYGWIN")
 ENDIF()
 
 SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
-
-# Various feature checks
-CHECK_INCLUDE_FILES ("sys/param.h;sys/mount.h" HAVE_SYS_MOUNT_H)
-CHECK_INCLUDE_FILES ("sys/vfs.h" HAVE_SYS_VFS_H)
 
 # if the compiler knows the switch, use it, otherwise try to work without it
 SET(CXX11_TESTSRC "struct z{int a=3;}; int main(){int a[3];for(auto x:a) return x;}")
@@ -245,13 +247,6 @@ string(REPLACE ";" " " lsd_LDFLAGS "${lsd_LDFLAGS}")
 string(REPLACE ";" " " lsd_CFLAGS "${lsd_CFLAGS}")
 set(HAVE_SD_NOTIFY ${lsd_FOUND})
 #message("sd? ${HAVE_SD_NOTIFY} ${lsd_LDFLAGS}")
-
-INCLUDE(CheckTypeSize)
-CHECK_TYPE_SIZE(int SIZE_INT)
-CHECK_TYPE_SIZE(long SIZE_LONG)
-
-INCLUDE(TestBigEndian)
-TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
 
 SET(TESTSRC "
 #include <memory>
