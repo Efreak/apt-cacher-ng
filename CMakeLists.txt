@@ -5,7 +5,6 @@ PROJECT(ACNG CXX C)
 
 INCLUDE(CheckIncludeFiles) 
 INCLUDE(CheckCXXSourceCompiles)
-INCLUDE(CheckCXXSourceRuns)
 INCLUDE(CheckCXXCompilerFlag)
 INCLUDE(CheckTypeSize)
 INCLUDE(TestBigEndian)
@@ -256,10 +255,6 @@ endif(NOT HAVE_BOOST_SMARTPTR)
 
 SET(CMAKE_REQUIRED_LIBRARIES dl)
 CHECK_CXX_SOURCE_COMPILES("#include \"${CMAKE_SOURCE_DIR}/include/testdlopen.h\"" HAVE_DLOPEN)
-
-# maybe enable workaround for platforms with a weird implementation. XXX: this is not cross-compilation friendly, find a better solution
-SET(CMAKE_REQUIRED_LIBRARIES pthread)
-CHECK_CXX_SOURCE_RUNS("#include \"${CMAKE_SOURCE_DIR}/include/testpthread.h\"" PTHREAD_COND_TIMEDWAIT_TIME_RANGE_OK)
 
 ##################################
 # All checks done, start building
