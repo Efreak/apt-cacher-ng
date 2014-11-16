@@ -1,25 +1,32 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 2.8.6)
 set(CMAKE_LEGACY_CYGWIN_WIN32 0)
 
 PROJECT(ACNG CXX C)
 
-INCLUDE (CheckIncludeFiles) 
+INCLUDE(CheckIncludeFiles) 
+INCLUDE(CheckCXXSourceCompiles)
+INCLUDE(CheckCXXSourceRuns)
+INCLUDE(CheckCXXCompilerFlag)
+INCLUDE(CheckTypeSize)
+INCLUDE(TestBigEndian)
 #INCLUDE (CheckLibraryExists)
+
+# Various feature checks
+CHECK_INCLUDE_FILES ("sys/param.h;sys/mount.h" HAVE_SYS_MOUNT_H)
+CHECK_INCLUDE_FILES ("sys/vfs.h" HAVE_SYS_VFS_H)
+CHECK_TYPE_SIZE(int SIZE_INT)
+CHECK_TYPE_SIZE(long SIZE_LONG)
+TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
 
 INCLUDE_DIRECTORIES(. ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
 FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
 
-# minimum prqs
+# minimum prerequisites
 list(APPEND AcngLdList pthread)
 
-INCLUDE(CheckIncludeFiles)
-INCLUDE(CheckCXXSourceCompiles)
-INCLUDE(CheckCXXSourceRuns)
-INCLUDE(CheckIncludeFiles)
-
 # common required flags to be used later for CMAKE_REQUIRED_FLAGS and the build,
-# CXXFLAGS (via initial CMAKE_CXX_FLAGS) can override them
+# CXXFLAGS (via initial CMAKE_CXX_FLAGS) extends and overrides them
 SET(ACNG_CXXFLAGS_COMMON " -pthread -g -O2 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
 # same for linker flags, imported from LDFLAGS environment var
 SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
@@ -35,63 +42,35 @@ IF(CMAKE_SYSTEM MATCHES "CYGWIN")
    SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__  ")
 ENDIF()
 
-SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
-
-# Various feature checks
-CHECK_INCLUDE_FILES ("sys/param.h;sys/mount.h" HAVE_SYS_MOUNT_H)
-CHECK_INCLUDE_FILES ("sys/vfs.h" HAVE_SYS_VFS_H)
-
-# if the compiler knows the switch, use it, otherwise try to work without it
-SET(CXX11_TESTSRC "struct z{int a=3;}; int main(){int a[3];for(auto x:a) return x;}")
-
-# if the compiler knows the switch, use it, otherwise try to work without it
-SET(CMAKE_REQUIRED_FLAGS " ${ACNG_CXXFLAGS_COMMON} -std=c++11 ")
-CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" SET_CXX11_FLAGS)
-if(SET_CXX11_FLAGS)
-   SET(ACNG_CXXFLAGS_COMMON ${CMAKE_REQUIRED_FLAGS})
-
-# also look for a very specific cygwin bug
-SET(GNU11_BUGSRC "
-#include <cstdio>
-int main() { char buf[20]; return snprintf(buf,3,0); }
-")
-CHECK_CXX_SOURCE_COMPILES("${GNU11_BUGSRC}" HAS_NOGNU11BUG)
-if(NOT HAS_NOGNU11BUG)
-message("!! WARNING: this compiler seems to have an old bug with missing definitions, trying to workaround. See http://cygwin.com/ml/cygwin/2012-04/msg00140.html for details.")
-   SET(ACNG_CXXFLAGS_COMMON " ${CMAKE_REQUIRED_FLAGS} -std=gnu++11 " )
-endif(NOT HAS_NOGNU11BUG)
-
-
-else(SET_CXX11_FLAGS)
-   SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
-   CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" CXX11_IS_DEFAULT)
-   IF(NOT CXX11_IS_DEFAULT)
-      message(FATAL_ERROR "!! Error: failed to configure compiler for C++11 support. For GCC, version 4.7 or newer is required.")
-   ENDIF(NOT CXX11_IS_DEFAULT)
-endif(SET_CXX11_FLAGS)
-
-if(NOLTO)
-	message("++ Link Time Optimization disabled by user")
+# prefer that style if possible since since Cygin seems to have an old bug with missing definitions, http://cygwin.com/ml/cygwin/2012-04/msg00140.html
+CHECK_CXX_COMPILER_FLAG(-std=gnu++11 COMPILER_SUPPORTS_GNU11)
+CHECK_CXX_COMPILER_FLAG(-std=c++11 COMPILER_SUPPORTS_CXX11)
+CHECK_CXX_COMPILER_FLAG(-std=c++0x COMPILER_SUPPORTS_CXX0X)
+if(COMPILER_SUPPORTS_GNU11)
+   set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=gnu++11")
+elseif(COMPILER_SUPPORTS_CXX11)
+   set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=c++11")
+elseif(COMPILER_SUPPORTS_CXX0X)
+   set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=c++0x")
 else()
-SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} -flto")
-SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN} -flto ")
-CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_LTO)
-if(USE_LTO)
-   SET(ACNG_CXXFLAGS_COMMON ${CMAKE_REQUIRED_FLAGS})
-   SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
-else(USE_LTO)
-   SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
-endif(USE_LTO)
+   message(FATAL_ERROR "!! Error: failed to configure the compiler with C++11 support. For GCC, version 4.7 or newer is required, a recent clang++ is also suitable.")
 endif()
 
-SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
-SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}  -Wl,--as-needed ")
-CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_WLASNEEDED)
+SET(CXX11_TESTSRC "struct z{int a=3;}; int main(){int a[3];for(auto x:a) return x;}")
+if(NOLTO)
+	message("++ Link Time Optimization disabled by user")
+else(NOLTO)
+   CHECK_CXX_COMPILER_FLAG(-flto USE_LTO)
+   if(USE_LTO)
+      SET(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -flto")
+      SET(LDFLAGS_MIN "${LDFLAGS_MIN} -flto")
+   endif()
+endif(NOLTO)
+
+CHECK_CXX_COMPILER_FLAG("-Wl,--as-needed" USE_WLASNEEDED)
 if(USE_WLASNEEDED)
-   SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
-else(USE_WLASNEEDED)
-   SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
-endif(USE_WLASNEEDED)
+   SET(LDFLAGS_MIN "${LDFLAGS_MIN} -Wl,--as-needed")
+endif()
 
 #INCLUDE(FindZLIB) # broken, hangs for 10 seconds
 # header check should be enough, gzip should be everywhere nowadays
@@ -246,13 +225,6 @@ string(REPLACE ";" " " lsd_CFLAGS "${lsd_CFLAGS}")
 set(HAVE_SD_NOTIFY ${lsd_FOUND})
 #message("sd? ${HAVE_SD_NOTIFY} ${lsd_LDFLAGS}")
 
-INCLUDE(CheckTypeSize)
-CHECK_TYPE_SIZE(int SIZE_INT)
-CHECK_TYPE_SIZE(long SIZE_LONG)
-
-INCLUDE(TestBigEndian)
-TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
-
 SET(TESTSRC "
 #include <memory>
 int main() { return NULL != std::shared_ptr<int>(new int(1)); }
@@ -285,10 +257,9 @@ endif(NOT HAVE_BOOST_SMARTPTR)
 SET(CMAKE_REQUIRED_LIBRARIES dl)
 CHECK_CXX_SOURCE_COMPILES("#include \"${CMAKE_SOURCE_DIR}/include/testdlopen.h\"" HAVE_DLOPEN)
 
-# maybe enable workaround for platforms with a weird implementation
+# maybe enable workaround for platforms with a weird implementation. XXX: this is not cross-compilation friendly, find a better solution
 SET(CMAKE_REQUIRED_LIBRARIES pthread)
 CHECK_CXX_SOURCE_RUNS("#include \"${CMAKE_SOURCE_DIR}/include/testpthread.h\"" PTHREAD_COND_TIMEDWAIT_TIME_RANGE_OK)
-
 
 ##################################
 # All checks done, start building
