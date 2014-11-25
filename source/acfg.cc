@@ -1230,6 +1230,7 @@ time_t BackgroundCleanup()
 	return ret;
 }
 
+#ifdef SUPPWHASH
 #ifdef HAVE_SSL
 bool DecodeBase64(LPCSTR pAscii, acbuf& binData) {
 	if(!pAscii)
@@ -1247,6 +1248,7 @@ bool DecodeBase64(LPCSTR pAscii, acbuf& binData) {
 	checkForceFclose(memStrm);
 	return binData.size();
 }
+#endif
 #endif
 
 lockable authLock;
