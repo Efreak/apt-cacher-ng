@@ -8,7 +8,9 @@
         notifempty
         create
         postrotate
-                if [ -s /var/run/apt-cacher-ng/pid ] ; then
+                if [ -e /run/systemd/system ] ; then
+                        systemctl is-active apt-cacher-ng && systemctl kill --signal=USR1 apt-cacher-ng
+                elif [ -s /var/run/apt-cacher-ng/pid ] ; then
                         kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)"
                 fi
         endscript
@@ -24,7 +26,9 @@
         notifempty
         create
         postrotate
-                if [ -s /var/run/apt-cacher-ng/pid ] ; then
+                if [ -e /run/systemd/system ] ; then
+                        systemctl is-active apt-cacher-ng && systemctl kill --signal=USR1 apt-cacher-ng
+                elif [ -s /var/run/apt-cacher-ng/pid ] ; then
                         kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)"
                 fi
         endscript

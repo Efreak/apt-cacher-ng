@@ -1,3 +1,10 @@
+apt-cacher-ng (0.8.0-2) UNRELEASED; urgency=medium
+
+  * Send SIGUSR1 properly to reopen the logs when controlled by systemd
+    (closes: Bug#771111)
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 26 Nov 2014 22:46:22 +0100
+
 apt-cacher-ng (0.8.0-1) unstable; urgency=medium
 
   * New upstream version
