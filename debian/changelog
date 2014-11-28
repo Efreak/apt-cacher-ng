@@ -1,3 +1,10 @@
+apt-cacher-ng (0.8.0-3) unstable; urgency=medium
+
+  * Restored build-dependency on libsystemd-daemond-dev since upstream source
+    didn't cope with that change (yet)
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 28 Nov 2014 21:05:16 +0100
+
 apt-cacher-ng (0.8.0-2) unstable; urgency=medium
 
   * Send SIGUSR1 properly to reopen the logs when controlled by systemd
