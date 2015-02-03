@@ -3,7 +3,7 @@ Section: net
 Priority: optional
 Maintainer: Eduard Bloch <blade@debian.org>
 Build-Depends: debhelper (>= 9), cmake (>= 2.6.2), libbz2-dev, zlib1g-dev, liblzma-dev, libfuse-dev [!hurd-i386], pkg-config, libwrap0-dev, lsb-base (>> 3.0-6), po-debconf, libssl-dev
-Standards-Version: 3.9.5
+Standards-Version: 3.9.6
 Homepage: http://www.unix-ag.uni-kl.de/~bloch/acng/
 
 Package: apt-cacher-ng

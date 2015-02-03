@@ -2,15 +2,16 @@
 # Copyright (C) 2011 THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the apt-cacher-ng package.
 # Jeroen Schot <schot@a-eskwadraat.nl>, 2011.
+# Frans Spiesschaert <Frans.Spiesschaert@yucom.be>, 2014.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: apt-cacher-ng 0.6.10-2\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
 "POT-Creation-Date: 2014-01-27 06:52+0100\n"
-"PO-Revision-Date: 2011-12-14 09:30+0100\n"
-"Last-Translator: Jeroen Schot <schot@a-eskwadraat.nl>\n"
-"Language-Team: Debian l10n Dutch <debian-l10n-dutch@lists.debian.org>\n"
+"PO-Revision-Date: 2014-09-25 17:53+0200\n"
+"Last-Translator: Frans Spiesschaert <Frans.Spiesschaert@yucom.be>\n"
+"Language-Team: Debian Dutch l10n Team <debian-l10n-dutch@lists.debian.org>\n"
 "Language: nl\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -26,28 +27,23 @@ msgstr "Eenmalig instellen"
 #. Choices
 #: ../apt-cacher-ng.templates:2001
 msgid "Set up now and update later"
-msgstr "Nu en bij elke update instellen"
+msgstr "Nu instellen en later bijwerken"
 
 #. Type: select
 #. Choices
 #: ../apt-cacher-ng.templates:2001
 msgid "No automated setup"
-msgstr "Geen automatische instelling"
+msgstr "Niet automatisch instellen"
 
 #. Type: select
 #. Description
 #: ../apt-cacher-ng.templates:2002
 msgid "Automatic remapping of client requests:"
-msgstr "Automatisch omschrijven van client-verzoeken:"
+msgstr "Automatisch omschakelen van client-verzoeken:"
 
 #. Type: select
 #. Description
 #: ../apt-cacher-ng.templates:2002
-#, fuzzy
-#| msgid ""
-#| "Apt-Cacher NG can download packages from repositories other than those "
-#| "requested by the clients. This allows it to cache content effectively, "
-#| "and makes it easy for an administrator to switch to another mirror later."
 msgid ""
 "Apt-Cacher NG can download packages from repositories other than those "
 "requested by the clients. This allows it to cache content effectively, and "
@@ -55,10 +51,12 @@ msgid ""
 "URL remapping can be set up automatically, using a configuration based on "
 "the current state of /etc/apt/sources.list."
 msgstr ""
-"Apt-Cacher NG kan pakketten ophalen van andere pakketbronnen dan waar de "
-"clienten om vragen. Hierdoor kan inhoud beter worden gecached en maakt het "
-"voor de beheerder makkelijk om later naar een andere spiegelserver over te "
-"schakelen."
+"Apt-Cacher NG kan pakketten ophalen van een andere pakketbron dan die waar "
+"de client om vraagt. Hierdoor kan inhoud op een effectieve manier gecached "
+"worden. Het maakt het voor een beheerder ook makkelijk om later naar een "
+"andere spiegelserver over te schakelen. Omschakelen van URL's kan "
+"geautomatiseerd worden aan de hand van een configuratie die op de huidige "
+"inhoud van /etc/apt/sources.list gebaseerd wordt."
 
 #. Type: select
 #. Description
@@ -68,6 +66,9 @@ msgid ""
 "reconfigured on every update of Apt-Cacher NG (modifying the configuration "
 "files each time), or left unconfigured."
 msgstr ""
+"Gelieve te specificeren of de omschakeling eenmalig en nu geconfigureerd "
+"moet worden, ofwel bij elke bijwerking van Apt-Cacher NG opnieuw (de "
+"configuratiebestanden worden dan telkens aangepast), ofwel niet."
 
 #. Type: select
 #. Description
@@ -76,15 +77,14 @@ msgid ""
 "Selecting \"No automated setup\" will leave the existing configuration "
 "unchanged. It will need to be updated manually."
 msgstr ""
-"Indien u \"Geen automatische instelling\" kiest zal de bestaande "
-"configuratie met rust worden gelaten. U dient deze dan handmatig bij te "
-"werken."
+"Indien u \"Niet automatisch instellen\" kiest zal de bestaande configuratie "
+"met rust worden gelaten. U dient deze dan handmatig bij te werken."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:3001
 msgid "Listening address(es) for Apt-Cacher NG:"
-msgstr ""
+msgstr "Op welke adressen moet Apt-Cacher NG luisteren:"
 
 #. Type: string
 #. Description
@@ -93,6 +93,8 @@ msgid ""
 "Please specify the local addresses that Apt-Cacher NG should listen on "
 "(multiple entries must be separated by spaces)."
 msgstr ""
+"Vermeld de lokale adressen waarop Apt-Cacher NG moet luisteren (meerdere "
+"elementen worden door spaties gescheiden)."
 
 #. Type: string
 #. Description
@@ -102,6 +104,10 @@ msgid ""
 "interface. Generic protocol-specific addresses are also supported, such as "
 "0.0.0.0 for listening on all IPv4-enabled interfaces."
 msgstr ""
+"Elk element moet een IP-adres of een computernaam zijn, gekoppeld aan een "
+"lokale netwerkinterface. Generische protocolspecifieke adressen worden ook "
+"ondersteund, zoals 0.0.0.0 om Apt-Cacher NG te doen luisteren op alle IPv4-"
+"compatibele interfaces."
 
 #. Type: string
 #. Description
@@ -110,6 +116,8 @@ msgid ""
 "If this field is left empty, Apt-Cacher NG will listen on all interfaces, "
 "with all supported protocols."
 msgstr ""
+"Als dit veld leeg blijft, luistert Apt-Cacher NG op alle interfaces met alle "
+"ondersteunde protocollen."
 
 #. Type: string
 #. Description
@@ -120,12 +128,14 @@ msgid ""
 "The special word \"keep\" keeps the value from the current (or default) "
 "configuration unchanged."
 msgstr ""
+"Het speciale woord \"keep\" laat de waarde van de huidige (of de standaard-) "
+"configuratie ongemoeid."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:4001
 msgid "Listening TCP port:"
-msgstr ""
+msgstr "Luisteren op TCP-poort:"
 
 #. Type: string
 #. Description
@@ -135,6 +145,9 @@ msgid ""
 "HTTP (proxy) requests. The default value is port 3142, but it can be set to "
 "9999 to emulate apt-proxy."
 msgstr ""
+"Vermeld de TCP-poort waarop Apt-Cacher NG moet luisteren naar binnenkomende "
+"HTTP- (proxy) verzoeken. De standaardwaarde is poort 3142, maar u kunt de "
+"waarde 9999 instellen om apt-proxy te emuleren."
 
 #. Type: string
 #. Description
@@ -143,12 +156,14 @@ msgid ""
 "If this field is left empty, the value from the current configuration "
 "remains unchanged."
 msgstr ""
+"Indien dit veld leeg blijft, blijft de waarde van de huidige configuratie "
+"ongewijzigd behouden."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:5001
 msgid "Top-level directory for package cache:"
-msgstr ""
+msgstr "Hoofdmap van de pakkettencache: "
 
 #. Type: string
 #. Description
@@ -157,6 +172,9 @@ msgid ""
 "The main cache storage directory should be located on a file system without "
 "file name restrictions."
 msgstr ""
+"De hoofdmap waarin de cache opgeslagen wordt moet zich op een "
+"bestandssysteem bevinden waarvoor geen restricties gelden op het gebied van "
+"bestandsnamen."
 
 #. Type: string
 #. Description
@@ -165,18 +183,21 @@ msgid ""
 "If this field is left empty, the value from the current configuration "
 "remains unchanged or is set to the default of /var/cache/apt-cacher-ng."
 msgstr ""
+"Als u dit veld leeg laat, wordt de waarde van de huidige configuratie niet "
+"gewijzigd of wordt ze ingesteld op de standaard, nl. /var/cache/apt-cacher-"
+"ng. "
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:6001
 msgid "Proxy to use for downloads:"
-msgstr ""
+msgstr "Bij het downloaden te gebruiken proxy:"
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:6001
 msgid "Please specify the proxy server to use for downloads."
-msgstr ""
+msgstr "Vermeld de proxyserver die bij het downloaden gebruikt moet worden."
 
 #. Type: string
 #. Description
@@ -186,13 +207,16 @@ msgid ""
 "the user:pass@host:port scheme. However, please check the documentation for "
 "limitations."
 msgstr ""
+"De gebruikersnaam en het wachtwoord voor de proxyserver kunnen hier "
+"toegevoegd worden volgens het schema gebruikersnaam:wachtwoord@computer:"
+"poort. Raadpleeg evenwel ook de documentatie voor de geldende beperkingen."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:6001
 msgid ""
 "If this field is left empty, Apt-Cacher NG will not use any proxy server."
-msgstr ""
+msgstr "Bij een leeg veld zal Apt-Cacher NG geen enkele proxyserver gebruiken."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

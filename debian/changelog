@@ -1,10 +1,35 @@
-apt-cacher-ng (0.8.0~rc4-2~bpo70+1) wheezy-backports; urgency=low
+apt-cacher-ng (0.8.0-3~bpo70+1) wheezy-backports; urgency=low
 
   * Wheezy backport
   * map_emplace_replacement patch: replaces a C++11 method with functionaly
     equivalent available with g++-4.7
 
  -- Eduard Bloch <blade@debian.org>  Tue, 07 Oct 2014 18:47:45 +0200
+
+apt-cacher-ng (0.8.0-3) unstable; urgency=medium
+
+  * Restored build-dependency on libsystemd-daemond-dev since upstream source
+    didn't cope with that change (yet)
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 28 Nov 2014 21:05:16 +0100
+
+apt-cacher-ng (0.8.0-2) unstable; urgency=medium
+
+  * Send SIGUSR1 properly to reopen the logs when controlled by systemd
+    (closes: Bug#771111)
+  * replace build-dependency on transitional package libsystemd-daemond-dev
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 28 Nov 2014 08:14:54 +0100
+
+apt-cacher-ng (0.8.0-1) unstable; urgency=medium
+
+  * New upstream version
+    + workaround for processing of damaged caches in maintenance tasks
+      (smarter/optimistic download source guessing, closes: #737069)
+  * Dutch Debconf strings translation update by Frans Spiesschaert
+    (closes: #764082)
+
+ -- Eduard Bloch <blade@debian.org>  Mon, 20 Oct 2014 22:52:25 +0200
 
 apt-cacher-ng (0.8.0~rc4-1) unstable; urgency=low
 
