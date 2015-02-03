@@ -91,12 +91,6 @@ apt-cacher-ng (0.7.27-1) unstable; urgency=medium
 
  -- Eduard Bloch <blade@debian.org>  Thu, 17 Jul 2014 21:10:25 +0200
 
-apt-cacher-ng (0.7.26-2~bpo70+2) wheezy-backports; urgency=low
-
-  * Fixed target branch
-
- -- 
-
 apt-cacher-ng (0.7.26-2~bpo70+1) unstable; urgency=low
 
   * Wheezy backport, changes only from 0.7.25-1~bpo70+1
