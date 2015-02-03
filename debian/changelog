@@ -1,10 +1,10 @@
 apt-cacher-ng (0.8.0-3~bpo70+1) wheezy-backports; urgency=low
 
-  * Wheezy backport
-  * map_emplace_replacement patch: replaces a C++11 method with functionaly
+  * Updated wheezy backport
+  * map_emplace_replacement patch: replaces a C++11 method with functionally
     equivalent available with g++-4.7
 
- -- Eduard Bloch <blade@debian.org>  Tue, 07 Oct 2014 18:47:45 +0200
+ -- Eduard Bloch <blade@debian.org>  Tue, 03 Feb 2015 19:14:51 +0100
 
 apt-cacher-ng (0.8.0-3) unstable; urgency=medium
 
