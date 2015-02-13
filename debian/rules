@@ -10,6 +10,10 @@ include /usr/share/dpkg/buildflags.mk
 # https://wiki.debian.org/Hardening#Notes_for_packages_using_CMake
 CFLAGS += $(CPPFLAGS)
 CXXFLAGS += $(CPPFLAGS)
+export CC=gcc-4.7
+export CXX=g++-4.7
+export CPP=cpp-4.7
+export CMAKEOPTS=--debug-trycompile
 
 %:
 	dh $@ --parallel

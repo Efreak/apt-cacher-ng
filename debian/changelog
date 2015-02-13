@@ -1,3 +1,9 @@
+apt-cacher-ng (0.8.0-3~bpo70+2) wheezy-backports; urgency=low
+
+  * Making sure to really use g++-4.7 on all architectures
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 13 Feb 2015 16:48:46 +0100
+
 apt-cacher-ng (0.8.0-3~bpo70+1) wheezy-backports; urgency=low
 
   * Updated wheezy backport
