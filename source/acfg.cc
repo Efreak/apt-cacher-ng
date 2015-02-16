@@ -385,8 +385,13 @@ tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
 				{
 					auto nam(GetBaseName(s));
 					if(bAddDefault)
-						nam.erase(nam.size()-8);
+					nam.erase(nam.size()-8);
+#if __GNUC__ >= 4 && __GNUC_MINOR__ < 8
+					if(bname2path.find(nam) == bname2path.end())
+						bname2path[nam]=s;
+#else
 					bname2path.emplace(nam, s);
+#endif
 				}
 
 			}
