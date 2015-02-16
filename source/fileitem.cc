@@ -45,11 +45,11 @@ fileitem::fileitem() :
 	m_nSizeChecked(0),
 	m_filefd(-1),
 	m_nDlRefsCount(0),
+	usercount(0),
 	m_status(FIST_FRESH),
 	m_nTimeDlStarted(0),
 	m_nTimeDlDone(END_OF_TIME),
-	m_globRef(mapItems.end()),
-	usercount(0)
+	m_globRef(mapItems.end())
 {
 }
 
@@ -791,10 +791,8 @@ bool fileItemMgmt::PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 					replaceChars(sPathRelMod, "/\\", '_');
 					sPathRelMod.insert(0, sReplDir + ltos(getpid()) + "_" + ltos(now)+"_");
 					LOG("Registering a new REPLACEMENT file item...");
-					fileitem_with_storage *p = new fileitem_with_storage(sPathRelMod);
-					p->usercount=1;
-					tFileItemPtr sp(p);
-					p->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
+					auto sp(make_shared<fileitem_with_storage>(sPathRelMod, 1));
+					sp->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
 					m_ptr = sp;
 					return true;
 				}
@@ -805,10 +803,8 @@ bool fileItemMgmt::PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 			return true;
 		}
 		LOG("Registering the NEW file item...");
-		fileitem_with_storage *p = new fileitem_with_storage(sPathRel);
-		p->usercount=1;
-		tFileItemPtr sp(p);
-		p->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
+		auto sp(make_shared<fileitem_with_storage>(sPathRel, 1));
+		sp->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
 		//lockGlobalMap.unLock();
 		m_ptr = sp;
 		return true;

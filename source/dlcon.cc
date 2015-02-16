@@ -697,9 +697,8 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 	LOGSTART2("dlcon::EnqJob", todo->m_remoteUri.ToURI(false));
 */
 	m_qNewjobs.push_back(
-			tDlJobPtr(
-					new tDlJob(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,
-							m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax)));
+			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,
+							m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax));
 	wake();
 	return true;
 }

@@ -716,7 +716,7 @@ bool tCacheOperation::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sRefere
 		}
 	};
 
-	tFileItemPtr p(new tHeadOnlyStorage(sTempDataRel, sReferencePathRel));
+	auto p(make_shared<tHeadOnlyStorage>(sTempDataRel, sReferencePathRel));
 	return (Download(sReferencePathRel, true, eMsgHideAll, p)
 			&& ( (tHeadOnlyStorage*) p.get())->m_nGotSize == nWantedSize);
 }
@@ -813,8 +813,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 			return true;
 		}
 	};
-	tInjectItem *p=new tInjectItem(to, bTryLink);
-	tFileItemPtr pfi(static_cast<fileitem*>(p));
+	auto pfi(make_shared<tInjectItem>(to, bTryLink));
 	// register it in global scope
 	fileItemMgmt fi;
 	if(!fi.RegisterFileItem(pfi))
@@ -822,7 +821,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 		MTLOGASSERT(false, "Couldn't register copy item");
 		return false;
 	}
-	bool bOK = p->Inject(from, *pHead);
+	bool bOK = pfi->Inject(from, *pHead);
 
 	MTLOGASSERT(bOK, "Inject: failed");
 

@@ -558,7 +558,7 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 			}
 	};
 
-	tFileItemPtr fi((fileitem*)new tPrintItem);
+	auto fi=std::make_shared<tPrintItem>();
 	dl.AddJob(fi, &url, nullptr, nullptr);
 	dl.WorkLoop();
 	return (fi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
