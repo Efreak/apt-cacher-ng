@@ -86,6 +86,7 @@ protected:
 	header m_head;
 	int m_filefd;
 	int m_nDlRefsCount;
+	int usercount;
 	FiStatus m_status;
 	mstring m_sPathRel;
 	time_t m_nTimeDlStarted, m_nTimeDlDone;
@@ -94,7 +95,6 @@ private:
 	// helper data for global registration control. Access is synchronized by the global lock,
 	// not the internal lock here
 	tFiGlobMap::iterator m_globRef;
-	int usercount;
 	friend class fileItemMgmt;
 };
 
@@ -103,6 +103,7 @@ class fileitem_with_storage : public fileitem
 {
 public:
 	inline fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
+	inline fileitem_with_storage(cmstring &s, int nUsers) {m_sPathRel=s; usercount=nUsers; };
 	virtual ~fileitem_with_storage();
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;

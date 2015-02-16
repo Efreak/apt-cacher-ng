@@ -379,7 +379,7 @@ public:
 				return true;
 			}
 		};
-		tFileItemPtr probe(static_cast<fileitem*>(new tFitemProbe()));
+		auto probe(make_shared<tFitemProbe>());
 		dler.AddJob(probe, &uri);
 		dler.WorkLoop();
 		int nHttpCode(100);
