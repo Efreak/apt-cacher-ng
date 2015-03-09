@@ -448,13 +448,7 @@ static inline time_t GetTime()
 	return ::time(0);
 }
 
-// arbitrary chosen time declaring some date in far future
-// -1 is preserved for convenience reasons (avoid clashes with time(2) return code and similar uses)
-#ifndef PTHREAD_COND_TIMEDWAIT_TIME_RANGE_OK
-#define END_OF_TIME (time_t(MAX_VAL(int))-2)
-#else
-#define END_OF_TIME (MAX_VAL(time_t)-2)
-#endif
+static const time_t END_OF_TIME(MAX_VAL(time_t)-2);
 
 static inline uint FormatTime(char *buf, const time_t cur)
 {

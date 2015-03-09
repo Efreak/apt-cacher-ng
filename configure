@@ -1,0 +1,3 @@
+#!/bin/sh
+rm -f build/CMakeCache* build/Makefi* build/.*stamp
+make config

@@ -38,18 +38,16 @@ README: build/.dir-stamp doc/src/README.but doc/src/manpage.but doc/src/acngfs.b
 	cd doc/man && halibut --man ../src/manpage.but && halibut --man ../src/acngfs.but
 	cp doc/README README
 
+PKGNAME=apt-cacher-ng
 VERSION=$(shell cat VERSION)
 TAGVERSION=$(subst rc,_rc,$(subst pre,_pre,$(VERSION)))
-DISTNAME=apt-cacher-ng-$(VERSION)
-DEBSRCNAME=apt-cacher-ng_$(shell echo $(VERSION) | sed -e "s,pre,~pre,;s,rc,~rc,;").orig.tar.xz
+DISTNAME=$(PKGNAME)-$(VERSION)
+DEBSRCNAME=$(PKGNAME)_$(shell echo $(VERSION) | sed -e "s,pre,~pre,;s,rc,~rc,;").orig.tar.xz
 
 tarball: doc notdebianbranch nosametarball
 	# diff-index is buggy and reports false positives... trying to work around
 	git update-index --refresh || git commit -a
 	git diff-index --quiet HEAD || git commit -a
-	# alternative to --quiet HEAD
-	#git diff-index --quiet --cached HEAD || git commit -a
-	#git diff-files --quiet || git commit -a
 	git archive --prefix $(DISTNAME)/ HEAD | xz -9 > ../$(DISTNAME).tar.xz
 	test -e /etc/debian_version && ln -f ../$(DISTNAME).tar.xz ../$(DEBSRCNAME) || true
 	test -e ../tarballs && ln -f ../$(DISTNAME).tar.xz ../tarballs/$(DEBSRCNAME) || true
@@ -62,7 +60,7 @@ release: noremainingwork tarball
 	git tag upstream/$(TAGVERSION)
 
 unrelease: tarball-remove
-	git tag -d upstream/$(TAGVERSION)
+	-git tag -d upstream/$(TAGVERSION)
 
 pristine-commit:
 	pristine-tar commit ../$(DISTNAME).tar.xz $(TAGVERSION)
