@@ -244,11 +244,13 @@ endif(HAVE_SOCKETLIB)
 
 INCLUDE(FindPkgConfig)
 
+pkg_check_modules(lsd "libsystemd>=209")
+if(NOT lsd_FOUND)
 pkg_check_modules(lsd libsystemd-daemon)
+endif()
 string(REPLACE ";" " " lsd_LDFLAGS "${lsd_LDFLAGS}")
 string(REPLACE ";" " " lsd_CFLAGS "${lsd_CFLAGS}")
 set(HAVE_SD_NOTIFY ${lsd_FOUND})
-#message("sd? ${HAVE_SD_NOTIFY} ${lsd_LDFLAGS}")
 
 SET(TESTSRC "
 #include <memory>
