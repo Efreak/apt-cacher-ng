@@ -1,3 +1,10 @@
+apt-cacher-ng (0.8.1-1) unstable; urgency=low
+
+  * New upstream version
+    + transition to libsystemd (optionally, closes: #779739)
+
+ -- 
+
 apt-cacher-ng (0.8.0-3) unstable; urgency=medium
 
   * Restored build-dependency on libsystemd-daemond-dev since upstream source
