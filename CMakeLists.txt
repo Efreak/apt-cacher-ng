@@ -4,11 +4,14 @@ set(CMAKE_LEGACY_CYGWIN_WIN32 0)
 PROJECT(ACNG CXX C)
 
 INCLUDE (CheckIncludeFiles) 
-#INCLUDE (CheckLibraryExists)
 
 INCLUDE_DIRECTORIES(. ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
 FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
+
+FILE(READ "${CMAKE_SOURCE_DIR}/VERSION" ACVERSION)
+string(REPLACE "\n" "" ACVERSION ${ACVERSION})
+MESSAGE(STATUS "Version: ${ACVERSION}")
 
 # minimum prqs
 list(APPEND AcngLdList pthread)
@@ -57,10 +60,9 @@ int main() { char buf[20]; return snprintf(buf,3,0); }
 ")
 CHECK_CXX_SOURCE_COMPILES("${GNU11_BUGSRC}" HAS_NOGNU11BUG)
 if(NOT HAS_NOGNU11BUG)
-message("!! WARNING: this compiler seems to have an old bug with missing definitions, trying to workaround. See http://cygwin.com/ml/cygwin/2012-04/msg00140.html for details.")
+message("!! WARNING: this compiler seems to have an old bug with missing definitions, trying to work around. See http://cygwin.com/ml/cygwin/2012-04/msg00140.html for details.")
    SET(ACNG_CXXFLAGS_COMMON " ${CMAKE_REQUIRED_FLAGS} -std=gnu++11 " )
 endif(NOT HAS_NOGNU11BUG)
-
 
 else(SET_CXX11_FLAGS)
    SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
@@ -70,9 +72,8 @@ else(SET_CXX11_FLAGS)
    ENDIF(NOT CXX11_IS_DEFAULT)
 endif(SET_CXX11_FLAGS)
 
-if(NOLTO)
-	message("++ Link Time Optimization disabled by user")
-else()
+option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" off)
+if(USE_LTO)
 SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} -flto")
 SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN} -flto ")
 CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_LTO)
@@ -81,6 +82,7 @@ if(USE_LTO)
    SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
 else(USE_LTO)
    SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
+   message(WARNING "Link Time Optimization support broken, disabling it.")
 endif(USE_LTO)
 endif()
 
@@ -305,23 +307,22 @@ SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
 ADD_EXECUTABLE(apt-cacher-ng ${SRCS})
 list(REMOVE_DUPLICATES AcngLdList)
-TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList}  "${lsd_LDFLAGS}")
+TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList} ${lsd_LDFLAGS} ${EXTRA_LIBS_ACNG})
 # I'd like this method more but apparently LINK_FLAGS is always prepended, no way to append it
 #SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES LINK_FLAGS "${lsd_LDFLAGS}")
 SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} ${lsd_CFLAGS}")
 
 ADD_EXECUTABLE(in.acng client/client.cc)
 SET_TARGET_PROPERTIES(in.acng PROPERTIES COMPILE_FLAGS ${ACNG_CXXFLAGS_COMMON})
+TARGET_LINK_LIBRARIES(in.acng ${EXTRA_LIBS_INETD})
 
-#IF(HAVE_WL_AS_NEEDED)
+# -DEXTRA_LIBS_INETD=-lsupc++
 # funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used
 # there). However, it needs to be investigated - the alternative linking makes
-# the binary 40kb larger, might include higher relocation costs and bigger
+# the binary ~40kb larger, might include higher relocation costs and bigger
 # chunks of unique memory while libstdc++ needs to be loaded anyway for the
 # server process.
-#TARGET_LINK_LIBRARIES(in.acng supc++)
-#SET_TARGET_PROPERTIES(in.acng PROPERTIES LINKER_LANGUAGE C)
-#ENDIF(HAVE_WL_AS_NEEDED)
+# Needs HAVE_WL_AS_NEEDED!
 
 
 ############################################
@@ -352,9 +353,9 @@ if(fuse_FOUND AND HAVE_FUSE_25)
    #message("uhm: ${fuse_CFLAGS} -- ${acngfs_cflags} -- ${fuse_LDFLAGS} -- ${HAVE_DLOPEN}")
    SET_TARGET_PROPERTIES(acngfs PROPERTIES COMPILE_FLAGS "${acngfs_cflags}" )
    if(HAVE_DLOPEN)
-      TARGET_LINK_LIBRARIES(acngfs dl pthread ${SSL_LIB_LIST})
+      TARGET_LINK_LIBRARIES(acngfs dl pthread ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
    else(HAVE_DLOPEN)
-      TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS} ${SSL_LIB_LIST})
+      TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
    endif(HAVE_DLOPEN)
 
 else(fuse_FOUND AND HAVE_FUSE_25)
