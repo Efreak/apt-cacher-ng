@@ -8,7 +8,7 @@ INCLUDE(CheckCXXSourceCompiles)
 INCLUDE(CheckCXXCompilerFlag)
 INCLUDE(CheckTypeSize)
 INCLUDE(TestBigEndian)
-#INCLUDE (CheckLibraryExists)
+INCLUDE (CheckLibraryExists)
 
 # Various feature checks
 CHECK_INCLUDE_FILES ("sys/param.h;sys/mount.h" HAVE_SYS_MOUNT_H)
@@ -20,6 +20,10 @@ TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
 INCLUDE_DIRECTORIES(. ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
 FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
+
+FILE(READ "${CMAKE_SOURCE_DIR}/VERSION" ACVERSION)
+string(REPLACE "\n" "" ACVERSION ${ACVERSION})
+MESSAGE(STATUS "Version: ${ACVERSION}")
 
 # minimum prerequisites
 list(APPEND AcngLdList pthread)
@@ -41,7 +45,9 @@ IF(CMAKE_SYSTEM MATCHES "CYGWIN")
    SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__  ")
 ENDIF()
 
-# prefer that style if possible since since Cygin seems to have an old bug with missing definitions, http://cygwin.com/ml/cygwin/2012-04/msg00140.html
+SET(CXX11_TESTSRC "struct z{int a=3;}; int main(){int a[3];for(auto x:a) return x;}")
+
+# prefer that style if possible since since Cygwin seems to have an old bug with missing definitions, http://cygwin.com/ml/cygwin/2012-04/msg00140.html
 CHECK_CXX_COMPILER_FLAG(-std=gnu++11 COMPILER_SUPPORTS_GNU11)
 CHECK_CXX_COMPILER_FLAG(-std=c++11 COMPILER_SUPPORTS_CXX11)
 CHECK_CXX_COMPILER_FLAG(-std=c++0x COMPILER_SUPPORTS_CXX0X)
@@ -52,10 +58,30 @@ elseif(COMPILER_SUPPORTS_CXX11)
 elseif(COMPILER_SUPPORTS_CXX0X)
    set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=c++0x")
 else()
-   message(FATAL_ERROR "!! Error: failed to configure the compiler with C++11 support. For GCC, version 4.7 or newer is required, a recent clang++ is also suitable.")
+   SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
+   CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" COMPILER_SUPPORTS_CXX11_DEFAULT)
+   if(NOT COMPILER_SUPPORTS_CXX11_DEFAULT)
+      message(FATAL_ERROR "!! Error: failed to configure compiler for C++11 support. For GCC, version 4.7 or newer is required.")
+   endif()
 endif()
 
-SET(CXX11_TESTSRC "struct z{int a=3;}; int main(){int a[3];for(auto x:a) return x;}")
+option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" off)
+if(USE_LTO)
+SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} -flto")
+SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN} -flto ")
+CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_LTO)
+if(USE_LTO)
+   SET(ACNG_CXXFLAGS_COMMON ${CMAKE_REQUIRED_FLAGS})
+   SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
+else(USE_LTO)
+   SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
+   message(WARNING "Link Time Optimization support broken, disabling it.")
+endif(USE_LTO)
+endif()
+
+SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
+SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}  -Wl,--as-needed ")
+CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_WLASNEEDED)
 if(NOLTO)
 	message("++ Link Time Optimization disabled by user")
 else(NOLTO)
@@ -271,23 +297,22 @@ SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
 ADD_EXECUTABLE(apt-cacher-ng ${SRCS})
 list(REMOVE_DUPLICATES AcngLdList)
-TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList}  "${lsd_LDFLAGS}")
+TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList} ${lsd_LDFLAGS} ${EXTRA_LIBS_ACNG})
 # I'd like this method more but apparently LINK_FLAGS is always prepended, no way to append it
 #SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES LINK_FLAGS "${lsd_LDFLAGS}")
 SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} ${lsd_CFLAGS}")
 
 ADD_EXECUTABLE(in.acng client/client.cc)
 SET_TARGET_PROPERTIES(in.acng PROPERTIES COMPILE_FLAGS ${ACNG_CXXFLAGS_COMMON})
+TARGET_LINK_LIBRARIES(in.acng ${EXTRA_LIBS_INETD})
 
-#IF(HAVE_WL_AS_NEEDED)
+# -DEXTRA_LIBS_INETD=-lsupc++
 # funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used
 # there). However, it needs to be investigated - the alternative linking makes
-# the binary 40kb larger, might include higher relocation costs and bigger
+# the binary ~40kb larger, might include higher relocation costs and bigger
 # chunks of unique memory while libstdc++ needs to be loaded anyway for the
 # server process.
-#TARGET_LINK_LIBRARIES(in.acng supc++)
-#SET_TARGET_PROPERTIES(in.acng PROPERTIES LINKER_LANGUAGE C)
-#ENDIF(HAVE_WL_AS_NEEDED)
+# Needs HAVE_WL_AS_NEEDED!
 
 
 ############################################
@@ -318,9 +343,9 @@ if(fuse_FOUND AND HAVE_FUSE_25)
    #message("uhm: ${fuse_CFLAGS} -- ${acngfs_cflags} -- ${fuse_LDFLAGS} -- ${HAVE_DLOPEN}")
    SET_TARGET_PROPERTIES(acngfs PROPERTIES COMPILE_FLAGS "${acngfs_cflags}" )
    if(HAVE_DLOPEN)
-      TARGET_LINK_LIBRARIES(acngfs dl pthread ${SSL_LIB_LIST})
+      TARGET_LINK_LIBRARIES(acngfs dl pthread ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
    else(HAVE_DLOPEN)
-      TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS} ${SSL_LIB_LIST})
+      TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
    endif(HAVE_DLOPEN)
 
 else(fuse_FOUND AND HAVE_FUSE_25)

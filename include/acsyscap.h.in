@@ -25,3 +25,4 @@
 #cmakedefine HAVE_SSL
 #cmakedefine HAVE_SD_NOTIFY
 #cmakedefine HAVE_LINUX_EVENTFD
+#cmakedefine ACVERSION "@ACVERSION@"

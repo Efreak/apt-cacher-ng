@@ -38,18 +38,13 @@ README: build/.dir-stamp doc/src/README.but doc/src/manpage.but doc/src/acngfs.b
 	cd doc/man && halibut --man ../src/manpage.but && halibut --man ../src/acngfs.but
 	cp doc/README README
 
-fixversion: VERSION
-	mkdir -p build/tmp
-	sed -e 's,^.*define.*ACVERSION.*,#define ACVERSION "$(VERSION)",' < include/config.h > build/tmp/hh
-	cmp include/config.h build/tmp/hh || cp build/tmp/hh include/config.h
-
 PKGNAME=apt-cacher-ng
 VERSION=$(shell cat VERSION)
 TAGVERSION=$(subst rc,_rc,$(subst pre,_pre,$(VERSION)))
 DISTNAME=$(PKGNAME)-$(VERSION)
 DEBSRCNAME=$(PKGNAME)_$(shell echo $(VERSION) | sed -e "s,pre,~pre,;s,rc,~rc,;").orig.tar.xz
 
-tarball: fixversion doc notdebianbranch nosametarball
+tarball: doc notdebianbranch nosametarball
 	# diff-index is buggy and reports false positives... trying to work around
 	git update-index --refresh || git commit -a
 	git diff-index --quiet HEAD || git commit -a
