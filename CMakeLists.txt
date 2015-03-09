@@ -45,7 +45,9 @@ IF(CMAKE_SYSTEM MATCHES "CYGWIN")
    SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__  ")
 ENDIF()
 
-# prefer that style if possible since since Cygin seems to have an old bug with missing definitions, http://cygwin.com/ml/cygwin/2012-04/msg00140.html
+SET(CXX11_TESTSRC "struct z{int a=3;}; int main(){int a[3];for(auto x:a) return x;}")
+
+# prefer that style if possible since since Cygwin seems to have an old bug with missing definitions, http://cygwin.com/ml/cygwin/2012-04/msg00140.html
 CHECK_CXX_COMPILER_FLAG(-std=gnu++11 COMPILER_SUPPORTS_GNU11)
 CHECK_CXX_COMPILER_FLAG(-std=c++11 COMPILER_SUPPORTS_CXX11)
 CHECK_CXX_COMPILER_FLAG(-std=c++0x COMPILER_SUPPORTS_CXX0X)
@@ -56,35 +58,12 @@ elseif(COMPILER_SUPPORTS_CXX11)
 elseif(COMPILER_SUPPORTS_CXX0X)
    set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=c++0x")
 else()
-   message(FATAL_ERROR "!! Error: failed to configure the compiler with C++11 support. For GCC, version 4.7 or newer is required, a recent clang++ is also suitable.")
-endif()
-
-SET(CXX11_TESTSRC "struct z{int a=3;}; int main(){int a[3];for(auto x:a) return x;}")
-
-# if the compiler knows the switch, use it, otherwise try to work without it
-SET(CMAKE_REQUIRED_FLAGS " ${ACNG_CXXFLAGS_COMMON} -std=c++11 ")
-CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" SET_CXX11_FLAGS)
-if(SET_CXX11_FLAGS)
-   SET(ACNG_CXXFLAGS_COMMON ${CMAKE_REQUIRED_FLAGS})
-
-# also look for a very specific cygwin bug
-SET(GNU11_BUGSRC "
-#include <cstdio>
-int main() { char buf[20]; return snprintf(buf,3,0); }
-")
-CHECK_CXX_SOURCE_COMPILES("${GNU11_BUGSRC}" HAS_NOGNU11BUG)
-if(NOT HAS_NOGNU11BUG)
-message("!! WARNING: this compiler seems to have an old bug with missing definitions, trying to work around. See http://cygwin.com/ml/cygwin/2012-04/msg00140.html for details.")
-   SET(ACNG_CXXFLAGS_COMMON " ${CMAKE_REQUIRED_FLAGS} -std=gnu++11 " )
-endif(NOT HAS_NOGNU11BUG)
-
-else(SET_CXX11_FLAGS)
    SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
-   CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" CXX11_IS_DEFAULT)
-   IF(NOT CXX11_IS_DEFAULT)
+   CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" COMPILER_SUPPORTS_CXX11_DEFAULT)
+   if(NOT COMPILER_SUPPORTS_CXX11_DEFAULT)
       message(FATAL_ERROR "!! Error: failed to configure compiler for C++11 support. For GCC, version 4.7 or newer is required.")
-   ENDIF(NOT CXX11_IS_DEFAULT)
-endif(SET_CXX11_FLAGS)
+   endif()
+endif()
 
 option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" off)
 if(USE_LTO)
