@@ -1,9 +1,9 @@
-apt-cacher-ng (0.8.1-1) unstable; urgency=low
+apt-cacher-ng (0.8.1-1) UNRELEASED; urgency=low
 
   * New upstream version
     + transition to libsystemd (optionally, closes: #779739)
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Wed, 11 Mar 2015 14:27:48 +0100
 
 apt-cacher-ng (0.8.0-3) unstable; urgency=medium
 
