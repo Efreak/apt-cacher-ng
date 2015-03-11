@@ -615,18 +615,16 @@ static int acngfs_fsync(const char *path, int isdatasync,
 
 struct fuse_operations_compat25 acngfs_oper;
 
-int my_fuse_main(int argc, char const * const * argv)
+int my_fuse_main(int argc, char ** argv)
 {
 #ifdef HAVE_DLOPEN
-   void *pLib = dlopen("libfuse.so.2", RTLD_LAZY);
+   auto pLib = dlopen("libfuse.so.2", RTLD_LAZY);
    if(!pLib)
    {
       cerr << "Couldn't find libfuse.so.2" <<endl;
       return -1;
    }
-   int (*myFuseMain) (int, char const * const *, const struct fuse_operations_compat25 *, size_t);
-   *(void **) (&myFuseMain) = dlsym(pLib, "fuse_main_real_compat25");
-
+   auto myFuseMain = (decltype(&fuse_main_real_compat25)) dlsym(pLib, "fuse_main_real_compat25");
    if(!myFuseMain)
    {
 	  cerr << "Error loading libfuse.so.2" <<endl;
@@ -644,7 +642,7 @@ void _ExitUsage() {
    << "examples:\n\t  acngfs http://ftp.uni-kl.de/debian cacheServer:3142 /var/local/aptfs\n"
    << "\t  acngfs http://ftp.uni-kl.de/debian localhost:3142 /var/cache/apt-cacher-ng/debrep /var/local/aptfs\n\n"
         << "FUSE mount options summary:\n\n";
-    const char *argv[] = {"...", "-h"};
+    char *argv[] = {strdup("..."), strdup("-h")};
     my_fuse_main( _countof(argv), argv);
     exit(EXIT_FAILURE);
 }
