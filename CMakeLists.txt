@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.6)
+cmake_minimum_required(VERSION 2.6.2)
 set(CMAKE_LEGACY_CYGWIN_WIN32 0)
 
 PROJECT(ACNG CXX C)
@@ -8,7 +8,7 @@ INCLUDE(CheckCXXSourceCompiles)
 INCLUDE(CheckCXXCompilerFlag)
 INCLUDE(CheckTypeSize)
 INCLUDE(TestBigEndian)
-INCLUDE (CheckLibraryExists)
+INCLUDE(CheckLibraryExists)
 
 # Various feature checks
 CHECK_INCLUDE_FILES ("sys/param.h;sys/mount.h" HAVE_SYS_MOUNT_H)
@@ -21,9 +21,11 @@ INCLUDE_DIRECTORIES(. ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
 FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
 
+IF(NOT DEFINED(ACVERSION))
 FILE(READ "${CMAKE_SOURCE_DIR}/VERSION" ACVERSION)
 string(REPLACE "\n" "" ACVERSION ${ACVERSION})
 MESSAGE(STATUS "Version: ${ACVERSION}")
+ENDIF()
 
 # minimum prerequisites
 list(APPEND AcngLdList pthread)
