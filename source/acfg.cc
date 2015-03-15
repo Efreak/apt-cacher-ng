@@ -98,11 +98,13 @@ MapNameToString n2sTbl[] = {
 		,{  "VfilePattern",            &vfilepat}
 		,{  "PfilePattern",            &pfilepat}
 		,{  "SPfilePattern",           &spfilepat}
+		,{  "SVfilePattern",           &svfilepat}
 		,{  "WfilePattern",            &wfilepat}
 		,{  "VfilePatternEx",          &vfilepatEx}
 		,{  "PfilePatternEx",          &pfilepatEx}
 		,{  "WfilePatternEx",          &wfilepatEx}
 		,{  "SPfilePatternEx",         &spfilepatEx}
+		,{  "SVfilePatternEx",         &svfilepatEx}
 //		,{  "AdminAuth",               &adminauth}
 		,{  "BindAddress",             &bindaddr}
 		,{  "UserAgent",               &agentname}
@@ -1354,6 +1356,8 @@ bool CompileExpressions()
 			&& compat(rex[PASSTHROUGH].pat, PTHOSTS_PATTERN.c_str())
 			&& compat(rex[FILE_SPECIAL_SOLID].pat, spfilepat.c_str())
 			&& compat(rex[FILE_SPECIAL_SOLID].extra, spfilepatEx.c_str())
+			&& compat(rex[FILE_SPECIAL_VOLATILE].pat, svfilepat.c_str())
+			&& compat(rex[FILE_SPECIAL_VOLATILE].extra, svfilepatEx.c_str())
 			);
 }
 
@@ -1371,11 +1375,14 @@ bool Match(cmstring &in, eMatchType type)
 	if(MatchType(in, type))
 		return true;
 	// XXX: very special behavior...
-	return (type == FILE_SOLID && MatchType(in, FILE_SPECIAL_SOLID));
+	return (type == FILE_SOLID && MatchType(in, FILE_SPECIAL_SOLID))
+		|| (type == FILE_VOLATILE && MatchType(in, FILE_SPECIAL_VOLATILE));
 }
 
 eMatchType GetFiletype(const string & in)
 {
+	if (MatchType(in, FILE_SPECIAL_VOLATILE))
+		return FILE_VOLATILE;
 	if (MatchType(in, FILE_SPECIAL_SOLID))
 		return FILE_SOLID;
 	if (MatchType(in, FILE_VOLATILE))

@@ -32,6 +32,8 @@ string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
 ")$");
 
+string svfilepat("/development/rawhide/.*");
+
 string vfilepat(INFOLDER
 		"(Index|Packages" COMPOPT "|InRelease|Release|mirrors\\.txt|.*\\.gpg|NEWS\\.Debian"
 		"|Sources" COMPOPT "|release|index\\.db-.*\\.gz|Contents-[^/]*" COMPOPT
@@ -59,7 +61,7 @@ string wfilepat(INFOLDER
 		"|[a-z]+32.exe"
 		")$");
 
-string pfilepatEx, spfilepatEx, vfilepatEx, wfilepatEx; // for customization by user
+string pfilepatEx, spfilepatEx, vfilepatEx, svfilepatEx, wfilepatEx; // for customization by user
 int offlinemode(false), verboselog(true), stupidfs(false), forcemanaged(false),
 extreshhold(20), tpstandbymax(8), tpthreadmax(-1), dirperms(00755), fileperms(00664),
 keepnver(0), maxtempdelay(27), vrangeops(1);
