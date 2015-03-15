@@ -77,3 +77,14 @@ _Description: Proxy to use for downloads:
  .
  The special word "keep" keeps the value from the current (or default)
  configuration unchanged.
+
+Template: apt-cacher-ng/tunnelenable
+Type: boolean
+Default: false
+_Description: Allow HTTP tunnels through Apt-Cacher NG?
+ Apt-Cacher NG supports creation of HTTP tunnels that allow the local users to
+ access remote servers without further control of data flow. This method is
+ usually used for direct connections with the https protocol.
+ .
+ This feature is usually disabled for security reasons, enable it only for
+ trusted LAN environments.
