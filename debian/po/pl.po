@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apt-cacher-ng\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2015-03-15 12:39+0100\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
 "PO-Revision-Date: 2014-02-12 17:46+0100\n"
 "Last-Translator: Michał Kułach <michal.kulach@gmail.com>\n"
 "Language-Team: Polish <debian-l10n-polish@lists.debian.org>\n"
@@ -229,15 +229,15 @@ msgstr ""
 #. Description
 #: ../apt-cacher-ng.templates:7001
 msgid ""
-"Apt-Cacher NG supports creation of HTTP tunnels that allow the local users "
-"to access remote servers without further control of data flow. This method "
-"is usually used for direct connections with the https protocol."
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
 msgstr ""
 
 #. Type: boolean
 #. Description
 #: ../apt-cacher-ng.templates:7001
 msgid ""
-"This feature is usually disabled for security reasons, enable it only for "
+"This feature is usually disabled for security reasons; enable it only for "
 "trusted LAN environments."
 msgstr ""

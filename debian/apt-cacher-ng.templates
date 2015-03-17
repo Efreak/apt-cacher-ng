@@ -82,9 +82,9 @@ Template: apt-cacher-ng/tunnelenable
 Type: boolean
 Default: false
 _Description: Allow HTTP tunnels through Apt-Cacher NG?
- Apt-Cacher NG supports creation of HTTP tunnels that allow the local users to
- access remote servers without further control of data flow. This method is
- usually used for direct connections with the https protocol.
+ Apt-Cacher NG can be configured to allow users to create HTTP tunnels,
+ which can be used to access remote servers that might otherwise be
+ blocked by (for instance) a firewall filtering HTTPS connections.
  .
- This feature is usually disabled for security reasons, enable it only for
+ This feature is usually disabled for security reasons; enable it only for
  trusted LAN environments.
