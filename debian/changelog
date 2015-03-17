@@ -2,8 +2,10 @@ apt-cacher-ng (0.8.1-1) UNRELEASED; urgency=low
 
   * New upstream version
     + transition to libsystemd (optionally, closes: #779739)
+    + LTO disabled by default (closes: #777753)
+  * Debconf question to enable CONNECT tunnels (closes: #734581)
 
- -- Eduard Bloch <blade@debian.org>  Wed, 11 Mar 2015 14:27:48 +0100
+ -- Eduard Bloch <blade@debian.org>  Sun, 15 Mar 2015 20:04:18 +0100
 
 apt-cacher-ng (0.8.0-3) unstable; urgency=medium
 
