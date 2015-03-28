@@ -22,7 +22,7 @@ capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 //#define COMPONENT_OPTIONAL "(-[a-z0-9-])"
 //#define PARANOIASOURCE "(\\.orig|\\.debian)"
 
-string spfilepat(INFOLDER ".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST "\\.gpg)$");
+string spfilepat(INFOLDER ".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")\\.gpg$");
 
 string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
