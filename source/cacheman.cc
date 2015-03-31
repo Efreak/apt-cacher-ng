@@ -26,7 +26,9 @@
 
 #include <unistd.h>
 
-//#define DEBUGIDX
+#ifdef DEBUG
+#define DEBUGIDX
+#endif
 
 using namespace std;
 
@@ -35,6 +37,7 @@ static cmstring diffIdxSfx(".diff/Index");
 static cmstring sConstDiffIdxHead(".diff/Index.head");
 static cmstring sPatchBaseRel("_actmp/patch.base");
 static cmstring sPatchResRel("_actmp/patch.result");
+static const string relKey("/Release"), inRelKey("/InRelease");
 static unsigned int nKillLfd=1;
 time_t m_gMaintTimeNow=0;
 
@@ -90,6 +93,7 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 	return false;
 }
 
+// defensive getter/setter methods, don't create non-existing entries
 const tCacheOperation::tIfileAttribs & tCacheOperation::GetFlags(cmstring &sPathRel) const
 {
 	auto it=m_metaFilesRel.find(sPathRel);
@@ -97,7 +101,6 @@ const tCacheOperation::tIfileAttribs & tCacheOperation::GetFlags(cmstring &sPath
 		return attr_dummy_pure;
 	return it->second;
 }
-
 tCacheOperation::tIfileAttribs &tCacheOperation::SetFlags(cmstring &sPathRel)
 {
 	ASSERT(!sPathRel.empty());
@@ -317,7 +320,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 			if(!pResolvedDirectUrl)
 			{
-				SendFmt << "<b>Failed to resolve original URL</b><br>";
+				SendChunkSZ("<b>Failed to resolve original URL</b><br>");
 				return false;
 			}
 		}
@@ -328,10 +331,11 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	{
 		acfg::tRepoResolvResult repinfo;
 		acfg::GetRepNameAndPathResidual(*pResolvedDirectUrl, repinfo);
-		pRepoDesc = repinfo.repodata;
+		auto hereDesc = repinfo.repodata;
 		if(repinfo.repodata && !repinfo.repodata->m_backends.empty())
 		{
 			pResolvedDirectUrl = nullptr;
+			pRepoDesc = hereDesc;
 			sRemoteSuffix = repinfo.sRestPath;
 		}
 	}
@@ -352,7 +356,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		if (IsDeprecatedArchFile(sFilePathRel))
 		{
 			if (NEEDED_VERBOSITY_EVERYTHING)
-				SendFmt << "<i>(no longer available)</i>\n";
+				SendChunkSZ("<i>(no longer available)</i>\n");
 			m_forceKeepInTrash[sFilePathRel] = true;
 			bSuccess = true;
 		}
@@ -364,7 +368,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		{
 			bSuccess = true;
 			if (NEEDED_VERBOSITY_EVERYTHING)
-				SendFmt << "<i>(ignored)</i>\n";
+				SendChunkSZ("<i>(ignored)</i>\n");
 		}
 		else
 			GOTOREPMSG(pFi->GetHttpMsg());
@@ -377,6 +381,50 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if(!bSuccess)
 	{
+		if(pRepoDesc && pRepoDesc->m_backends.empty() && !hor.h[header::XORIG] && !pForcedURL)
+		{
+			// oh, that crap: in a repo, but no backends configured, and no original source
+			// to look at because head file is probably damaged :-(
+			// try to re-resolve relative to InRelease and retry download
+			SendChunkSZ("Warning, running out of download locations (probably corrupted cache). Trying an educated guess...<br>\n");
+			cmstring::size_type pos=sFilePathRel.length();
+			while(true)
+			{
+				pos=sFilePathRel.rfind(CPATHSEPUNX, pos);
+				if(pos == stmiss)
+					break;
+				for(const auto& sfx : {&inRelKey, &relKey})
+				{
+					if(endsWith(sFilePathRel, *sfx))
+						continue;
+
+					auto testpath=sFilePathRel.substr(0, pos) + *sfx;
+					if(GetFlags(testpath).vfile_ondisk)
+					{
+						header hare;
+						if(hare.LoadFromFile(SABSPATH(testpath)+".head")
+								&& hare.h[header::XORIG])
+						{
+							string url(hare.h[header::XORIG]);
+							url.replace(url.size() - sfx->size(), sfx->size(), sFilePathRel.substr(pos));
+							tHttpUrl tu;
+							if(tu.SetHttpUrl(url, false))
+							{
+								SendChunkSZ("Restarting download... ");
+								if(pFi)
+									pFi->ResetCacheState();
+								return Download(sFilePathRel, bIsVolatileFile,
+										msgVerbosityLevel, tFileItemPtr(), &tu);
+							}
+						}
+					}
+				}
+				if(!pos)
+					break;
+				pos--;
+			}
+		}
+
 		if (sErr.empty())
 			sErr = "Download error";
 		if (NEEDED_VERBOSITY_EVERYTHING || m_bVerbose)
@@ -397,8 +445,6 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	return bSuccess;
 }
-
-static const string relKey("/Release"), inRelKey("/InRelease");
 
 #define ERRMSGABORT if(m_nErrorCount && m_bErrAbort) { SendChunk(sErr); return; }
 #define ERRABORT if(m_nErrorCount && m_bErrAbort) { return; }
@@ -670,7 +716,7 @@ bool tCacheOperation::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sRefere
 		}
 	};
 
-	tFileItemPtr p(new tHeadOnlyStorage(sTempDataRel, sReferencePathRel));
+	auto p(make_shared<tHeadOnlyStorage>(sTempDataRel, sReferencePathRel));
 	return (Download(sReferencePathRel, true, eMsgHideAll, p)
 			&& ( (tHeadOnlyStorage*) p.get())->m_nGotSize == nWantedSize);
 }
@@ -767,8 +813,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 			return true;
 		}
 	};
-	tInjectItem *p=new tInjectItem(to, bTryLink);
-	tFileItemPtr pfi(static_cast<fileitem*>(p));
+	auto pfi(make_shared<tInjectItem>(to, bTryLink));
 	// register it in global scope
 	fileItemMgmt fi;
 	if(!fi.RegisterFileItem(pfi))
@@ -776,7 +821,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 		MTLOGASSERT(false, "Couldn't register copy item");
 		return false;
 	}
-	bool bOK = p->Inject(from, *pHead);
+	bool bOK = pfi->Inject(from, *pHead);
 
 	MTLOGASSERT(bOK, "Inject: failed");
 
@@ -930,20 +975,22 @@ void tCacheOperation::UpdateVolatileFiles()
 		return;
 	}
 
+
+	auto dbgState = [&]() {
 #ifdef DEBUGIDX
 	for (auto& f: m_metaFilesRel)
 		SendFmt << "State of " << f.first << ": "
-			<< f.second.alreadyparsed
-			<< f.second.forgiveDlErrors
-			<< f.second.hideDlErrors
-			<< f.second.parseignore
-			<< f.second.space
-			<< f.second.uptodate
-			<< f.second.vfile_ondisk
-			<< f.second.synthesized
-			<< "<br>\n";
+			<< f.second.alreadyparsed << "|"
+			<< f.second.forgiveDlErrors << "|"
+			<< f.second.hideDlErrors << "|"
+			<< f.second.parseignore << "|"
+			<< f.second.space << "|"
+			<< f.second.uptodate << "|"
+			<< f.second.vfile_ondisk << "|"
+			<< f.second.synthesized << "|<br>\n";
 #endif
-
+	};
+	dbgState();
 	typedef unordered_map<string, tContId> tFile2Cid;
 
 	MTLOGDEBUG("<br><br><b>STARTING ULTIMATE INTELLIGENCE</b><br><br>");
@@ -1023,7 +1070,8 @@ void tCacheOperation::UpdateVolatileFiles()
 			string sBase=cid.first.substr(0, cid.first.size()-diffIdxSfx.size());
 			for(auto& suf : compSuffixesAndEmptyByRatio)
 			{
-				if(GetFlags(sBase+suf).vfile_ondisk)
+				const auto& flags=GetFlags(sBase+suf);
+				if(flags.vfile_ondisk)
 					goto has_base;
 			}
 			// ok, not found, enforce any existing one?
@@ -1032,6 +1080,7 @@ void tCacheOperation::UpdateVolatileFiles()
 				if(ContHas(recvr.m_file2cid, (sBase+suf)))
 				{
 					SetFlags(sBase+suf).synthesized=true;
+					LOG("enforcing dl: " << (sBase+suf));
 					break;
 				}
 			}
@@ -1039,7 +1088,7 @@ void tCacheOperation::UpdateVolatileFiles()
 has_base:
 			;
 		}
-
+		dbgState();
 		for(auto if2cid : recvr.m_file2cid)
 		{
 			string sNativeName=if2cid.first.substr(0, FindCompSfxPos(if2cid.first));
@@ -1126,7 +1175,7 @@ strip_next_class:
 	}
 	ERRMSGABORT;
 	dbgDump("Refined (1):", 1);
-
+	dbgState();
 	// Let the most recent files be in the front of the list, but the uncompressed ones have priority
 	for(auto& it: eqClasses)
 	{
@@ -1141,7 +1190,7 @@ strip_next_class:
 			SetFlags(path).bros=&it.second.paths;
 	}
 	dbgDump("Refined (2):", 2);
-
+	dbgState();
 	DelTree(SABSPATH("_actmp")); // do one to test the permissions
 
 	// Iterate over classes and do patch-update where possible
@@ -1313,16 +1362,13 @@ strip_next_class:
 			}
 		}
 
-		// ok, now try to get a good version of that file and install this into needed locations
 NOT_PATCHABLE:
-		/*
-		   if(m_bVerbose)
-		   SendFmt << "Cannot update " << it->first << " by patching, what next?"<<"<br>";
-		   */
+
+		MTLOGDEBUG("ok, now try to get a good version of that file and install this into needed locations");
+
 		// prefer to download them in that order, no uncompressed versions because
 		// mirrors usually don't have them
-		static const string preComp[] = { ".xz", ".lzma", ".bz2", ".gz"};
-		for (auto& ps : preComp)
+		for (auto& ps : compSuffixesByRatio)
 		{
 			for (auto& cand: cid2eqcl->second.paths)
 			{
@@ -1348,6 +1394,8 @@ CONTINUE_NEXT_GROUP:
 	}
 
 	dbgDump("Refined (3):", 3);
+
+	dbgState();
 
 	MTLOGDEBUG("<br><br><b>NOW GET THE REST</b><br><br>");
 

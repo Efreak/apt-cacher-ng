@@ -2,8 +2,8 @@ Source: apt-cacher-ng
 Section: net
 Priority: optional
 Maintainer: Eduard Bloch <blade@debian.org>
-Build-Depends: debhelper (>= 9), cmake (>= 2.6.2), libbz2-dev, zlib1g-dev, liblzma-dev, libfuse-dev [!hurd-i386], pkg-config, libwrap0-dev, lsb-base (>> 3.0-6), dh-systemd (>= 1.5), po-debconf, libssl-dev, libsystemd-daemon-dev [linux-any]
-Standards-Version: 3.9.5
+Build-Depends: debhelper (>= 9), cmake (>= 2.6.2), libbz2-dev, zlib1g-dev, liblzma-dev, libfuse-dev [!hurd-i386], pkg-config, libwrap0-dev, lsb-base (>> 3.0-6), dh-systemd (>= 1.5), po-debconf, libssl-dev, libsystemd-dev (>= 210) [linux-any] | libsystemd-daemon-dev [linux-any]
+Standards-Version: 3.9.6
 Homepage: http://www.unix-ag.uni-kl.de/~bloch/acng/
 
 Package: apt-cacher-ng

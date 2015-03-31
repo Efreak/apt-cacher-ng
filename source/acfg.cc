@@ -102,7 +102,7 @@ MapNameToString n2sTbl[] = {
 		,{  "VfilePatternEx",          &vfilepatEx}
 		,{  "PfilePatternEx",          &pfilepatEx}
 		,{  "WfilePatternEx",          &wfilepatEx}
-		,{  "SPfilePattern",           &spfilepatEx}
+		,{  "SPfilePatternEx",         &spfilepatEx}
 //		,{  "AdminAuth",               &adminauth}
 		,{  "BindAddress",             &bindaddr}
 		,{  "UserAgent",               &agentname}
@@ -385,8 +385,13 @@ tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
 				{
 					auto nam(GetBaseName(s));
 					if(bAddDefault)
-						nam.erase(nam.size()-8);
+					nam.erase(nam.size()-8);
+#if __GNUC__ >= 4 && __GNUC_MINOR__ < 8
+					if(bname2path.find(nam) == bname2path.end())
+						bname2path[nam]=s;
+#else
 					bname2path.emplace(nam, s);
+#endif
 				}
 
 			}
@@ -807,7 +812,7 @@ void GetRepNameAndPathResidual(const tHttpUrl & in, tRepoResolvResult &result)
 const tRepoData * GetRepoData(cmstring &vname)
 {
 	auto it=repoparms.find(vname);
-	if(it==repoparms.end() || it->second.m_backends.empty())
+	if(it==repoparms.end())
 		return nullptr;
 	return & it->second;
 }
@@ -1160,7 +1165,7 @@ void PostProcConfig(bool bDumpConfig)
 
 #ifndef DEBUG
    if(acfg::debug >= LOG_DEBUG)
-	   cerr << "\n\nAdditional debugging information not compiled in." << endl << endl;
+	   cerr << "\n\nAdditional debugging information not compiled in.\n\n";
 #endif
    
 #if 0 //def DEBUG
@@ -1230,6 +1235,7 @@ time_t BackgroundCleanup()
 	return ret;
 }
 
+#ifdef SUPPWHASH
 #ifdef HAVE_SSL
 bool DecodeBase64(LPCSTR pAscii, acbuf& binData) {
 	if(!pAscii)
@@ -1247,6 +1253,7 @@ bool DecodeBase64(LPCSTR pAscii, acbuf& binData) {
 	checkForceFclose(memStrm);
 	return binData.size();
 }
+#endif
 #endif
 
 lockable authLock;
@@ -1379,6 +1386,7 @@ eMatchType GetFiletype(const string & in)
 }
 
 #ifndef MINIBUILD
+
 inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool bRecursiveCall)
 {
 	auto & patvec = (NOCACHE_TGT == type) ? vecTgtPatterns : vecReqPatters;
@@ -1466,3 +1474,19 @@ void mkbasedir(const string & path)
     }
 }
 
+#ifndef MINIBUILD
+LPCSTR ReTest(LPCSTR s)
+{
+	static LPCSTR names[rechecks::ematchtype_max] =
+	{
+				"FILE_SOLID", "FILE_VOLATILE",
+				"FILE_WHITELIST",
+				"NASTY_PATH", "PASSTHROUGH",
+				"FILE_SPECIAL_SOLID"
+	};
+	auto t = rechecks::GetFiletype(s);
+	if(t<0 || t>=rechecks::ematchtype_max)
+		return "NOMATCH";
+	return names[t];
+}
+#endif

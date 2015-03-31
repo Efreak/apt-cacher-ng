@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apt-cacher-ng 0.7.26\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2014-01-27 06:52+0100\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
 "PO-Revision-Date: 2014-03-22 12:33 +0100\n"
 "Last-Translator: Eduard Bloch <blade@debian.org>\n"
 "Language-Team: German <debian-l10n-german@lists.debian.org>\n"
@@ -211,6 +211,29 @@ msgstr ""
 msgid ""
 "If this field is left empty, Apt-Cacher NG will not use any proxy server."
 msgstr "Ein leerer Eintrag hier bedeutet Zugriff ohne Proxy."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid "Allow HTTP tunnels through Apt-Cacher NG?"
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
+msgstr ""
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"This feature is usually disabled for security reasons; enable it only for "
+"trusted LAN environments."
+msgstr ""
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

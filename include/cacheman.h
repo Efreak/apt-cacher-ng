@@ -63,11 +63,17 @@ protected:
 	};
 	struct tIfileAttribs
 	{
-		bool vfile_ondisk=false, uptodate=false, parseignore=false, hideDlErrors=false,
-				forgiveDlErrors=false, alreadyparsed=false, synthesized=false;
+		bool vfile_ondisk:1, uptodate:1, parseignore:1, hideDlErrors:1,
+				forgiveDlErrors:1, alreadyparsed:1, synthesized:1;
 		enumMetaType eIdxType = EIDX_UNSUPPORTED;
 		const tStrDeq *bros = nullptr;
 		off_t space = 0;
+		inline tIfileAttribs() :
+				vfile_ondisk(false), uptodate(false),
+				parseignore(false), hideDlErrors(false),
+				forgiveDlErrors(false), alreadyparsed(false),
+				synthesized(false)
+		{};
 	};
 
 	std::unordered_map<mstring,tIfileAttribs> m_metaFilesRel;
@@ -168,6 +174,7 @@ static cmstring compSuffixes[] = { ".bz2", ".gz", ".lzma", ".xz"};
 static cmstring compSuffixesAndEmpty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
 static cmstring compSuffixesAndEmptyByLikelyhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
 static cmstring compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
+static cmstring compSuffixesByRatio[] = { ".xz", ".lzma", ".bz2", ".gz"};
 
 bool CompDebVerLessThan(cmstring &s1, cmstring s2);
 extern time_t m_gMaintTimeNow;

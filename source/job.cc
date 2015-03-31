@@ -66,21 +66,22 @@ public:
 		m_bAllowStoreData=false;
 		m_nSizeChecked = m_nSizeSeen = 0;
 	};
-	virtual FiStatus Setup(bool)
+	virtual FiStatus Setup(bool) override
 	{
 		m_nSizeChecked = m_nSizeSeen = 0;
 		return m_status = FIST_INITED;
 	}
-	virtual int GetFileFd() { return SPECIAL_FD; }; // something, don't care for now
+	virtual int GetFileFd() override
+			{ return SPECIAL_FD; }; // something, don't care for now
 	virtual bool DownloadStartedStoreHeader(const header & h, const char *,
-			bool, bool&)
+			bool, bool&) override
 	{
 		setLockGuard;
 		m_head=h;
 		m_status=FIST_DLGOTHEAD;
 		return true;
 	}
-	virtual bool StoreFileData(const char *data, unsigned int size)
+	virtual bool StoreFileData(const char *data, unsigned int size) override
 	{
 		setLockGuard;
 
@@ -120,7 +121,7 @@ public:
 		}
 		return true;
 	}
-	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow)
+	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow) override
 	{
 		setLockGuard;
 
@@ -135,7 +136,7 @@ public:
 		if(!m_nSizeChecked)
 			return 0;
 
-		ssize_t r = write(out_fd, m_pData, min(nMax2SendNow, m_nConsumable));
+		auto r = write(out_fd, m_pData, min(nMax2SendNow, m_nConsumable));
 		if (r < 0 && (errno == EAGAIN || errno == EINTR)) // harmless
 			r = 0;
 		if(r<0)
@@ -159,7 +160,9 @@ public:
 class tGeneratedFitemBase : public fileitem
 {
 public:
-	virtual int GetFileFd() { return SPECIAL_FD; }; // something, don't care for now
+	virtual int GetFileFd() override
+	{ return SPECIAL_FD; }; // something, don't care for now
+
 	tSS m_data;
 
 	tGeneratedFitemBase(const string &sFitemId, const char *szFrontLineMsg) : m_data(256)
@@ -172,10 +175,11 @@ public:
 		m_head.set(header::CONTENT_TYPE, WITHLEN("text/html") );
 	}
 	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow)
+	override
 	{
 		if (m_status > FIST_COMPLETE || out_fd<0)
 			return -1;
-		int r = m_data.syswrite(out_fd, nMax2SendNow);
+		auto r = m_data.syswrite(out_fd, nMax2SendNow);
 		if(r>0) nSendPos+=r;
 		return r;
 	}
@@ -186,8 +190,10 @@ public:
 		m_head.set(header::CONTENT_LENGTH, m_nSizeChecked);
 	}
 	// never used to store data
-	bool DownloadStartedStoreHeader(const header &, const char *, bool, bool&) {return false;};
-	bool StoreFileData(const char *, unsigned int) {return false;};
+	bool DownloadStartedStoreHeader(const header &, const char *, bool, bool&)
+	override
+	{return false;};
+	bool StoreFileData(const char *, unsigned int) override {return false;};
 	header & HeadRef() { return m_head; }
 };
 
@@ -205,7 +211,7 @@ ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count)
 		return -1;
 	while(count>0)
 	{
-		ssize_t readcount=read(in_fd, buf, min(count, sizeof(buf)));
+		auto readcount=read(in_fd, buf, min(count, sizeof(buf)));
 		if(readcount<=0)
 		{
 			if(errno==EINTR || errno==EAGAIN)
@@ -218,17 +224,15 @@ ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count)
 		totalcnt+=readcount;
 		count-=readcount;
 		
-		ssize_t nPos(0);
-		while(nPos<readcount)
+		for(decltype(readcount) nPos(0);nPos<readcount;)
 		{
-			ssize_t r=write(out_fd, buf+nPos, readcount-nPos);
+			auto r=write(out_fd, buf+nPos, readcount-nPos);
 			if(r==0) continue; // not nice but needs to deliver it
 			if(r<0)
 			{
 				if(errno==EAGAIN || errno==EINTR)
 					continue;
-				else
-					return r;
+				return r;
 			}
 			nPos+=r;
 		}
@@ -442,7 +446,7 @@ inline void job::HandleLocalDownload(const string &visPath,
 			if(!sMimeType.empty())
 				m_head.set(header::CONTENT_TYPE, sMimeType);
 		};
-		virtual int GetFileFd()
+		virtual int GetFileFd() override
 		{
 			int fd=open(m_sPathRel.c_str(), O_RDONLY);
 		#ifdef HAVE_FADVISE
@@ -942,7 +946,7 @@ job::eJobResult job::SendData(int confd)
 					MYTRY
 					{
 						ldbg("prebuf sending: "<< m_sendbuf.c_str());
-						int r=send(confd, m_sendbuf.rptr(), m_sendbuf.size(),
+						auto r=send(confd, m_sendbuf.rptr(), m_sendbuf.size(),
 								m_backstate == STATE_TODISCON ? 0 : MSG_MORE);
 						if (r<0)
 						{

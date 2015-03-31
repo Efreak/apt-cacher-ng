@@ -110,7 +110,7 @@ void tSpecOpDetachable::Run()
 		pTracked=g_pTracker.lock();
 		if(!pTracked) // ok, not running yet -> become the log source then
 		{
-			m_pTracker.reset(new tProgressTracker);
+			m_pTracker = make_shared<tProgressTracker>();
 			msg.clear();
 			time_t nMaintId=time(0);
 

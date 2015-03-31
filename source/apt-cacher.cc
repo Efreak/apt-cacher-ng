@@ -310,6 +310,7 @@ int main(int argc, char **argv)
 
 	// preprocess some startup related parameters
 	bool bForceCleanup(false);
+	LPCSTR pReTest(nullptr);
 	for (char **p=argv+1; p<argv+argc; p++)
 	{
 		if (!strncmp(*p, "-h", 2))
@@ -347,6 +348,13 @@ int main(int argc, char **argv)
 		{
 			bDumpCfg=true;
 		}
+		else if (!strcmp(*p, "--retest"))
+		{
+			++p;
+			if(p>=argv+argc)
+				exit(EXIT_FAILURE);
+			pReTest=*p;
+		}
 		else if(**p) // not empty
 		{
 			if(!acfg::SetOption(*p, false))
@@ -379,6 +387,12 @@ int main(int argc, char **argv)
 
 	if(bDumpCfg)
 		exit(EXIT_SUCCESS);
+	if(pReTest)
+	{
+		LPCSTR ReTest(LPCSTR);
+		std::cout << ReTest(pReTest) << std::endl;
+		exit(EXIT_SUCCESS);
+	}
 
 	SetupCacheDir();
 
@@ -426,6 +440,7 @@ static void usage() {
 		"-c: configuration directory\n"
 		"-e: on startup, run expiration once\n"
 		"-p: print configuration and exit\n"
+		"--retest string: regular expression tester"
 #if SUPPWHASH
 		"-H: read a password from STDIN and print its hash\n"
 #endif
@@ -537,28 +552,28 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 				m_bAllowStoreData=false;
 				m_nSizeChecked = m_nSizeSeen = 0;
 			};
-			virtual FiStatus Setup(bool)
+			virtual FiStatus Setup(bool) override
 			{
 				m_nSizeChecked = m_nSizeSeen = 0;
 				return m_status = FIST_INITED;
 			}
-			virtual int GetFileFd() { return 1; }; // something, don't care for now
-			virtual bool DownloadStartedStoreHeader(const header & h, const char *,
-					bool, bool&)
+			virtual int GetFileFd() override { return 1; }; // something, don't care for now
+			virtual bool DownloadStartedStoreHeader(const header &, const char *,
+					bool, bool&) override
 			{
 				return true;
 			}
-			virtual bool StoreFileData(const char *data, unsigned int size)
+			virtual bool StoreFileData(const char *data, unsigned int size) override
 			{
 				return (size==fwrite(data, sizeof(char), size, stdout));
 			}
-			ssize_t SendData(int , int, off_t &, size_t )
+			ssize_t SendData(int , int, off_t &, size_t ) override
 			{
 				return 0;
 			}
 	};
 
-	tFileItemPtr fi((fileitem*)new tPrintItem);
+	auto fi=std::make_shared<tPrintItem>();
 	dl.AddJob(fi, &url, nullptr, nullptr);
 	dl.WorkLoop();
 	return (fi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
