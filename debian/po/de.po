@@ -216,7 +216,7 @@ msgstr "Ein leerer Eintrag hier bedeutet Zugriff ohne Proxy."
 #. Description
 #: ../apt-cacher-ng.templates:7001
 msgid "Allow HTTP tunnels through Apt-Cacher NG?"
-msgstr ""
+msgstr "HTTP-Tunnel durch Apt-Cacher NG erlauben?"
 
 #. Type: boolean
 #. Description
@@ -226,6 +226,10 @@ msgid ""
 "can be used to access remote servers that might otherwise be blocked by (for "
 "instance) a firewall filtering HTTPS connections."
 msgstr ""
+"Apt-Cacher NG kann mit entsprechender Konfiguration normalen Benutzern "
+"ermöglichen, direkten Zugriff auf entfernte Systeme über HTTP-Tunnel "
+"aufzubauen, auch wenn dies sonst (z.B. durch eine HTTPS-blockierende "
+"Firewall) unterbunden wird."
 
 #. Type: boolean
 #. Description
@@ -234,6 +238,8 @@ msgid ""
 "This feature is usually disabled for security reasons; enable it only for "
 "trusted LAN environments."
 msgstr ""
+"Diese Funktionalität ist aus Sicherheitsgründen normalerweise ausgeschaltet "
+"und sollte nur in vertrauenswürdigen LANs aktiviert werden."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "
