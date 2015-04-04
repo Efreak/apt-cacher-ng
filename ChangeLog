@@ -3,6 +3,8 @@ apt-cacher-ng (0.8.1) JUST-A-LITTLE-BIT; urgency=low
   [Eduard Bloch]
   * Minor build system improvements
   * Mirror database update
+  * Added .o files to volatile file name pattern (LP: #1078224)
+  * LTO disabled by default (Debian bug #777753)
   * Simple regex testing helper
   * Add handling of http://keyserver.ubuntu.com:11371/pks/lookup?op=get...
     calls to volatile file pattern (LP: #993426)
