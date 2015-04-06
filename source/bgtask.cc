@@ -48,9 +48,8 @@ cmstring& GetFooter()
 	if(footer.empty())
 	{
 		footer = string("<hr><address>Server: ") + acfg::agentname +
-		" | <a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">"
-			"Flattr it!</a> | <a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">"
-			"Apt-Cacher NG homepage</a></address>";
+		"&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">Flattr this!"
+    "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
 	}
 	return footer;
 }
