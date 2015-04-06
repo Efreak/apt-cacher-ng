@@ -28,7 +28,7 @@
                      it in apt.conf or related configuration files, see
                      apt.conf manual page for details. Server and Port need to match
                      the values used to visit this page. For example,
-                     edit&nbsp;<i>/etc/apt/apt.conf</i> and add the line:
+                     edit&nbsp;<i>/etc/apt/apt.conf</i> (or create a new file called like <i>/etc/apt/apt.conf.d/00aptproxy</i>) and add the line:
                      <p />
             <div class="rawstyle">Acquire::http { Proxy "http://${serverip}:${cfg:port}"; };</div>
                      <p />
