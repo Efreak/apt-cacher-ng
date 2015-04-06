@@ -132,6 +132,7 @@ tStrPos findHostStart(const mstring & sUri);
 #endif
 
 #define WITHLEN(x) x, (_countof(x)-1)
+#define MAKE_PTR_0_LEN(x) x, 0, (_countof(x)-1)
 
 //extern mstring sPathSep, sPathSepUnix, sCR, sCRLF;
 
@@ -159,6 +160,7 @@ tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool b
 bool ParseKeyValLine(const mstring & sIn, mstring & sOutKey, mstring & sOutVal);
 #define keyEq(a, b) (0 == strcasecmp((a), (b).c_str()))
 
+static cmstring PROT_PFX_HTTPS("https://"), PROT_PFX_HTTP("http://");
 
 class tHttpUrl
 {
@@ -166,17 +168,19 @@ public:
 	bool SetHttpUrl(cmstring &uri, bool unescape = true);
 	mstring ToURI(bool bEscaped) const;
 	mstring sHost, sPath, sUserPass;
+
 #ifdef HAVE_SSL
 	bool bSSL=false;
-#endif
-	inline cmstring GetProtoPrefix() const
+	inline cmstring & GetProtoPrefix() const
 	{
-		return
-#ifdef HAVE_SSL
-			bSSL ? "https://" :
-#endif
-					"http://";
+		return bSSL ? PROT_PFX_HTTPS : PROT_PFX_HTTP;
 	}
+#else
+	inline cmstring & GetProtoPrefix() const
+	{
+		return PROT_PFX_HTTP;
+	}
+#endif
 
 	tHttpUrl & operator=(const tHttpUrl &a) 
 	{

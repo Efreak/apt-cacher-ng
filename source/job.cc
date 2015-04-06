@@ -532,18 +532,18 @@ void job::PrepareDownload() {
 
     // "clever" file system browsing attempt?
 	if(rechecks::Match(sReqPath, rechecks::NASTY_PATH)
-			|| stmiss != sReqPath.find("/_actmp")
+			|| stmiss != sReqPath.find(MAKE_PTR_0_LEN("/_actmp"))
 			|| startsWithSz(sReqPath, "/_"))
 		goto report_notallowed;
 
     MYTRY
 	{
+		if (startsWithSz(sReqPath, "/HTTPS///"))
+			sReqPath.replace(0, 6, PROT_PFX_HTTPS);
+		// special case: proxy-mode AND special prefix are there
+		if (startsWithSz(sReqPath, "http://HTTPS///"))
+			sReqPath.replace(0, 13, PROT_PFX_HTTPS);
 
-		if (0==sReqPath.compare(0, 12, "apt-cacher?/"))
-		sReqPath.erase(0, 12);
-		if (0==sReqPath.compare(0, 11, "apt-cacher/"))
-		sReqPath.erase(11);
-		
 		if(!theUrl.SetHttpUrl(sReqPath, false))
 		{
 			m_eMaintWorkType=tSpecialRequest::workUSERINFO;
@@ -551,6 +551,7 @@ void job::PrepareDownload() {
 		}
 		LOG("refined path: " << theUrl.sPath << "\n on host: " << theUrl.sHost);
 
+		// extract the actual port from the URL
 		char *pEnd(0);
 		uint nPort = 80;
 		LPCSTR sPort=theUrl.GetPort().c_str();
@@ -561,17 +562,16 @@ void job::PrepareDownload() {
 				goto report_invport;
 		}
 
-		// if no filter set, it must be 80; with filter, it must be therein
-		if( (acfg::pUserPorts && ! acfg::pUserPorts->test(nPort)) // alarm
-				|| (!acfg::pUserPorts && nPort != 80))
+		if(acfg::pUserPorts)
 		{
-			/*if(acfg::port == tUrl.sPort) // admin failed to RTFM?
-				goto report_doubleproxy;*/
-			goto report_invport;
+			if(!acfg::pUserPorts->test(nPort))
+				goto report_invport;
 		}
+		else if(nPort != 80)
+			goto report_invport;
 
 		// kill multiple slashes
-		for(tStrPos pos; stmiss != (pos = theUrl.sPath.find("//")); )
+		for(tStrPos pos=0; stmiss != (pos = theUrl.sPath.find("//", pos, 2)); )
 			theUrl.sPath.erase(pos, 1);
 
 		bPtMode=rechecks::MatchUncacheable(theUrl.ToURI(false), rechecks::NOCACHE_REQ);
