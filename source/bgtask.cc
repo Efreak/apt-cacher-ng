@@ -48,9 +48,11 @@ cmstring& GetFooter()
 	if(footer.empty())
 	{
 		footer = string("<hr><address>Server: ") + acfg::agentname +
-		" | <a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">"
-			"Flattr it!</a> | <a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">"
-			"Apt-Cacher NG homepage</a></address>";
+		"&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">"
+    "<!-- http://api.flattr.com/button/flattr-badge-large.png on 2015-04-06 -->"
+			"<img border=0  style='height:15px;margin-bottom:-4px;margin-right:-1px;' alt=\"Flattr this!\" "
+    " src=\"data:image/png;base64,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\"/>"
+    "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
 	}
 	return footer;
 }
