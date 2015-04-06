@@ -20,9 +20,9 @@ public:
 	
 protected:
 	// FileHandler
-	bool ProcessRegular(const mstring &sPath, const struct stat &);
+	bool ProcessRegular(const mstring &sPath, const struct stat &) override;
 	//bool ProcessOthers(const mstring &sPath, const struct stat &);
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry);
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override;
 	void _LoadKeyCache();
 
 private:
