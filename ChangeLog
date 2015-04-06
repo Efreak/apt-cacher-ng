@@ -8,6 +8,7 @@ apt-cacher-ng (0.8.1) JUST-A-LITTLE-BIT; urgency=low
   * Simple regex testing helper
   * Add handling of http://keyserver.ubuntu.com:11371/pks/lookup?op=get...
     calls to volatile file pattern (LP: #993426)
+  * Added special method to tell the server to switch to HTTPS transport
 
   [Carlos Maddela]
   * Fixed support for SPfilePatternEx and improved documentation

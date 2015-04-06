@@ -2043,15 +2043,15 @@ int parseidx_demo(LPCSTR file)
 		{
 			return !ParseAndProcessMetaFile(*this, file, GuessMetaTypeFromURL(file));
 		}
-		virtual void HandlePkgEntry(const tRemoteFileInfo &entry)
+		virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override
 		{
 			cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
 					<< "Checksum-" << entry.fpr.GetCsName() << ": " << entry.fpr.GetCsAsString()
 					<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
 		}
-		virtual bool ProcessRegular(const mstring &, const struct stat &) {return true;}
-		virtual bool ProcessOthers(const mstring &, const struct stat &) {return true;}
-		virtual bool ProcessDirAfter(const mstring &, const struct stat &) {return true;}
+		virtual bool ProcessRegular(const mstring &, const struct stat &) override {return true;}
+		virtual bool ProcessOthers(const mstring &, const struct stat &) override {return true;}
+		virtual bool ProcessDirAfter(const mstring &, const struct stat &) override {return true;}
 		virtual void Action() override {};
 	}
 	mgr;

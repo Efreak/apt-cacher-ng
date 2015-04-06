@@ -17,17 +17,18 @@
 <ul>
 <li><a href="#imp">8.1 Package import</a></li>
 <li><a href="#cache-overview">8.2 Cache overview</a></li>
-<li><a href="#jigdo">8.3 JIGDO usage</a></li>
-<li><a href="#prob-proxy">8.4 Avoid use of apt-cacher-ng for certain hosts</a></li>
-<li><a href="#howto-dontcache1">8.5 Avoid caching for certain domains or certain file types</a></li>
-<li><a href="#howto-faster">8.6 How to make big download series faster</a></li>
-<li><a href="#howto-importiso">8.7 How to import DVDs or ISO images</a></li>
-<li><a href="#howto-importdisk">8.8 How to integrate DVDs or ISO image data</a></li>
-<li><a href="#howto-hooks">8.9 How to execute commands before and after going online?</a></li>
-<li><a href="#howto-interfaces">8.10 Listen to only specific interfaces or IP protocols</a></li>
-<li><a href="#howto-outproto">8.11 How to avoid use of IPv4 (or IPv6) where possible?</a></li>
-<li><a href="#howto-acngfs">8.12 Use the proxy without storing all data twice</a></li>
-<li><a href="#mirroring">8.13 Partial Mirroring</a></li>
+<li><a href="#ssluse">8.3 Access to SSL/TLS remotes (HTTPS)</a></li>
+<li><a href="#jigdo">8.4 JIGDO usage</a></li>
+<li><a href="#prob-proxy">8.5 Avoid use of apt-cacher-ng for certain hosts</a></li>
+<li><a href="#howto-dontcache1">8.6 Avoid caching for certain domains or certain file types</a></li>
+<li><a href="#howto-faster">8.7 How to make big download series faster</a></li>
+<li><a href="#howto-importiso">8.8 How to import DVDs or ISO images</a></li>
+<li><a href="#howto-importdisk">8.9 How to integrate DVDs or ISO image data</a></li>
+<li><a href="#howto-hooks">8.10 How to execute commands before and after going online?</a></li>
+<li><a href="#howto-interfaces">8.11 Listen to only specific interfaces or IP protocols</a></li>
+<li><a href="#howto-outproto">8.12 How to avoid use of IPv4 (or IPv6) where possible?</a></li>
+<li><a href="#howto-acngfs">8.13 Use the proxy without storing all data twice</a></li>
+<li><a href="#mirroring">8.14 Partial Mirroring</a></li>
 </ul></li>
 </ul>
 <h1><a name="howtos"></a>Chapter 8: HOWTOs and FAQ</h1>
@@ -127,7 +128,37 @@ WARNING: The removal action would wipe out whole directories containing
          index files. Select d to see detailed list.
 
 </code></pre>
-<h2><a name="jigdo"></a>8.3 JIGDO usage</h2>
+<h2><a name="ssluse"></a>8.3 Access to SSL/TLS remotes (HTTPS)</h2>
+<p>
+It is possible to have encrypted access to remote sites via HTTPS protocol with recent versions of apt-cacher-ng if the OpenSSL support was enabled at compile time. However this leads certain side effects and complications; due to the nature of the HTTPS connection model, it is not possible to act as an intermediate server (e.g. caching proxy) by the same rules as with HTTP:
+</p>
+<ul><li>
+SSL ensures strict verification of remote host name. Therefore, you cannot add an URL to sources.list and make them point to "hostname of acng server": the download client would expect the remote site to offer the certificate of "hostname of acng server" but the certificate of the remote server would be used.
+</li>
+<li>
+This restriction also applies if the LAN admin somehow manages to trick the client that it connects to the remote site but the real connection is silently rerouted to the local server: since the proxy in the middle cannot fake the real certificate it would need to create a custom one but that manipulation usually cannot go unnoticed by the client unless some local hack disables or manipulates the certificate verification. All parts of this should be considered a crude hack and won't be described here in detail. In fact, apt-cacher-ng does not implement local SSL server functionality (as of version 0.8.1), partly because of these considerations.
+</li>
+<li>
+If the client assumes that it needs to access a HTTPS remote server through a HTTP proxy, it usually goes for the HTTP tunneling (see the <a href="http://en.wikipedia.org/wiki/HTTP_tunnel">Wikipedia article</a> for details). This is a well-known and widely-used method but it comes with some disadvantages: the proxy has no control of the data flowing through it so the proxy cannot cache the data in any useful way; in environments with additional security restrictions, it's also hard to identify malicious users that abuse the service for illegitimate purposes.
+</li>
+</ul>
+<p>
+Considering these difficulties, there are three (and a half) methods to use SSL.
+</p>
+<ul><li>
+First, the "half method" - not using the proxy at all, configuring each client to not use the HTTP proxy for HTTPS urls. This will obviously disable central caching and requires the client has separated configuration options to set this. For Debian based distros, this can be done by adding a configuration like this: <code>Acquire::https::proxy "DIRECT";</code> to apt.conf or one of the apt.conf.d files. See <a href="#prob-proxy">section 8.5</a> for further information.
+</li>
+<li>
+The "backend configuration method": if the clients access the remote sites through URLs remapped on the server, the cacher admin can add https URLs to backend lists instead of http urls. Data will be cached just like usual.
+</li>
+<li>
+The "laissez-faire method": in acng.conf (or related) configure the <code>PassThroughPattern</code> option to contain a regex like <code>.*</code> and configure the clients to use apt-cacher-ng as HTTP proxy and let the clients connect to https URLs "as usual". Some limited access control can be achieved through adjustment of the regular expression (.* permits access to any host and any port, including 443 for https). Data is not cached on the server.
+</li>
+<li>
+The "tell-me-what-you-need method": on the client side, modify the access URLs and change https to http and put the string "HTTPS///" between http:// and the host name. With this trick, the user client will access the proxy like going for a usual HTTP download and the proxy will continue with the remote URL using the https scheme. Caching (and file merging to repositories) will work, flexibility for the user remains. The disadvantages of this method are basically the same as with the access URLs rewriting (see <a href="config-servquick.html#config-client">Section 3.2</a>) but the method is still the preferred one by the apt-cacher-ng author.
+</li>
+</ul>
+<h2><a name="jigdo"></a>8.4 JIGDO usage</h2>
 <p>
 It's possible to use apt-cacher-ng source with the jigdo-lite utility. There are some limitations, though:
 </p>
@@ -156,18 +187,18 @@ i.e. construct the same URL as present in usual apt-cacher-ng's user's sources.l
 <p>
 That's all, jigdo-lite will fetch the package files using apt-cacher-ng proxy.
 </p>
-<h2><a name="prob-proxy"></a>8.4 Avoid use of apt-cacher-ng for certain hosts</h2>
+<h2><a name="prob-proxy"></a>8.5 Avoid use of apt-cacher-ng for certain hosts</h2>
 <p>
 Sometimes clients might need to access some remote side directly to do some non-file-transfer oriented work but still passing the data through configured apt-cacher-ng proxy. Such remote hosts can be marked for direct access in apt configuration, e.g. in <code>/etc/apt/apt.conf</code>:
 </p>
 <pre><code>Acquire::HTTP::Proxy::archive.example.org "DIRECT";
 //or Acquire::HTTP::Proxy::archive.example.org  "other.proxy:port"
 </code></pre>
-<h2><a name="howto-dontcache1"></a>8.5 Avoid caching for certain domains or certain file types</h2>
+<h2><a name="howto-dontcache1"></a>8.6 Avoid caching for certain domains or certain file types</h2>
 <p>
 Sometimes clients to download through apt-cacher-ng but the data shall not be stored on the harddisk of the server. To get it, use the DontCache directive (see examples for details) to define such files.
 </p>
-<h2><a name="howto-faster"></a>8.6 How to make big download series faster</h2>
+<h2><a name="howto-faster"></a>8.7 How to make big download series faster</h2>
 <p>
 Symptom: A common situation is a periodic download of hundreds of files through apt-cacher-ng where just a half is present in the cache. Although caching works fine, there are visible delays on some files during the download.
 </p>
@@ -180,9 +211,9 @@ Possible cause and relief: the download from the real mirror gets interrupted wh
 <p>
 there is a higher chance to get the server connection "preheated" before a stall occurs.
 </p>
-<h2><a name="howto-importiso"></a>8.7 How to import DVDs or ISO images</h2>
+<h2><a name="howto-importiso"></a>8.8 How to import DVDs or ISO images</h2>
 <p>
-First, it should be clear what is needed to be done. In order to integrate the packages from a DVD or ISO image, read on in <a href="#howto-importdisk">section 8.8</a>.
+First, it should be clear what is needed to be done. In order to integrate the packages from a DVD or ISO image, read on in <a href="#howto-importdisk">section 8.9</a>.
 </p>
 <p>
 The situation with ISO files import is complicated. They are not supported by the cache and there is also no expiration mode for them. The feature might be considered for addition in some future release of apt-cacher-ng.
@@ -190,7 +221,7 @@ The situation with ISO files import is complicated. They are not supported by th
 <p>
 What is possible now is publishing a directory with ISO files using its web server mode, see <code>LocalDirs</code> config option for details.
 </p>
-<h2><a name="howto-importdisk"></a>8.8 How to integrate DVDs or ISO image data</h2>
+<h2><a name="howto-importdisk"></a>8.9 How to integrate DVDs or ISO image data</h2>
 <p>
 Integrating package files from DVD or ISO images is not much different to the usual import operation, see above for instructions.
 </p>
@@ -203,13 +234,13 @@ One possible way to get files into the <code>_import</code> directory is simply 
 After running the import operation, the disk can be umounted and removed.
 </p>
 <p>
-A possible variation is import via symlinks. This can make sense when the space consumption must be reduced and the ISO image should stay on the server for a long time. To achive this, the image should be mounted at some mount point outside of the <code>_import</code> directory, the state should be set permanently via an /etc/fstab entry (don't forget the loop option), then a symlink tree pointing to the mountpoint location should be created in the <code>_import</code> directory (something like <code>cp -as /mnt/image_sarge_01/pool /var/cache/apt-cacher-ng/_import</code>). The subsequent "import" operation should pick up the symlinks and keep them symlinks instead of making file copies.
+A possible variation is import via symlinks. This can make sense where the space consumption must be reduced and the ISO image should stay on the server for a long time. To achive this, the image should be mounted at some mount point outside of the <code>_import</code> directory; the mounted state should be made permanent, maybe via an /etc/fstab entry with the loop option; then a symbolic link tree pointing to the mountpoint location should be created in the <code>_import</code> directory (something like <code>cp -as /mnt/image_jessie_01/pool /var/cache/apt-cacher-ng/_import/</code>). The subsequent "import" operation should pick up the symlinks and continue using them as links istead of file copies.
 </p>
-<h2><a name="howto-hooks"></a>8.9 How to execute commands before and after going online?</h2>
+<h2><a name="howto-hooks"></a>8.10 How to execute commands before and after going online?</h2>
 <p>
 It is possible to configure custom commands which are executed before the internet connection attempt and after a certain period after closing the connection. The commands are bound to a remapping configuration and the config file is named after the name of that remapping config, like <code>debrep.hooks</code> for <code>Remap-debrep</code>. See <a href="config-serv.html#remap-trickz">section 4.3.2</a>, <code>conf/*.hooks</code> and <code>/usr/share/doc/apt-cacher-ng/examples/*.hooks</code> files for details.
 </p>
-<h2><a name="howto-interfaces"></a>8.10 Listen to only specific interfaces or IP protocols</h2>
+<h2><a name="howto-interfaces"></a>8.11 Listen to only specific interfaces or IP protocols</h2>
 <p>
 Unless configured explicitely, the server listens to any interface with IPv4 or IPv6 protocol. To disable some of this, use the <code>BindAddress</code> option. It should contain a list of IP adresseses associated with particular network interfaces, separated by space. When option is set then the server won't listen to addresses or protocols not included there.
 </p>
@@ -219,11 +250,11 @@ To limit to specific IP protocol, the address should only be present in the prot
 <p>
 The usual wildcard addresses can also be used to match all interfaces configured for the specific protocol, like 0.0.0.0 for IPv4.
 </p>
-<h2><a name="howto-outproto"></a>8.11 How to avoid use of IPv4 (or IPv6) where possible?</h2>
+<h2><a name="howto-outproto"></a>8.12 How to avoid use of IPv4 (or IPv6) where possible?</h2>
 <p>
 Usually, outgoing hosts are accessed by the protocol and with the target IP reported as the first candidate by operating system facilities (getaddrinfo). It is possible to change this behavior, i.e. to skip IPv6 or IPv4 versions or try IPv6 connection first and then use IPv4 as alternative (or vice versa). See option <em>ConnectProto</em> in configuration examples.
 </p>
-<h2><a name="howto-acngfs"></a>8.12 Use the proxy without storing all data twice</h2>
+<h2><a name="howto-acngfs"></a>8.13 Use the proxy without storing all data twice</h2>
 <p>
 There is a general use case where the data storing behavior of APT is not so fortunate. Imagine an old laptop with a slow and small harddisk but a modern network connection (i.e. Cardbus-attached WLAN card). But there is not enough space for APT to store the downloaded packages on the local disk, or not enough to perform the upgrade afterwards.
 </p>
@@ -236,7 +267,7 @@ As real alternative, apt-cacher-ng comes with an own implementation of a http fi
 <p>
 And finally, angfs usage can be optimized for local access. This works best if the proxy daemons runs on the same machine as acngfs and there are hundreds of packages to update while filesystem access costs are negligible. Here the cache directory can be specified in acngfs parameters, and then it gets files directly from the cache if they are completely downloaded and don't have volatile contents.
 </p>
-<h2><a name="mirroring"></a>8.13 Partial Mirroring</h2>
+<h2><a name="mirroring"></a>8.14 Partial Mirroring</h2>
 <p>
 It is possible to create a partial local mirror of a remote package repository. The method to do this is usually known as pre-caching. A such mirror would contain all files available to apt through <code>apt-cacher-ng</code>, making the cache server suitable for pure off-line use.
 </p>

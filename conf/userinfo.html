@@ -28,9 +28,9 @@
                      it in apt.conf or related configuration files, see
                      apt.conf manual page for details. Server and Port need to match
                      the values used to visit this page. For example,
-                     edit&nbsp;<i>/etc/apt/apt.conf</i> and add the line:
+                     edit&nbsp;<i>/etc/apt/apt.conf</i> (or create a new file called like <i>/etc/apt/apt.conf.d/00aptproxy</i>) and add the line:
                      <p />
-            <div class="rawstyle">Acquire::http { Proxy "http://${serverip}:${cfg:port}"; };</div>
+            <div class="rawstyle">Acquire::http::Proxy "http://${serverip}:${cfg:port}";</div>
                      <p />
                      </li>
 
@@ -41,11 +41,13 @@
                      server machine and the port with ${cfg:port} (adding a port if none
                      specified). For example:
                      <p /><div class="rawstyle" style="color:gray;">
-                     deb http://ftp.debian.org/debian stable main contrib non-free<br>
-                     deb-src http://ftp.debian.org/debian stable main contrib non-free</div><p/>
+                        deb http://ftp.debian.org/debian stable main contrib non-free<br>
+                     deb-src http://ftp.debian.org/debian stable main contrib non-free<br>
+                     deb https://get.docker.com/ubuntu docker main<br></div><p/>
                      becomes:<p/>
-                     <div class="rawstyle">deb http://${serverip}:${cfg:port}/ftp.debian.org/debian stable main contrib non-free<br/>
-                        deb-src http://${serverip}:${cfg:port}/ftp.debian.org/debian stable main contrib non-free</div><p/>
+                     <div class="rawstyle">deb http://<span style="color:red">${serverip}:${cfg:port}/</span>ftp.debian.org/debian stable main contrib non-free<br/>
+                        deb-src http://<span style="color:red">${serverip}:${cfg:port}/</span>ftp.debian.org/debian stable main contrib non-free<br/>
+                        deb <span style="color:red">http://${serverip}:${cfg:port}//HTTPS///</span>get.docker.com/ubuntu docker main</div><p/>
                      Depending on the configuration, it might be possible to use a shortcut
                      for the base URLs without knowing the mirror, for example:<p/>
                      <div class="rawstyle">deb http://${serverip}:${cfg:port}/debian stable main contrib non-free</div><p/>
