@@ -5,6 +5,12 @@ apt-cacher-ng (0.8.1-1) UNRELEASED; urgency=low
     + LTO disabled by default (closes: #777753)
     + *.o file download as volatile type (LP: #1078224)
   * Debconf question to enable CONNECT tunnels (closes: #734581)
+  * Translation updates: German (Holger Wansing, closes: #781921), French
+    (Jean-Baka Domelevo Entfellner, closes: #782026), Italian (Beatrice
+    Torracca, closes: #782013), Dutch (Frans Spiesschaert), Polish (Łukasz
+    <BartekChom@poczta.onet.pl>), Swedish (Martin Bagge, Anders Jonsson,
+    closes: #781672), Czech (Miroslav Kure, closes: #781447), Russian
+    (Yuri Kozlov, closes: #781364), Danish (Joe Dalton, closes: #781328)
 
  -- Eduard Bloch <blade@debian.org>  Sun, 15 Mar 2015 20:04:18 +0100
 
