@@ -16,6 +16,12 @@ Should use local methods instead, maybe passing a config file with commands via
 filesystem which is only readable/writtable to apt-cacher-ng and push it via
 signal?
 
+Local storage of admin password shall use hashing, maybe PBKDF2 from OpenSSL
+
+Direct NTLM proxy authentication (user can use cntlm but internal solution would be nice)
+
+Investigate more on Fedora mirror management, improve mirror list generation
+
 No cancel button in attached mode of maint pages
 
 Use cache control headers where possible
