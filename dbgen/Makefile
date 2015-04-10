@@ -1,6 +1,8 @@
 
 DBTMP=tmp
+export DBTMP
 CONFDIR=conf
+export CONFDIR
 
 # Main rule to be called to update all databases. Does two things, first get
 # and pre-filter raw data, second: check the sources and generate final lists,
@@ -34,14 +36,14 @@ get_ubu_input:
 	cmp sig-ubuntu $(DBTMP)/sig-ubuntu 2>/dev/null || cp $(DBTMP)/sig-ubuntu sig-ubuntu 
 
 get_fedora_input:
-	wget -O- https://mirrors.fedoraproject.org/publiclist/ | tr '"' '\n' | grep -iE '^http.*(linux|epel)/?$$' | sort -u > $(DBTMP)/fsnap
+	wget -O- https://mirrors.fedoraproject.org/publiclist/ | tr '"' '\n' | grep -iE '^http.*(linux|epel)/?$$' > $(DBTMP)/fsnap_
+	bash fedorasrcs.sh >> $(DBTMP)/fsnap_
+	cat $(DBTMP)/fsnap_ extra/fedora_mirrors | sort -u > $(DBTMP)/fsnap
 	md5sum $(DBTMP)/fsnap > $(DBTMP)/sig-fsnap
 	cmp sig-fsnap $(DBTMP)/sig-fsnap 2>/dev/null || cp $(DBTMP)/sig-fsnap sig-fsnap
 
 get_sl_input:
-	wget -O- http://www.scientificlinux.org/download/mirrors | tr '"' '\n' | grep -iE '^http.*(scientific|linux|scientific-linux)/?$$' |sort -u > $(DBTMP)/slsnap
-	# the mirrors list for SL does not contain the three main sites; so adding these manually
-	printf "http://ftp.scientificlinux.org/linux/scientific/\nhttp://ftp1.scientificlinux.org/linux/scientific/\nhttp://ftp2.scientificlinux.org/linux/scientific/\n" >> $(DBTMP)/slsnap
+	( cat extra/sl_mirrors ; wget -O- http://www.scientificlinux.org/download/mirrors | tr '"' '\n' | grep -iE '^http.*(scientific|linux|scientific-linux)/?$$') | sort -u > $(DBTMP)/slsnap
 	md5sum $(DBTMP)/slsnap > $(DBTMP)/sig-slsnap
 	cmp sig-slsnap $(DBTMP)/sig-slsnap 2>/dev/null || cp $(DBTMP)/sig-slsnap sig-slsnap
 
@@ -52,7 +54,7 @@ $(CONFDIR)/epel_mirrors: sig-fsnap ubuntuscan.sh
 	bash ubuntuscan.sh $@ $(DBTMP)/epelsnap $(DBTMP) "/" "RPM-GPG-KEY-EPEL"
 
 $(CONFDIR)/fedora_mirrors: sig-fsnap ubuntuscan.sh
-	grep -iE 'linux/?$$' $(DBTMP)/fsnap | sort -u > $(DBTMP)/fcsnap
+	grep -v epel/ $(DBTMP)/fsnap | grep -v releases | sort -u > $(DBTMP)/fcsnap
 	bash ubuntuscan.sh $@ $(DBTMP)/fcsnap $(DBTMP) "/" "releases"
 
 $(CONFDIR)/sl_mirrors: sig-slsnap ubuntuscan.sh
@@ -69,11 +71,7 @@ $(CONFDIR)/archlx_mirrors:
 
 $(CONFDIR)/deb_mirrors.gz: sig-debian deburlgen.pl
 	perl deburlgen.pl Archive-http < $(DBTMP)/dsnap > $(DBTMP)/dsnap.urls
-	echo http://ftp.debian.org/debian/ >> $(DBTMP)/dsnap.urls
-	echo http://ftp.debian.com/debian/ >> $(DBTMP)/dsnap.urls
-	echo http://cdn.debian.net/debian/ >> $(DBTMP)/dsnap.urls
-	echo http://http.debian.net/debian/ >> $(DBTMP)/dsnap.urls
-# a way too experimental...	echo http://http.debian.net/debian/ >> $(DBTMP)/dsnap.urls
+	cat extra/deb_mirrors >> $(DBTMP)/dsnap.urls
 # there is no pool... echo http://ftp-master.debian.org/newdists/ >> $(DBTMP)/dsnap.urls
 	bash ubuntuscan.sh $(CONFDIR)/deb_mirrors $(DBTMP)/dsnap.urls $(DBTMP) "/dists"
 	gzip -f -9 $(CONFDIR)/deb_mirrors
