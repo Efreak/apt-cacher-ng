@@ -1,0 +1,7 @@
+POST http://bugs.debian.org:80/cgi-bin/soap.cgi HTTP/1.1
+Content-Type: text/xml; charset=utf-8
+SOAPAction: ""
+User-Agent: SOAP4R/1.6.1-SNAPSHOT (2.3.3, ruby 2.1.5 (2014-11-13))
+Accept: */*
+Date: Fri, 10 Apr 2015 17:09:29 GMT
+Host: bugs.debian.org
