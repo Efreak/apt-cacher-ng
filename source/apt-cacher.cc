@@ -159,127 +159,149 @@ bool AppendPasswordHash(string &stringWithSalt, LPCSTR plainPass, size_t passLen
 #endif
 
 
-void runDemo()
+void early_special_operations()
 {
+	LPCSTR envvar(nullptr);
 
 #ifdef DEBUG
 	cerr << "Pandora: " << sizeof(regex_t) << endl;
-
-
+	/*
 	// PLAYGROUND
-
-	/*
-	 cerr << sizeof(job) << endl;
-	 exit(1);
-	 */
-
-	/*
-	 * Let's be another csum tool...
-
-	 md5_state_s ctx;
-	 md5_init(&ctx);
-	 uint8_t buf[2000];
-	 while(!feof(stdin))
-	 {
-	 int n=fread(buf, sizeof(char), 2000, stdin);
-	 md5_append(&ctx, buf, n);
-	 }
-	 uint8_t csum[16];
-	 md5_finish(&ctx, csum);
-	 for(int i=0;i<16;i++)
-	 printf("%02x", csum[i]);
-	 printf("\n");
-	 exit(0);
-
-
-
-	if(argc<2)
+	if (argc < 2)
 		return -1;
 
 	acfg::tHostInfo hi;
-	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1])<<endl;
-	cout << "Host: " << hi.sHost <<", Port: " << hi.sPort << ", Path: " << hi.sPath<<endl;
+	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1]) << endl;
+	cout << "Host: " << hi.sHost << ", Port: " << hi.sPort << ", Path: "
+			<< hi.sPath << endl;
 	return 0;
 
+	bool Bz2compressFile(const char *, const char*);
+	return !Bz2compressFile(argv[1], argv[2]);
 
-	 bool Bz2compressFile(const char *, const char*);
-	 return ! Bz2compressFile(argv[1], argv[2]);
-
-
-	 char tbuf[40];
-	 FormatCurrentTime(tbuf);
-	 std::cerr << tbuf << std::endl;
-	 exit(1);
-
-*/
-auto bt=getenv("BUSTEST");
-  if (bt)
-  {
-     static filereader r;
-     if(!r.OpenFile(bt))
-        exit(42);
-     else
-        std::cerr << "opened bt: " << bt << endl;
-  }
-#endif
-	if (getenv("GETSUM"))
-	{
-		uint8_t csum[20];
-		string s(getenv("GETSUM"));
-		off_t resSize;
-		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
-		for (uint i = 0; i < sizeof(csum); i++)
-			printf("%02x", csum[i]);
-		printf("\n");
-		if (ok && getenv("REFSUM"))
-		{
-			printf(CsEqual(getenv("REFSUM"), csum, sizeof(csum)) ? "IsOK\n" : "Diff\n");
-		}
-		exit(0);
-	}
-/*
-	LPCSTR envvar = getenv("PARSEIDX");
+	char tbuf[40];
+	FormatCurrentTime(tbuf);
+	std::cerr << tbuf << std::endl;
+	exit(1);
+	*/
+	envvar = getenv("PARSEIDX");
 	if (envvar)
 	{
 		int parseidx_demo(LPCSTR);
 		exit(parseidx_demo(envvar));
 	}
-
-	if (getenv("SHRINK"))
-	{
-		uint8_t csum[20];
-		string s(getenv("SHRINK"));
-		off_t resSize;
-		auto n=(filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize, stdout));
-		exit(n);
-	}
-	*/
-}
-
-
-int main(int argc, char **argv)
-{
-
-#ifdef HAVE_SSL
-	SSL_load_error_strings();
-	ERR_load_BIO_strings();
-	ERR_load_crypto_strings();
-	ERR_load_SSL_strings();
-	OpenSSL_add_all_algorithms();
-	SSL_library_init();
 #endif
 
-	const char *envvar=getenv("TOBASE64");
+	envvar = getenv("GETSUM");
+	if (envvar)
+	{
+		uint8_t csum[20];
+		string s(envvar);
+		off_t resSize;
+		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
+		for (uint i = 0; i < sizeof(csum); i++)
+			printf("%02x", csum[i]);
+		printf("\n");
+		envvar = getenv("REFSUM");
+		if (ok && envvar)
+		{
+			printf(CsEqual(envvar, csum, sizeof(csum)) ? "IsOK\n" : "Diff\n");
+		}
+		exit(0);
+	}
+
+	envvar=getenv("TOBASE64");
 	if(envvar)
 	{
 		std::cout << EncodeBase64Auth(envvar);
-		return 0;
+		exit(EXIT_SUCCESS);
 	}
 	envvar=getenv("BECURL");
 	if(envvar)
-		return wcat(envvar, getenv("http_proxy"));
+		exit(wcat(envvar, getenv("http_proxy")));
 
-	check_algos();
+}
+
+struct optflags
+{
+	bool bDumpCfg=false, bForceCleanup=false;
+	LPCSTR pReTest=nullptr;
+};
+
+void parse_options(int argc, const char **argv, optflags& ret)
+{
+
+	// preprocess some startup related parameters
+	for (auto p=argv+1; p<argv+argc; p++)
+	{
+		if (!strncmp(*p, "-h", 2))
+			usage();
+		else if (!strncmp(*p, "-v", 2))
+			acfg::debug=acfg::debug|LOG_DEBUG|LOG_MORE;
+		else if (!strncmp(*p, "-e", 2))
+			ret.bForceCleanup=true;
+#if SUPPWHASH
+		else if (!strncmp(*p, "-H", 2))
+			exit(hashpwd());
+#endif
+	}
+
+	LPCSTR PRINTCFGVAR=getenv("PRINTCFGVAR");
+
+	for (auto p=argv+1; p<argv+argc; p++)
+	{
+		if(!strcmp(*p, "-c"))
+		{
+			++p;
+			if(p < argv+argc)
+				acfg::ReadConfigDirectory(*p, PRINTCFGVAR);
+			else
+				usage();
+		}
+		else if(!strcmp(*p, "-p"))
+		{
+			ret.bDumpCfg=true;
+		}
+		else if (!strcmp(*p, "--retest"))
+		{
+			++p;
+			if(p>=argv+argc)
+				exit(EXIT_FAILURE);
+			ret.pReTest=*p;
+		}
+		else if(**p) // not empty
+		{
+			if(!acfg::SetOption(*p, false))
+				usage();
+		}
+	}
+
+	if(PRINTCFGVAR)
+	{
+		auto ps(acfg::GetStringPtr(PRINTCFGVAR));
+		if(ps)
+		{
+			cout << *ps << endl;
+			exit(EXIT_SUCCESS);
+		}
+		auto pi(acfg::GetIntPtr(PRINTCFGVAR));
+		if(pi)
+			cout << *pi << endl;
+		exit(pi ? EXIT_SUCCESS : EXIT_FAILURE);
+	}
+
+	if(!aclog::open())
+	{
+		cerr << "Problem creating log files. Check permissions of the log directory, "
+			<< acfg::logdir<<endl;
+		exit(1);
+	}
+
+	acfg::PostProcConfig(ret.bDumpCfg);
+}
+
+void setup_sighandler()
+{
 	tSigAct act = tSigAct();
 
 	sigfillset(&act.sa_mask);
@@ -303,94 +325,36 @@ int main(int argc, char **argv)
 #ifdef SIGXFSZ
 	sigaction(SIGXFSZ, &act, NULL);
 #endif
+}
 
-//#ifdef DEBUG
-	runDemo();
-//#endif
+int main(int argc, const char **argv)
+{
 
-	// preprocess some startup related parameters
-	bool bForceCleanup(false);
-	LPCSTR pReTest(nullptr);
-	for (char **p=argv+1; p<argv+argc; p++)
-	{
-		if (!strncmp(*p, "-h", 2))
-			usage();
-		else if (!strncmp(*p, "-v", 2))
-		{
-			acfg::debug=acfg::debug|LOG_DEBUG|LOG_MORE;
-			**p=0x0; // ignore it if ever checked anywhere
-		}
-		else if (!strncmp(*p, "-e", 2))
-		{
-			bForceCleanup=true;
-			**p=0x0; // ignore it if ever checked anywhere
-		}
-#if SUPPWHASH
-		else if (!strncmp(*p, "-H", 2))
-			exit(hashpwd());
+#ifdef HAVE_SSL
+	SSL_load_error_strings();
+	ERR_load_BIO_strings();
+	ERR_load_crypto_strings();
+	ERR_load_SSL_strings();
+	OpenSSL_add_all_algorithms();
+	SSL_library_init();
 #endif
-	}
 
-	LPCSTR PRINTCFGVAR=getenv("PRINTCFGVAR");
-	bool bDumpCfg(false);
+	optflags flags;
+#ifdef DEBUG // need options from cmdline ASAP
+	parse_options(argc, argv, flags);
+#endif
+	check_algos();
+	setup_sighandler();
+	early_special_operations();
 
-	for (char **p=argv+1; p<argv+argc; p++)
-	{
-		if(!strcmp(*p, "-c"))
-		{
-			++p;
-			if(p < argv+argc)
-				acfg::ReadConfigDirectory(*p, PRINTCFGVAR);
-			else
-				usage();
-		}
-		else if(!strcmp(*p, "-p"))
-		{
-			bDumpCfg=true;
-		}
-		else if (!strcmp(*p, "--retest"))
-		{
-			++p;
-			if(p>=argv+argc)
-				exit(EXIT_FAILURE);
-			pReTest=*p;
-		}
-		else if(**p) // not empty
-		{
-			if(!acfg::SetOption(*p, false))
-				usage();
-		}
-	}
+	parse_options(argc, argv, flags);
 
-	if(PRINTCFGVAR)
-	{
-		auto ps(acfg::GetStringPtr(PRINTCFGVAR));
-		if(ps)
-		{
-			cout << *ps << endl;
-			return EXIT_SUCCESS;
-		}
-		auto pi(acfg::GetIntPtr(PRINTCFGVAR));
-		if(pi)
-			cout << *pi << endl;
-		return pi ? EXIT_SUCCESS : EXIT_FAILURE;
-	}
-
-	if(!aclog::open())
-	{
-		cerr << "Problem creating log files. Check permissions of the log directory, "
-			<< acfg::logdir<<endl;
-		exit(1);
-	}
-
-	acfg::PostProcConfig(bDumpCfg);
-
-	if(bDumpCfg)
+	if(flags.bDumpCfg)
 		exit(EXIT_SUCCESS);
-	if(pReTest)
+	if(flags.pReTest)
 	{
 		LPCSTR ReTest(LPCSTR);
-		std::cout << ReTest(pReTest) << std::endl;
+		std::cout << ReTest(flags.pReTest) << std::endl;
 		exit(EXIT_SUCCESS);
 	}
 
@@ -401,7 +365,7 @@ int main(int argc, char **argv)
 
 	conserver::Setup();
 
-	if (bForceCleanup)
+	if (flags.bForceCleanup)
 	{
 		tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
 				acfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
@@ -577,6 +541,6 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 	dl.AddJob(fi, &url, nullptr, nullptr);
 	dl.WorkLoop();
 	return (fi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
-			&& fi->GetHeaderUnlocked().getStatus() == 200) ? 0 : -3;
+			&& fi->GetHeaderUnlocked().getStatus() == 200) ? EXIT_SUCCESS : -3;
 }
 
