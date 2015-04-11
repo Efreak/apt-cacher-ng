@@ -1,14 +1,14 @@
 # Danish translation apt-cacher-ng.
-# Copyright (C) 2014 apt-cacher-ng & nedenstående oversættere.
+# Copyright (C) 2015 apt-cacher-ng & nedenstående oversættere.
 # This file is distributed under the same license as the apt-cacher-ng package.
-# Joe Hansen (joedalton2@yahoo.dk), 2012, 2014.
+# Joe Hansen (joedalton2@yahoo.dk), 2012, 2014, 2015.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: apt-cacher-ng\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2014-01-27 06:52+0100\n"
-"PO-Revision-Date: 2014-01-27 12:42+0000\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
+"PO-Revision-Date: 2015-03-27 12:42+0000\n"
 "Last-Translator: Joe Hansen <joedalton2@yahoo.dk>\n"
 "Language-Team: Danish <debian-l10n-danish@lists.debian.org>\n"
 "Language: da\n"
@@ -214,3 +214,32 @@ msgid ""
 "If this field is left empty, Apt-Cacher NG will not use any proxy server."
 msgstr ""
 "Hvis dette felt efterlades tomt, vil Apt-Cacher NG ikke bruge en proxyserver."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid "Allow HTTP tunnels through Apt-Cacher NG?"
+msgstr "Tillad HTTP-tunneler via Apt-Cacher NG?"
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
+msgstr ""
+"Apt-Cacher NG kan konfigureres til at brugerne kan oprette HTTP-tunnelser, "
+"som kan bruges til at tilgå eksterne servere, som ellers kan blokeres af "
+"(for eksempel) en brandmur, der filtrerer HTTP-forbindelser."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"This feature is usually disabled for security reasons; enable it only for "
+"trusted LAN environments."
+msgstr ""
+"Denne funktion er normalt deaktiveret af sikkerhedsmæssige årsager; aktiver "
+"den kun for troværdige LAN-miljøer."
+

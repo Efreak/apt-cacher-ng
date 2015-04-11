@@ -98,11 +98,13 @@ Chapter 3: Basic Configuration
        replacement for apt-cacher. The same rules apply, e.g. Debian/Ubuntu
        users should EITHER:
 
-        -  Specify the caching machine as HTTP Proxy for APT, e.g.
-           putting a line like the following into a file like
-           /etc/apt/apt.conf.d/02proxy:
+        -  Specify the caching machine as HTTP Proxy for your download
+           client. This can be usually done (temporarily) with the
+           environment variable `http_proxy' or (permanently) in some
+           configuration file or dialog. For APT, this means putting a line
+           like the following into a file like /etc/apt/apt.conf.d/02proxy:
 
-             Acquire::http { Proxy "http://CacheServerIp:3142"; };
+             Acquire::http::proxy "http://CacheServerIp:3142";
 
        OR:
 
@@ -118,14 +120,29 @@ Chapter 3: Basic Configuration
         (assuming that CacheServerIp is 192.168.0.17 and the service port
        is 3142) .
 
-       Mixing both configuration methods is not recommended and will lead
-       to obscure APT failures in most cases.
+       These both methods have their own pros and cons. The last method can
+       be used with clients which cannot configure an additional http proxy
+       for some reason. The disadvantages are the worse progress visibility
+       (all downloads seem to come from the same machine) and some resource
+       usage limits might be hit (i.e. maximum number of simultaneous
+       downloads from the "same" machine). It might also require to modify
+       many different URLs and some of those URLs might be hardcoded in
+       software and not be accessible to the user.
 
-       Additionally, leading path component containing "apt-cacher/"
-       or "apt-cacher?/" might be ignored by the server during the URL
-       processing. This is intended behavior and exists to maintain
-       backwards compatibility to sources.list entries configured for early
-       versions of Apt-Cacher (based on CGI technology).
+       The former method is more convenient since it usually means less
+       configuration work; however, it implies that all relevant client
+       programs respect the proxy setting and use it from this central
+       location.
+
+       Mixing the configuration methods is usually possible but not within
+       the same client program instance. Doing that (going with proxy mode
+       AND use rewritten URLs) will probably confuse the server: in best-
+       case, the connection will be slower because of a little transport
+       loop on the server side, and in the worst-case, the target URL will
+       eventually become not resolvable and the downloads will just fail.
+
+       Using SSL/TLS transport (i.e. https urls) is also possible with some
+       restrictions, see section 8.3 for details.
 
 Chapter 4: Advanced Server Configuration
 ----------------------------------------
@@ -386,7 +403,7 @@ Chapter 4: Advanced Server Configuration
            .debdelta files. The path hierarchy below this URL should
            correspond to the source URLs and file paths in the cache. Only
            one URL can be specified at the moment. It is used for explicit
-           mirroring operations, see section 8.13 for details.
+           mirroring operations, see section 8.14 for details.
 
         -  `proxy=proxyspec' Configures an alternative proxy URL which
            overrides the global proxy setting in the context of this
@@ -453,7 +470,7 @@ Chapter 5: Security
 
        A simple control method for incoming connections is listening only
        to network interfaces which are inside a secure perimeter, e.g.
-       belong to the local network. See section 8.10 for details on this
+       belong to the local network. See section 8.11 for details on this
        configuration parameter. The default setting is listening to all
        interfaces.
 
@@ -931,7 +948,80 @@ Chapter 8: HOWTOs and FAQ
                   index files. Select d to see detailed list.
          
 
-   8.3 JIGDO usage
+   8.3 Access to SSL/TLS remotes (HTTPS)
+
+       It is possible to have encrypted access to remote sites via HTTPS
+       protocol with recent versions of apt-cacher-ng if the OpenSSL
+       support was enabled at compile time. However this leads certain side
+       effects and complications; due to the nature of the HTTPS connection
+       model, it is not possible to act as an intermediate server (e.g.
+       caching proxy) by the same rules as with HTTP:
+
+        -  SSL ensures strict verification of remote host name. Therefore,
+           you cannot add an URL to sources.list and make them point to
+           "hostname of acng server": the download client would expect
+           the remote site to offer the certificate of "hostname of acng
+           server" but the certificate of the remote server would be used.
+
+        -  This restriction also applies if the LAN admin somehow manages
+           to trick the client that it connects to the remote site but
+           the real connection is silently rerouted to the local server:
+           since the proxy in the middle cannot fake the real certificate
+           it would need to create a custom one but that manipulation
+           usually cannot go unnoticed by the client unless some local hack
+           disables or manipulates the certificate verification. All parts
+           of this should be considered a crude hack and won't be described
+           here in detail. In fact, apt-cacher-ng does not implement local
+           SSL server functionality (as of version 0.8.1), partly because
+           of these considerations.
+
+        -  If the client assumes that it needs to access a HTTPS remote
+           server through a HTTP proxy, it usually goes for the HTTP
+           tunneling (see the Wikipedia article for details). This is
+           a well-known and widely-used method but it comes with some
+           disadvantages: the proxy has no control of the data flowing
+           through it so the proxy cannot cache the data in any useful way;
+           in environments with additional security restrictions, it's also
+           hard to identify malicious users that abuse the service for
+           illegitimate purposes.
+
+       Considering these difficulties, there are three (and a half) methods
+       to use SSL.
+
+        -  First, the "half method" - not using the proxy at all,
+           configuring each client to not use the HTTP proxy for HTTPS
+           urls. This will obviously disable central caching and requires
+           the client has separated configuration options to set this. For
+           Debian based distros, this can be done by adding a configuration
+           like this: `Acquire::https::proxy "DIRECT";' to apt.conf or
+           one of the apt.conf.d files. See section 8.5 for further
+           information.
+
+        -  The "backend configuration method": if the clients access the
+           remote sites through URLs remapped on the server, the cacher
+           admin can add https URLs to backend lists instead of http urls.
+           Data will be cached just like usual.
+
+        -  The "laissez-faire method": in acng.conf (or related) configure
+           the `PassThroughPattern' option to contain a regex like `.*'
+           and configure the clients to use apt-cacher-ng as HTTP proxy
+           and let the clients connect to https URLs "as usual". Some
+           limited access control can be achieved through adjustment of the
+           regular expression (.* permits access to any host and any port,
+           including 443 for https). Data is not cached on the server.
+
+        -  The "tell-me-what-you-need method": on the client side, modify
+           the access URLs and change https to http and put the string
+           "HTTPS///" between http:// and the host name. With this trick,
+           the user client will access the proxy like going for a usual
+           HTTP download and the proxy will continue with the remote
+           URL using the https scheme. Caching (and file merging to
+           repositories) will work, flexibility for the user remains. The
+           disadvantages of this method are basically the same as with the
+           access URLs rewriting (see Section 3.2) but the method is still
+           the preferred one by the apt-cacher-ng author.
+
+   8.4 JIGDO usage
 
        It's possible to use apt-cacher-ng source with the jigdo-lite
        utility. There are some limitations, though:
@@ -963,7 +1053,7 @@ Chapter 8: HOWTOs and FAQ
        That's all, jigdo-lite will fetch the package files using apt-
        cacher-ng proxy.
 
-   8.4 Avoid use of apt-cacher-ng for certain hosts
+   8.5 Avoid use of apt-cacher-ng for certain hosts
 
        Sometimes clients might need to access some remote side directly
        to do some non-file-transfer oriented work but still passing the
@@ -974,14 +1064,14 @@ Chapter 8: HOWTOs and FAQ
          Acquire::HTTP::Proxy::archive.example.org "DIRECT";
          //or Acquire::HTTP::Proxy::archive.example.org  "other.proxy:port"
 
-   8.5 Avoid caching for certain domains or certain file types
+   8.6 Avoid caching for certain domains or certain file types
 
        Sometimes clients to download through apt-cacher-ng but the data
        shall not be stored on the harddisk of the server. To get it, use
        the DontCache directive (see examples for details) to define such
        files.
 
-   8.6 How to make big download series faster
+   8.7 How to make big download series faster
 
        Symptom: A common situation is a periodic download of hundreds of
        files through apt-cacher-ng where just a half is present in the
@@ -1003,11 +1093,11 @@ Chapter 8: HOWTOs and FAQ
        there is a higher chance to get the server connection "preheated"
        before a stall occurs.
 
-   8.7 How to import DVDs or ISO images
+   8.8 How to import DVDs or ISO images
 
        First, it should be clear what is needed to be done. In order to
        integrate the packages from a DVD or ISO image, read on in section
-       8.8.
+       8.9.
 
        The situation with ISO files import is complicated. They are not
        supported by the cache and there is also no expiration mode for
@@ -1017,7 +1107,7 @@ Chapter 8: HOWTOs and FAQ
        What is possible now is publishing a directory with ISO files using
        its web server mode, see `LocalDirs' config option for details.
 
-   8.8 How to integrate DVDs or ISO image data
+   8.9 How to integrate DVDs or ISO image data
 
        Integrating package files from DVD or ISO images is not much
        different to the usual import operation, see above for instructions.
@@ -1031,18 +1121,18 @@ Chapter 8: HOWTOs and FAQ
        removed.
 
        A possible variation is import via symlinks. This can make sense
-       when the space consumption must be reduced and the ISO image should
+       where the space consumption must be reduced and the ISO image should
        stay on the server for a long time. To achive this, the image should
-       be mounted at some mount point outside of the `_import' directory,
-       the state should be set permanently via an /etc/fstab entry (don't
-       forget the loop option), then a symlink tree pointing to the
-       mountpoint location should be created in the `_import' directory
-       (something like `cp -as /mnt/image_sarge_01/pool /var/cache/apt-
-       cacher-ng/_import'). The subsequent "import" operation should pick
-       up the symlinks and keep them symlinks instead of making file
+       be mounted at some mount point outside of the `_import' directory;
+       the mounted state should be made permanent, maybe via an /etc/fstab
+       entry with the loop option; then a symbolic link tree pointing to
+       the mountpoint location should be created in the `_import' directory
+       (something like `cp -as /mnt/image_jessie_01/pool /var/cache/apt-
+       cacher-ng/_import/'). The subsequent "import" operation should pick
+       up the symlinks and continue using them as links istead of file
        copies.
 
-   8.9 How to execute commands before and after going online?
+  8.10 How to execute commands before and after going online?
 
        It is possible to configure custom commands which are executed
        before the internet connection attempt and after a certain period
@@ -1052,7 +1142,7 @@ Chapter 8: HOWTOs and FAQ
        section 4.3.2, `conf/*.hooks' and `/usr/share/doc/apt-cacher-
        ng/examples/*.hooks' files for details.
 
-  8.10 Listen to only specific interfaces or IP protocols
+  8.11 Listen to only specific interfaces or IP protocols
 
        Unless configured explicitely, the server listens to any interface
        with IPv4 or IPv6 protocol. To disable some of this, use the
@@ -1069,7 +1159,7 @@ Chapter 8: HOWTOs and FAQ
        interfaces configured for the specific protocol, like 0.0.0.0 for
        IPv4.
 
-  8.11 How to avoid use of IPv4 (or IPv6) where possible?
+  8.12 How to avoid use of IPv4 (or IPv6) where possible?
 
        Usually, outgoing hosts are accessed by the protocol and with the
        target IP reported as the first candidate by operating system
@@ -1078,7 +1168,7 @@ Chapter 8: HOWTOs and FAQ
        and then use IPv4 as alternative (or vice versa). See option
         ConnectProto  in configuration examples.
 
-  8.12 Use the proxy without storing all data twice
+  8.13 Use the proxy without storing all data twice
 
        There is a general use case where the data storing behavior of APT
        is not so fortunate. Imagine an old laptop with a slow and small
@@ -1115,7 +1205,7 @@ Chapter 8: HOWTOs and FAQ
        acngfs parameters, and then it gets files directly from the cache if
        they are completely downloaded and don't have volatile contents.
 
-  8.13 Partial Mirroring
+  8.14 Partial Mirroring
 
        It is possible to create a partial local mirror of a remote package
        repository. The method to do this is usually known as pre-caching. A
@@ -1378,4 +1468,4 @@ Chapter 11: Contact
        And last, but not least: feel free to express your gratitude by
        donating a small amount of money via PayPal (to edi@gmx.de).
 
-[Eduard Bloch, Sat, 08 Oct 2011 23:18:17 +0200]
+[Eduard Bloch, Mon, 06 Apr 2015 22:46:43 +0200]

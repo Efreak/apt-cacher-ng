@@ -1,10 +1,10 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: apt-cacher-ng 0.7.26\n"
+"Project-Id-Version: apt-cacher-ng 0.8.1\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2014-01-27 06:52+0100\n"
-"PO-Revision-Date: 2014-03-22 12:33 +0100\n"
-"Last-Translator: Eduard Bloch <blade@debian.org>\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
+"PO-Revision-Date: 2015-04-03 21:08+0100\n"
+"Last-Translator: Holger Wansing <linux@wansing-online.org>\n"
 "Language-Team: German <debian-l10n-german@lists.debian.org>\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
@@ -21,7 +21,7 @@ msgstr ""
 #. Choices
 #: ../apt-cacher-ng.templates:2001
 msgid "Set up once"
-msgstr "Nur ein Mal einrichten"
+msgstr "Nur einmalig einrichten"
 
 #. Type: select
 #. Choices
@@ -33,7 +33,7 @@ msgstr "Jetzt einrichten und später aktualisieren"
 #. Choices
 #: ../apt-cacher-ng.templates:2001
 msgid "No automated setup"
-msgstr "Keine automatisierte Einrichtung"
+msgstr "Keine automatische Konfiguration"
 
 #. Type: select
 #. Description
@@ -51,11 +51,11 @@ msgid ""
 "URL remapping can be set up automatically, using a configuration based on "
 "the current state of /etc/apt/sources.list."
 msgstr ""
-"Apt-Cacher NG kann Pakete aus anderen Depots beziehen als von denen, die in "
+"Apt-Cacher NG kann Pakete von anderen Depots beziehen als von denen, die in "
 "Client-Aufrufen angegeben wurden. Dadurch kann der Cache effektiver "
-"arbeiten, außerdem kann nachträglich einfacher auf anderen Spiegelserver "
+"arbeiten, außerdem kann nachträglich einfacher auf andere Spiegelserver "
 "umgestellt werden. Diese URL-Abbildung kann jetzt automatisch eingerichtet "
-"werden, unter Bezug des aktuellen Inhalts von /etc/apt/sources.list."
+"werden, unter Berücksichtigung des aktuellen Inhalts von /etc/apt/sources.list."
 
 #. Type: select
 #. Description
@@ -65,9 +65,9 @@ msgid ""
 "reconfigured on every update of Apt-Cacher NG (modifying the configuration "
 "files each time), or left unconfigured."
 msgstr ""
-"Bitte auswählen, ob die URL-Abbildung jetzt einmalig konfiguriert werden "
-"soll, oder bei jeder Aktuallisierung von Apt-Cacher NG (Konfiguration wird "
-"jedes mal angepasst), oder gar nicht konfiguriert werden soll."
+"Bitte auswählen, ob die URL-Abbildung jetzt einmalig, oder "
+"bei jeder Aktualisierung von Apt-Cacher NG (Konfiguration wird "
+"jedes Mal angepasst), oder gar nicht konfiguriert werden soll."
 
 #. Type: select
 #. Description
@@ -76,8 +76,8 @@ msgid ""
 "Selecting \"No automated setup\" will leave the existing configuration "
 "unchanged. It will need to be updated manually."
 msgstr ""
-"Auswahl von »Keine automatisierte Konfiguration« rührt bestehende "
-"Konfigurationsdateien nicht an. Diese müssen dann per Hand gepflegt werden."
+"Die Auswahl von »Keine automatische Konfiguration« lässt bestehende "
+"Konfigurationsdateien unverändert. Diese müssen dann per Hand gepflegt werden."
 
 #. Type: string
 #. Description
@@ -132,7 +132,7 @@ msgstr ""
 #. Description
 #: ../apt-cacher-ng.templates:4001
 msgid "Listening TCP port:"
-msgstr "Annehmender TCP-Port:"
+msgstr "Verbindungen annehmender TCP-Port:"
 
 #. Type: string
 #. Description
@@ -143,7 +143,7 @@ msgid ""
 "9999 to emulate apt-proxy."
 msgstr ""
 "Konfiguriert den TCP-Port, auf dem Apt-Cacher NG die hereinkommenden "
-"(Proxy-)HTTP-Anfragen annimmt. Standard ist 3142, es kann auch auf 9999 "
+"(Proxy-)HTTP-Anfragen annimmt. Standard ist 3142, kann auch auf 9999 "
 "gesetzt werden, um apt-proxy zu emulieren."
 
 #. Type: string
@@ -152,7 +152,7 @@ msgstr ""
 msgid ""
 "If this field is left empty, the value from the current configuration "
 "remains unchanged."
-msgstr "Eine leerer Eintrag belässt die derzeitige Konfiguration unverändert."
+msgstr "Ein leerer Eintrag lässt die derzeitige Konfiguration unverändert."
 
 #. Type: string
 #. Description
@@ -168,7 +168,7 @@ msgid ""
 "file name restrictions."
 msgstr ""
 "Das Hauptverzeichnis des Paket-Caches sollte auf einem Dateisystem ohne "
-"Beschränkungen bezüglich Dateinamen liegen."
+"Beschränkungen bezüglich der Dateinamen liegen."
 
 #. Type: string
 #. Description
@@ -177,7 +177,7 @@ msgid ""
 "If this field is left empty, the value from the current configuration "
 "remains unchanged or is set to the default of /var/cache/apt-cacher-ng."
 msgstr ""
-"Eine leere Eingabe belässt die derzeitige Konfiguration unverändert "
+"Eine leere Eingabe lässt die derzeitige Konfiguration unverändert "
 "(gegebenenfalls auf dem Standardverzeichnis /var/cache/apt-cacher-ng )."
 
 #. Type: string
@@ -201,9 +201,8 @@ msgid ""
 "limitations."
 msgstr ""
 "Benutzername und Passwort für den Proxy-Server können hier nach dem Muster "
-"benutzer:passwort@rechner:port übergeben werden, aber siehe auch Handbuch "
-"für Einschränkungen. Ein leerer String hier bedeutet, direkte Verbindungen "
-"zu verwenden."
+"benutzer:passwort@rechner:port übergeben werden, das Handbuch enthält "
+"jedoch auch Informationen über mögliche Einschränkungen."
 
 #. Type: string
 #. Description
@@ -211,6 +210,37 @@ msgstr ""
 msgid ""
 "If this field is left empty, Apt-Cacher NG will not use any proxy server."
 msgstr "Ein leerer Eintrag hier bedeutet Zugriff ohne Proxy."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid "Allow HTTP tunnels through Apt-Cacher NG?"
+msgstr "HTTP-Tunnel für Apt-Cacher NG erlauben?"
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
+msgstr ""
+"In der Konfiguration von Apt-Cacher NG kann dem Benutzer der Aufbau "
+"von Verbindungen über HTTP-Tunnel erlaubt werden; dies ist für "
+"Zugriffe auf ferne Server nützlich, die ansonsten (beispielsweise) "
+"aufgrund von Firewalls zur Filterung von HTTPS-Verbindungen "
+"nicht erreichbar wären."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"This feature is usually disabled for security reasons; enable it only for "
+"trusted LAN environments."
+msgstr ""
+"Diese Funktionalität wird normalerweise aus Sicherheitsgründen "
+"deaktiviert; aktivieren Sie sie nur in LAN-Umgebungen, denen Sie "
+"vertrauen."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

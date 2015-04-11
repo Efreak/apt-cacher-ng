@@ -2,20 +2,20 @@
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the apt-cacher-ng package.
 #
-# Yuri Kozlov <yuray@komyakino.ru>, 2009, 2014.
+# Yuri Kozlov <yuray@komyakino.ru>, 2009, 2014, 2015.
 msgid ""
 msgstr ""
-"Project-Id-Version: apt-cacher-ng 0.7.25-1\n"
+"Project-Id-Version: apt-cacher-ng 0.8.1-1\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2014-01-27 06:52+0100\n"
-"PO-Revision-Date: 2014-01-21 19:26+0400\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
+"PO-Revision-Date: 2015-03-28 06:52+0300\n"
 "Last-Translator: Yuri Kozlov <yuray@komyakino.ru>\n"
 "Language-Team: Russian <debian-l10n-russian@lists.debian.org>\n"
 "Language: ru\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Lokalize 1.4\n"
+"X-Generator: Lokalize 1.5\n"
 "Plural-Forms:  nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n"
 "%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
@@ -215,6 +215,35 @@ msgstr ""
 msgid ""
 "If this field is left empty, Apt-Cacher NG will not use any proxy server."
 msgstr "Если не указано, Apt-Cacher NG не будет использовать других прокси."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid "Allow HTTP tunnels through Apt-Cacher NG?"
+msgstr "Разрешить туннелирование HTTP через Apt-Cacher NG?"
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
+msgstr ""
+"В Apt-Cacher NG можно разрешить пользователям создавать туннели HTTP, "
+"которые можно использовать для доступа к удалённым серверам (недоступным "
+"по другим протоколам (например) из-за фильтрации соединений HTTPS на "
+"межсетевых экранах."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"This feature is usually disabled for security reasons; enable it only for "
+"trusted LAN environments."
+msgstr ""
+"Обычно, это возможность отключена в целях безопасности; "
+"включайте её только в доверенных средах LAN."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

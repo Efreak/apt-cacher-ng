@@ -1,22 +1,23 @@
-# translation of apt-cacher-ng_sv.po to Swedish
-# Copyright (C) 2009
+# Translation of apt-cacher-ng_sv.po to Swedish
+# Copyright (C) 2015 Martin Bagge <brother@bsnet.se>
 # This file is distributed under the same license as the apt-cacher-ng package.
 #
 # Martin Ågren <martin.agren@gmail.com>, 2009.
+# Martin Bagge <brother@bsnet.se>, 2015
 msgid ""
 msgstr ""
 "Project-Id-Version: apt-cacher-ng_sv\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2014-01-27 06:52+0100\n"
-"PO-Revision-Date: 2009-11-03 08:17+0100\n"
-"Last-Translator: Martin Ågren <martin.agren@gmail.com>\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
+"PO-Revision-Date: 2015-04-01 18:03+0100\n"
+"Last-Translator: Martin Bagge / brother <brother@bsnet.se>\n"
 "Language-Team: Swedish <debian-l10n-swedish@lists.debian.org>\n"
 "Language: sv\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: KBabel 1.11.4\n"
-"Plural-Forms:  nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 1.7.3\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #. Type: select
 #. Choices
@@ -45,11 +46,6 @@ msgstr "Automatisk ommappning av klientfrågor:"
 #. Type: select
 #. Description
 #: ../apt-cacher-ng.templates:2002
-#, fuzzy
-#| msgid ""
-#| "Apt-Cacher NG can download packages from repositories other than those "
-#| "requested by the clients. This allows it to cache content effectively, "
-#| "and makes it easy for an administrator to switch to another mirror later."
 msgid ""
 "Apt-Cacher NG can download packages from repositories other than those "
 "requested by the clients. This allows it to cache content effectively, and "
@@ -57,9 +53,11 @@ msgid ""
 "URL remapping can be set up automatically, using a configuration based on "
 "the current state of /etc/apt/sources.list."
 msgstr ""
-"Apt-Cacher NG kan ladda ner paket från arkiv som klienten inte frågat efter. "
-"Detta gör att den kan cacha innehåll effektivt och gör det enkelt för en "
-"administratör att byta till en annan spegel vid ett senare tillfälle."
+"Apt-Cacher NG kan ladda ner paket från arkiv utöver de som klienterna frågat "
+"om. Detta gör att den kan cacha innehåll effektivt och gör det enkelt för en "
+"administratör att byta till en annan spegel vid ett senare tillfälle. "
+"Justeringen av sökvägar kan aktiveras automatiskt genom att basera "
+"inställningarna på nuvarande läge i filen /etc/apt/sources.list."
 
 #. Type: select
 #. Description
@@ -69,6 +67,9 @@ msgid ""
 "reconfigured on every update of Apt-Cacher NG (modifying the configuration "
 "files each time), or left unconfigured."
 msgstr ""
+"Ange om sökvägs-justeringen ska aktiveras en gång för alla nu, om den ska "
+"kunna justeras vid varje uppdatering av Apt-Cacher NG (modifierar "
+"inställningsfilen varje gång) eller om den ska lämnas utan inställning."
 
 #. Type: select
 #. Description
@@ -84,7 +85,7 @@ msgstr ""
 #. Description
 #: ../apt-cacher-ng.templates:3001
 msgid "Listening address(es) for Apt-Cacher NG:"
-msgstr ""
+msgstr "Adress(er) som Apt-Cacher NG lyssnar på:"
 
 #. Type: string
 #. Description
@@ -93,6 +94,8 @@ msgid ""
 "Please specify the local addresses that Apt-Cacher NG should listen on "
 "(multiple entries must be separated by spaces)."
 msgstr ""
+"Ange den lokala adress som Apt-Cacher NG ska lyssna på (separera adresser "
+"med mellanslag)."
 
 #. Type: string
 #. Description
@@ -102,6 +105,9 @@ msgid ""
 "interface. Generic protocol-specific addresses are also supported, such as "
 "0.0.0.0 for listening on all IPv4-enabled interfaces."
 msgstr ""
+"De avgivna IP-adresserna eller värdnamnen måste knytas till ett lokalt "
+"nätverksgränssnitt. Generella protokollspecifika adresser stöds också, "
+"exempelvis 0.0.0.0 för att lyssna på alla IPv4-kapabla gränssnitt."
 
 #. Type: string
 #. Description
@@ -110,6 +116,8 @@ msgid ""
 "If this field is left empty, Apt-Cacher NG will listen on all interfaces, "
 "with all supported protocols."
 msgstr ""
+"Om detta fält lämnas tomt kommer Apt-Cacher NG att lyssna på alla gränssnitt "
+"med alla protokoll som stöds."
 
 #. Type: string
 #. Description
@@ -119,13 +127,13 @@ msgstr ""
 msgid ""
 "The special word \"keep\" keeps the value from the current (or default) "
 "configuration unchanged."
-msgstr ""
+msgstr "Specialordet \"keep\" lämnar nuvarande inställning utan justering."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:4001
 msgid "Listening TCP port:"
-msgstr ""
+msgstr "TCP-port att lyssna på:"
 
 #. Type: string
 #. Description
@@ -135,6 +143,9 @@ msgid ""
 "HTTP (proxy) requests. The default value is port 3142, but it can be set to "
 "9999 to emulate apt-proxy."
 msgstr ""
+"Ange den TCP-port som Apt-Cacher NG ska lyssna på för att hitta inkommande "
+"HTTP-förfrågningar. Standardvärdet för port är 3142 men kan också sättas "
+"till 9999 för att emulera apt-proxy."
 
 #. Type: string
 #. Description
@@ -143,12 +154,14 @@ msgid ""
 "If this field is left empty, the value from the current configuration "
 "remains unchanged."
 msgstr ""
+"Om detta fält lämnas blankt kommer värdet från nuvarande inställning att "
+"lämnas oförändrad."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:5001
 msgid "Top-level directory for package cache:"
-msgstr ""
+msgstr "Sökväg för paket-cache:"
 
 #. Type: string
 #. Description
@@ -157,6 +170,8 @@ msgid ""
 "The main cache storage directory should be located on a file system without "
 "file name restrictions."
 msgstr ""
+"Sökvägen för lagring av paket-cachen ska vara på ett filsystem utan "
+"restriktioner för filnamnen."
 
 #. Type: string
 #. Description
@@ -165,18 +180,20 @@ msgid ""
 "If this field is left empty, the value from the current configuration "
 "remains unchanged or is set to the default of /var/cache/apt-cacher-ng."
 msgstr ""
+"Om detta fält lämnas blankt kommer nuvarande inställningar att behållas "
+"eller sättas till standardvärdet /var/cache/apt-cacher-ng."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:6001
 msgid "Proxy to use for downloads:"
-msgstr ""
+msgstr "Proxy som ska användas för nedladdning:"
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:6001
 msgid "Please specify the proxy server to use for downloads."
-msgstr ""
+msgstr "Ange den proxyserver som ska användas vid nedladdningar."
 
 #. Type: string
 #. Description
@@ -186,6 +203,9 @@ msgid ""
 "the user:pass@host:port scheme. However, please check the documentation for "
 "limitations."
 msgstr ""
+"Användarnamn och lösenord för proxyservern kan inkluderas här genom schemat "
+"användare:lösenord@värd:port. De restriktioner som finns kan studeras i "
+"dokumentationen."
 
 #. Type: string
 #. Description
@@ -193,6 +213,36 @@ msgstr ""
 msgid ""
 "If this field is left empty, Apt-Cacher NG will not use any proxy server."
 msgstr ""
+"Om detta fält lämnas blankt kommer Apt-Cacher NG inte att använda en "
+"proxyserver."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid "Allow HTTP tunnels through Apt-Cacher NG?"
+msgstr "HTTP-tunnlar tillåtas genom Apt-Cacher NG?"
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
+msgstr ""
+"Apt-Cacher NG kan ställas in så att användare kan skapa HTTP-tunnlar, dessa "
+"kan användas för att komma åt fjärrservrar som annars skulle vara utom "
+"räckhåll exempelvis genom att en brandvägg filtrerar bort HTTPS-anslutningar."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"This feature is usually disabled for security reasons; enable it only for "
+"trusted LAN environments."
+msgstr ""
+"Denna funktion är avstängd av säkerhetsskäl, aktivera den endast för "
+"betrodda miljöer i interna nätverk."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

@@ -2,13 +2,13 @@
 # COPYRIGHT (C) 2014, apt-cacher-ng's copyright holder
 # This file is distributed under the same license as the apt-cacher-ng package.
 # Vincenzo Campanella <vinz65@gmail.com>, 2009.
-# Beatrice Torracca <beatricet@libero.it>, 2014.
+# Beatrice Torracca <beatricet@libero.it>, 2014, 2015.
 msgid ""
 msgstr ""
 "Project-Id-Version: apt-cacher-ng 0.4-2\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2014-01-27 06:52+0100\n"
-"PO-Revision-Date: 2014-02-10 19:45+0200\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
+"PO-Revision-Date: 2015-04-06 16:20+0200\n"
 "Last-Translator: Beatrice Torracca <beatricet@libero.it>\n"
 "Language-Team: Italian <debian-l10n-italian@lists.debian.org>\n"
 "Language: it\n"
@@ -40,7 +40,7 @@ msgstr "Nessuna impostazione automatica"
 #. Description
 #: ../apt-cacher-ng.templates:2002
 msgid "Automatic remapping of client requests:"
-msgstr "Ridirezione automatica delle richieste dei client:"
+msgstr "Riscrittura automatica delle richieste dei client:"
 
 #. Type: select
 #. Description
@@ -55,7 +55,7 @@ msgstr ""
 "Apt-Cacher NG può scaricare i pacchetti da repository diversi da quelli "
 "richiesti dai client. Questo consente di memorizzare localmente il contenuto "
 "in maniera efficace e facilita agli amministratori un eventuale successivo "
-"passaggio a un altro mirror. La ridirezione degli URL può essere impostata "
+"passaggio a un altro mirror. La riscrittura degli URL può essere impostata "
 "automaticamente usando una configurazione basata sullo stato attuale di /etc/"
 "apt/sources.list."
 
@@ -67,7 +67,7 @@ msgid ""
 "reconfigured on every update of Apt-Cacher NG (modifying the configuration "
 "files each time), or left unconfigured."
 msgstr ""
-"Specificare se la ridirezione deve essere configurata una volta sola ora o "
+"Specificare se la riscrittura deve essere configurata una volta sola ora o "
 "riconfigurata ad ogni aggiornamento di Apt-Cacher NG (modificando ogni volta "
 "i file di configurazione), oppure lasciata non configurata."
 
@@ -219,6 +219,35 @@ msgid ""
 msgstr ""
 "Se questo campo viene lasciato vuoto, Apt-Cacher NG non userà alcun server "
 "proxy."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid "Allow HTTP tunnels through Apt-Cacher NG?"
+msgstr "Permettere tunnel HTTP attraverso Apt-Cacher NG?"
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
+msgstr ""
+"Apt-Cacher NG può essere configurato per permettere agli utenti di creare "
+"tunnel HTTP i quali possono essere usati per accedere a server remoti che "
+"altrimenti potrebbero essere bloccati, ad esempio, da un firewall che filtra "
+"le connessioni"
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"This feature is usually disabled for security reasons; enable it only for "
+"trusted LAN environments."
+msgstr ""
+"Questa funzionalità è solitamente disabilitata per ragioni di sicurezza; "
+"abilitarla solo per ambienti LAN fidati."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

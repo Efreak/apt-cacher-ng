@@ -22,7 +22,7 @@ capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 //#define COMPONENT_OPTIONAL "(-[a-z0-9-])"
 //#define PARANOIASOURCE "(\\.orig|\\.debian)"
 
-string spfilepat(INFOLDER ".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST "\\.gpg)$");
+string spfilepat(INFOLDER ".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")\\.gpg$");
 
 string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
@@ -31,6 +31,8 @@ string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
 		"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
 ")$");
+
+string svfilepat("/development/rawhide/.*");
 
 string vfilepat(INFOLDER
 		"(Index|Packages" COMPOPT "|InRelease|Release|mirrors\\.txt|.*\\.gpg|NEWS\\.Debian"
@@ -45,8 +47,11 @@ string vfilepat(INFOLDER
 		"|" ALXPATTERN // Arch Linux
 		"|metalink\\?repo|.*prestodelta\\.xml\\.gz|repodata/.*\\.(xml|sqlite)" COMPOPT // CentOS
 		"|\\.treeinfo|vmlinuz|(initrd|product|squashfs|updates)\\.img" // Fedora
+		"|\\.o" // https://bugs.launchpad.net/ubuntu/+source/apt-cacher-ng/+bug/1078224
 		")$" // end of only-filename paterns
-		"|/dists/.*/installer-[^/]+/[^0-9][^/]+/images/.*"); // d-i stuff but not containing a date (year number) in the revision directory (like "current", "beta", ...)
+		"|/dists/.*/installer-[^/]+/[^0-9][^/]+/images/.*" // d-i stuff but not containing a date (year number) in the revision directory (like "current", "beta", ...)
+		"|/pks/lookup.op.get" // some Ubuntu PPA management activity
+);
 
 //string wfilepat( VPATPREFIX  "(Release|Release\\.gpg|release|meta-release|Translation[^/]*\\.bz2)$");
 //string wfilepat(vfilepat);
@@ -59,7 +64,7 @@ string wfilepat(INFOLDER
 		"|[a-z]+32.exe"
 		")$");
 
-string pfilepatEx, spfilepatEx, vfilepatEx, wfilepatEx; // for customization by user
+string pfilepatEx, spfilepatEx, vfilepatEx, svfilepatEx, wfilepatEx; // for customization by user
 int offlinemode(false), verboselog(true), stupidfs(false), forcemanaged(false),
 extreshhold(20), tpstandbymax(8), tpthreadmax(-1), dirperms(00755), fileperms(00664),
 keepnver(0), maxtempdelay(27), vrangeops(1);

@@ -22,7 +22,7 @@
 #cmakedefine HAVE_LIBWRAP
 #cmakedefine HAVE_SYS_MOUNT_H
 #cmakedefine HAVE_SYS_VFS_H
-#cmakedefine PTHREAD_COND_TIMEDWAIT_TIME_RANGE_OK
 #cmakedefine HAVE_SSL
 #cmakedefine HAVE_SD_NOTIFY
 #cmakedefine HAVE_LINUX_EVENTFD
+#cmakedefine ACVERSION "@ACVERSION@"

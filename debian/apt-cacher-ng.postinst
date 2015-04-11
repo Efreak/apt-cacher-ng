@@ -241,6 +241,12 @@ HERESEC
       fi
    fi
 
+   PTENABLE='# PassThroughPattern: setting is not configured by debconf'
+   db_get $NAME/tunnelenable
+   if [ x"$RET" = x"true" ] ; then
+      PTENABLE='PassThroughPattern: .*'
+   fi
+
    cat << HERE > $CONFIGFILE
 # This is a configuration generated file managed by the package configuration
 # scripts of apt-cacher-ng. All manual changes here will be overriden.
@@ -255,6 +261,7 @@ $PROXY
 $PORT
 $BINDADDRESS
 $CDIRCONF
+$PTENABLE
 
 HERE
 

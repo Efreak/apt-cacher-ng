@@ -3,7 +3,9 @@
 .settings
 *.swp
 *~
-build
+build/*.h
+build/*ng*
+build/*ake*
 TODO.next
 dbgen/tmp/*
 doc/dev/*

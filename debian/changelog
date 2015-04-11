@@ -1,3 +1,27 @@
+apt-cacher-ng (0.8.1-1~bpo70+1) wheezy-backports; urgency=low
+
+  * Minor version update
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 13 Feb 2015 16:48:46 +0100
+
+apt-cacher-ng (0.8.1-1) unstable; urgency=low
+
+  * New upstream version
+    + transition to libsystemd without -daemon where possible (closes: #779739)
+    + LTO disabled by default (closes: #777753)
+    + *.o file download as volatile type (LP: #1078224)
+    + more Fedora mirrors (Carlos Maddela, closes: #780555)
+    + corrects handling of SPfilePatternEx (Carlos Maddela, closes: #780550)
+  * Debconf question to enable HTTP tunnels, e.g. for https (closes: #734581)
+  * Debconf translation updates: German (Holger Wansing, closes: #781921),
+    French (Jean-Baka Domelevo Entfellner, closes: #782026), Italian (Beatrice
+    Torracca, closes: #782013), Dutch (Frans Spiesschaert), Polish (Łukasz
+    <BartekChom@poczta.onet.pl>), Swedish (Martin Bagge, Anders Jonsson,
+    closes: #781672), Czech (Miroslav Kure, closes: #781447), Russian (Yuri
+    Kozlov, closes: #781364), Danish (Joe Dalton, closes: #781328)
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 10 Apr 2015 23:40:20 +0200
+
 apt-cacher-ng (0.8.0-3~bpo70+2) wheezy-backports; urgency=low
 
   * Making sure to really use g++-4.7 on all architectures

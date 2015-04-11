@@ -1,3 +1,25 @@
+apt-cacher-ng (0.8.1) JUST-A-LITTLE-BIT; urgency=low
+
+  [Eduard Bloch]
+  * Minor build system improvements
+  * Mirror database update
+  * Added .o files to volatile file name pattern (LP: #1078224)
+  * LTO disabled by default (Debian bug #777753)
+  * Simple regex testing helper
+  * Add handling of http://keyserver.ubuntu.com:11371/pks/lookup?op=get...
+    calls to volatile file pattern (LP: #993426)
+  * Added special method to tell the server to switch to HTTPS transport
+  * Unified the injection of additional mirrors when building mirror lists
+  * Added additional mirror list source (mirrors.fedoraproject.org services),
+    investigated by Carlos Maddela (Debian bug #780555)
+
+  [Carlos Maddela]
+  * Allow Fedora Rawhide repository to be treated as volatile
+  * Fixed support for SPfilePatternEx and improved documentation (Debian
+    bug #780550)
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 10 Apr 2015 18:35:31 +0200
+
 apt-cacher-ng (0.8.0) GOOD-ENOUGH; urgency=low
 
   * Work around damaged cache contents when retrieving index files in

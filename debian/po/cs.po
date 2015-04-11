@@ -1,14 +1,14 @@
 # Czech translation of apt-cacher-ng debconf messages.
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the apt-cacher-ng package.
-# Miroslav Kure <kurem@debian.cz>, 2009--2014
+# Miroslav Kure <kurem@debian.cz>, 2009--2015
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: apt-cacher-ng\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2014-01-27 06:52+0100\n"
-"PO-Revision-Date: 2014-02-09 16:37+0100\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
+"PO-Revision-Date: 2015-03-29 14:39+0200\n"
 "Last-Translator: Miroslav Kure <kurem@debian.cz>\n"
 "Language-Team: Czech <debian-l10n-czech@lists.debian.org>\n"
 "Language: cs\n"
@@ -210,6 +210,34 @@ msgid ""
 "If this field is left empty, Apt-Cacher NG will not use any proxy server."
 msgstr ""
 "Ponecháte-li prázdné, Apt-Cacher NG nebude používat žádný proxy server."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid "Allow HTTP tunnels through Apt-Cacher NG?"
+msgstr "Povolit HTTP tunely skrze Apt-Cacher NG?"
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
+msgstr ""
+"Apt-Cacher NG se dá nastavit tak, aby uživatelům umožnil vytváření HTTP "
+"tunelů, skrze které lze přistupovat k serverům, které mohou být jinak "
+"blokované (například firewallem filtrujícím HTTPS spojení)."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"This feature is usually disabled for security reasons; enable it only for "
+"trusted LAN environments."
+msgstr ""
+"Tato vlastnost bývá obvykle z bezpečnostních důvodů vypnutá. Povolte ji "
+"pouze na důvěryhodných lokálních sítích."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

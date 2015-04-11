@@ -1,16 +1,18 @@
-# translation of apt-cacher-ng_eu.po to basque
+# Basque translation for apt-cacher-ng
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the PACKAGE package.
+#
 # Piarres Beobide <pi@beobide.net>, 2009.
-# Iñaki Larrañaga Murgoitio <dooteo@euskalgnu.org>, 2009.
+# Iñaki Larrañaga Murgoitio <dooteo@euskalgnu.org>, 2009, 2015.
 # Joseba Goitia Gandiaga <joseba@goitia.org>, 2014.
+#
 msgid ""
 msgstr ""
-"Project-Id-Version: apt-cacher-ng_eu\n"
+"Project-Id-Version: apt-cacher-ng_eu 0.8.1-1\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2014-01-27 06:52+0100\n"
-"PO-Revision-Date: 2014-02-08 23:23+0100\n"
-"Last-Translator: Joseba Goitia Gandiaga <joseba@goitia.org>\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
+"PO-Revision-Date: 2015-03-28 11:36+0100\n"
+"Last-Translator: Iñaki Larrañaga Murgoitio <dooteo@zundan.com>\n"
 "Language-Team: Basque <debian-l10n-basque@lists.debian.org>\n"
 "Language: eu\n"
 "MIME-Version: 1.0\n"
@@ -29,13 +31,13 @@ msgstr "Konfiguratu behin"
 #. Choices
 #: ../apt-cacher-ng.templates:2001
 msgid "Set up now and update later"
-msgstr "Konfiguratu orain eta eguneratu beranduago"
+msgstr "Konfiguratu orain eta eguneratu geroago"
 
 #. Type: select
 #. Choices
 #: ../apt-cacher-ng.templates:2001
 msgid "No automated setup"
-msgstr "Ez egin konfigurazio automatikorik"
+msgstr "Ez konfiguratu automatikoki"
 
 #. Type: select
 #. Description
@@ -56,7 +58,7 @@ msgstr ""
 "Bezeroek eskatu ez dituzten biltegietatik Apt-Cacher NG aplikazioak paketeak "
 "deskarga ditzake. Honek edukia cache eraginkorrago batean gordetzea "
 "baimentzen du, eta administratzaileek beranduago beste ispilu batera "
-"aldatzea errazten du. URL birmapatzea automatikoki egin daiteke, uneko /etc/"
+"aldatzea errazten du. URLak birmapatzea automatikoki egin daiteke, uneko /etc/"
 "apt/sources.list egoera oinarritzat duen konfigurazioa erabilita."
 
 #. Type: select
@@ -67,9 +69,9 @@ msgid ""
 "reconfigured on every update of Apt-Cacher NG (modifying the configuration "
 "files each time), or left unconfigured."
 msgstr ""
-"Mesedez zehaztu birmapatzea behin konfiguratu behar den orain, edo Apt-"
-"Cacher NG eguneratze bakoitzean birkonfiguratu behar den (aldi bakoitzean "
-"konfigurazio fitxategiak aldatuz), edo konfiguratu gabe utzi."
+"Zehaztu birmapatzea behin konfiguratu behar den orain, edo "
+"Apt-Cacher NG eguneratze bakoitzean birkonfiguratu behar den "
+"(aldi bakoitzean konfigurazio fitxategiak aldatuz), edo konfiguratu gabe utzi."
 
 #. Type: select
 #. Description
@@ -78,14 +80,14 @@ msgid ""
 "Selecting \"No automated setup\" will leave the existing configuration "
 "unchanged. It will need to be updated manually."
 msgstr ""
-"\"Ez egin konfigurazio automatikorik\" hautatuz dagoen konfigurazioa aldatu "
+"\"Ez konfiguratu automatikoki\" hautatuz dagoen konfigurazioa aldatu "
 "gabe utziko du. Eskuz eraldatu beharko duzu."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:3001
 msgid "Listening address(es) for Apt-Cacher NG:"
-msgstr "Apt-Cacher NG-rako entzungai dauden helbidea(k)"
+msgstr "Apt-Cacher NG-rako entzungai dauden helbideak:"
 
 #. Type: string
 #. Description
@@ -94,8 +96,8 @@ msgid ""
 "Please specify the local addresses that Apt-Cacher NG should listen on "
 "(multiple entries must be separated by spaces)."
 msgstr ""
-"Mesedez zehaztu Apt-Cacher NG entzun behar dituen helbide lokalak. (sarrera "
-"aniztuak txuriunekin banandu behar dira)"
+"Zehaztu Apt-Cacher NG entzun behar dituen helbide lokalak. (sarrera "
+"aniztuak zuriuneekin banandu behar dira)"
 
 #. Type: string
 #. Description
@@ -105,9 +107,9 @@ msgid ""
 "interface. Generic protocol-specific addresses are also supported, such as "
 "0.0.0.0 for listening on all IPv4-enabled interfaces."
 msgstr ""
-"Sarrera bakoitza Ip helbide edo sare lokaleko intefaze batekin  elakartutako "
-"ostalari-izena izan behar du. Protokolo-zehatzen helmuga generikoak ere "
-"sostengatzen dira, adibidez 0.0.0.0 IPv4-gaitutako interfaze guztietan "
+"Sarrera bakoitza Ip helbide edo sare lokaleko interfaze batekin  elkartutako "
+"ostalari-izena izan behar du. Protokolo-zehatzen helbide generikoak ere "
+"onartzen dira, adibidez 0.0.0.0 IPv4-gaitutako interfaze guztietan "
 "entzuteko."
 
 #. Type: string
@@ -117,8 +119,9 @@ msgid ""
 "If this field is left empty, Apt-Cacher NG will listen on all interfaces, "
 "with all supported protocols."
 msgstr ""
-"Alor hau huts utzi ezkero, Apt-Cacher NG interfaz guztiak eta gaitutako "
-"protokolo guztiak entzungo ditu."
+"Eremu hau hutsik utziz gero, 'Apt-Cacher NG'-ek  interfaze guztietan entzungo "
+"du "
+"(onartutako protokolo guztiekin)."
 
 #. Type: string
 #. Description
@@ -129,14 +132,14 @@ msgid ""
 "The special word \"keep\" keeps the value from the current (or default) "
 "configuration unchanged."
 msgstr ""
-"\"keep\" hitz bereziak momentuko (edo lehenetsitako) kongigurazio balioak "
-"aldaketa barik uzten ditu."
+"\"keep\" hitz bereziak uneko (edo lehenetsia den) konfigurazioaren balioa "
+"aldatu gabe uzten du."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:4001
 msgid "Listening TCP port:"
-msgstr "TCP ataka entzungai:"
+msgstr "TCP ataka entzuteko:"
 
 #. Type: string
 #. Description
@@ -146,9 +149,9 @@ msgid ""
 "HTTP (proxy) requests. The default value is port 3142, but it can be set to "
 "9999 to emulate apt-proxy."
 msgstr ""
-"Mesedez zehaztu Apt-Cacher NG entzun behar duen TCP ataka HTTP (proxya) "
-"sartzen diren eskaeretarako. Lehenetsitako balioa 3141 ataka da, baina 9999 "
-"ataka ezarri daiteke apt-proxy emulatzeko."
+"Zehaztu Apt-Cacher NG entzun behar duen TCP ataka sarrerako HTTP (proxya) "
+"eskaerentzako. Balio lehenetsia: 3141 ataka da, baina 9999 gisa ezar daiteke "
+"apt-proxy emulatzeko."
 
 #. Type: string
 #. Description
@@ -157,14 +160,14 @@ msgid ""
 "If this field is left empty, the value from the current configuration "
 "remains unchanged."
 msgstr ""
-"Eremu hau huts utzi ezkero,  momentuko konfigurazio balioa aldaketa barik "
-"mantentzen da."
+"Eremu hau hutsik  utziz gero, uneko konfigurazioren balioa aldaketarik gabe "
+"utziko da."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:5001
 msgid "Top-level directory for package cache:"
-msgstr "Goi mailako direktorioa pakete katxerako:"
+msgstr "Goi mailako direktorioa paketeen cacherako:"
 
 #. Type: string
 #. Description
@@ -173,8 +176,9 @@ msgid ""
 "The main cache storage directory should be located on a file system without "
 "file name restrictions."
 msgstr ""
-"Katxe nagusiaren biltegiratze direktorioa izen murrizketarik ez duen "
-"fitxategi-sistema batean kokatu behar da."
+"Cache nagusiaren biltegiaren direktorioa fitxategi-izenean murriztapenik ez "
+"duen "
+"fitxategi-sistema batean kokatu beharko da."
 
 #. Type: string
 #. Description
@@ -183,20 +187,21 @@ msgid ""
 "If this field is left empty, the value from the current configuration "
 "remains unchanged or is set to the default of /var/cache/apt-cacher-ng."
 msgstr ""
-"eremu hau hutsik utzi ezkero, momentu kongiruazio balioa aldaketa barik "
-"geratzen da, edo lehenetsitako /var/cache/apt-cacher-ng balioa hartzen du."
+"Eremu hau hutsik utziz gero, uneko konfigurazioko balioa aldatu gabe utziko "
+"da, "
+"'/var/cache/apt-cacher-ng'-eko balio lehenetsiarekin ezarriko da."
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:6001
 msgid "Proxy to use for downloads:"
-msgstr "Deskargentzako proxy-a"
+msgstr "Proxya deskargetan erabiltzeko:"
 
 #. Type: string
 #. Description
 #: ../apt-cacher-ng.templates:6001
 msgid "Please specify the proxy server to use for downloads."
-msgstr "Mesedez zehaztu deskargentzako erabili beharreko proxy zerbitzaria."
+msgstr "Zehaztu deskargentzako erabiliko duten proxy-zerbitzaria."
 
 #. Type: string
 #. Description
@@ -206,9 +211,9 @@ msgid ""
 "the user:pass@host:port scheme. However, please check the documentation for "
 "limitations."
 msgstr ""
-"Proxy zerbitzarirako erabiltzaile izena eta pasahitza hemen gehitu daitezke "
-"erabiltzaile:pasahitza@helmuga:ataka eskema erabilita. Hala ere, mesedez, "
-"dokumentazioa aztertu mugak ezagutzeko."
+"Proxy zerbitzarirako erabiltzaile-izena eta pasahitza hemen gehi daiteke "
+"'erabiltzailea:pasahitza@ostalaria:ataka' eskema erabilita. Hala ere, "
+"irakurri dokumentazioa mugak ezagutzeko."
 
 #. Type: string
 #. Description
@@ -216,7 +221,38 @@ msgstr ""
 msgid ""
 "If this field is left empty, Apt-Cacher NG will not use any proxy server."
 msgstr ""
-"eremu hau huts utzi ezkero, Apt-Cacher NG ez du proxy zerbitzaririk erabilko."
+"Eremu hau hutsik utziz gero, 'Apt-Cacher NG'-ek ez du proxy-zerbitzaririk "
+"erabiliko."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid "Allow HTTP tunnels through Apt-Cacher NG?"
+msgstr "'Apt-Cacher NG' bidezko HTTP tunelak baimendu?"
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
+msgstr ""
+"Erabiltzaileei HTTP tunelak sortzea baimentzeko konfigura daiteke Apt-Cacher "
+"NG."
+"Adibidez, HTTPS konexioak iragazten dituen suebaki batek blokeatuta eduki "
+"ditzakeen "
+"urruneko zerbitzarietara sarbidetzeko erabil daiteke."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"This feature is usually disabled for security reasons; enable it only for "
+"trusted LAN environments."
+msgstr ""
+"Eginbide hau desgaituta egon ohi da segurtasuneko arrazoiak direla eta. "
+"Soilik LAN ingurumen fidagarrietan gaitu."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

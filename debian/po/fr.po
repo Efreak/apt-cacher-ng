@@ -9,8 +9,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: apt-cacher-ng\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2014-01-27 06:52+0100\n"
-"PO-Revision-Date: 2014-01-29 01:05+0200\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
+"PO-Revision-Date: 2015-04-01 13:01+0200\n"
 "Last-Translator: Jean-Baka Domelevo Entfellner <domelevo@gmail.com>\n"
 "Language-Team: French <debian-l10n-french@lists.debian.org>\n"
 "Language: fr\n"
@@ -223,6 +223,35 @@ msgid ""
 msgstr ""
 "Si ce champ est laissé vide, Apt-Cacher NG n'utilisera pas de serveur "
 "mandataire (« proxy »)."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid "Allow HTTP tunnels through Apt-Cacher NG?"
+msgstr "Faut-il autoriser la création de tunnels HTTP par Apt-Cacher NG ?"
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
+msgstr ""
+"Apt-Cacher NG peut être configuré de façon à autoriser la création de "
+"tunnels HTTP, lesquels peuvent être utilisés pour accéder par exemple à des "
+"serveurs distants situés derrière un pare-feu filtrant les connexions HTTPS."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"This feature is usually disabled for security reasons; enable it only for "
+"trusted LAN environments."
+msgstr ""
+"Cette fonctionnalité est habituellement désactivée pour des raisons de "
+"sécurité, ne l'utilisez que dans des environnements réseau dignes de "
+"confiance."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

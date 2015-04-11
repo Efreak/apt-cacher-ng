@@ -22,8 +22,8 @@ public:
 
 protected:
 	// FileHandler
-	bool ProcessRegular(const mstring &sPath, const struct stat &);
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry);
+	bool ProcessRegular(const mstring &sPath, const struct stat &) override;
+	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override;
 	void _LoadKeyCache(const mstring & sFileName);
 
 	bool m_bCalcSize=false, m_bSkipIxUpdate =false,

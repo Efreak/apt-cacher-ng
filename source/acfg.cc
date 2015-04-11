@@ -98,11 +98,13 @@ MapNameToString n2sTbl[] = {
 		,{  "VfilePattern",            &vfilepat}
 		,{  "PfilePattern",            &pfilepat}
 		,{  "SPfilePattern",           &spfilepat}
+		,{  "SVfilePattern",           &svfilepat}
 		,{  "WfilePattern",            &wfilepat}
 		,{  "VfilePatternEx",          &vfilepatEx}
 		,{  "PfilePatternEx",          &pfilepatEx}
 		,{  "WfilePatternEx",          &wfilepatEx}
-		,{  "SPfilePattern",           &spfilepatEx}
+		,{  "SPfilePatternEx",         &spfilepatEx}
+		,{  "SVfilePatternEx",         &svfilepatEx}
 //		,{  "AdminAuth",               &adminauth}
 		,{  "BindAddress",             &bindaddr}
 		,{  "UserAgent",               &agentname}
@@ -385,8 +387,13 @@ tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
 				{
 					auto nam(GetBaseName(s));
 					if(bAddDefault)
-						nam.erase(nam.size()-8);
+					nam.erase(nam.size()-8);
+#if __GNUC__ >= 4 && __GNUC_MINOR__ < 8
+					if(bname2path.find(nam) == bname2path.end())
+						bname2path[nam]=s;
+#else
 					bname2path.emplace(nam, s);
+#endif
 				}
 
 			}
@@ -1230,6 +1237,7 @@ time_t BackgroundCleanup()
 	return ret;
 }
 
+#ifdef SUPPWHASH
 #ifdef HAVE_SSL
 bool DecodeBase64(LPCSTR pAscii, acbuf& binData) {
 	if(!pAscii)
@@ -1247,6 +1255,7 @@ bool DecodeBase64(LPCSTR pAscii, acbuf& binData) {
 	checkForceFclose(memStrm);
 	return binData.size();
 }
+#endif
 #endif
 
 lockable authLock;
@@ -1347,6 +1356,8 @@ bool CompileExpressions()
 			&& compat(rex[PASSTHROUGH].pat, PTHOSTS_PATTERN.c_str())
 			&& compat(rex[FILE_SPECIAL_SOLID].pat, spfilepat.c_str())
 			&& compat(rex[FILE_SPECIAL_SOLID].extra, spfilepatEx.c_str())
+			&& compat(rex[FILE_SPECIAL_VOLATILE].pat, svfilepat.c_str())
+			&& compat(rex[FILE_SPECIAL_VOLATILE].extra, svfilepatEx.c_str())
 			);
 }
 
@@ -1364,11 +1375,14 @@ bool Match(cmstring &in, eMatchType type)
 	if(MatchType(in, type))
 		return true;
 	// XXX: very special behavior...
-	return (type == FILE_SOLID && MatchType(in, FILE_SPECIAL_SOLID));
+	return (type == FILE_SOLID && MatchType(in, FILE_SPECIAL_SOLID))
+		|| (type == FILE_VOLATILE && MatchType(in, FILE_SPECIAL_VOLATILE));
 }
 
 eMatchType GetFiletype(const string & in)
 {
+	if (MatchType(in, FILE_SPECIAL_VOLATILE))
+		return FILE_VOLATILE;
 	if (MatchType(in, FILE_SPECIAL_SOLID))
 		return FILE_SOLID;
 	if (MatchType(in, FILE_VOLATILE))
@@ -1379,6 +1393,7 @@ eMatchType GetFiletype(const string & in)
 }
 
 #ifndef MINIBUILD
+
 inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool bRecursiveCall)
 {
 	auto & patvec = (NOCACHE_TGT == type) ? vecTgtPatterns : vecReqPatters;
@@ -1466,3 +1481,19 @@ void mkbasedir(const string & path)
     }
 }
 
+#ifndef MINIBUILD
+LPCSTR ReTest(LPCSTR s)
+{
+	static LPCSTR names[rechecks::ematchtype_max] =
+	{
+				"FILE_SOLID", "FILE_VOLATILE",
+				"FILE_WHITELIST",
+				"NASTY_PATH", "PASSTHROUGH",
+				"FILE_SPECIAL_SOLID"
+	};
+	auto t = rechecks::GetFiletype(s);
+	if(t<0 || t>=rechecks::ematchtype_max)
+		return "NOMATCH";
+	return names[t];
+}
+#endif

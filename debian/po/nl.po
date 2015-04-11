@@ -2,20 +2,22 @@
 # Copyright (C) 2011 THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the apt-cacher-ng package.
 # Jeroen Schot <schot@a-eskwadraat.nl>, 2011.
-# Frans Spiesschaert <Frans.Spiesschaert@yucom.be>, 2014.
+# Frans Spiesschaert <Frans.Spiesschaert@yucom.be>, 2014, 2015.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: apt-cacher-ng 0.6.10-2\n"
+"Project-Id-Version: apt-cacher-ng 0.8.1-1\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
-"POT-Creation-Date: 2014-01-27 06:52+0100\n"
-"PO-Revision-Date: 2014-09-25 17:53+0200\n"
+"POT-Creation-Date: 2015-03-17 19:19+0100\n"
+"PO-Revision-Date: 2015-03-27 20:44+0100\n"
 "Last-Translator: Frans Spiesschaert <Frans.Spiesschaert@yucom.be>\n"
 "Language-Team: Debian Dutch l10n Team <debian-l10n-dutch@lists.debian.org>\n"
 "Language: nl\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Gtranslator 2.91.6\n"
 
 #. Type: select
 #. Choices
@@ -217,6 +219,35 @@ msgstr ""
 msgid ""
 "If this field is left empty, Apt-Cacher NG will not use any proxy server."
 msgstr "Bij een leeg veld zal Apt-Cacher NG geen enkele proxyserver gebruiken."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid "Allow HTTP tunnels through Apt-Cacher NG?"
+msgstr "HTTP-tunnels via Apt-Cacher NG toelaten?"
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"Apt-Cacher NG can be configured to allow users to create HTTP tunnels, which "
+"can be used to access remote servers that might otherwise be blocked by (for "
+"instance) a firewall filtering HTTPS connections."
+msgstr ""
+"Apt-Cacher NG kan ingesteld worden om gebruikers toe te laten een HTTP-"
+"tunnel te creëren die gebruikt kan worden om verbinding te maken met externe "
+"servers die anders geblokkeerd zouden kunnen worden door (bijvoorbeeld) een "
+"firewall die HTTPS-verbindingen filtert."
+
+#. Type: boolean
+#. Description
+#: ../apt-cacher-ng.templates:7001
+msgid ""
+"This feature is usually disabled for security reasons; enable it only for "
+"trusted LAN environments."
+msgstr ""
+"Uit veiligheidsoverwegingen is deze functionaliteit meestal gedeactiveerd. "
+"Activeer ze enkel in te vertrouwen LAN-omgevingen."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

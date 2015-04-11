@@ -310,6 +310,7 @@ int main(int argc, char **argv)
 
 	// preprocess some startup related parameters
 	bool bForceCleanup(false);
+	LPCSTR pReTest(nullptr);
 	for (char **p=argv+1; p<argv+argc; p++)
 	{
 		if (!strncmp(*p, "-h", 2))
@@ -347,6 +348,13 @@ int main(int argc, char **argv)
 		{
 			bDumpCfg=true;
 		}
+		else if (!strcmp(*p, "--retest"))
+		{
+			++p;
+			if(p>=argv+argc)
+				exit(EXIT_FAILURE);
+			pReTest=*p;
+		}
 		else if(**p) // not empty
 		{
 			if(!acfg::SetOption(*p, false))
@@ -379,6 +387,12 @@ int main(int argc, char **argv)
 
 	if(bDumpCfg)
 		exit(EXIT_SUCCESS);
+	if(pReTest)
+	{
+		LPCSTR ReTest(LPCSTR);
+		std::cout << ReTest(pReTest) << std::endl;
+		exit(EXIT_SUCCESS);
+	}
 
 	SetupCacheDir();
 
@@ -426,6 +440,7 @@ static void usage() {
 		"-c: configuration directory\n"
 		"-e: on startup, run expiration once\n"
 		"-p: print configuration and exit\n"
+		"--retest string: regular expression tester"
 #if SUPPWHASH
 		"-H: read a password from STDIN and print its hash\n"
 #endif
@@ -558,7 +573,7 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 			}
 	};
 
-	tFileItemPtr fi((fileitem*)new tPrintItem);
+	auto fi=std::make_shared<tPrintItem>();
 	dl.AddJob(fi, &url, nullptr, nullptr);
 	dl.WorkLoop();
 	return (fi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE

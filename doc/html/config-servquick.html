@@ -35,8 +35,8 @@ There is also a daily cron job which executes some maintenance work. Additional 
 From the client side, apt-cacher-ng can be used as a drop-in replacement for apt-cacher. The same rules apply, e.g. Debian/Ubuntu users should EITHER:
 </p>
 <ul><li>
-Specify the caching machine as HTTP Proxy for APT, e.g. putting a line like the following into a file like /etc/apt/apt.conf.d/02proxy:
-<pre><code>Acquire::http { Proxy "http://CacheServerIp:3142"; };
+Specify the caching machine as HTTP Proxy for your download client. This can be usually done (temporarily) with the environment variable <code>http_proxy</code> or (permanently) in some configuration file or dialog. For APT, this means putting a line like the following into a file like /etc/apt/apt.conf.d/02proxy:
+<pre><code>Acquire::http::proxy "http://CacheServerIp:3142";
 </code></pre>
 
 </li>
@@ -60,13 +60,19 @@ should now become:
 <em>(assuming that CacheServerIp is 192.168.0.17 and the service port is 3142)</em>.
 </p>
 <p>
-Mixing both configuration methods is not recommended and will lead to obscure APT failures in most cases.
+These both methods have their own pros and cons. The last method can be used with clients which cannot configure an additional http proxy for some reason. The disadvantages are the worse progress visibility (all downloads seem to come from the same machine) and some resource usage limits might be hit (i.e. maximum number of simultaneous downloads from the "same" machine). It might also require to modify many different URLs and some of those URLs might be hardcoded in software and not be accessible to the user.
 </p>
 <p>
-Additionally, leading path component containing "apt-cacher/" or "apt-cacher?/" might be ignored by the server during the URL processing. This is intended behavior and exists to maintain backwards compatibility to sources.list entries configured for early versions of Apt-Cacher (based on CGI technology).
+The former method is more convenient since it usually means less configuration work; however, it implies that all relevant client programs respect the proxy setting and use it from this central location.
+</p>
+<p>
+Mixing the configuration methods is usually possible but not within the same client program instance. Doing that (going with proxy mode AND use rewritten URLs) will probably confuse the server: in best-case, the connection will be slower because of a little transport loop on the server side, and in the worst-case, the target URL will eventually become not resolvable and the downloads will just fail.
+</p>
+<p>
+Using SSL/TLS transport (i.e. https urls) is also possible with some restrictions, see <a href="howtos.html#ssluse">section 8.3</a> for details.
 </p>
 
 <hr><address>Comments to <a href='mailto:blade@debian.org'>blade@debian.org</a>
 <br>
-[Eduard Bloch, Sat, 08 Oct 2011 23:18:17 +0200]</address></body>
+[Eduard Bloch, Mon, 06 Apr 2015 22:46:43 +0200]</address></body>
 </html>
