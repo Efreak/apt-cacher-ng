@@ -1260,7 +1260,7 @@ Chapter 9: Troubleshooting
 
         -  4: extra debug information is written to apt-cacher.err (also
            enables lots of additional trace points when apt-cacher-ng
-           binary is built with debug configuration, see section 9.5 for
+           binary is built with debug configuration, see section 9.6 for
            details)
 
        To combine that settings, add them (i.e. 7 enables all messages and
@@ -1329,7 +1329,30 @@ Chapter 9: Troubleshooting
        configuration directory and store one path name per line with paths
        relative to the cache directory, as seen in the error messages.
 
-   9.4 Problem: download fails with 503 ... status message
+   9.4 Problem: cacher suddenly terminates, log reports IO errors
+
+       For simplicity and memory saving reasons, apt-cacher-ng assumes that
+       some files can be opened exclusively for reading and they don't
+       suddenly become unreadable. Unfortunatelly, in some conditions and
+       in case of IO errors, this doesn't work and the file systems sends a
+       fatal signal and eventually terminates the program.
+
+       To track this down to the likely reasons, it's possible to execute a
+       custom script in the moment of the reception of the fatal signal. To
+       do that, add something like this to the configuration:
+
+         BusAction = ls -l /proc/$PPID/ | mail -s SIGBUS! root
+
+       This command would send a list of opened files with paths to the
+       "root" mail user, and the root shall check the state of those files
+       (maybe run them through md5sum or similar).
+
+       NOTE: Beware of the security implications of this configuration
+       option. It runs regular shell code in context of the daemon user in
+       a blocking way, so it may be vulnerable to symlink attacks and it
+       will delay the automatic restart of the daemon through systemd.
+
+   9.5 Problem: download fails with 503 ... status message
 
        Code 503 usually represents an internal failure which could not be
        described correctly by other HTTP status codes. In the most cases
@@ -1351,7 +1374,7 @@ Chapter 9: Troubleshooting
           chown -R apt-cacher-ng:apt-cacher-ng /var/cache/apt-cacher-ng
           chmod -R a+rX,g+rw,u+rw /var/cache/apt-cacher-ng
 
-   9.5 Problem: `apt-get' freezes when downloading files
+   9.6 Problem: `apt-get' freezes when downloading files
 
        Solution: First, check:
 
@@ -1382,7 +1405,7 @@ Chapter 9: Troubleshooting
        The value of debug can be varied to have different verbosity (see
        section 9.1 for more information about Debug levels).
 
-   9.6 `apt-get' reports corrupted bzip2 data
+   9.7 `apt-get' reports corrupted bzip2 data
 
        Symptoms: apt-get fails to run through "update" no matter what you
        do. And you may have get a message like this one.
@@ -1412,7 +1435,7 @@ Chapter 9: Troubleshooting
            "immediate deletion" (or delete later after checking the list).
            See section 7.1.1 for details.
 
-   9.7 Problem: `apt-cacher-ng' refuses to start with "Address already in
+   9.8 Problem: `apt-cacher-ng' refuses to start with "Address already in
        use"
 
        Another service is already listening on the port which apt-cacher-ng
@@ -1462,10 +1485,10 @@ Chapter 11: Contact
        contact the author if you really need something not found there and
        you can explain the severity of your request.
 
-       There is also a public mailing list and request trackers available
+       There are also a public mailing list and request trackers available
        on the Alioth project page.
 
        And last, but not least: feel free to express your gratitude by
        donating a small amount of money via PayPal (to edi@gmx.de).
 
-[Eduard Bloch, Mon, 06 Apr 2015 22:46:43 +0200]
+[Eduard Bloch, Sat, 11 Apr 2015 15:10:17 +0200]
