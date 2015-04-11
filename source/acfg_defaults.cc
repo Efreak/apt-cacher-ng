@@ -88,6 +88,7 @@ string remoteport("80"), port(ACNG_DEF_PORT);
 string agentheader;
 
 string requestapx;
+string sigbuscmd;
 
 #ifdef DEBUG
 int debug(3), foreground(true);

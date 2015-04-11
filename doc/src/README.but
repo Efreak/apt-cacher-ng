@@ -1219,6 +1219,27 @@ It needs to be stored as "ignore_list" in the configuration directory and store
 one path name per line with paths relative to the cache directory, as seen in
 the error messages.
 
+\H{sigbus-prob} Problem: cacher suddenly terminates, log reports IO errors
+
+For simplicity and memory saving reasons, apt-cacher-ng assumes that some files
+can be opened exclusively for reading and they don't suddenly become
+unreadable. Unfortunatelly, in some conditions and in case of IO errors, this
+doesn't work and the file systems sends a fatal signal and eventually
+terminates the program.
+
+To track this down to the likely reasons, it's possible to execute a custom script in the moment of the reception of the fatal signal. To do that, add something like this to the configuration:
+
+\c BusAction = ls -l /proc/$PPID/ | mail -s SIGBUS! root
+
+This command would send a list of opened files with paths to the "root" mail
+user, and the root shall check the state of those files (maybe run them through
+md5sum or similar).
+
+NOTE: Beware of the security implications of this
+configuration option. It runs regular shell code in context of the daemon user
+in a blocking way, so it may be vulnerable to symlink attacks and it will delay the
+automatic restart of the daemon through systemd.
+
 \H{503-prob} Problem: download fails with 503 ... status message
 
 Code 503 usually represents an internal failure which could not be described
@@ -1334,7 +1355,7 @@ The planned features are listed in the file TODO. Don't hesitate to
 contact the author if you really need something not found there and you can
 explain the severity of your request.
 
-There is also a public
+There are also a public
 \W{https://alioth.debian.org/mail/?group_id=100566}{mailing list} and
 \W{https://alioth.debian.org/tracker/?group_id=100566}{request trackers}
 available on the \W{http://alioth.debian.org/projects/apt-cacher-ng/}{Alioth project page}.
@@ -1342,4 +1363,4 @@ available on the \W{http://alioth.debian.org/projects/apt-cacher-ng/}{Alioth pro
 And last, but not least: feel free to express your gratitude by donating a
 small amount of money via \W{https://www.paypal.com}{PayPal} (to edi@gmx.de).
 
-\versionid Eduard Bloch, Mon, 06 Apr 2015 22:46:43 +0200
+\versionid Eduard Bloch, Sat, 11 Apr 2015 15:10:17 +0200

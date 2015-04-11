@@ -24,7 +24,9 @@
 #include <openssl/md5.h>
 #endif
 
+#ifdef DEBUG
 //#define SHRINKTEST
+#endif
 
 // must be something sensible, ratio impacts stack size by inverse power of 2
 #define BUFSIZEMIN 4095 // makes one page on i386 and should be enough for typical index files
@@ -353,7 +355,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, uint nFakeTra
 	posix_madvise(m_szFileBuf, statbuf.st_size, POSIX_MADV_SEQUENTIAL);
 #endif
 	
-#if 0//def SHRINKTEST
+#ifdef SHRINKTEST
 	if (ftruncate(m_fd, GetSize()/2) < 0)
 	{
 		perror ("ftruncate");
@@ -434,6 +436,14 @@ std::atomic_int g_nThreadsToKill;
 
 void handle_sigbus()
 {
+	if(!acfg::sigbuscmd.empty())
+	{
+		/*static char buf[21];
+		sprintf(buf, "%u", (unsigned) getpid());
+		setenv("ACNGPID", buf, 1);
+		*/
+		system(acfg::sigbuscmd.c_str());
+	}
 #if 1
 	for (auto &x : g_mmapMemory)
 	{

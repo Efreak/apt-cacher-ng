@@ -117,6 +117,8 @@ MapNameToString n2sTbl[] = {
 		,{  "CApath",                  &capath}
 		,{  "CAfile",                  &cafile}
 		,{  "BadRedirDetectMime",      &badredmime}
+
+		,{ "BusAction",                &sigbuscmd} // "Special debugging helper, see manual!"
 };
 
 MapNameToInt n2iTbl[] = {
