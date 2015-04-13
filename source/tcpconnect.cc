@@ -577,11 +577,14 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  	BIO_set_nbio(m_bio, 1);
 	set_nb(m_conFd);
 
-	hret=SSL_get_verify_result(ssl);
-	if( hret != X509_V_OK)
+	if(!acfg::nsafriendly)
 	{
-		perr=X509_verify_cert_error_string(hret);
-		goto ssl_init_fail;
+		hret=SSL_get_verify_result(ssl);
+		if( hret != X509_V_OK)
+		{
+			perr=X509_verify_cert_error_string(hret);
+			goto ssl_init_fail;
+		}
 	}
 
 	return true;

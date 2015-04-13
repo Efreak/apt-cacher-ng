@@ -23,8 +23,6 @@ using namespace std;
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
 
-typedef std::pair<const tHttpUrl*,bool> tHostIsproxy;
-
 static cmstring sGenericError("567 Unknown download error occured");
 
 std::atomic_uint g_nDlCons(0);
@@ -207,8 +205,10 @@ struct tDlJob
 		return true;
 	}
 
-	inline tHostIsproxy GetConnectHost()
+	inline const tHttpUrl * GetConnectHost(bool& bIsProxy)
 	{
+		bIsProxy = false;
+
 		if (!m_parent.m_bProxyTot)
 		{
 			// otherwise consider using proxy
@@ -216,14 +216,20 @@ struct tDlJob
 			{
 				// do what the specific entry says
 				if(m_pRepoDesc->m_pProxy->sHost.empty())
-					return make_pair(GetPeerHost(), false);
-				return make_pair(m_pRepoDesc->m_pProxy, true);
+					return GetPeerHost();
+
+				bIsProxy = true;
+				return m_pRepoDesc->m_pProxy;
 			}
 			if (!acfg::proxy_info.sHost.empty())
-				return make_pair(& acfg::proxy_info, true);
-			// ok, no proxy...
+			{
+				bIsProxy = true;
+				return & acfg::proxy_info;
+			}
+
+			// ok, no proxy for now
 		}
-		return make_pair(GetPeerHost(), false);
+		return GetPeerHost();
 	}
 
 
@@ -278,12 +284,11 @@ struct tDlJob
 
 		head << (m_pStorage->m_bHeadOnly ? "HEAD " : "GET ");
 
-		tHostIsproxy conHostInfo = GetConnectHost();
+		bool isproxy(false);
+		auto conHostInfo = GetConnectHost(isproxy);
 
-		if (conHostInfo.second)
-		{
+		if (isproxy)
 			head << RemoteUri(true);
-		}
 		else // only absolute path without scheme
 		{
 			if (m_pCurBackend) // base dir from backend definition
@@ -296,13 +301,13 @@ struct tDlJob
 
 		head << " HTTP/1.1\r\n" << acfg::agentheader << "Host: " << GetPeerHost()->sHost << "\r\n";
 
-		if (conHostInfo.second) // proxy stuff, and add authorization if there is any
+		if (isproxy) // proxy stuff, and add authorization if there is any
 		{
 			ldbg("using proxy");
-			if(!conHostInfo.first->sUserPass.empty())
+			if(!conHostInfo->sUserPass.empty())
 			{
 				head << "Proxy-Authorization: Basic "
-						<< EncodeBase64Auth(conHostInfo.first->sUserPass) << "\r\n";
+						<< EncodeBase64Auth(conHostInfo->sUserPass) << "\r\n";
 			}
 			// Proxy-Connection is a non-sensical copy of Connection but some proxy
 			// might listen only to this one so better add it
@@ -1140,8 +1145,9 @@ void dlcon::WorkLoop()
 
 #endif
         		ASSERT(!m_qNewjobs.empty());
-        		tHostIsproxy conHost = m_qNewjobs.front()->GetConnectHost();
-        		con = doconnect( conHost.first, (conHost.second && acfg::optproxytimeout>0)
+        		bool isproxy(false);
+        		auto conHost = m_qNewjobs.front()->GetConnectHost(isproxy);
+        		con = doconnect(conHost, (isproxy && acfg::optproxytimeout>0)
         				? acfg::optproxytimeout : acfg::nettimeout);
 
         		if(!con && acfg::optproxytimeout>0)
@@ -1197,12 +1203,13 @@ void dlcon::WorkLoop()
         		}
 
 				// needs to send them for the connected target host
-        		tHostIsproxy hostNew=cjob->GetConnectHost();
-        		if(hostNew.first->sHost != con->GetHostname() ||
-        				hostNew.first->GetPort() != con->GetPort())
+        		bool isproxy(false);
+        		auto hostNew=cjob->GetConnectHost(isproxy);
+        		if(hostNew->sHost != con->GetHostname() ||
+        				hostNew->GetPort() != con->GetPort())
         		{
-        			LOG("host mismatch," << hostNew.first->sHost << ":" <<
-        					hostNew.first->GetPort() <<
+        			LOG("host mismatch," << hostNew->sHost << ":" <<
+        					hostNew->GetPort() <<
         					" vs. " << con->GetHostname() << ":"<<con->GetPort() <<
         					" -- stop sending requesting for now");
         			bStopRequesting=true;
