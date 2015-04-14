@@ -1142,7 +1142,7 @@ void dlcon::WorkLoop()
 
 				bool bUsed = false;
 				auto doconnect =
-						[&](const tHttpUrl& tgt, int timeout)
+						[&](const tHttpUrl& tgt, int timeout, bool fresh)
 						{
 
 							return tcpconnect::CreateConnected(tgt.sHost,
@@ -1155,21 +1155,21 @@ void dlcon::WorkLoop()
 #else
 						false
 #endif
-						timeout);
+						timeout, fresh);
 			};
 				ASSERT(!m_qNewjobs.empty());
 				bool isproxy(false);
 				auto& conHost = m_qNewjobs.front()->GetHost2Connect2(isproxy);
 				con = doconnect(conHost,
 						(isproxy && acfg::optproxytimeout > 0) ?
-								acfg::optproxytimeout : acfg::nettimeout);
+								acfg::optproxytimeout : acfg::nettimeout, false);
 
         		if(!con && acfg::optproxytimeout>0)
         		{
         			ldbg("optional proxy broken, disable");
-        			m_bProxyTot=true;
+        			m_bProxyTot = true;
         			isproxy = false;
-        			con = doconnect(m_qNewjobs.front()->GetPeerHost(), acfg::nettimeout);
+        			con = doconnect(m_qNewjobs.front()->GetPeerHost(), acfg::nettimeout, false);
         		}
 
         		nLostConTolerance = MAX_RETRY + bUsed;

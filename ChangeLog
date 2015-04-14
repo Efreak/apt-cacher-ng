@@ -1,3 +1,10 @@
+apt-cacher-ng (0.8.2) FOR-A-FEW-BITS-MORE; urgency=low
+
+  * Creating fresh connection for each bugs.d.o operation (attempt to fix
+    Debian bug #775126)
+
+ -- 
+
 apt-cacher-ng (0.8.1) JUST-A-LITTLE-BIT; urgency=low
 
   [Eduard Bloch]

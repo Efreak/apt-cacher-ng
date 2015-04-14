@@ -285,7 +285,7 @@ class : public lockable, public multimap<tHostHint, std::pair<tTcpHandlePtr, tim
 
 tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, acfg::tRepoData::IHookHandler *pStateTracker
-		,bool bSsl, int timeout)
+		,bool bSsl, int timeout, bool nocache)
 {
 	LOGSTART2s("tcpconnect::CreateConnected", "hostname: " << sHostname << ", port: " << sPort
 			<< (bSsl?" with ssl":" , no ssl"));
@@ -314,7 +314,9 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 			p.reset();
 	}
 #else
-	{ // mutex context
+	if(!nocache)
+	{
+		// mutex context
 		lockguard __g(spareConPool);
 		auto it=spareConPool.find(key);
 		if(spareConPool.end() != it)
@@ -323,6 +325,8 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 			spareConPool.erase(it);
 			bReused = true;
 			ldbg("got connection " << p.get() << " from the idle pool");
+
+			// it was reset in connection recycling, restart now
 			if(pStateTracker)
 			{
 				p->m_pStateObserver = pStateTracker;
@@ -482,7 +486,8 @@ void tcpconnect::dump_status()
 
 		msg << x.second.first->m_conFd << ": for "
 				<< x.first.pHost << ":" << x.first.pPort
-				<< ", recycled at " << x.second.second << "\n";
+				<< ", recycled at " << x.second.second
+				<< "\n";
 	}
 #ifdef DEBUG
 	msg << "dbg counts, con: " << nConCount.load()

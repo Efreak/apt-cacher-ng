@@ -35,6 +35,7 @@ public:
 			acfg::tRepoData::IHookHandler *pStateTracker
 			,bool ssl
 			,int timeout
+			,bool mustbevirgin
 	);
 
 	/// Moves the connection handle to the reserve pool (resets the specified sptr).

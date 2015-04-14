@@ -90,14 +90,14 @@ public:
 
 		if(listBugsMode)
 			m_spOutCon = tcpconnect::CreateConnected("bugs.debian.org", sDefPortHTTP,
-					sErr, 0,0,false,acfg::nettimeout);
+					sErr, 0,0,false,acfg::nettimeout, true);
 		else if(pConTgt)
 		{
 			tHttpUrl url;
 			if(!url.SetHttpUrl(*pConTgt))
 				return;
 			m_spOutCon = tcpconnect::CreateConnected(url.sHost , url.GetPort(), sErr, 0,0,
-					false, acfg::nettimeout);
+					false, acfg::nettimeout, false);
 
 			if(m_spOutCon)
 				clientBufOut << "HTTP/1.0 200 Connection established\r\n\r\n";
