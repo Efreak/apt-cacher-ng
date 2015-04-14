@@ -13,6 +13,8 @@
 #include "meta.h"
 #include "sockio.h"
 
+#include <memory>
+
 #ifdef HAVE_SSL
 #include <openssl/bio.h>
 #include "acbuf.h"
@@ -20,7 +22,7 @@
 
 class tcpconnect;
 class fileitem;
-typedef SHARED_PTR<tcpconnect> tTcpHandlePtr;
+typedef std::shared_ptr<tcpconnect> tTcpHandlePtr;
 
 class tcpconnect
 {
@@ -36,7 +38,7 @@ public:
 	);
 
 	/// Moves the connection handle to the reserve pool (resets the specified sptr).
-	/// Shold only be supplied with IDLE connection handles in a sane state.
+	/// Should only be supplied with IDLE connection handles in a sane state.
 	static void RecycleIdleConnection(tTcpHandlePtr & handle);
 	static time_t BackgroundCleanup();
 
@@ -54,14 +56,12 @@ public:
 protected:
 	tcpconnect operator=(const tcpconnect&);
 	tcpconnect(const tcpconnect&) =default;
-	tcpconnect();
+	tcpconnect(acfg::tRepoData::IHookHandler *pStateReport);
 
 	int m_conFd =-1;
 	mstring m_sHostName, m_sPort;
 
-	acfg::tRepoData::IHookHandler *m_pConnStateObserver =nullptr;
-
-	WEAK_PTR<fileitem> m_lastFile;
+	std::weak_ptr<fileitem> m_lastFile;
 
 	static std::atomic_uint g_nconns;
 
@@ -72,7 +72,8 @@ public:
 	void KillLastFile();
 
 private:
-	bool Connect(mstring &sErrOut, int timeout);
+	bool _Connect(mstring &sErrOut, int timeout);
+	acfg::tRepoData::IHookHandler *m_pStateObserver=nullptr;
 
 #ifdef HAVE_SSL
 	BIO *m_bio = nullptr;

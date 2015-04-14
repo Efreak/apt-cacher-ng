@@ -38,10 +38,12 @@ atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 
 std::atomic_uint tcpconnect::g_nconns(0);
 
-tcpconnect::tcpconnect()
+tcpconnect::tcpconnect(acfg::tRepoData::IHookHandler *pObserver) : m_pStateObserver(pObserver)
 {
 	if(acfg::maxdlspeed != RESERVED_DEFVAL)
 		g_nconns.fetch_add(1);
+	if(pObserver)
+		pObserver->OnAccess();
 }
 
 tcpconnect::~tcpconnect()
@@ -52,11 +54,18 @@ tcpconnect::~tcpconnect()
 		g_nconns.fetch_add(-1);
 #ifdef HAVE_SSL
 	if(m_ctx)
+	{
 		SSL_CTX_free(m_ctx);
-	m_ctx=0;
+		m_ctx=0;
+	}
 #endif
-}
+	if(m_pStateObserver)
+	{
+		m_pStateObserver->OnRelease();
+		m_pStateObserver=nullptr;
 
+	}
+}
 
 /*! \brief Helper to flush data stream contents reliable and close the connection then
  * DUDES, who write TCP implementations... why can this just not be done easy and reliable? Why do we need hacks like termsocket?
@@ -158,7 +167,7 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 	return 0;
 }
 
-inline bool tcpconnect::Connect(string & sErrorMsg, int timeout)
+inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 {
 	LOGSTART2("tcpconnect::_Connect", "hostname: " << m_sHostName);
 
@@ -238,10 +247,6 @@ void tcpconnect::Disconnect()
 		BIO_free_all(m_bio), m_bio=NULL;
 #endif
 
-	if(m_conFd>=0 && m_pConnStateObserver)
-		m_pConnStateObserver->JobRelease();
-
-	m_pConnStateObserver=NULL;
 	m_lastFile.reset();
 
 	termsocket_quick(m_conFd);
@@ -302,9 +307,12 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 	);
 
 #ifdef NOCONCACHE
-	p.reset(new tcpconnect);
-	if(!p || !p->Connect(sHostname, sPort, sErrOut) || p->GetFD()<0) // failed or worthless
-		p.reset();
+	p.reset(new tcpconnect(pStateTracker));
+	if(p)
+	{
+		if(!p->_Connect(sHostname, sPort, sErrOut) || p->GetFD()<0) // failed or worthless
+			p.reset();
+	}
 #else
 	{ // mutex context
 		lockguard __g(spareConPool);
@@ -315,6 +323,11 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 			spareConPool.erase(it);
 			bReused = true;
 			ldbg("got connection " << p.get() << " from the idle pool");
+			if(pStateTracker)
+			{
+				p->m_pStateObserver = pStateTracker;
+				pStateTracker->OnAccess();
+			}
 #ifdef DEBUG
 			nReuseCount.fetch_add(1);
 #endif
@@ -324,14 +337,14 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 
 	if(!p)
 	{
-		p.reset(new tcpconnect);
+		p.reset(new tcpconnect(pStateTracker));
 		if(p)
 		{
 			p->m_sHostName=sHostname;
 			p->m_sPort=sPort;
 		}
 
-		if(!p || !p->Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
+		if(!p || !p->_Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
 			p.reset();
 #ifdef HAVE_SSL
 		else if(bSsl)
@@ -343,13 +356,6 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 			}
 		}
 #endif
-	}
-
-
-	if(p && pStateTracker)
-	{
-		p->m_pConnStateObserver = pStateTracker;
-		pStateTracker->JobConnect();
 	}
 
 	if(pbSecondHand)
@@ -365,10 +371,10 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 
 	LOGSTART2s("tcpconnect::RecycleIdleConnection", handle->m_sHostName);
 
-	if(handle->m_pConnStateObserver)
+	if(handle->m_pStateObserver)
 	{
-		handle->m_pConnStateObserver->JobRelease();
-		handle->m_pConnStateObserver = NULL;
+		handle->m_pStateObserver->OnRelease();
+		handle->m_pStateObserver = nullptr;
 	}
 
 	if(! acfg::persistoutgoing)

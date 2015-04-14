@@ -58,8 +58,8 @@ struct tRepoData
 
 	// dirty little helper to execute custom actions when a jobs associates or forgets this data set
 	struct IHookHandler {
-		virtual void JobRelease()=0;
-		virtual void JobConnect()=0;
+		virtual void OnAccess()=0;
+		virtual void OnRelease()=0;
 		virtual ~IHookHandler() {
 		}
 	} *m_pHooks = nullptr;

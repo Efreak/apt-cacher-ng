@@ -462,7 +462,7 @@ struct tHookHandler: public tRepoData::IHookHandler, public lockable
 //		cmdRel = "logger JobRelease/" + name;
 //		cmdCon = "logger JobConnect/" + name;
 	}
-	virtual void JobRelease()
+	virtual void OnRelease() override
 	{
 		setLockGuard;
 		if (0 >= --m_nRefCnt)
@@ -472,7 +472,7 @@ struct tHookHandler: public tRepoData::IHookHandler, public lockable
 			g_victor.ScheduleFor(downTimeNext, cleaner::TYPE_ACFGHOOKS);
 		}
 	}
-	virtual void JobConnect()
+	virtual void OnAccess() override
 	{
 		setLockGuard;
 		if (0 == m_nRefCnt++)

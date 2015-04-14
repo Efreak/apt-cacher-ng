@@ -205,6 +205,11 @@ struct tDlJob
 		return true;
 	}
 
+	/**
+	 *  little helper that returns a safe host information describing
+	 *  where to connect (first) for the particular job (considering
+	 *  custom proxies and failed-proxy mode
+	 */
 	inline const tHttpUrl& GetHost2Connect2(bool& bIsProxy)
 	{
 		bIsProxy = false;
