@@ -76,9 +76,9 @@ struct tDlJob
 	 * Returns a reference to http url where host and port and protocol match the current host
 	 * Other fields in that member have undefined contents. ;-)
 	 */
-	inline const tHttpUrl *GetPeerHost()
+	inline const tHttpUrl& GetPeerHost()
 	{
-		return m_pCurBackend ? m_pCurBackend : &m_remoteUri;
+		return m_pCurBackend ? *m_pCurBackend : m_remoteUri;
 	}
 
 	inline acfg::tRepoData::IHookHandler * GetConnStateTracker()
@@ -205,7 +205,7 @@ struct tDlJob
 		return true;
 	}
 
-	inline const tHttpUrl * GetConnectHost(bool& bIsProxy)
+	inline const tHttpUrl& GetHost2Connect2(bool& bIsProxy)
 	{
 		bIsProxy = false;
 
@@ -219,12 +219,12 @@ struct tDlJob
 					return GetPeerHost();
 
 				bIsProxy = true;
-				return m_pRepoDesc->m_pProxy;
+				return * m_pRepoDesc->m_pProxy;
 			}
 			if (!acfg::proxy_info.sHost.empty())
 			{
 				bIsProxy = true;
-				return & acfg::proxy_info;
+				return acfg::proxy_info;
 			}
 
 			// ok, no proxy for now
@@ -269,7 +269,7 @@ struct tDlJob
 
 		// ok, not backend mode. Check the mirror data (vs. blacklist)
 		auto bliter = blacklist.find(
-				make_pair(GetPeerHost()->sHost, GetPeerHost()->GetPort()));
+				make_pair(GetPeerHost().sHost, GetPeerHost().GetPort()));
 		if (bliter == blacklist.end())
 			return true;
 
@@ -285,7 +285,7 @@ struct tDlJob
 		head << (m_pStorage->m_bHeadOnly ? "HEAD " : "GET ");
 
 		bool isproxy(false);
-		auto conHostInfo = GetConnectHost(isproxy);
+		auto& conHostInfo = GetHost2Connect2(isproxy);
 
 		if (isproxy)
 			head << RemoteUri(true);
@@ -299,15 +299,15 @@ struct tDlJob
 
 		ldbg(RemoteUri(true));
 
-		head << " HTTP/1.1\r\n" << acfg::agentheader << "Host: " << GetPeerHost()->sHost << "\r\n";
+		head << " HTTP/1.1\r\n" << acfg::agentheader << "Host: " << GetPeerHost().sHost << "\r\n";
 
 		if (isproxy) // proxy stuff, and add authorization if there is any
 		{
 			ldbg("using proxy");
-			if(!conHostInfo->sUserPass.empty())
+			if(!conHostInfo.sUserPass.empty())
 			{
 				head << "Proxy-Authorization: Basic "
-						<< EncodeBase64Auth(conHostInfo->sUserPass) << "\r\n";
+						<< EncodeBase64Auth(conHostInfo.sUserPass) << "\r\n";
 			}
 			// Proxy-Connection is a non-sensical copy of Connection but some proxy
 			// might listen only to this one so better add it
@@ -315,7 +315,7 @@ struct tDlJob
 									: "Proxy-Connection: close\r\n");
 		}
 
-		const tHttpUrl& pSourceHost(* GetPeerHost());
+		const auto& pSourceHost = GetPeerHost();
 		if(!pSourceHost.sUserPass.empty())
 		{
 			head << "Authorization: Basic "
@@ -1079,9 +1079,9 @@ void dlcon::WorkLoop()
 	auto BlacklistMirror = [&](tDlJobPtr & job)
 	{
 		LOGSTART2("BlacklistMirror", "blacklisting " <<
-				job->GetPeerHost()->ToURI(false));
-		m_blacklist[std::make_pair(job->GetPeerHost()->sHost,
-				job->GetPeerHost()->GetPort())] = sErrorMsg;
+				job->GetPeerHost().ToURI(false));
+		m_blacklist[std::make_pair(job->GetPeerHost().sHost,
+				job->GetPeerHost().GetPort())] = sErrorMsg;
 	};
 
 	while(true) // outer loop: jobs, connection handling
@@ -1135,25 +1135,35 @@ void dlcon::WorkLoop()
         			goto go_select; // nothing left, might receive new jobs soon
         		}
 
-        		bool bUsed=false;
-#ifdef HAVE_SSL
-#define doconnect(x, t) tcpconnect::CreateConnected(x->sHost, x->GetPort(), \
-				sErrorMsg, &bUsed, m_qNewjobs.front()->GetConnStateTracker(), x->bSSL, t)
-#else
-#define doconnect(x, t) tcpconnect::CreateConnected(x->sHost, x->GetPort(), \
-				sErrorMsg, &bUsed, m_qNewjobs.front()->GetConnStateTracker(), false, t)
+				bool bUsed = false;
+				auto doconnect =
+						[&](const tHttpUrl& tgt, int timeout)
+						{
 
+							return tcpconnect::CreateConnected(tgt.sHost,
+									tgt.GetPort(),
+									sErrorMsg,
+									&bUsed,
+									m_qNewjobs.front()->GetConnStateTracker(),
+#ifdef HAVE_SSL
+						tgt.bSSL,
+#else
+						false
 #endif
-        		ASSERT(!m_qNewjobs.empty());
-        		bool isproxy(false);
-        		auto conHost = m_qNewjobs.front()->GetConnectHost(isproxy);
-        		con = doconnect(conHost, (isproxy && acfg::optproxytimeout>0)
-        				? acfg::optproxytimeout : acfg::nettimeout);
+						timeout);
+			};
+				ASSERT(!m_qNewjobs.empty());
+				bool isproxy(false);
+				auto& conHost = m_qNewjobs.front()->GetHost2Connect2(isproxy);
+				con = doconnect(conHost,
+						(isproxy && acfg::optproxytimeout > 0) ?
+								acfg::optproxytimeout : acfg::nettimeout);
 
         		if(!con && acfg::optproxytimeout>0)
         		{
         			ldbg("optional proxy broken, disable");
         			m_bProxyTot=true;
+        			isproxy = false;
         			con = doconnect(m_qNewjobs.front()->GetPeerHost(), acfg::nettimeout);
         		}
 
@@ -1204,12 +1214,11 @@ void dlcon::WorkLoop()
 
 				// needs to send them for the connected target host
         		bool isproxy(false);
-        		auto hostNew=cjob->GetConnectHost(isproxy);
-        		if(hostNew->sHost != con->GetHostname() ||
-        				hostNew->GetPort() != con->GetPort())
+        		auto& hostNew=cjob->GetHost2Connect2(isproxy);
+        		if(hostNew.sHost != con->GetHostname() || hostNew.GetPort() != con->GetPort())
         		{
-        			LOG("host mismatch," << hostNew->sHost << ":" <<
-        					hostNew->GetPort() <<
+        			LOG("host mismatch," << hostNew.sHost << ":" <<
+        					hostNew.GetPort() <<
         					" vs. " << con->GetHostname() << ":"<<con->GetPort() <<
         					" -- stop sending requesting for now");
         			bStopRequesting=true;
