@@ -110,6 +110,9 @@ public:
     inline tSS & operator<<(const char c) { reserve(size()+1); *(wptr())=c; got(1); return *this;}
     inline tSS & clean() { clear(); return *this;}
     inline tSS & append(const char *data, size_t len) { add(data,len); return *this; }
+    // similar to syswrite but adapted to socket behavior and reports error codes as HTTP status lines
+    bool send(int nConFd, mstring& sErrorStatus);
+    bool recv(int nConFd, mstring& sErrorStatus);
 
 protected:
     char fmtbuf[22];

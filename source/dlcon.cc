@@ -205,39 +205,6 @@ struct tDlJob
 		return true;
 	}
 
-	/**
-	 *  little helper that returns a safe host information describing
-	 *  where to connect (first) for the particular job (considering
-	 *  custom proxies and failed-proxy mode
-	 */
-	inline const tHttpUrl& GetHost2Connect2(bool& bIsProxy)
-	{
-		bIsProxy = false;
-
-		if (!m_parent.m_bProxyTot)
-		{
-			// otherwise consider using proxy
-			if (m_pRepoDesc && m_pRepoDesc->m_pProxy)
-			{
-				// do what the specific entry says
-				if(m_pRepoDesc->m_pProxy->sHost.empty())
-					return GetPeerHost();
-
-				bIsProxy = true;
-				return * m_pRepoDesc->m_pProxy;
-			}
-			if (!acfg::proxy_info.sHost.empty())
-			{
-				bIsProxy = true;
-				return acfg::proxy_info;
-			}
-
-			// ok, no proxy for now
-		}
-		return GetPeerHost();
-	}
-
-
 	bool SetupJobConfig(mstring& sReasonMsg, decltype(dlcon::m_blacklist) &blacklist)
 	{
 		LOGSTART("dlcon::SetupJobConfig");
@@ -283,16 +250,13 @@ struct tDlJob
 	}
 
 	// needs connectedHost, blacklist, output buffer from the parent, proxy mode?
-	inline void AppendRequest(tSS &head, cmstring &xff)
+	inline void AppendRequest(tSS &head, cmstring &xff, const tHttpUrl *proxy)
 	{
 		LOGSTART("tDlJob::AppendRequest");
 
 		head << (m_pStorage->m_bHeadOnly ? "HEAD " : "GET ");
 
-		bool isproxy(false);
-		auto& conHostInfo = GetHost2Connect2(isproxy);
-
-		if (isproxy)
+		if (proxy)
 			head << RemoteUri(true);
 		else // only absolute path without scheme
 		{
@@ -306,13 +270,13 @@ struct tDlJob
 
 		head << " HTTP/1.1\r\n" << acfg::agentheader << "Host: " << GetPeerHost().sHost << "\r\n";
 
-		if (isproxy) // proxy stuff, and add authorization if there is any
+		if (proxy) // proxy stuff, and add authorization if there is any
 		{
 			ldbg("using proxy");
-			if(!conHostInfo.sUserPass.empty())
+			if(!proxy->sUserPass.empty())
 			{
 				head << "Proxy-Authorization: Basic "
-						<< EncodeBase64Auth(conHostInfo.sUserPass) << "\r\n";
+						<< EncodeBase64Auth(proxy->sUserPass) << "\r\n";
 			}
 			// Proxy-Connection is a non-sensical copy of Connection but some proxy
 			// might listen only to this one so better add it
@@ -1089,6 +1053,22 @@ void dlcon::WorkLoop()
 				job->GetPeerHost().GetPort())] = sErrorMsg;
 	};
 
+	auto prefProxy = [&](tDlJobPtr& cjob) -> const tHttpUrl*
+	{
+		if(m_bProxyTot)
+			return nullptr;
+
+		if(cjob->m_pRepoDesc && cjob->m_pRepoDesc->m_pProxy
+				&& !cjob->m_pRepoDesc->m_pProxy->sHost.empty())
+		{
+			return cjob->m_pRepoDesc->m_pProxy;
+		}
+		if(!acfg::proxy_info.sHost.empty())
+			return &acfg::proxy_info;
+
+		return nullptr;
+	};
+
 	while(true) // outer loop: jobs, connection handling
 	{
         // init state or transfer loop jumped out, what are the needed actions?
@@ -1141,38 +1121,60 @@ void dlcon::WorkLoop()
         		}
 
 				bool bUsed = false;
-				auto doconnect =
-						[&](const tHttpUrl& tgt, int timeout, bool fresh)
-						{
+				ASSERT(!m_qNewjobs.empty());
 
-							return tcpconnect::CreateConnected(tgt.sHost,
-									tgt.GetPort(),
-									sErrorMsg,
-									&bUsed,
-									m_qNewjobs.front()->GetConnStateTracker(),
+				auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
+				{
+					return tcpconnect::CreateConnected(tgt.sHost,
+							tgt.GetPort(),
+							sErrorMsg,
+							&bUsed,
+							m_qNewjobs.front()->GetConnStateTracker(),
 #ifdef HAVE_SSL
 						tgt.bSSL,
 #else
 						false
 #endif
 						timeout, fresh);
-			};
-				ASSERT(!m_qNewjobs.empty());
-				bool isproxy(false);
-				auto& conHost = m_qNewjobs.front()->GetHost2Connect2(isproxy);
-				con = doconnect(conHost,
-						(isproxy && acfg::optproxytimeout > 0) ?
-								acfg::optproxytimeout : acfg::nettimeout, false);
+			}	;
 
-        		if(!con && acfg::optproxytimeout>0)
+				auto& cjob = m_qNewjobs.front();
+				auto proxy = m_bProxyTot ? nullptr : prefProxy(cjob);
+				auto& peerHost = cjob->GetPeerHost();
+
+				if(peerHost.bSSL)
+				{
+					if(proxy)
+					{
+						con = doconnect(*proxy, acfg::optproxytimeout > 0 ?
+								acfg::optproxytimeout : acfg::nettimeout, false);
+						if(con)
+						{
+							if(!con->StartTLStunnel(peerHost, sErrorMsg, & proxy->sUserPass))
+								con.reset();
+						}
+					}
+					else
+						con = doconnect(peerHost, acfg::nettimeout, false);
+				}
+				else
+				{
+					if(proxy)
+					{
+						con = doconnect(*proxy, acfg::optproxytimeout > 0 ?
+								acfg::optproxytimeout : acfg::nettimeout, false);
+					}
+					else
+						con = doconnect(peerHost, acfg::nettimeout, false);
+				}
+
+        		if(!con && proxy && acfg::optproxytimeout>0)
         		{
         			ldbg("optional proxy broken, disable");
         			m_bProxyTot = true;
-        			isproxy = false;
-        			con = doconnect(m_qNewjobs.front()->GetPeerHost(), acfg::nettimeout, false);
+        			proxy = nullptr;
+        			con = doconnect(peerHost, acfg::nettimeout, false);
         		}
-
-        		nLostConTolerance = MAX_RETRY + bUsed;
 
         		ldbg("connection valid? " << bool(con) << " was fresh? " << !bUsed);
 
@@ -1190,7 +1192,7 @@ void dlcon::WorkLoop()
         		}
         		else
         		{
-        			BlacklistMirror(m_qNewjobs.front());
+        			BlacklistMirror(cjob);
         			continue; // try the next backend
         		}
         	}
@@ -1202,35 +1204,42 @@ void dlcon::WorkLoop()
         	{
    				tDlJobPtr &cjob = m_qNewjobs.front();
 
-        		bool bGoodConfig = cjob->SetupJobConfig(sErrorMsg, m_blacklist);
-
-        		/*
-        		ldbg("target: " << cjob->GetPeerName() << " vs " << con->GetHostname()
-        				<< ", ports: " << cjob->GetPeerPort() << " vs " << con->GetPort()
-        				<< ", good config: " << bGoodConfig);
-*/
-
-        		if(!bGoodConfig)
+        		if(!cjob->SetupJobConfig(sErrorMsg, m_blacklist))
         		{
         			// something weird happened to it, drop it and let the client care
         			m_qNewjobs.pop_front();
         			continue;
         		}
 
-				// needs to send them for the connected target host
-        		bool isproxy(false);
-        		auto& hostNew=cjob->GetHost2Connect2(isproxy);
-        		if(hostNew.sHost != con->GetHostname() || hostNew.GetPort() != con->GetPort())
+        		auto& tgt=cjob->GetPeerHost();
+        		// good case, direct or tunneled connection
+        		bool match=(tgt.sHost == con->GetHostname() && tgt.GetPort() == con->GetPort());
+        		const tHttpUrl * proxy = nullptr; // to be set ONLY if PROXY mode is used
+
+        		// if not exact and can be proxied, and is this the right proxy?
+        		if(!match)
         		{
-        			LOG("host mismatch," << hostNew.sHost << ":" <<
-        					hostNew.GetPort() <<
-        					" vs. " << con->GetHostname() << ":"<<con->GetPort() <<
-        					" -- stop sending requesting for now");
+        			proxy = prefProxy(cjob);
+        			if(proxy)
+        			{
+        				/*
+        				 * SSL over proxy uses HTTP tunnels (CONNECT scheme) so the check
+        				 * above should have matched before.
+        				 */
+        				if(!tgt.bSSL)
+        					match=(proxy->sHost == con->GetHostname() && proxy->GetPort() == con->GetPort());
+        			}
+        			// else... host changed and not going through the same proxy -> fail
+        		}
+
+        		if(!match)
+        		{
+        			LOG("host mismatch, new target: " << tgt.sHost << ":" << tgt.GetPort());
         			bStopRequesting=true;
         			break;
         		}
 
-				cjob->AppendRequest(m_sendBuf, m_sXForwardedFor);
+				cjob->AppendRequest(m_sendBuf, m_sXForwardedFor, proxy);
 				LOG("request added to buffer");
 				inpipe.push_back(cjob);
 				m_qNewjobs.pop_front();
@@ -1241,7 +1250,6 @@ void dlcon::WorkLoop()
 					--m_nTempPipelineDisable;
 					break;
 				}
-
         	}
         }
 
@@ -1282,7 +1290,6 @@ void dlcon::WorkLoop()
 			}
 		}
 
-
         /*
          * Here we go if the inpipe is still not processed or there have been errors
          * needing special handling.
@@ -1310,7 +1317,10 @@ void dlcon::WorkLoop()
 		{
 			// disconnected by OS... give it a chance, or maybe not...
 			if (--nLostConTolerance <= 0)
+			{
 				BlacklistMirror(inpipe.front());
+				nLostConTolerance=MAX_RETRY;
+			}
 
 			timespec sleeptime = { 0, 325000000 };
 			nanosleep(&sleeptime, NULL);
@@ -1325,7 +1335,6 @@ void dlcon::WorkLoop()
 
         if(loopRes & (HINT_DONE|HINT_MORE))
         {
-        	nLostConTolerance=MAX_RETRY;
         	sErrorMsg.clear();
         	continue;
         }

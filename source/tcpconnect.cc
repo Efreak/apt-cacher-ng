@@ -381,6 +381,15 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 		handle->m_pStateObserver = nullptr;
 	}
 
+	/*
+	if(handle->m_bIsTunnel)
+	{
+		ldbg("disconnecting an upgraded connection, drop " << handle.get());
+		handle.reset();
+		return;
+	}
+	*/
+
 	if(! acfg::persistoutgoing)
 	{
 		ldbg("not caching outgoing connections, drop " << handle.get());
@@ -398,26 +407,29 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 	}
 #endif
 
-#ifndef NOCONCACHE
-	time_t now=GetTime();
-	lockguard __g(spareConPool);
-	ldbg("caching connection " << handle.get());
-
-	// a DOS?
-	if(spareConPool.size()<50)
+	auto& host = handle->GetHostname();
+	if (!host.empty())
 	{
-		spareConPool.insert(make_pair(tHostHint(handle->GetHostname(), handle->GetPort()
+#ifndef NOCONCACHE
+		time_t now = GetTime();
+		lockguard __g(spareConPool);
+		ldbg("caching connection " << handle.get());
+
+		// a DOS?
+		if (spareConPool.size() < 50)
+		{
+			spareConPool.insert(make_pair(tHostHint(host, handle->GetPort()
 #ifdef HAVE_SSL
-				,handle->m_bio
+					, handle->m_bio
 #endif
-		),make_pair(handle, now)));
+					), make_pair(handle, now)));
 
 #ifndef MINIBUILD
-		g_victor.ScheduleFor(now+TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
+			g_victor.ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
 #endif
-
+		}
+#endif
 	}
-#endif
 
 	handle.reset();
 }
@@ -487,6 +499,7 @@ void tcpconnect::dump_status()
 		msg << x.second.first->m_conFd << ": for "
 				<< x.first.pHost << ":" << x.first.pPort
 				<< ", recycled at " << x.second.second
+				//<< ", is a tunnel?: " << x.second.first->m_bIsTunnel
 				<< "\n";
 	}
 #ifdef DEBUG
@@ -611,6 +624,77 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	sErr="500 SSL error: ";
 	sErr+=(perr?perr:"Generic SSL failure");
 	return false;
+}
+
+bool tcpconnect::StartTLStunnel(const tHttpUrl& realTarget, mstring& sError, cmstring *psAuthorization)
+{
+	/*
+	  CONNECT server.example.com:80 HTTP/1.1
+      Host: server.example.com:80
+      Proxy-Authorization: basic aGVsbG86d29ybGQ=
+	 */
+	tSS fmt;
+	fmt << "CONNECT " << realTarget.sHost << ":" << realTarget.GetPort()
+			<< " HTTP/1.1\r\nHost: " << realTarget.sHost << ":" << realTarget.GetPort()
+			<< "\r\n";
+	if(psAuthorization && !psAuthorization->empty())
+	{
+			fmt << "Proxy-Authorization: Basic "
+					<< EncodeBase64Auth(*psAuthorization) << "\r\n";
+	}
+	fmt << "\r\n";
+
+	try
+	{
+		if (!fmt.send(m_conFd, sError))
+			return false;
+
+		fmt.clear();
+		while (true)
+		{
+			if (!fmt.recv(m_conFd, sError))
+				return false;
+			if(fmt.freecapa()<=0)
+			{
+				sError = "503 Remote proxy error";
+				return false;
+			}
+
+			header h;
+			auto n = h.LoadFromBuf(fmt.rptr(), fmt.size());
+			if(!n)
+				continue;
+
+			auto st = h.getStatus();
+			if (n <= 0 || st == 404 /* just be sure it doesn't send crap */)
+			{
+				sError = "503 Tunnel setup failed";
+				return false;
+			}
+
+			if (st < 200 || st >= 300)
+			{
+				sError = h.frontLine;
+				return false;
+			}
+			break;
+		}
+
+		m_sHostName = realTarget.sHost;
+		m_sPort = realTarget.GetPort();
+
+		if (!SSLinit(sError, m_sHostName, m_sPort))
+		{
+			m_sHostName.clear();
+			return false;
+		}
+
+	}
+	catch(...)
+	{
+		return false;
+	}
+	return true;
 }
 
 #endif

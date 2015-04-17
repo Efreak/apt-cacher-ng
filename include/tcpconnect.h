@@ -71,6 +71,8 @@ public:
 	inline void KnowLastFile(WEAK_PTR<fileitem> spRemItem) { m_lastFile = spRemItem; }
 	//! @brief Invalidate (truncate) recently touched file
 	void KillLastFile();
+	//! @brief Request tunneling with CONNECT and change identity if succeeded, and start TLS
+	bool StartTLStunnel(const tHttpUrl & realTarget, mstring& sError, cmstring *psAuthorization=nullptr);
 
 private:
 	bool _Connect(mstring &sErrOut, int timeout);

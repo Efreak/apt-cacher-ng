@@ -89,6 +89,8 @@ public:
 		clientBufOut.setsize(32*1024); // out to be enough for any BTS response
 
 		if(listBugsMode)
+#warning FIXME, needs to work through a proxy cascade.
+#warning geht nur mit dem rotzigen connect, der evtl. nur port 443 erlaubt... vielleicht doch mal endlich richtiges post verarbeiten...
 			m_spOutCon = tcpconnect::CreateConnected("bugs.debian.org", sDefPortHTTP,
 					sErr, 0,0,false,acfg::nettimeout, true);
 		else if(pConTgt)
@@ -96,14 +98,16 @@ public:
 			tHttpUrl url;
 			if(!url.SetHttpUrl(*pConTgt))
 				return;
+#warning das gleiche, muss mit tunnelto schalten und beten, und proxy auth, etc.
 			m_spOutCon = tcpconnect::CreateConnected(url.sHost , url.GetPort(), sErr, 0,0,
-					false, acfg::nettimeout, false);
+					false, acfg::nettimeout, true);
 
 			if(m_spOutCon)
 				clientBufOut << "HTTP/1.0 200 Connection established\r\n\r\n";
 			else
 			{
 				clientBufOut << "HTTP/1.0 502 CONNECT error: " << sErr << "\r\n\r\n";
+#warning rotz, fixen, besser gestertes send wrapper fuer einfache puffer, mit socket timeout
 				while(!clientBufOut.empty())
 					clientBufOut.syswrite(fdClient);
 			}
@@ -150,15 +154,19 @@ public:
 
 			if(FD_ISSET(ofd, &wfds))
 			{
-				// if the incoming request is from a proxy-style acng setup then we need to
-				// remove the HOST string from the prefix in the request header and replace it
-				// with something harmless.
-				// But if there is another web proxy, let it deal with the stuff...
-				serverBufOut.move();
-				char *p = 0;
+				if (listBugsMode)
+				{
+					// if the incoming request is from a proxy-style acng setup then we need to
+					// remove the HOST string from the prefix in the request header and replace it
+					// with something harmless.
+					// But if there is another web proxy, let it deal with the stuff...
+					serverBufOut.move();
+					char *p = 0;
 
-				while (0 != (p = strstr((char*) serverBufOut.rptr(), POSTMARK)))
-					memcpy(p, FAKEMARK, _countof(FAKEMARK) - 1);
+					while (0 != (p = strstr((char*) serverBufOut.rptr(),
+					POSTMARK)))
+						memcpy(p, FAKEMARK, _countof(FAKEMARK) - 1);
+				}
 
 				if(serverBufOut.syswrite(ofd)<0)
 					return;

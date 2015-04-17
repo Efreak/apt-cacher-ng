@@ -160,7 +160,7 @@ tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool b
 bool ParseKeyValLine(const mstring & sIn, mstring & sOutKey, mstring & sOutVal);
 #define keyEq(a, b) (0 == strcasecmp((a), (b).c_str()))
 
-static cmstring PROT_PFX_HTTPS("https://"), PROT_PFX_HTTP("http://");
+extern cmstring PROT_PFX_HTTPS, PROT_PFX_HTTP;
 
 class tHttpUrl
 {
