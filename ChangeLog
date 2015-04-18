@@ -1,7 +1,12 @@
-apt-cacher-ng (0.8.2) FOR-A-FEW-BITS-MORE; urgency=low
+apt-cacher-ng (0.8.2) FOR-A-FEW-BYTES-MORE; urgency=low
 
   * Creating fresh connection for each bugs.d.o operation (attempt to fix
     Debian bug #775126)
+  * Various fixes and workarounds for pass-through operations in proxy
+    cascades, for direct connects (HTTPS tunnels) and bugs.debian.org SOAP
+    activities
+  * FIX: correct detection and blacklisting of broken (permanently
+    disconnecting) hosts
 
  -- 
 

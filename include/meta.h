@@ -164,6 +164,10 @@ extern cmstring PROT_PFX_HTTPS, PROT_PFX_HTTP;
 
 class tHttpUrl
 {
+
+private:
+	mstring sPort;
+
 public:
 	bool SetHttpUrl(cmstring &uri, bool unescape = true);
 	mstring ToURI(bool bEscaped) const;
@@ -219,8 +223,11 @@ public:
 #endif
 	}
 	inline cmstring& GetPort() const { return !sPort.empty() ? sPort : GetDefaultPortForProto(); }
-private:
-	mstring sPort;
+
+
+	inline tHttpUrl(cmstring &host, cmstring& port, bool ssl)
+	: sPort(port), sHost(host), bSSL(ssl) {};
+	inline tHttpUrl() =default;
 };
 
 #define POKE(x) for(;;) { ssize_t n=write(x, "", 1); if(n>0 || (EAGAIN!=errno && EINTR!=errno)) break;  }

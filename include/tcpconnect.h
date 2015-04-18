@@ -72,7 +72,7 @@ public:
 	//! @brief Invalidate (truncate) recently touched file
 	void KillLastFile();
 	//! @brief Request tunneling with CONNECT and change identity if succeeded, and start TLS
-	bool StartTLStunnel(const tHttpUrl & realTarget, mstring& sError, cmstring *psAuthorization=nullptr);
+	bool StartTunnel(const tHttpUrl & realTarget, mstring& sError, cmstring *psAuthorization, bool bDoSSLinit);
 
 private:
 	bool _Connect(mstring &sErrOut, int timeout);

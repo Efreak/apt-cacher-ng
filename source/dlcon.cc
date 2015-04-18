@@ -1150,7 +1150,7 @@ void dlcon::WorkLoop()
 								acfg::optproxytimeout : acfg::nettimeout, false);
 						if(con)
 						{
-							if(!con->StartTLStunnel(peerHost, sErrorMsg, & proxy->sUserPass))
+							if(!con->StartTunnel(peerHost, sErrorMsg, & proxy->sUserPass, true))
 								con.reset();
 						}
 					}

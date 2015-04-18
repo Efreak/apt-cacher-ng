@@ -29,7 +29,7 @@ bool acbuf::initFromFile(const char *szPath)
 	if (0!=stat(szPath, &statbuf))
 		return false;
 
-	int fd=open(szPath, O_RDONLY);
+	int fd=::open(szPath, O_RDONLY);
 	if (fd<0)
 		return false;
 

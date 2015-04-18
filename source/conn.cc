@@ -75,48 +75,103 @@ class RawPassThrough
 #define POSTMARK "POST http://bugs.debian.org:80/"
 #define FAKEMARK "POST                          /"
 
-
 public:
 	inline bool CheckListbugs(const header &ph)
 	{
 		return (0 == ph.frontLine.compare(0, _countof(POSTMARK) - 1, POSTMARK));
 	}
 	void PassThrough(acbuf &clientBufIn, int fdClient,
-			bool listBugsMode, cmstring *pConTgt)
+			bool modPOSTstringForBugsDO, cmstring& uri)
 	{
 		string sErr;
 		tSS clientBufOut;
 		clientBufOut.setsize(32*1024); // out to be enough for any BTS response
+//		bool bDoCrypto(false);
 
-		if(listBugsMode)
-#warning FIXME, needs to work through a proxy cascade.
-#warning geht nur mit dem rotzigen connect, der evtl. nur port 443 erlaubt... vielleicht doch mal endlich richtiges post verarbeiten...
-			m_spOutCon = tcpconnect::CreateConnected("bugs.debian.org", sDefPortHTTP,
-					sErr, 0,0,false,acfg::nettimeout, true);
-		else if(pConTgt)
+		// XXX: this is very similar except for minor details
+		// (fixed host vs. arbitrary, response expected vs. not expected)
+		if(modPOSTstringForBugsDO)
 		{
-			tHttpUrl url;
-			if(!url.SetHttpUrl(*pConTgt))
+			if(acfg::proxy_info.sHost.empty())
+			{
+				m_spOutCon = tcpconnect::CreateConnected("bugs.debian.org",
+					sDefPortHTTP, sErr, 0,0,false,acfg::nettimeout, true);
+			}
+			else
+			{
+#if 0
+				// yeah, that might work if the exchange loop is extended with crypto ops
+				// like in dlcon, but for now just redirect the client to HTTPS
+				// version which will establish direct communication that will
+				// be forwarded as-is by the handling below
+
+				// switch to HTTPS tunnel in order to get a direct connection through the proxy
+				m_spOutCon = tcpconnect::CreateConnected(acfg::proxy_info.sHost,
+						acfg::proxy_info.GetPort(), sErr, 0,0,false,acfg::nettimeout, true);
+				if(m_spOutCon)
+				{
+					if(!m_spOutCon->StartTunnel(tHttpUrl("bugs.debian.org", "443", true),
+							sErr, & acfg::proxy_info.sUserPass, true))
+					{
+						m_spOutCon.reset();
+					}
+					else
+						bDoCrypto = true;
+				}
+#else
+				clientBufOut << "HTTP/1.1 302 Redirect\r\nLocation: "
+						<< "https://bugs.debian.org:443/";
+				constexpr auto offset = _countof(POSTMARK)-6;
+				clientBufOut.append(uri.c_str()+offset, uri.size()-offset);
+				clientBufOut << "\r\nConnection: close\r\n\r\n";
+				clientBufOut.send(fdClient, sErr);
 				return;
-#warning das gleiche, muss mit tunnelto schalten und beten, und proxy auth, etc.
-			m_spOutCon = tcpconnect::CreateConnected(url.sHost , url.GetPort(), sErr, 0,0,
+
+#endif
+			}
+			if(!m_spOutCon)
+			{
+				clientBufOut << "HTTP/1.0 502 Connection error: " << sErr << "\r\n\r\n";
+				clientBufOut.send(fdClient, sErr);
+				return;
+			}
+		}
+		else
+		{
+			// arbitrary target/port, client cares about SSL other stuff
+			tHttpUrl url;
+			if(!url.SetHttpUrl(uri))
+				return;
+			if(acfg::proxy_info.sHost.empty())
+			{
+				m_spOutCon = tcpconnect::CreateConnected(url.sHost , url.GetPort(), sErr, 0,0,
 					false, acfg::nettimeout, true);
+			}
+			else
+			{
+				// switch to HTTPS tunnel in order to get a direct connection through the proxy
+				m_spOutCon = tcpconnect::CreateConnected(acfg::proxy_info.sHost,
+						acfg::proxy_info.GetPort(), sErr, 0, 0, false, acfg::nettimeout, true);
+
+				if (m_spOutCon)
+				{
+					if (!m_spOutCon->StartTunnel(tHttpUrl(url.sHost, url.GetPort(),
+							true), sErr,
+							&acfg::proxy_info.sUserPass, false))
+					{
+						m_spOutCon.reset();
+					}
+				}
+			}
 
 			if(m_spOutCon)
 				clientBufOut << "HTTP/1.0 200 Connection established\r\n\r\n";
 			else
 			{
 				clientBufOut << "HTTP/1.0 502 CONNECT error: " << sErr << "\r\n\r\n";
-#warning rotz, fixen, besser gestertes send wrapper fuer einfache puffer, mit socket timeout
-				while(!clientBufOut.empty())
-					clientBufOut.syswrite(fdClient);
+				clientBufOut.send(fdClient, sErr);
+				return;
 			}
-
-		}
-		else
-		{
-			ASSERT(!"huh?");
-			return;
 		}
 
 		if(!m_spOutCon)
@@ -154,7 +209,7 @@ public:
 
 			if(FD_ISSET(ofd, &wfds))
 			{
-				if (listBugsMode)
+				if (modPOSTstringForBugsDO)
 				{
 					// if the incoming request is from a proxy-style acng setup then we need to
 					// remove the HOST string from the prefix in the request header and replace it
@@ -289,7 +344,13 @@ void con::WorkLoop() {
 					{
 						RawPassThrough pt;
 						if (pt.CheckListbugs(*m_pTmpHead))
-							pt.PassThrough(inBuf, m_confd, true, NULL);
+						{
+							tSplitWalk iter(&m_pTmpHead->frontLine);
+							if(iter.Next() && iter.Next())
+								pt.PassThrough(inBuf, m_confd, true, iter);
+							else
+								return;
+						}
 						else
 						{
 							ldbg("not bugs.d.o: " << inBuf.rptr());
@@ -311,12 +372,12 @@ void con::WorkLoop() {
 						if(rechecks::Match(tgt, rechecks::PASSTHROUGH))
 						{
 							RawPassThrough pt;
-							pt.PassThrough(inBuf, m_confd, false, &tgt);
+							pt.PassThrough(inBuf, m_confd, false, tgt);
 						}
 						else
 						{
 							tSS response;
-							response << "HTTP/1.0 403 CONNECT denied\r\n\r\n";
+							response << "HTTP/1.0 403 CONNECT denied (ask the admin to allow tunnels)\r\n\r\n";
 							while(!response.empty())
 								response.syswrite(m_confd);
 						}

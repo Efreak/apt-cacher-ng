@@ -626,7 +626,8 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	return false;
 }
 
-bool tcpconnect::StartTLStunnel(const tHttpUrl& realTarget, mstring& sError, cmstring *psAuthorization)
+bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
+		cmstring *psAuthorization, bool bDoSSL)
 {
 	/*
 	  CONNECT server.example.com:80 HTTP/1.1
@@ -652,6 +653,7 @@ bool tcpconnect::StartTLStunnel(const tHttpUrl& realTarget, mstring& sError, cms
 		fmt.clear();
 		while (true)
 		{
+			fmt.setsize(4000);
 			if (!fmt.recv(m_conFd, sError))
 				return false;
 			if(fmt.freecapa()<=0)
@@ -683,7 +685,7 @@ bool tcpconnect::StartTLStunnel(const tHttpUrl& realTarget, mstring& sError, cms
 		m_sHostName = realTarget.sHost;
 		m_sPort = realTarget.GetPort();
 
-		if (!SSLinit(sError, m_sHostName, m_sPort))
+		if (bDoSSL && !SSLinit(sError, m_sHostName, m_sPort))
 		{
 			m_sHostName.clear();
 			return false;
