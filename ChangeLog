@@ -7,6 +7,10 @@ apt-cacher-ng (0.8.2) FOR-A-FEW-BYTES-MORE; urgency=low
     activities
   * FIX: correct detection and blacklisting of broken (permanently
     disconnecting) hosts
+  * bugs.debian.org:443 is allowed for CONNECT calls by default if an
+    extra proxy is used
+
+todo: document beh. of bugs.do default in config
 
  -- 
 

@@ -89,6 +89,7 @@ string agentheader;
 
 string requestapx;
 string sigbuscmd;
+mstring connectPermPattern("~~~");
 
 #ifdef DEBUG
 int debug(3), foreground(true);

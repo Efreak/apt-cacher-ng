@@ -159,7 +159,13 @@ bool AppendPasswordHash(string &stringWithSalt, LPCSTR plainPass, size_t passLen
 #endif
 
 
-void early_special_operations()
+struct optflags
+{
+	bool bDumpCfg=false, bForceCleanup=false;
+	LPCSTR pReTest=nullptr;
+};
+
+int do_alternative_work(optflags& flags)
 {
 	LPCSTR envvar(nullptr);
 
@@ -220,13 +226,25 @@ void early_special_operations()
 	if(envvar)
 		exit(wcat(envvar, getenv("http_proxy")));
 
+
+
+#error if(action ist dumpen?) und dann exit!
+	if (acfg::debug >= LOG_MORE || bDumpConfig)
+	acfg::dump_config();
+
+#error aus derm anderen main, fixen
+	if(flags.bDumpCfg)
+		exit(EXIT_SUCCESS);
+	if(flags.pReTest)
+	{
+		LPCSTR ReTest(LPCSTR);
+		std::cout << ReTest(flags.pReTest) << std::endl;
+		exit(EXIT_SUCCESS);
+	}
+
+
 }
 
-struct optflags
-{
-	bool bDumpCfg=false, bForceCleanup=false;
-	LPCSTR pReTest=nullptr;
-};
 
 void parse_options(int argc, const char **argv, optflags& ret)
 {
@@ -271,7 +289,7 @@ void parse_options(int argc, const char **argv, optflags& ret)
 		}
 		else if(**p) // not empty
 		{
-			if(!acfg::SetOption(*p, false))
+			if(!acfg::SetOption(*p, false, false, nullptr))
 				usage();
 		}
 	}
@@ -296,8 +314,7 @@ void parse_options(int argc, const char **argv, optflags& ret)
 			<< acfg::logdir<<endl;
 		exit(1);
 	}
-
-	acfg::PostProcConfig(ret.bDumpCfg);
+	acfg::PostProcConfig(quiet);
 }
 
 void setup_sighandler()
@@ -340,23 +357,14 @@ int main(int argc, const char **argv)
 #endif
 
 	optflags flags;
-#ifdef DEBUG // need options from cmdline ASAP
 	parse_options(argc, argv, flags);
-#endif
+
 	check_algos();
 	setup_sighandler();
-	early_special_operations();
 
-	parse_options(argc, argv, flags);
-
-	if(flags.bDumpCfg)
-		exit(EXIT_SUCCESS);
-	if(flags.pReTest)
-	{
-		LPCSTR ReTest(LPCSTR);
-		std::cout << ReTest(flags.pReTest) << std::endl;
-		exit(EXIT_SUCCESS);
-	}
+	auto wcode = do_alternative_work(flags);
+	if(wcode != RESERVED_DEFVAL)
+		return wcode;
 
 	SetupCacheDir();
 

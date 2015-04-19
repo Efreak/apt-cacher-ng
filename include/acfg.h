@@ -28,7 +28,7 @@ namespace acfg
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
 reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, bindaddr, port, sUmask,
 tmpDontcacheReq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
-cafile, capath, spfilepat, svfilepat, badredmime, sigbuscmd;
+cafile, capath, spfilepat, svfilepat, badredmime, sigbuscmd, connectPermPattern;
 
 extern mstring pfilepatEx, vfilepatEx, wfilepatEx, spfilepatEx, svfilepatEx; // for customization by user
 
@@ -46,11 +46,11 @@ extern int conprotos[2];
 
 extern std::atomic_bool degraded;
 
-bool SetOption(const mstring &line, bool bQuiet=false, NoCaseStringMap *pDupeChecker=NULL);
+bool SetOption(const mstring &line, bool bQuiet, bool bNoComplex, NoCaseStringMap *pDupeChecker);
 void ReadConfigDirectory(const char*, bool bTestMode);
 
 //! Prepare various things resulting from variable combinations, etc.
-void PostProcConfig(bool bDumpConfig);
+void PostProcConfig(bool bDumpConfig, bool bQuiet);
 
 struct tRepoData
 {
@@ -133,5 +133,7 @@ bool CompileExpressions();
 #define SABSPATH(x) (CACHE_BASE+(x))
 
 bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
+
+void dump_config();
 
 #endif

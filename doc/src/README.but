@@ -1337,17 +1337,19 @@ port accordingly).
 
 \C{bugs} Known Bugs and Limitations
 
-\b Versions between 0.2.6 and 0.3.3 created broken X-Original-Source URLs in the .head files. The effects should be negligible.
-
 \b Only the "Basic" type of HTTP proxy authentication is supported at the moment
 
-\b Only HTTP HEAD and GET commands are supported properly. POST support is limited to the calls made by apt-listbugs and might garble some requests.
+\b Only HTTP HEAD and GET commands are supported properly.
+
+\b CONNECT (for https/SSL/TLS tunnels) is supported but needs to be enabled by local administrators, see \k{ssluse} for details
+
+\b POST support is restricted to apt-listbugs actions and is actually implemented as simple data forwarding with minor header manipulation. If additional proxy is configured, the client will be redirected to the HTTPS version of bugs.debian.org service, i.e. switching to the CONNECT method (see above)
 
 \b Transparent proxy mode not implemented yet
 
-\b The metadata update in maintenance jobs (like expiration task) attempts to guess the best source of update based on original source information and current backend configuration. In case of failure, run a "forced" download of index files through the web interface.
+\b The metadata update in maintenance jobs (like expiration task) attempts to guess the best source of update based on original source information and current backend configuration. In case of repeating failures, please run a "forced" download of index files through the web interface
 
-\b See TODO file in apt-cacher-ng source for various other notes
+\b See TODO file in apt-cacher-ng source for more related information
 
 \C{cont} Contact
 
@@ -1361,6 +1363,7 @@ There are also a public
 available on the \W{http://alioth.debian.org/projects/apt-cacher-ng/}{Alioth project page}.
 
 And last, but not least: feel free to express your gratitude by donating a
-small amount of money via \W{https://www.paypal.com}{PayPal} (to edi@gmx.de).
+small amount of money via \W{https://www.paypal.com}{PayPal} (to edi@gmx.de) or just
+\W{https://flattr.com/thing/51105/Apt-Cacher-NG}{Flattr it!}
 
-\versionid Eduard Bloch, Sat, 11 Apr 2015 15:10:17 +0200
+\versionid Eduard Bloch, Sun, 19 Apr 2015 10:25:49 +0200
