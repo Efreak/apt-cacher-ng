@@ -9,6 +9,11 @@
 #include <sys/select.h>
 #include <signal.h>
 
+namespace acfg
+{
+	int nettimeout=60;
+}
+
 int main(int argc, char **argv)
 {
 	signal(SIGPIPE, SIG_IGN);

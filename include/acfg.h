@@ -36,7 +36,7 @@ extern int debug, numcores, offlinemode, foreground, verbose, stupidfs, forceman
 verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, dlbufsize, usewrap,
 exporigin, logxff, oldupdate, recompbz2, nettimeout, updinterval, forwardsoap, dirperms, fileperms,
 maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsupcount,
-optproxytimeout, patrace, maxdlspeed, maxredlsize;
+optproxytimeout, patrace, maxdlspeed, maxredlsize, nsafriendly;
 
 // processed config settings
 extern tHttpUrl proxy_info;
@@ -58,8 +58,8 @@ struct tRepoData
 
 	// dirty little helper to execute custom actions when a jobs associates or forgets this data set
 	struct IHookHandler {
-		virtual void JobRelease()=0;
-		virtual void JobConnect()=0;
+		virtual void OnAccess()=0;
+		virtual void OnRelease()=0;
 		virtual ~IHookHandler() {
 		}
 	} *m_pHooks = nullptr;

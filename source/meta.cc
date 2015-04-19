@@ -25,6 +25,9 @@ cmstring sDefPortHTTP("80");
 cmstring sDefPortHTTPS("443");
 #endif
 
+cmstring PROT_PFX_HTTPS("https://"), PROT_PFX_HTTP("http://");
+
+
 /*
 int getUUID() {
     lfd=(lfd+1)%65536;
