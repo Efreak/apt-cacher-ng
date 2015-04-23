@@ -123,7 +123,7 @@ bool Match(cmstring &in, eMatchType type);
 
 eMatchType GetFiletype(const mstring &);
 bool MatchUncacheable(const mstring &, NOCACHE_PATTYPE);
-bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat);
+bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat, bool bQuiet);
 bool CompileExpressions();
 }
 

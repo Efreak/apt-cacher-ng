@@ -1100,9 +1100,10 @@ void PostProcConfig(bool bQuiet)
 #endif
 
    if(!rechecks::CompileUncExpressions(rechecks::NOCACHE_REQ,
-		   tmpDontcacheReq.empty() ? tmpDontcache : tmpDontcacheReq)
+		   tmpDontcacheReq.empty() ? tmpDontcache : tmpDontcacheReq,
+				   bQuiet)
    || !rechecks::CompileUncExpressions(rechecks::NOCACHE_TGT,
-		   tmpDontcacheTgt.empty() ? tmpDontcache : tmpDontcacheTgt))
+		   tmpDontcacheTgt.empty() ? tmpDontcache : tmpDontcacheTgt, bQuiet))
    {
 	   BARF("An error occurred while compiling regular expression for non-cached paths!");
    }
@@ -1140,7 +1141,9 @@ void PostProcConfig(bool bQuiet)
 
 void dump_config()
 {
-	ostream &cmine(bDumpConfig ? cout : cerr);
+#warning was war vorher genau wann? fehler vs. nicht fehler?
+//	ostream &cmine(bDumpConfig ? cout : cerr);
+	ostream &cmine(cout);
 
 	for (auto& n2s : n2sTbl)
 		if (n2s.ptr)
