@@ -442,7 +442,7 @@ void handle_sigbus()
 		sprintf(buf, "%u", (unsigned) getpid());
 		setenv("ACNGPID", buf, 1);
 		*/
-		system(acfg::sigbuscmd.c_str());
+		::ignore_value(system(acfg::sigbuscmd.c_str()));
 	}
 #if 1
 	for (auto &x : g_mmapMemory)
