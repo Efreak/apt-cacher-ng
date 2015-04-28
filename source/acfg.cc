@@ -32,7 +32,8 @@ using namespace std;
 
 bool bIsHashedPwd=false;
 
-#define BARF(x) {if(!bQuiet) { cerr << x << endl;} exit(EXIT_FAILURE); }
+#warning murks, manchmal war quiet intern verwendet
+#define BARF(x) {if(!g_bQuiet) { cerr << x << endl;} exit(EXIT_FAILURE); }
 #define BADSTUFF_PATTERN "\\.\\.($|%|/)"
 
 namespace rechecks
@@ -43,6 +44,7 @@ bool CompileExpressions();
 
 namespace acfg {
 
+bool g_bQuiet=false, g_bNoComplex=false;
 
 // internal stuff:
 string sPopularPath("/debian/");
@@ -162,8 +164,8 @@ MapNameToInt n2iTbl[] = {
 		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10}
 };
 
-void ReadRewriteFile(const string & sFile, const string & sRepName, bool bQuiet);
-void ReadBackendsFile(const string & sFile, const string &sRepName, bool bQuiet);
+void ReadRewriteFile(const string & sFile, const string & sRepName);
+void ReadBackendsFile(const string & sFile, const string &sRepName);
 
 map<cmstring, tRepoData> repoparms;
 typedef decltype(repoparms)::iterator tPairRepoNameData;
@@ -242,7 +244,7 @@ inline void _FixPostPreSlashes(string &val)
 		val.insert(0, "/", 1);
 }
 
-bool ReadOneConfFile(const string & szFilename, bool bQuiet, bool bNoComplex)
+bool ReadOneConfFile(const string & szFilename)
 {
 	tCfgIter itor(szFilename);
 	itor.reader.CheckGoodState(true, &szFilename);
@@ -259,7 +261,7 @@ bool ReadOneConfFile(const string & szFilename, bool bQuiet, bool bNoComplex)
 		if(stmiss != pos)
 			itor.sLine.erase(pos);
 
-		if(! SetOption(itor.sLine, bQuiet, bNoComplex, &dupeCheck))
+		if(! SetOption(itor.sLine, &dupeCheck))
 			BARF("Error reading main options, terminating.");
 	}
 	return true;
@@ -275,13 +277,13 @@ inline decltype(repoparms)::iterator GetRepoEntryRef(const string & sRepName)
 	return rv.first;
 }
 
-inline bool ParseOptionLine(const string &sLine, string &key, string &val, bool bQuiet)
+inline bool ParseOptionLine(const string &sLine, string &key, string &val)
 {
 	string::size_type posCol = sLine.find(":");
 	string::size_type posEq = sLine.find("=");
 	if (posEq==stmiss && posCol==stmiss)
 	{
-		if(!bQuiet)
+		if(!g_bQuiet)
 			cerr << "Not a valid configuration directive: " << sLine <<endl;
 		return false;
 	}
@@ -307,7 +309,7 @@ inline bool ParseOptionLine(const string &sLine, string &key, string &val, bool 
 inline void AddRemapFlag(const string & token, const string &repname)
 {
 	mstring key, value;
-	if(!ParseOptionLine(token, key, value, true))
+	if(!ParseOptionLine(token, key, value))
 		return;
 
 	tRepoData &where = repoparms[repname];
@@ -349,7 +351,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 	}
 }
 
-tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback, bool bQuiet)
+tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
 {
 	tStrDeq srcs;
 	string sPath = token.substr(5);
@@ -421,7 +423,7 @@ tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback, bool bQuiet)
 }
 
 inline void AddRemapInfo(bool bAsBackend, const string & token,
-		const string &repname, bool bQuiet)
+		const string &repname)
 {
 	if (0!=token.compare(0, 5, "file:"))
 	{
@@ -438,12 +440,12 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 	}
 	else
 	{
-		for(auto& src : ExpandFileTokens(token, true, bQuiet))
+		for(auto& src : ExpandFileTokens(token, true))
 		{
 			if (bAsBackend)
-				ReadBackendsFile(src, repname, bQuiet);
+				ReadBackendsFile(src, repname);
 			else
-				ReadRewriteFile(src, repname, bQuiet);
+				ReadRewriteFile(src, repname);
 		}
 	}
 }
@@ -494,7 +496,7 @@ void _AddHooksFile(cmstring& vname)
 	mstring key,val;
 	while (itor.Next())
 	{
-		if(!ParseOptionLine(itor.sLine, key, val, false))
+		if(!ParseOptionLine(itor.sLine, key, val))
 			continue;
 
 		const char *p = key.c_str();
@@ -599,11 +601,11 @@ cmstring & GetMimeType(cmstring &path)
 	return sEmptyString;
 }
 
-bool SetOption(const string &sLine, bool bQuiet, bool bNoComplex, NoCaseStringMap *pDupeCheck)
+bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 {
 	string key, value;
 
-	if(!ParseOptionLine(sLine, key, value, bQuiet))
+	if(!ParseOptionLine(sLine, key, value))
 		return false;
 
 	string * psTarget;
@@ -613,7 +615,7 @@ bool SetOption(const string &sLine, bool bQuiet, bool bNoComplex, NoCaseStringMa
 	if ( nullptr != (psTarget = GetStringPtr(key.c_str())))
 	{
 
-		if(pDupeCheck && !bQuiet)
+		if(pDupeCheck && !g_bQuiet)
 		{
 			mstring &w = (*pDupeCheck)[key];
 			if(w.empty())
@@ -627,7 +629,7 @@ bool SetOption(const string &sLine, bool bQuiet, bool bNoComplex, NoCaseStringMa
 	else if ( nullptr != (pnTarget = GetIntPtr(key.c_str(), nNumBase)))
 	{
 
-		if(pDupeCheck && !bQuiet)
+		if(pDupeCheck && !g_bQuiet)
 		{
 			mstring &w = (*pDupeCheck)[key];
 			if(w.empty())
@@ -678,17 +680,17 @@ bool SetOption(const string &sLine, bool bQuiet, bool bNoComplex, NoCaseStringMa
 				BARF("Invalid proxy specification, aborting...");
 		}
 	}
-	else if(CHECKOPTKEY("LocalDirs") && !bNoComplex)
+	else if(CHECKOPTKEY("LocalDirs") && !g_bNoComplex)
 	{
 		_ParseLocalDirs(value);
 		return !localdirs.empty();
 	}
-	else if(0==strncasecmp(key.c_str(), "Remap-", 6) && !bNoComplex)
+	else if(0==strncasecmp(key.c_str(), "Remap-", 6) && !g_bNoComplex)
 	{
 		string vname=key.substr(6, key.npos);
 		if(vname.empty())
 		{
-			if(!bQuiet)
+			if(!g_bQuiet)
 				cerr << "Bad repository name in " << key << endl;
 			return false;
 		}
@@ -705,15 +707,15 @@ bool SetOption(const string &sLine, bool bQuiet, bool bNoComplex, NoCaseStringMa
 			if(s.at(0)==';')
 				++type;
 			else if(0 == type)
-				AddRemapInfo(false, s, vname, bQuiet);
+				AddRemapInfo(false, s, vname);
 			else if(1 == type)
-				AddRemapInfo(true, s, vname, bQuiet);
+				AddRemapInfo(true, s, vname);
 			else if(2 == type)
 				AddRemapFlag(s, vname);
 		}
 		if(type<0)
 		{
-			if(!bQuiet)
+			if(!g_bQuiet)
 				cerr << "Invalid entry, no configuration: " << key << ": " << value <<endl;
 			return false;
 		}
@@ -774,7 +776,7 @@ bool SetOption(const string &sLine, bool bQuiet, bool bNoComplex, NoCaseStringMa
 	}
 	else
 	{
-		if(!bQuiet)
+		if(!g_bQuiet)
 			cerr << "Warning, unknown configuration directive: " << key <<endl;
 		return false;
 	}
@@ -821,7 +823,7 @@ const tRepoData * GetRepoData(cmstring &vname)
 	return & it->second;
 }
 
-void ReadBackendsFile(const string & sFile, const string &sRepName, bool bQuiet)
+void ReadBackendsFile(const string & sFile, const string &sRepName)
 {
 
 	int nAddCount=0;
@@ -881,7 +883,7 @@ void ShutDown()
 /* This parses also legacy files, i.e. raw RFC-822 formated mirror catalogue from the
  * Debian archive maintenance repository.
  */
-void ReadRewriteFile(const string & sFile, cmstring& sRepName, bool bQuiet)
+void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 {
 	filereader reader;
 	if(debug>4)
@@ -982,7 +984,7 @@ tRepoData::~tRepoData()
 	delete m_pHooks;
 }
 
-void ReadConfigDirectory(const char *szPath, bool bQuiet, bool bNoComplex)
+void ReadConfigDirectory(const char *szPath)
 {
 	dump_proc_status();
 	char buf[PATH_MAX];
@@ -993,7 +995,7 @@ void ReadConfigDirectory(const char *szPath, bool bQuiet, bool bNoComplex)
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
-		ReadOneConfFile(src, bQuiet, bNoComplex);
+		ReadOneConfFile(src);
 #else
 	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bQuiet, bNoComplex);
 #endif
@@ -1009,7 +1011,7 @@ void ReadConfigDirectory(const char *szPath, bool bQuiet, bool bNoComplex)
 	}
 }
 
-void PostProcConfig(bool bQuiet)
+void PostProcConfig()
 {
 	
 	if(port.empty()) // heh?
@@ -1100,10 +1102,9 @@ void PostProcConfig(bool bQuiet)
 #endif
 
    if(!rechecks::CompileUncExpressions(rechecks::NOCACHE_REQ,
-		   tmpDontcacheReq.empty() ? tmpDontcache : tmpDontcacheReq,
-				   bQuiet)
+		   tmpDontcacheReq.empty() ? tmpDontcache : tmpDontcacheReq)
    || !rechecks::CompileUncExpressions(rechecks::NOCACHE_TGT,
-		   tmpDontcacheTgt.empty() ? tmpDontcache : tmpDontcacheTgt, bQuiet))
+		   tmpDontcacheTgt.empty() ? tmpDontcache : tmpDontcacheTgt))
    {
 	   BARF("An error occurred while compiling regular expression for non-cached paths!");
    }
@@ -1141,7 +1142,7 @@ void PostProcConfig(bool bQuiet)
 
 void dump_config()
 {
-#warning was war vorher genau wann? fehler vs. nicht fehler?
+#warning was war vorher genau wann? fehler vs. nicht fehler? eigentlich finger weg von cout außer es war explizit gefragt
 //	ostream &cmine(bDumpConfig ? cout : cerr);
 	ostream &cmine(cout);
 
@@ -1401,7 +1402,7 @@ eMatchType GetFiletype(const string & in)
 
 #ifndef MINIBUILD
 
-inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool bRecursiveCall, bool bQuiet)
+inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool bRecursiveCall)
 {
 	auto & patvec = (NOCACHE_TGT == type) ? vecTgtPatterns : vecReqPatters;
 
@@ -1413,7 +1414,7 @@ inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool 
 	}
 	else if(!bRecursiveCall) // don't go further than one level
 	{
-		tStrDeq srcs = acfg::ExpandFileTokens(token, true, bQuiet);
+		tStrDeq srcs = acfg::ExpandFileTokens(token, true);
 		for(const auto& src: srcs)
 		{
 			acfg::tCfgIter itor(src);
@@ -1424,7 +1425,7 @@ inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool 
 			}
 			while(itor.Next())
 			{
-				if(!CompileUncachedRex(itor.sLine, type, true, bQuiet))
+				if(!CompileUncachedRex(itor.sLine, type, true))
 					return false;
 			}
 		}
@@ -1437,10 +1438,10 @@ inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool 
 }
 
 
-bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat, bool bQuiet)
+bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat)
 {
 	for(tSplitWalk split(&pat); split.Next(); )
-		if (!CompileUncachedRex(split, type, false, bQuiet))
+		if (!CompileUncachedRex(split, type, false))
 			return false;
 	return true;
 }

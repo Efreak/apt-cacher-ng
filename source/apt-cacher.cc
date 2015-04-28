@@ -50,7 +50,7 @@ using namespace std;
 
 #include "maintenance.h"
 
-static void usage();
+static void usage(int nRetCode=0);
 static void SetupCacheDir();
 void sig_handler(int signum);
 void log_handler(int signum);
@@ -158,14 +158,7 @@ bool AppendPasswordHash(string &stringWithSalt, LPCSTR plainPass, size_t passLen
 }
 #endif
 
-
-struct optflags
-{
-	bool bDumpCfg=false, bForceCleanup=false;
-	LPCSTR pReTest=nullptr;
-};
-
-int do_alternative_work(optflags& flags)
+void do_stuff_before_config()
 {
 	LPCSTR envvar(nullptr);
 
@@ -205,13 +198,27 @@ int do_alternative_work(optflags& flags)
 		string s(envvar);
 		off_t resSize;
 		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
+		if(!ok)
+		{
+			perror("");
+			exit(1);
+		}
 		for (uint i = 0; i < sizeof(csum); i++)
 			printf("%02x", csum[i]);
 		printf("\n");
 		envvar = getenv("REFSUM");
 		if (ok && envvar)
 		{
-			printf(CsEqual(envvar, csum, sizeof(csum)) ? "IsOK\n" : "Diff\n");
+			if(CsEqual(envvar, csum, sizeof(csum)))
+			{
+				printf("IsOK\n");
+				exit(0);
+			}
+			else
+			{
+				printf("Diff\n");
+				exit(1);
+			}
 		}
 		exit(0);
 	}
@@ -225,73 +232,88 @@ int do_alternative_work(optflags& flags)
 	envvar=getenv("BECURL");
 	if(envvar)
 		exit(wcat(envvar, getenv("http_proxy")));
-
-
-
-#error if(action ist dumpen?) und dann exit!
-	if (acfg::debug >= LOG_MORE || bDumpConfig)
-	acfg::dump_config();
-
-#error aus derm anderen main, fixen
-	if(flags.bDumpCfg)
-		exit(EXIT_SUCCESS);
-	if(flags.pReTest)
-	{
-		LPCSTR ReTest(LPCSTR);
-		std::cout << ReTest(flags.pReTest) << std::endl;
-		exit(EXIT_SUCCESS);
-	}
-
-
 }
 
-
-void parse_options(int argc, const char **argv, optflags& ret)
+void parse_options(int argc, const char **argv, bool& bStartCleanup)
 {
 
-	// preprocess some startup related parameters
+	bool bExtraVerb=false;
+	LPCSTR szCfgDir=nullptr;
+	LPCSTR szReTest=nullptr;
+	bool bDumpCfg=false;
+	std::vector<LPCSTR> cmdvars;
+
+	LPCSTR PRINTCFGVAR=getenv("PRINTCFGVAR");
+	if(PRINTCFGVAR)
+	{
+		acfg::g_bNoComplex = true;
+		acfg::g_bQuiet = true;
+	}
+
 	for (auto p=argv+1; p<argv+argc; p++)
 	{
 		if (!strncmp(*p, "-h", 2))
 			usage();
-		else if (!strncmp(*p, "-v", 2))
-			acfg::debug=acfg::debug|LOG_DEBUG|LOG_MORE;
+		if (!strncmp(*p, "-v", 2))
+			bExtraVerb = true;
 		else if (!strncmp(*p, "-e", 2))
-			ret.bForceCleanup=true;
-#if SUPPWHASH
-		else if (!strncmp(*p, "-H", 2))
-			exit(hashpwd());
-#endif
-	}
-
-	LPCSTR PRINTCFGVAR=getenv("PRINTCFGVAR");
-
-	for (auto p=argv+1; p<argv+argc; p++)
-	{
-		if(!strcmp(*p, "-c"))
+			bStartCleanup=true;
+		else if (!strcmp(*p, "-c"))
 		{
 			++p;
-			if(p < argv+argc)
-				acfg::ReadConfigDirectory(*p, PRINTCFGVAR);
+			if (p < argv + argc)
+				szCfgDir = *p;
+
 			else
-				usage();
+				usage(2);
 		}
-		else if(!strcmp(*p, "-p"))
+		else if (!strcmp(*p, "-p"))
 		{
-			ret.bDumpCfg=true;
+			bDumpCfg = true;
+			// might need external stuff
+			acfg::g_bNoComplex = false;
 		}
 		else if (!strcmp(*p, "--retest"))
 		{
 			++p;
 			if(p>=argv+argc)
 				exit(EXIT_FAILURE);
-			ret.pReTest=*p;
+			szReTest = *p;
+			// might need external stuff
+			acfg::g_bNoComplex = false;
 		}
 		else if(**p) // not empty
-		{
-			if(!acfg::SetOption(*p, false, false, nullptr))
-				usage();
-		}
+			cmdvars.push_back(*p);
+
+#if SUPPWHASH
+		else if (!strncmp(*p, "-H", 2))
+			exit(hashpwd());
+#endif
+	}
+
+	if(szCfgDir)
+		acfg::ReadConfigDirectory(szCfgDir);
+
+	for(auto& keyval : cmdvars)
+		if(!acfg::SetOption(keyval, 0))
+			usage(1);
+
+	acfg::PostProcConfig();
+
+	if(bExtraVerb)
+		acfg::debug |= (LOG_DEBUG|LOG_MORE);
+
+	if(bDumpCfg)
+	{
+		acfg::dump_config();
+		exit(EXIT_SUCCESS);
+	}
+
+	if(szReTest)
+	{
+		LPCSTR ReTest(LPCSTR);
+		std::cout << ReTest(szReTest) << std::endl;
+		exit(EXIT_SUCCESS);
 	}
 
 	if(PRINTCFGVAR)
@@ -308,13 +330,6 @@ void parse_options(int argc, const char **argv, optflags& ret)
 		exit(pi ? EXIT_SUCCESS : EXIT_FAILURE);
 	}
 
-	if(!aclog::open())
-	{
-		cerr << "Problem creating log files. Check permissions of the log directory, "
-			<< acfg::logdir<<endl;
-		exit(1);
-	}
-	acfg::PostProcConfig(quiet);
 }
 
 void setup_sighandler()
@@ -356,15 +371,22 @@ int main(int argc, const char **argv)
 	SSL_library_init();
 #endif
 
-	optflags flags;
-	parse_options(argc, argv, flags);
+	bool bTriggerCleanup=false;
+
+	do_stuff_before_config();
+
+	parse_options(argc, argv, bTriggerCleanup);
+
+	if(!aclog::open())
+	{
+		cerr << "Problem creating log files. Check permissions of the log directory, "
+			<< acfg::logdir<<endl;
+		exit(EXIT_FAILURE);
+	}
 
 	check_algos();
 	setup_sighandler();
 
-	auto wcode = do_alternative_work(flags);
-	if(wcode != RESERVED_DEFVAL)
-		return wcode;
 
 	SetupCacheDir();
 
@@ -373,7 +395,7 @@ int main(int argc, const char **argv)
 
 	conserver::Setup();
 
-	if (flags.bForceCleanup)
+	if (bTriggerCleanup)
 	{
 		tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
 				acfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
@@ -405,8 +427,8 @@ int main(int argc, const char **argv)
 
 }
 
-static void usage() {
-	cout <<"Usage: apt-cacher -h -c configdir <var=value ...>\n\n"
+static void usage(int retCode) {
+	cout <<"Usage: apt-cacher [options] [ -c configdir ] <var=value ...>\n\n"
 		"Options:\n"
 		"-h: this help message\n"
 		"-c: configuration directory\n"
@@ -424,7 +446,7 @@ static void usage() {
 		"LogDir: /directory/for/logfiles\n"
 		"\n"
 		"See configuration examples for all directives.\n\n";
-	exit(0);
+	exit(retCode);
 }
 
 

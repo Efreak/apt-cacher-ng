@@ -46,11 +46,12 @@ extern int conprotos[2];
 
 extern std::atomic_bool degraded;
 
-bool SetOption(const mstring &line, bool bQuiet, bool bNoComplex, NoCaseStringMap *pDupeChecker);
-void ReadConfigDirectory(const char*, bool bTestMode);
+bool SetOption(const mstring &line, NoCaseStringMap *pDupeChecker);
+void ReadConfigDirectory(const char*);
 
 //! Prepare various things resulting from variable combinations, etc.
-void PostProcConfig(bool bDumpConfig, bool bQuiet);
+void PostProcConfig();
+void dump_config();
 
 struct tRepoData
 {
@@ -99,6 +100,9 @@ int * GetIntPtr(LPCSTR key);
 mstring * GetStringPtr(LPCSTR key);
 
 int CheckAdminAuth(LPCSTR auth);
+
+extern bool g_bQuiet, g_bNoComplex;
+
 } // namespace acfg
 
 namespace rechecks
@@ -123,7 +127,7 @@ bool Match(cmstring &in, eMatchType type);
 
 eMatchType GetFiletype(const mstring &);
 bool MatchUncacheable(const mstring &, NOCACHE_PATTYPE);
-bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat, bool bQuiet);
+bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat);
 bool CompileExpressions();
 }
 
