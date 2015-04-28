@@ -17,6 +17,10 @@ CXXFLAGS += $(CPPFLAGS)
 override_dh_auto_build:
 	dh_auto_build -- VERBOSE=1
 
+# needs extra build deps and internet -> ignore
+override_dh_auto_test:
+	true
+
 override_dh_install:
 	dh_install $(shell test -e build/acngfs || echo -Xacngfs)
 	grep -q "define.*HAVE_SD_NOTIFY" build/acsyscap.h && sed -e s,^Type=simple,Type=notify, systemd/apt-cacher-ng.service > debian/apt-cacher-ng.service || cp systemd/apt-cacher-ng.service debian/apt-cacher-ng.service
