@@ -9,6 +9,7 @@ apt-cacher-ng (0.8.2) FOR-A-FEW-BYTES-MORE; urgency=low
     disconnecting) hosts
   * bugs.debian.org:443 is allowed for CONNECT calls by default if an
     extra proxy is used
+  * Various bugfixes of program option parsing and return codes
 
 todo: document beh. of bugs.do default in config
 
