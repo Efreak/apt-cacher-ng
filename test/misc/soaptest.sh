@@ -32,6 +32,7 @@ cat >> body.txt <<THERE
 </env:Envelope>
 THERE
 
+set -e
 (
 ( cat <<HEAD
 POST http://bugs.debian.org:80/cgi-bin/soap.cgi HTTP/1.1
@@ -47,4 +48,6 @@ Content-Length: $(wc -c < body.txt)
 HEAD
 ) | sed -e 's,$,\r,g'
 cat body.txt
-) | socket localhost 3142
+) | socket localhost 3142 > response.txt
+grep 200.*OK response.txt
+rm -f response.txt samplepkgs body.txt

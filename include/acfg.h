@@ -28,7 +28,7 @@ namespace acfg
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
 reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, bindaddr, port, sUmask,
 tmpDontcacheReq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
-cafile, capath, spfilepat, svfilepat, badredmime, sigbuscmd;
+cafile, capath, spfilepat, svfilepat, badredmime, sigbuscmd, connectPermPattern;
 
 extern mstring pfilepatEx, vfilepatEx, wfilepatEx, spfilepatEx, svfilepatEx; // for customization by user
 
@@ -46,11 +46,12 @@ extern int conprotos[2];
 
 extern std::atomic_bool degraded;
 
-bool SetOption(const mstring &line, bool bQuiet=false, NoCaseStringMap *pDupeChecker=NULL);
-void ReadConfigDirectory(const char*, bool bTestMode);
+bool SetOption(const mstring &line, NoCaseStringMap *pDupeChecker);
+void ReadConfigDirectory(const char*);
 
 //! Prepare various things resulting from variable combinations, etc.
-void PostProcConfig(bool bDumpConfig);
+void PostProcConfig();
+void dump_config();
 
 struct tRepoData
 {
@@ -58,8 +59,8 @@ struct tRepoData
 
 	// dirty little helper to execute custom actions when a jobs associates or forgets this data set
 	struct IHookHandler {
-		virtual void JobRelease()=0;
-		virtual void JobConnect()=0;
+		virtual void OnAccess()=0;
+		virtual void OnRelease()=0;
 		virtual ~IHookHandler() {
 		}
 	} *m_pHooks = nullptr;
@@ -99,6 +100,9 @@ int * GetIntPtr(LPCSTR key);
 mstring * GetStringPtr(LPCSTR key);
 
 int CheckAdminAuth(LPCSTR auth);
+
+extern bool g_bQuiet, g_bNoComplex;
+
 } // namespace acfg
 
 namespace rechecks
@@ -133,5 +137,7 @@ bool CompileExpressions();
 #define SABSPATH(x) (CACHE_BASE+(x))
 
 bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
+
+void dump_config();
 
 #endif

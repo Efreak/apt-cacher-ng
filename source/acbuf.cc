@@ -29,7 +29,7 @@ bool acbuf::initFromFile(const char *szPath)
 	if (0!=stat(szPath, &statbuf))
 		return false;
 
-	int fd=open(szPath, O_RDONLY);
+	int fd=::open(szPath, O_RDONLY);
 	if (fd<0)
 		return false;
 
@@ -79,6 +79,75 @@ int acbuf::sysread(int fd, unsigned int maxlen)
     if(n>0)
         w+=n;
     return(n);
+}
+
+bool tSS::send(int nConFd, mstring& sErrorStatus)
+{
+	while (!empty())
+	{
+		auto n = ::send(nConFd, rptr(), size(), 0);
+		if (n > 0)
+		{
+			drop(n);
+			continue;
+		}
+		if (n <= 0)
+		{
+			if (EINTR == errno || EAGAIN == errno)
+			{
+				struct timeval tv{acfg::nettimeout, 0};
+				fd_set wfds;
+				FD_ZERO(&wfds);
+				FD_SET(nConFd, &wfds);
+				auto r=::select(nConFd + 1, nullptr, &wfds, nullptr, &tv);
+				if(!r && errno != EINTR)
+				{
+					sErrorStatus = "502 Socket timeout";
+					return false;
+				}
+				continue;
+			}
+
+#ifdef MINIBUILD
+			sErrorStatus = "502 Socket error";
+#else
+			sErrorStatus = tErrnoFmter("502 Socket error, ");
+#endif
+			return false;
+		}
+	}
+	return true;
+}
+
+bool tSS::recv(int nConFd, mstring& sErrorStatus)
+{
+	struct timeval tv
+	{ acfg::nettimeout, 0 };
+	fd_set rfds;
+	FD_ZERO(&rfds);
+	FD_SET(nConFd, &rfds);
+	auto r = ::select(nConFd + 1, &rfds, nullptr, nullptr, &tv);
+	if (!r)
+	{
+		if(errno == EINTR)
+			return true;
+
+		sErrorStatus = "502 Socket timeout";
+		return false;
+	}
+	// must be readable
+	r = ::recv(nConFd, wptr(), freecapa(), 0);
+	if(r<=0)
+	{
+#ifdef MINIBUILD
+			sErrorStatus = "502 Socket error";
+#else
+			sErrorStatus = tErrnoFmter("502 Socket error, ");
+#endif
+			return false;
+	}
+	got(r);
+	return true;
 }
 
 /*
