@@ -41,4 +41,21 @@ grep illustrative $TMP/dump
 export REFSUM=$(sha1sum $TMP/dump | cut -c1-40)
 GETSUM=$TMP/dump $exe
 
+test "c2Fucy1zZXJpZg==" = $(TOBASE64=sans-serif $exe)
+
+mkdir -p $TMP/srv
+touch $TMP/srv/foo.deb
+$exe foreground=0 logdir=$TMP CacheDir:$TMP port:$PORT pidfile=$TMP/x.pid ExTreshold:0 -e
+! test -e $TMP/srv/foo.deb
+
+$exe --retest http://srv/foo.deb
+$exe --retest http://srv/foo.deb | grep FILE_SOLID
+$exe --retest http://srv/InRelease | grep FILE_VOLAT
+$exe --retest http://srv/InRelease.html | grep NOMATCH
+$exe "VfilePatternEx:.*html" --retest http://srv/InRelease.html | grep VOLATIL
+$exe "PfilePatternEx:.*html" --retest http://srv/InRelease.html | grep SOLID
+
+$exe -p > $TMP/vars
+PRINTCFGVAR=useragent $exe | grep Apt-Cacher-NG
+
 rm -rf $TMP
