@@ -296,7 +296,7 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 
 	for(auto& keyval : cmdvars)
 		if(!acfg::SetOption(keyval, 0))
-			usage(1);
+			usage(EXIT_FAILURE);
 
 	acfg::PostProcConfig();
 
@@ -371,11 +371,11 @@ int main(int argc, const char **argv)
 	SSL_library_init();
 #endif
 
-	bool bTriggerCleanup=false;
+	bool bRunCleanup=false;
 
 	do_stuff_before_config();
 
-	parse_options(argc, argv, bTriggerCleanup);
+	parse_options(argc, argv, bRunCleanup);
 
 	if(!aclog::open())
 	{
@@ -395,7 +395,7 @@ int main(int argc, const char **argv)
 
 	conserver::Setup();
 
-	if (bTriggerCleanup)
+	if (bRunCleanup)
 	{
 		tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
 				acfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
@@ -486,22 +486,18 @@ void log_handler(int)
 
 void sig_handler(int signum)
 {
-dbgprint("caught signal " << signum);
+	dbgprint("caught signal " << signum);
 	switch (signum) {
 	case (SIGBUS):
 		/* OH NO!
 		 * Something going wrong with the mmaped files.
-		 * Log the current state and shutdown gracefully.
+		 * Log the current state reliably.
+		 * As long as there is no good recovery mechanism,
+		 * just hope that systemd will restart the daemon.
 		 */
-
 		handle_sigbus();
 		aclog::flush();
-
-		// nope, not reliable yet, just exit ASAP and hope that systemd will restart us
-		//return;
-		//signum = SIGTERM;
-    // return;
-
+		//no break
 	case (SIGTERM):
 	case (SIGINT):
 	case (SIGQUIT): {

@@ -32,7 +32,6 @@ using namespace std;
 
 bool bIsHashedPwd=false;
 
-#warning murks, manchmal war quiet intern verwendet
 #define BARF(x) {if(!g_bQuiet) { cerr << x << endl;} exit(EXIT_FAILURE); }
 #define BADSTUFF_PATTERN "\\.\\.($|%|/)"
 
@@ -1142,8 +1141,6 @@ void PostProcConfig()
 
 void dump_config()
 {
-#warning was war vorher genau wann? fehler vs. nicht fehler? eigentlich finger weg von cout außer es war explizit gefragt
-//	ostream &cmine(bDumpConfig ? cout : cerr);
 	ostream &cmine(cout);
 
 	for (auto& n2s : n2sTbl)
