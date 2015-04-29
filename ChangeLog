@@ -1,9 +1,10 @@
 apt-cacher-ng (0.8.2) FOR-A-FEW-BYTES-MORE; urgency=low
 
-  * CHANGE: bugs.debian.org:443 is allowed for CONNECT calls by default if an
-    extra proxy is used
+  * CHANGE: by default, bugs.debian.org:443 is permitted for CONNECT requests
+    if an extra proxy is configured
   * FIX: correct detection and blacklisting of broken (permanently
     disconnecting) hosts
+  * NEW: options to run a command upon SIGBUS and disable SSL checks
   * Creating fresh connection for each bugs.d.o operation (attempt to fix
     Debian bug #775126)
   * Various fixes and workarounds for pass-through operations in proxy
@@ -11,7 +12,7 @@ apt-cacher-ng (0.8.2) FOR-A-FEW-BYTES-MORE; urgency=low
     activities
   * Various bugfixes of program option parsing and return codes
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Wed, 29 Apr 2015 11:30:01 +0200
 
 apt-cacher-ng (0.8.1) JUST-A-LITTLE-BIT; urgency=low
 
