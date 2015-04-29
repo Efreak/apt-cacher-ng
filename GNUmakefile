@@ -56,7 +56,7 @@ tarball: doc notdebianbranch nosametarball
 tarball-remove:
 	rm -f ../$(DISTNAME).tar.xz ../tarballs/$(DEBSRCNAME) ../$(DEBSRCNAME) ../build-area/$(DEBSRCNAME)
 
-release: noremainingwork tarball
+release: test noremainingwork tarball
 	git tag upstream/$(TAGVERSION)
 
 unrelease: tarball-remove
