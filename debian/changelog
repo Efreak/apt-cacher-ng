@@ -1,9 +1,13 @@
-apt-cacher-ng (0.8.2-0.1) UNRELEASED; urgency=medium
+apt-cacher-ng (0.8.2-1) experimental; urgency=low
 
   * Non-maintainer upload.
-  * 
+    + forwarding of bugs.debian.org SOAP traffic through proxy cascades
+      and potential bugfixes of its transport code (closes: #775126)
+    + adds httpredir.debian.org to mirror list (closes: #782643)
+    + adds routing of HTTPS traffic through proxy cascades (closes: #734581)
+    + improves HTTPS tunnel config documentation (closes: #779175)
 
- -- Eduard Bloch <ed@idefix>  Tue, 28 Apr 2015 22:29:11 +0200
+ -- Your Name <your@email.address>  Wed, 29 Apr 2015 07:57:28 +0200
 
 apt-cacher-ng (0.8.1-1) unstable; urgency=low
 
