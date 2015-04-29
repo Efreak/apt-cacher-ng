@@ -1,13 +1,19 @@
-apt-cacher-ng (0.8.2-1) experimental; urgency=low
+apt-cacher-ng (0.8.2-1) unstable; urgency=low
 
   * Non-maintainer upload.
     + forwarding of bugs.debian.org SOAP traffic through proxy cascades
       and potential bugfixes of its transport code (closes: #775126)
-    + adds httpredir.debian.org to mirror list (closes: #782643)
+    + includes httpredir.debian.org in the mirror list (closes: #782643)
     + adds routing of HTTPS traffic through proxy cascades (closes: #734581)
     + improves HTTPS tunnel config documentation (closes: #779175)
+    + adds documentation and example on how to track SIGBUS restarts to the
+      (probably damaged) last open files (closes: #773825)
 
- -- Your Name <your@email.address>  Wed, 29 Apr 2015 07:57:28 +0200
+  [ Felix Geyer ]
+  * added quiet option to systemctl calls to make logrotate less noisy
+    (closes: #782562)
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 29 Apr 2015 07:57:28 +0200
 
 apt-cacher-ng (0.8.1-1) unstable; urgency=low
 
