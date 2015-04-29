@@ -13,26 +13,29 @@
 <p><a href="troublefaq.html">Previous</a> | <a href="index.html">Contents</a> | <a href="cont.html">Next</a></p>
 <h1><a name="bugs"></a>Chapter 10: Known Bugs and Limitations</h1>
 <ul><li>
-Versions between 0.2.6 and 0.3.3 created broken X-Original-Source URLs in the .head files. The effects should be negligible.
-</li>
-<li>
 Only the "Basic" type of HTTP proxy authentication is supported at the moment
 </li>
 <li>
-Only HTTP HEAD and GET commands are supported properly. POST support is limited to the calls made by apt-listbugs and might garble some requests.
+Only HTTP HEAD and GET commands are supported properly.
+</li>
+<li>
+CONNECT (for https/SSL/TLS tunnels) is supported but needs to be enabled by local administrators, see <a href="howtos.html#ssluse">section 8.3</a> for details
+</li>
+<li>
+POST support is restricted to apt-listbugs actions and is actually implemented as simple data forwarding with minor header manipulation. If additional proxy is configured, the client will be redirected to the HTTPS version of bugs.debian.org service, i.e. switching to the CONNECT method (see above)
 </li>
 <li>
 Transparent proxy mode not implemented yet
 </li>
 <li>
-The metadata update in maintenance jobs (like expiration task) attempts to guess the best source of update based on original source information and current backend configuration. In case of failure, run a "forced" download of index files through the web interface.
+The metadata update in maintenance jobs (like expiration task) attempts to guess the best source of update based on original source information and current backend configuration. In case of repeating failures, please run a "forced" download of index files through the web interface
 </li>
 <li>
-See TODO file in apt-cacher-ng source for various other notes
+See TODO file in apt-cacher-ng source for more related information
 </li>
 </ul>
 
 <hr><address>Comments to <a href='mailto:blade@debian.org'>blade@debian.org</a>
 <br>
-[Eduard Bloch, Sat, 11 Apr 2015 15:10:17 +0200]</address></body>
+[Eduard Bloch, Sun, 19 Apr 2015 10:25:49 +0200]</address></body>
 </html>
