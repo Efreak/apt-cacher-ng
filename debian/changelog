@@ -1,6 +1,6 @@
 apt-cacher-ng (0.8.2-1) unstable; urgency=low
 
-  * Non-maintainer upload.
+  * New upstream version
     + forwarding of bugs.debian.org SOAP traffic through proxy cascades
       and potential bugfixes of its transport code (closes: #775126)
     + includes httpredir.debian.org in the mirror list (closes: #782643)
@@ -13,7 +13,7 @@ apt-cacher-ng (0.8.2-1) unstable; urgency=low
   * added quiet option to systemctl calls to make logrotate less noisy
     (closes: #782562)
 
- -- Eduard Bloch <blade@debian.org>  Wed, 29 Apr 2015 07:57:28 +0200
+ -- Eduard Bloch <blade@debian.org>  Wed, 29 Apr 2015 11:31:38 +0200
 
 apt-cacher-ng (0.8.1-1) unstable; urgency=low
 
