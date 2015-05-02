@@ -309,6 +309,7 @@ mstring DosEscape(cmstring &s);
 
 // appears in the STL container?
 #define ContHas(stlcont, needle) ((stlcont).find(needle) != (stlcont).end())
+#define ContHasLinear(stlcont, needle) ((stlcont).end() != (std::find((stlcont).begin(), (stlcont).end(), needle)))
 
 #define StrHas(haystack, needle) (haystack.find(needle) != stmiss)
 #define StrHasFrom(haystack, needle, startpos) (haystack.find(needle, startpos) != stmiss)
