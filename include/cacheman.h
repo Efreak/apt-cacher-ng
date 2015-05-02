@@ -64,7 +64,8 @@ protected:
 	struct tIfileAttribs
 	{
 		bool vfile_ondisk:1, uptodate:1, parseignore:1, hideDlErrors:1,
-				forgiveDlErrors:1, alreadyparsed:1, synthesized:1;
+				forgiveDlErrors:1, alreadyparsed:1,
+				guessed:1; // file is not on disk, the name is pure calculation from pdiff mechanism
 		enumMetaType eIdxType = EIDX_UNSUPPORTED;
 		const tStrDeq *bros = nullptr;
 		off_t space = 0;
@@ -72,11 +73,13 @@ protected:
 				vfile_ondisk(false), uptodate(false),
 				parseignore(false), hideDlErrors(false),
 				forgiveDlErrors(false), alreadyparsed(false),
-				synthesized(false)
+				guessed(false)
 		{};
 	};
 
-	std::unordered_map<mstring,tIfileAttribs> m_metaFilesRel;
+	// this is not unordered because sometimes it might need modification
+	// while an iterator still works on it
+	std::map<mstring,tIfileAttribs> m_metaFilesRel;
 	// helpers to keep the code cleaner and more readable
 	const tIfileAttribs &GetFlags(cmstring &sPathRel) const;
 	tIfileAttribs &SetFlags(cmstring &sPathRel);
@@ -115,7 +118,8 @@ protected:
 	};
 	bool Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(),
-			const tHttpUrl *pForcedURL=NULL);
+			const tHttpUrl *pForcedURL=NULL, unsigned hints=0);
+#define DL_HINT_GUESS_REPLACEMENT 0x1
 
 	// internal helper variables
 	bool m_bErrAbort, m_bVerbose, m_bForceDownload;
@@ -144,10 +148,13 @@ protected:
 	void ProgTell();
 	void AddDelCbox(cmstring &sFileRel);
 
-public:
 	typedef std::pair<tFingerprint,mstring> tContId;
 	struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
 	typedef std::map<tContId, tClassDesc> tContId2eqClass;
+
+	// ugly solution to migrate to changed remote structures
+	tStrMap m_fallback_hints;
+	bool m_fallbacks_were_used = false;
 
 private:
 
@@ -170,9 +177,9 @@ private:
 };
 
 
-static cmstring compSuffixes[] = { ".bz2", ".gz", ".lzma", ".xz"};
-static cmstring compSuffixesAndEmpty[] = { ".bz2", ".gz", ".lzma", ".xz", ""};
-static cmstring compSuffixesAndEmptyByLikelyhood[] = { "", ".bz2", ".gz", ".lzma", ".xz"};
+static cmstring compSuffixes[] = { ".xz", ".bz2", ".gz", ".lzma"};
+static cmstring compSuffixesAndEmpty[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
+static cmstring compSuffixesAndEmptyByLikelyhood[] = { "", ".xz", ".bz2", ".gz", ".lzma",};
 static cmstring compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
 static cmstring compSuffixesByRatio[] = { ".xz", ".lzma", ".bz2", ".gz"};
 

@@ -7,9 +7,9 @@ export CONFDIR
 # Main rule to be called to update all databases. Does two things, first get
 # and pre-filter raw data, second: check the sources and generate final lists,
 # skipping dead mirrors.
-gendbs: $(CONFDIR) clean_db_tmp get_deb_input get_ubu_input get_fedora_input get_sl_input
+gendbs: $(CONFDIR) clean_db_tmp get_deb_input get_ubu_input get_fedora_input get_sl_input get_sfnet_input
 	$(MAKE) $(CONFDIR)/deb_mirrors.gz $(CONFDIR)/debvol_mirrors.gz $(CONFDIR)/gentoo_mirrors.gz
-	$(MAKE) $(CONFDIR)/ubuntu_mirrors $(CONFDIR)/cygwin_mirrors $(CONFDIR)/archlx_mirrors $(CONFDIR)/fedora_mirrors $(CONFDIR)/epel_mirrors $(CONFDIR)/sl_mirrors
+	$(MAKE) $(CONFDIR)/ubuntu_mirrors $(CONFDIR)/cygwin_mirrors $(CONFDIR)/archlx_mirrors $(CONFDIR)/fedora_mirrors $(CONFDIR)/epel_mirrors $(CONFDIR)/sl_mirrors $(CONFDIR)/sfnet_mirrors
 
 clean_db_tmp:
 	rm -rf "$(DBTMP)"
@@ -52,6 +52,13 @@ get_sl_input:
 	md5sum $(DBTMP)/slsnap > $(DBTMP)/sig-slsnap
 	cmp sig-slsnap $(DBTMP)/sig-slsnap 2>/dev/null || cp $(DBTMP)/sig-slsnap sig-slsnap
 
+get_sfnet_input:
+	wget -q -O $(DBTMP)/sf_raw http://sourceforge.net/p/forge/documentation/Mirrors/
+	perl -ne 'next if !/^<td>([a-z]+)<\/td>/; print "http://$$1.dl.sourceforge.net/project/\n"' > $(DBTMP)/sfsnap <$(DBTMP)/sf_raw
+	md5sum $(DBTMP)/sfsnap > $(DBTMP)/sig-sfsnap
+	cmp sig-sfsnap $(DBTMP)/sig-sfsnap 2>/dev/null || cp $(DBTMP)/sig-sfsnap sig-sfsnap
+
+
 # the $(CONFDIR)/* targets are intended to check the raw data got in the first step and 
 # generate the final lists, skipping dead mirrors. this is the second stage of the gendbs target. 
 $(CONFDIR)/epel_mirrors: sig-fsnap ubuntuscan.sh
@@ -64,6 +71,12 @@ $(CONFDIR)/fedora_mirrors: sig-fsnap ubuntuscan.sh
 
 $(CONFDIR)/sl_mirrors: sig-slsnap ubuntuscan.sh
 	bash ubuntuscan.sh $@ $(DBTMP)/slsnap $(DBTMP) "/" "5rolling\|6rolling\|7rolling\|8rolling\|9rolling"
+
+$(CONFDIR)/sfnet_mirrors: sig-sfsnap
+	> $(DBTMP)/sfnet_mirrors.tmp
+	for u in $$(cat $(DBTMP)/sfsnap) ; do echo Testing "$$u"; wget --timeout=10 --tries=1 -q -O- $$u | grep -qi "all.*rights" && echo "$$u" >> $(DBTMP)/sfnet_mirrors.tmp; done
+	mkdir -p "$(CONFDIR)"
+	cp -f $(DBTMP)/sfnet_mirrors.tmp $@
 
 $(CONFDIR)/ubuntu_mirrors: sig-ubuntu ubuntuscan.sh
 	bash ubuntuscan.sh $@ $(DBTMP)/usnap $(DBTMP) "/pool/" "main"
