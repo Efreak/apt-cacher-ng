@@ -3,6 +3,7 @@ apt-cacher-ng (0.8.3) TECHNICAL-DEBT-STRIKES-BACK; urgency=medium
   * FIX: semi-smart replacement of .bz2 files with their .xz variants if the
     .bz2 version is no longer available (current mess with the Debian archive)
   * Code refactoring
+  * Semi-automated getting of Sourceforge mirror network URLs, list update
 
  -- Eduard Bloch <blade@debian.org>  Sat, 02 May 2015 16:22:45 +0200
 
