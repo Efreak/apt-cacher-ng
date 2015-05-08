@@ -56,7 +56,7 @@ tarball: doc notdebianbranch nosametarball
 tarball-remove:
 	rm -f ../$(DISTNAME).tar.xz ../tarballs/$(DEBSRCNAME) ../$(DEBSRCNAME) ../build-area/$(DEBSRCNAME)
 
-release: noremainingwork tarball
+release: test noremainingwork tarball
 	git tag upstream/$(TAGVERSION)
 
 unrelease: tarball-remove
@@ -83,8 +83,12 @@ doxy:
 	doxygen Doxyfile
 	see doc/dev/html/index.html
 
+test:
+	bash -x test/cmdline/apt-cacher-ng.sh
+	cd test/misc && bash soaptest.sh
+
 # execute them always and consider done afterwards
-.PHONY: gendbs clean distclean config conf/gentoo_mirrors.gz
+.PHONY: gendbs clean distclean config conf/gentoo_mirrors.gz test
 
 # the dependencies in THIS Makefile shall be processed as sequence
 .NOTPARALLEL:

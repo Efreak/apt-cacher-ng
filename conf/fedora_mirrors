@@ -6,7 +6,6 @@ http://fedora.aau.at/linux/
 http://fedora.bhs.mirrors.ovh.net/linux/
 http://fedora.blizoo.mk/fedora/linux/
 http://fedora.c3sl.ufpr.br/linux/
-http://fedora.dcc.fc.up.pt/linux/
 http://fedora.inode.at/fedora/linux/
 http://fedora.ip-connect.vn.ua/linux/
 http://fedora.linux.ee/pub/fedora/linux/
@@ -20,7 +19,6 @@ http://fedora.mirrors.ovh.net/linux/
 http://fedora.mirrors.pair.com/linux/
 http://fedora.mirrors.tds.net/pub/fedora/
 http://fedora.mirrors.telekom.ro/pub/fedora/linux/
-http://fedora.mirror.tn/fedora/linux/
 http://fedora.mirror.uber.com.au/fedora/linux/
 http://fedora.osuosl.org/linux/
 http://fedora.skyggnir.is/linux/
@@ -112,7 +110,6 @@ http://mirror.i3d.net/pub/fedora/linux/
 http://mirror.iprimus.com.au/fedora/linux/
 http://mirror.its.dal.ca/pub/fedora/linux/
 http://mirror.karneval.cz/pub/linux/fedora/linux/
-http://mirror.lagoon.nc/pub/fedora/linux/
 http://mirror.liberty.edu/pub/fedora/linux/
 http://mirror.metrocast.net/fedora/linux/
 http://mirror.nbtelecom.com.br/fedora/linux/
@@ -157,6 +154,7 @@ http://mirror.switch.ch/ftp/mirror/fedora/linux/
 http://mirrors.xmission.com/fedora/linux/
 http://mirror.symnds.com/distributions/fedora/
 http://mirror.t-home.mk/fedora/linux/
+http://mirror.umd.edu/fedora/linux/
 http://mirror.unl.edu/fedora/linux/
 http://mirror.uoregon.edu/fedora/linux/
 http://mirror.us.as6453.net/fedora/linux/

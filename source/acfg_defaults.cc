@@ -73,7 +73,7 @@ int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
 logxff(false), oldupdate(false), recompbz2(false), nettimeout(60), updinterval(0),
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(255), exsupcount(RESERVED_DEFVAL),
-optproxytimeout(-1), patrace(false), maxredlsize(1<<16);
+optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false);
 
 int maxdlspeed(RESERVED_DEFVAL);
 
@@ -88,6 +88,8 @@ string remoteport("80"), port(ACNG_DEF_PORT);
 string agentheader;
 
 string requestapx;
+string sigbuscmd;
+mstring connectPermPattern("~~~");
 
 #ifdef DEBUG
 int debug(3), foreground(true);

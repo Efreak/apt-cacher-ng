@@ -38,10 +38,12 @@ atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 
 std::atomic_uint tcpconnect::g_nconns(0);
 
-tcpconnect::tcpconnect()
+tcpconnect::tcpconnect(acfg::tRepoData::IHookHandler *pObserver) : m_pStateObserver(pObserver)
 {
 	if(acfg::maxdlspeed != RESERVED_DEFVAL)
 		g_nconns.fetch_add(1);
+	if(pObserver)
+		pObserver->OnAccess();
 }
 
 tcpconnect::~tcpconnect()
@@ -52,11 +54,18 @@ tcpconnect::~tcpconnect()
 		g_nconns.fetch_add(-1);
 #ifdef HAVE_SSL
 	if(m_ctx)
+	{
 		SSL_CTX_free(m_ctx);
-	m_ctx=0;
+		m_ctx=0;
+	}
 #endif
-}
+	if(m_pStateObserver)
+	{
+		m_pStateObserver->OnRelease();
+		m_pStateObserver=nullptr;
 
+	}
+}
 
 /*! \brief Helper to flush data stream contents reliable and close the connection then
  * DUDES, who write TCP implementations... why can this just not be done easy and reliable? Why do we need hacks like termsocket?
@@ -158,7 +167,7 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 	return 0;
 }
 
-inline bool tcpconnect::Connect(string & sErrorMsg, int timeout)
+inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 {
 	LOGSTART2("tcpconnect::_Connect", "hostname: " << m_sHostName);
 
@@ -238,10 +247,6 @@ void tcpconnect::Disconnect()
 		BIO_free_all(m_bio), m_bio=NULL;
 #endif
 
-	if(m_conFd>=0 && m_pConnStateObserver)
-		m_pConnStateObserver->JobRelease();
-
-	m_pConnStateObserver=NULL;
 	m_lastFile.reset();
 
 	termsocket_quick(m_conFd);
@@ -280,7 +285,7 @@ class : public lockable, public multimap<tHostHint, std::pair<tTcpHandlePtr, tim
 
 tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, acfg::tRepoData::IHookHandler *pStateTracker
-		,bool bSsl, int timeout)
+		,bool bSsl, int timeout, bool nocache)
 {
 	LOGSTART2s("tcpconnect::CreateConnected", "hostname: " << sHostname << ", port: " << sPort
 			<< (bSsl?" with ssl":" , no ssl"));
@@ -302,11 +307,16 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 	);
 
 #ifdef NOCONCACHE
-	p.reset(new tcpconnect);
-	if(!p || !p->Connect(sHostname, sPort, sErrOut) || p->GetFD()<0) // failed or worthless
-		p.reset();
+	p.reset(new tcpconnect(pStateTracker));
+	if(p)
+	{
+		if(!p->_Connect(sHostname, sPort, sErrOut) || p->GetFD()<0) // failed or worthless
+			p.reset();
+	}
 #else
-	{ // mutex context
+	if(!nocache)
+	{
+		// mutex context
 		lockguard __g(spareConPool);
 		auto it=spareConPool.find(key);
 		if(spareConPool.end() != it)
@@ -315,6 +325,13 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 			spareConPool.erase(it);
 			bReused = true;
 			ldbg("got connection " << p.get() << " from the idle pool");
+
+			// it was reset in connection recycling, restart now
+			if(pStateTracker)
+			{
+				p->m_pStateObserver = pStateTracker;
+				pStateTracker->OnAccess();
+			}
 #ifdef DEBUG
 			nReuseCount.fetch_add(1);
 #endif
@@ -324,14 +341,14 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 
 	if(!p)
 	{
-		p.reset(new tcpconnect);
+		p.reset(new tcpconnect(pStateTracker));
 		if(p)
 		{
 			p->m_sHostName=sHostname;
 			p->m_sPort=sPort;
 		}
 
-		if(!p || !p->Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
+		if(!p || !p->_Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
 			p.reset();
 #ifdef HAVE_SSL
 		else if(bSsl)
@@ -343,13 +360,6 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 			}
 		}
 #endif
-	}
-
-
-	if(p && pStateTracker)
-	{
-		p->m_pConnStateObserver = pStateTracker;
-		pStateTracker->JobConnect();
 	}
 
 	if(pbSecondHand)
@@ -365,11 +375,20 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 
 	LOGSTART2s("tcpconnect::RecycleIdleConnection", handle->m_sHostName);
 
-	if(handle->m_pConnStateObserver)
+	if(handle->m_pStateObserver)
 	{
-		handle->m_pConnStateObserver->JobRelease();
-		handle->m_pConnStateObserver = NULL;
+		handle->m_pStateObserver->OnRelease();
+		handle->m_pStateObserver = nullptr;
 	}
+
+	/*
+	if(handle->m_bIsTunnel)
+	{
+		ldbg("disconnecting an upgraded connection, drop " << handle.get());
+		handle.reset();
+		return;
+	}
+	*/
 
 	if(! acfg::persistoutgoing)
 	{
@@ -388,26 +407,29 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 	}
 #endif
 
-#ifndef NOCONCACHE
-	time_t now=GetTime();
-	lockguard __g(spareConPool);
-	ldbg("caching connection " << handle.get());
-
-	// a DOS?
-	if(spareConPool.size()<50)
+	auto& host = handle->GetHostname();
+	if (!host.empty())
 	{
-		spareConPool.insert(make_pair(tHostHint(handle->GetHostname(), handle->GetPort()
+#ifndef NOCONCACHE
+		time_t now = GetTime();
+		lockguard __g(spareConPool);
+		ldbg("caching connection " << handle.get());
+
+		// a DOS?
+		if (spareConPool.size() < 50)
+		{
+			spareConPool.insert(make_pair(tHostHint(host, handle->GetPort()
 #ifdef HAVE_SSL
-				,handle->m_bio
+					, handle->m_bio
 #endif
-		),make_pair(handle, now)));
+					), make_pair(handle, now)));
 
 #ifndef MINIBUILD
-		g_victor.ScheduleFor(now+TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
+			g_victor.ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
 #endif
-
+		}
+#endif
 	}
-#endif
 
 	handle.reset();
 }
@@ -476,7 +498,9 @@ void tcpconnect::dump_status()
 
 		msg << x.second.first->m_conFd << ": for "
 				<< x.first.pHost << ":" << x.first.pPort
-				<< ", recycled at " << x.second.second << "\n";
+				<< ", recycled at " << x.second.second
+				//<< ", is a tunnel?: " << x.second.first->m_bIsTunnel
+				<< "\n";
 	}
 #ifdef DEBUG
 	msg << "dbg counts, con: " << nConCount.load()
@@ -577,11 +601,14 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  	BIO_set_nbio(m_bio, 1);
 	set_nb(m_conFd);
 
-	hret=SSL_get_verify_result(ssl);
-	if( hret != X509_V_OK)
+	if(!acfg::nsafriendly)
 	{
-		perr=X509_verify_cert_error_string(hret);
-		goto ssl_init_fail;
+		hret=SSL_get_verify_result(ssl);
+		if( hret != X509_V_OK)
+		{
+			perr=X509_verify_cert_error_string(hret);
+			goto ssl_init_fail;
+		}
 	}
 
 	return true;
@@ -597,6 +624,79 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	sErr="500 SSL error: ";
 	sErr+=(perr?perr:"Generic SSL failure");
 	return false;
+}
+
+bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
+		cmstring *psAuthorization, bool bDoSSL)
+{
+	/*
+	  CONNECT server.example.com:80 HTTP/1.1
+      Host: server.example.com:80
+      Proxy-Authorization: basic aGVsbG86d29ybGQ=
+	 */
+	tSS fmt;
+	fmt << "CONNECT " << realTarget.sHost << ":" << realTarget.GetPort()
+			<< " HTTP/1.1\r\nHost: " << realTarget.sHost << ":" << realTarget.GetPort()
+			<< "\r\n";
+	if(psAuthorization && !psAuthorization->empty())
+	{
+			fmt << "Proxy-Authorization: Basic "
+					<< EncodeBase64Auth(*psAuthorization) << "\r\n";
+	}
+	fmt << "\r\n";
+
+	try
+	{
+		if (!fmt.send(m_conFd, sError))
+			return false;
+
+		fmt.clear();
+		while (true)
+		{
+			fmt.setsize(4000);
+			if (!fmt.recv(m_conFd, sError))
+				return false;
+			if(fmt.freecapa()<=0)
+			{
+				sError = "503 Remote proxy error";
+				return false;
+			}
+
+			header h;
+			auto n = h.LoadFromBuf(fmt.rptr(), fmt.size());
+			if(!n)
+				continue;
+
+			auto st = h.getStatus();
+			if (n <= 0 || st == 404 /* just be sure it doesn't send crap */)
+			{
+				sError = "503 Tunnel setup failed";
+				return false;
+			}
+
+			if (st < 200 || st >= 300)
+			{
+				sError = h.frontLine;
+				return false;
+			}
+			break;
+		}
+
+		m_sHostName = realTarget.sHost;
+		m_sPort = realTarget.GetPort();
+
+		if (bDoSSL && !SSLinit(sError, m_sHostName, m_sPort))
+		{
+			m_sHostName.clear();
+			return false;
+		}
+
+	}
+	catch(...)
+	{
+		return false;
+	}
+	return true;
 }
 
 #endif

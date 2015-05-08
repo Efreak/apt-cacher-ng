@@ -50,7 +50,7 @@ using namespace std;
 
 #include "maintenance.h"
 
-static void usage();
+static void usage(int nRetCode=0);
 static void SetupCacheDir();
 void sig_handler(int signum);
 void log_handler(int signum);
@@ -158,128 +158,182 @@ bool AppendPasswordHash(string &stringWithSalt, LPCSTR plainPass, size_t passLen
 }
 #endif
 
-
-void runDemo()
+void do_stuff_before_config()
 {
+	LPCSTR envvar(nullptr);
 
 #ifdef DEBUG
 	cerr << "Pandora: " << sizeof(regex_t) << endl;
-
-
+	/*
 	// PLAYGROUND
-
-	/*
-	 cerr << sizeof(job) << endl;
-	 exit(1);
-	 */
-
-	/*
-	 * Let's be another csum tool...
-
-	 md5_state_s ctx;
-	 md5_init(&ctx);
-	 uint8_t buf[2000];
-	 while(!feof(stdin))
-	 {
-	 int n=fread(buf, sizeof(char), 2000, stdin);
-	 md5_append(&ctx, buf, n);
-	 }
-	 uint8_t csum[16];
-	 md5_finish(&ctx, csum);
-	 for(int i=0;i<16;i++)
-	 printf("%02x", csum[i]);
-	 printf("\n");
-	 exit(0);
-
-
-
-	if(argc<2)
+	if (argc < 2)
 		return -1;
 
 	acfg::tHostInfo hi;
-	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1])<<endl;
-	cout << "Host: " << hi.sHost <<", Port: " << hi.sPort << ", Path: " << hi.sPath<<endl;
+	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1]) << endl;
+	cout << "Host: " << hi.sHost << ", Port: " << hi.sPort << ", Path: "
+			<< hi.sPath << endl;
 	return 0;
 
+	bool Bz2compressFile(const char *, const char*);
+	return !Bz2compressFile(argv[1], argv[2]);
 
-	 bool Bz2compressFile(const char *, const char*);
-	 return ! Bz2compressFile(argv[1], argv[2]);
-
-
-	 char tbuf[40];
-	 FormatCurrentTime(tbuf);
-	 std::cerr << tbuf << std::endl;
-	 exit(1);
-
-*/
-auto bt=getenv("BUSTEST");
-  if (bt)
-  {
-     static filereader r;
-     if(!r.OpenFile(bt))
-        exit(42);
-     else
-        std::cerr << "opened bt: " << bt << endl;
-  }
-#endif
-	if (getenv("GETSUM"))
-	{
-		uint8_t csum[20];
-		string s(getenv("GETSUM"));
-		off_t resSize;
-		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
-		for (uint i = 0; i < sizeof(csum); i++)
-			printf("%02x", csum[i]);
-		printf("\n");
-		if (ok && getenv("REFSUM"))
-		{
-			printf(CsEqual(getenv("REFSUM"), csum, sizeof(csum)) ? "IsOK\n" : "Diff\n");
-		}
-		exit(0);
-	}
-/*
-	LPCSTR envvar = getenv("PARSEIDX");
+	char tbuf[40];
+	FormatCurrentTime(tbuf);
+	std::cerr << tbuf << std::endl;
+	exit(1);
+	*/
+	envvar = getenv("PARSEIDX");
 	if (envvar)
 	{
 		int parseidx_demo(LPCSTR);
 		exit(parseidx_demo(envvar));
 	}
-
-	if (getenv("SHRINK"))
-	{
-		uint8_t csum[20];
-		string s(getenv("SHRINK"));
-		off_t resSize;
-		auto n=(filereader::GetChecksum(s, CSTYPE_SHA1, csum, true, resSize, stdout));
-		exit(n);
-	}
-	*/
-}
-
-
-int main(int argc, char **argv)
-{
-
-#ifdef HAVE_SSL
-	SSL_load_error_strings();
-	ERR_load_BIO_strings();
-	ERR_load_crypto_strings();
-	ERR_load_SSL_strings();
-	OpenSSL_add_all_algorithms();
-	SSL_library_init();
 #endif
 
-	const char *envvar=getenv("TOBASE64");
+	envvar = getenv("GETSUM");
+	if (envvar)
+	{
+		uint8_t csum[20];
+		string s(envvar);
+		off_t resSize;
+		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
+		if(!ok)
+		{
+			perror("");
+			exit(1);
+		}
+		for (uint i = 0; i < sizeof(csum); i++)
+			printf("%02x", csum[i]);
+		printf("\n");
+		envvar = getenv("REFSUM");
+		if (ok && envvar)
+		{
+			if(CsEqual(envvar, csum, sizeof(csum)))
+			{
+				printf("IsOK\n");
+				exit(0);
+			}
+			else
+			{
+				printf("Diff\n");
+				exit(1);
+			}
+		}
+		exit(0);
+	}
+
+	envvar=getenv("TOBASE64");
 	if(envvar)
 	{
 		std::cout << EncodeBase64Auth(envvar);
-		return 0;
+		exit(EXIT_SUCCESS);
 	}
 	envvar=getenv("BECURL");
 	if(envvar)
-		return wcat(envvar, getenv("http_proxy"));
+		exit(wcat(envvar, getenv("http_proxy")));
+}
 
-	check_algos();
+void parse_options(int argc, const char **argv, bool& bStartCleanup)
+{
+
+	bool bExtraVerb=false;
+	LPCSTR szCfgDir=nullptr;
+	LPCSTR szReTest=nullptr;
+	bool bDumpCfg=false;
+	std::vector<LPCSTR> cmdvars;
+
+	LPCSTR PRINTCFGVAR=getenv("PRINTCFGVAR");
+	if(PRINTCFGVAR)
+	{
+		acfg::g_bNoComplex = true;
+		acfg::g_bQuiet = true;
+	}
+
+	for (auto p=argv+1; p<argv+argc; p++)
+	{
+		if (!strncmp(*p, "-h", 2))
+			usage();
+		if (!strncmp(*p, "-v", 2))
+			bExtraVerb = true;
+		else if (!strncmp(*p, "-e", 2))
+			bStartCleanup=true;
+		else if (!strcmp(*p, "-c"))
+		{
+			++p;
+			if (p < argv + argc)
+				szCfgDir = *p;
+
+			else
+				usage(2);
+		}
+		else if (!strcmp(*p, "-p"))
+		{
+			bDumpCfg = true;
+			// might need external stuff
+			acfg::g_bNoComplex = false;
+		}
+		else if (!strcmp(*p, "--retest"))
+		{
+			++p;
+			if(p>=argv+argc)
+				exit(EXIT_FAILURE);
+			szReTest = *p;
+			// might need external stuff
+			acfg::g_bNoComplex = false;
+		}
+		else if(**p) // not empty
+			cmdvars.push_back(*p);
+
+#if SUPPWHASH
+		else if (!strncmp(*p, "-H", 2))
+			exit(hashpwd());
+#endif
+	}
+
+	if(szCfgDir)
+		acfg::ReadConfigDirectory(szCfgDir);
+
+	for(auto& keyval : cmdvars)
+		if(!acfg::SetOption(keyval, 0))
+			usage(EXIT_FAILURE);
+
+	acfg::PostProcConfig();
+
+	if(bExtraVerb)
+		acfg::debug |= (LOG_DEBUG|LOG_MORE);
+
+	if(bDumpCfg)
+	{
+		acfg::dump_config();
+		exit(EXIT_SUCCESS);
+	}
+
+	if(szReTest)
+	{
+		LPCSTR ReTest(LPCSTR);
+		std::cout << ReTest(szReTest) << std::endl;
+		exit(EXIT_SUCCESS);
+	}
+
+	if(PRINTCFGVAR)
+	{
+		auto ps(acfg::GetStringPtr(PRINTCFGVAR));
+		if(ps)
+		{
+			cout << *ps << endl;
+			exit(EXIT_SUCCESS);
+		}
+		auto pi(acfg::GetIntPtr(PRINTCFGVAR));
+		if(pi)
+			cout << *pi << endl;
+		exit(pi ? EXIT_SUCCESS : EXIT_FAILURE);
+	}
+
+}
+
+void setup_sighandler()
+{
 	tSigAct act = tSigAct();
 
 	sigfillset(&act.sa_mask);
@@ -303,96 +357,36 @@ int main(int argc, char **argv)
 #ifdef SIGXFSZ
 	sigaction(SIGXFSZ, &act, NULL);
 #endif
+}
 
-//#ifdef DEBUG
-	runDemo();
-//#endif
+int main(int argc, const char **argv)
+{
 
-	// preprocess some startup related parameters
-	bool bForceCleanup(false);
-	LPCSTR pReTest(nullptr);
-	for (char **p=argv+1; p<argv+argc; p++)
-	{
-		if (!strncmp(*p, "-h", 2))
-			usage();
-		else if (!strncmp(*p, "-v", 2))
-		{
-			acfg::debug=acfg::debug|LOG_DEBUG|LOG_MORE;
-			**p=0x0; // ignore it if ever checked anywhere
-		}
-		else if (!strncmp(*p, "-e", 2))
-		{
-			bForceCleanup=true;
-			**p=0x0; // ignore it if ever checked anywhere
-		}
-#if SUPPWHASH
-		else if (!strncmp(*p, "-H", 2))
-			exit(hashpwd());
+#ifdef HAVE_SSL
+	SSL_load_error_strings();
+	ERR_load_BIO_strings();
+	ERR_load_crypto_strings();
+	ERR_load_SSL_strings();
+	OpenSSL_add_all_algorithms();
+	SSL_library_init();
 #endif
-	}
 
-	LPCSTR PRINTCFGVAR=getenv("PRINTCFGVAR");
-	bool bDumpCfg(false);
+	bool bRunCleanup=false;
 
-	for (char **p=argv+1; p<argv+argc; p++)
-	{
-		if(!strcmp(*p, "-c"))
-		{
-			++p;
-			if(p < argv+argc)
-				acfg::ReadConfigDirectory(*p, PRINTCFGVAR);
-			else
-				usage();
-		}
-		else if(!strcmp(*p, "-p"))
-		{
-			bDumpCfg=true;
-		}
-		else if (!strcmp(*p, "--retest"))
-		{
-			++p;
-			if(p>=argv+argc)
-				exit(EXIT_FAILURE);
-			pReTest=*p;
-		}
-		else if(**p) // not empty
-		{
-			if(!acfg::SetOption(*p, false))
-				usage();
-		}
-	}
+	do_stuff_before_config();
 
-	if(PRINTCFGVAR)
-	{
-		auto ps(acfg::GetStringPtr(PRINTCFGVAR));
-		if(ps)
-		{
-			cout << *ps << endl;
-			return EXIT_SUCCESS;
-		}
-		auto pi(acfg::GetIntPtr(PRINTCFGVAR));
-		if(pi)
-			cout << *pi << endl;
-		return pi ? EXIT_SUCCESS : EXIT_FAILURE;
-	}
+	parse_options(argc, argv, bRunCleanup);
 
 	if(!aclog::open())
 	{
 		cerr << "Problem creating log files. Check permissions of the log directory, "
 			<< acfg::logdir<<endl;
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
-	acfg::PostProcConfig(bDumpCfg);
+	check_algos();
+	setup_sighandler();
 
-	if(bDumpCfg)
-		exit(EXIT_SUCCESS);
-	if(pReTest)
-	{
-		LPCSTR ReTest(LPCSTR);
-		std::cout << ReTest(pReTest) << std::endl;
-		exit(EXIT_SUCCESS);
-	}
 
 	SetupCacheDir();
 
@@ -401,7 +395,7 @@ int main(int argc, char **argv)
 
 	conserver::Setup();
 
-	if (bForceCleanup)
+	if (bRunCleanup)
 	{
 		tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
 				acfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
@@ -433,8 +427,8 @@ int main(int argc, char **argv)
 
 }
 
-static void usage() {
-	cout <<"Usage: apt-cacher -h -c configdir <var=value ...>\n\n"
+static void usage(int retCode) {
+	cout <<"Usage: apt-cacher [options] [ -c configdir ] <var=value ...>\n\n"
 		"Options:\n"
 		"-h: this help message\n"
 		"-c: configuration directory\n"
@@ -452,7 +446,7 @@ static void usage() {
 		"LogDir: /directory/for/logfiles\n"
 		"\n"
 		"See configuration examples for all directives.\n\n";
-	exit(0);
+	exit(retCode);
 }
 
 
@@ -492,22 +486,18 @@ void log_handler(int)
 
 void sig_handler(int signum)
 {
-dbgprint("caught signal " << signum);
+	dbgprint("caught signal " << signum);
 	switch (signum) {
 	case (SIGBUS):
 		/* OH NO!
 		 * Something going wrong with the mmaped files.
-		 * Log the current state and shutdown gracefully.
+		 * Log the current state reliably.
+		 * As long as there is no good recovery mechanism,
+		 * just hope that systemd will restart the daemon.
 		 */
-
 		handle_sigbus();
 		aclog::flush();
-
-		// nope, not reliable yet, just exit ASAP and hope that systemd will restart us
-		//return;
-		//signum = SIGTERM;
-    // return;
-
+		//no break
 	case (SIGTERM):
 	case (SIGINT):
 	case (SIGQUIT): {
@@ -535,6 +525,8 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 
 	acfg::dnscachetime=0;
 	acfg::persistoutgoing=0;
+	acfg::badredmime.clear();
+	acfg::redirmax=10;
 
 	if(proxy)
 		if(acfg::proxy_info.SetHttpUrl(proxy))
@@ -558,13 +550,17 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 				return m_status = FIST_INITED;
 			}
 			virtual int GetFileFd() override { return 1; }; // something, don't care for now
-			virtual bool DownloadStartedStoreHeader(const header &, const char *,
+			virtual bool DownloadStartedStoreHeader(const header &h, const char *,
 					bool, bool&) override
 			{
+				m_head = h;
 				return true;
 			}
 			virtual bool StoreFileData(const char *data, unsigned int size) override
 			{
+				if(!size)
+					m_status = FIST_COMPLETE;
+
 				return (size==fwrite(data, sizeof(char), size, stdout));
 			}
 			ssize_t SendData(int , int, off_t &, size_t ) override
@@ -577,6 +573,6 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 	dl.AddJob(fi, &url, nullptr, nullptr);
 	dl.WorkLoop();
 	return (fi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
-			&& fi->GetHeaderUnlocked().getStatus() == 200) ? 0 : -3;
+			&& fi->GetHeaderUnlocked().getStatus() == 200) ? EXIT_SUCCESS : -3;
 }
 

@@ -28,13 +28,12 @@
 using namespace std;
 
 // hint to use the main configuration excluding the complex directives
-bool g_testMode=false;
+//bool g_testMode=false;
 
 bool bIsHashedPwd=false;
 
-#define BARF(x) {if(!g_testMode){ cerr << x << endl; exit(EXIT_FAILURE); }}
+#define BARF(x) {if(!g_bQuiet) { cerr << x << endl;} exit(EXIT_FAILURE); }
 #define BADSTUFF_PATTERN "\\.\\.($|%|/)"
-mstring PTHOSTS_PATTERN;
 
 namespace rechecks
 {
@@ -44,6 +43,7 @@ bool CompileExpressions();
 
 namespace acfg {
 
+bool g_bQuiet=false, g_bNoComplex=false;
 
 // internal stuff:
 string sPopularPath("/debian/");
@@ -113,10 +113,12 @@ MapNameToString n2sTbl[] = {
 		,{  "DontCacheResolved",       &tmpDontcacheTgt}
 		,{  "PrecacheFor",             &mirrorsrcs}
 		,{  "RequestAppendix",         &requestapx}
-		,{  "PassThroughPattern",      &PTHOSTS_PATTERN}
+		,{  "PassThroughPattern",      &connectPermPattern}
 		,{  "CApath",                  &capath}
 		,{  "CAfile",                  &cafile}
 		,{  "BadRedirDetectMime",      &badredmime}
+
+		,{ "BusAction",                &sigbuscmd} // "Special debugging helper, see manual!"
 };
 
 MapNameToInt n2iTbl[] = {
@@ -154,10 +156,11 @@ MapNameToInt n2iTbl[] = {
 		,{  "DirPerms",                          &dirperms,         nullptr,    8}
 		,{  "FilePerms",                         &fileperms,        nullptr,    8}
 
-		,{ "Verbose", 			nullptr,			"Option is deprecated, ignoring the value." , 10}
+		,{ "Verbose", 			nullptr,		"Option is deprecated, ignoring the value." , 10}
 		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10}
 		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
-		,{ "Patrace",	&patrace, 		"Don't use in config files!" , 10}
+		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10}
+		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10}
 };
 
 void ReadRewriteFile(const string & sFile, const string & sRepName);
@@ -257,7 +260,7 @@ bool ReadOneConfFile(const string & szFilename)
 		if(stmiss != pos)
 			itor.sLine.erase(pos);
 
-		if(! SetOption(itor.sLine, g_testMode, &dupeCheck))
+		if(! SetOption(itor.sLine, &dupeCheck))
 			BARF("Error reading main options, terminating.");
 	}
 	return true;
@@ -273,13 +276,13 @@ inline decltype(repoparms)::iterator GetRepoEntryRef(const string & sRepName)
 	return rv.first;
 }
 
-inline bool ParseOptionLine(const string &sLine, string &key, string &val, bool bQuiet)
+inline bool ParseOptionLine(const string &sLine, string &key, string &val)
 {
 	string::size_type posCol = sLine.find(":");
 	string::size_type posEq = sLine.find("=");
 	if (posEq==stmiss && posCol==stmiss)
 	{
-		if(!bQuiet)
+		if(!g_bQuiet)
 			cerr << "Not a valid configuration directive: " << sLine <<endl;
 		return false;
 	}
@@ -305,7 +308,7 @@ inline bool ParseOptionLine(const string &sLine, string &key, string &val, bool 
 inline void AddRemapFlag(const string & token, const string &repname)
 {
 	mstring key, value;
-	if(!ParseOptionLine(token, key, value, true))
+	if(!ParseOptionLine(token, key, value))
 		return;
 
 	tRepoData &where = repoparms[repname];
@@ -459,7 +462,7 @@ struct tHookHandler: public tRepoData::IHookHandler, public lockable
 //		cmdRel = "logger JobRelease/" + name;
 //		cmdCon = "logger JobConnect/" + name;
 	}
-	virtual void JobRelease()
+	virtual void OnRelease() override
 	{
 		setLockGuard;
 		if (0 >= --m_nRefCnt)
@@ -469,7 +472,7 @@ struct tHookHandler: public tRepoData::IHookHandler, public lockable
 			g_victor.ScheduleFor(downTimeNext, cleaner::TYPE_ACFGHOOKS);
 		}
 	}
-	virtual void JobConnect()
+	virtual void OnAccess() override
 	{
 		setLockGuard;
 		if (0 == m_nRefCnt++)
@@ -492,7 +495,7 @@ void _AddHooksFile(cmstring& vname)
 	mstring key,val;
 	while (itor.Next())
 	{
-		if(!ParseOptionLine(itor.sLine, key, val, false))
+		if(!ParseOptionLine(itor.sLine, key, val))
 			continue;
 
 		const char *p = key.c_str();
@@ -597,11 +600,11 @@ cmstring & GetMimeType(cmstring &path)
 	return sEmptyString;
 }
 
-bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
+bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 {
 	string key, value;
 
-	if(!ParseOptionLine(sLine, key, value, bQuiet))
+	if(!ParseOptionLine(sLine, key, value))
 		return false;
 
 	string * psTarget;
@@ -611,7 +614,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 	if ( nullptr != (psTarget = GetStringPtr(key.c_str())))
 	{
 
-		if(pDupeCheck && !bQuiet)
+		if(pDupeCheck && !g_bQuiet)
 		{
 			mstring &w = (*pDupeCheck)[key];
 			if(w.empty())
@@ -625,7 +628,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 	else if ( nullptr != (pnTarget = GetIntPtr(key.c_str(), nNumBase)))
 	{
 
-		if(pDupeCheck && !bQuiet)
+		if(pDupeCheck && !g_bQuiet)
 		{
 			mstring &w = (*pDupeCheck)[key];
 			if(w.empty())
@@ -676,17 +679,17 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 				BARF("Invalid proxy specification, aborting...");
 		}
 	}
-	else if(CHECKOPTKEY("LocalDirs") && !g_testMode)
+	else if(CHECKOPTKEY("LocalDirs") && !g_bNoComplex)
 	{
 		_ParseLocalDirs(value);
 		return !localdirs.empty();
 	}
-	else if(0==strncasecmp(key.c_str(), "Remap-", 6) && !g_testMode)
+	else if(0==strncasecmp(key.c_str(), "Remap-", 6) && !g_bNoComplex)
 	{
 		string vname=key.substr(6, key.npos);
 		if(vname.empty())
 		{
-			if(!bQuiet)
+			if(!g_bQuiet)
 				cerr << "Bad repository name in " << key << endl;
 			return false;
 		}
@@ -711,7 +714,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 		}
 		if(type<0)
 		{
-			if(!bQuiet)
+			if(!g_bQuiet)
 				cerr << "Invalid entry, no configuration: " << key << ": " << value <<endl;
 			return false;
 		}
@@ -772,7 +775,7 @@ bool SetOption(const string &sLine, bool bQuiet, NoCaseStringMap *pDupeCheck)
 	}
 	else
 	{
-		if(!bQuiet)
+		if(!g_bQuiet)
 			cerr << "Warning, unknown configuration directive: " << key <<endl;
 		return false;
 	}
@@ -980,11 +983,10 @@ tRepoData::~tRepoData()
 	delete m_pHooks;
 }
 
-void ReadConfigDirectory(const char *szPath, bool bTestMode)
+void ReadConfigDirectory(const char *szPath)
 {
 	dump_proc_status();
 	char buf[PATH_MAX];
-	g_testMode=bTestMode;
 	if(!realpath(szPath, buf))
 		BARF("Failed to open config directory");
 
@@ -994,7 +996,7 @@ void ReadConfigDirectory(const char *szPath, bool bTestMode)
 	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
 		ReadOneConfFile(src);
 #else
-	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
+	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bQuiet, bNoComplex);
 #endif
 	dump_proc_status();
 	if(debug & LOG_DEBUG)
@@ -1008,11 +1010,14 @@ void ReadConfigDirectory(const char *szPath, bool bTestMode)
 	}
 }
 
-void PostProcConfig(bool bDumpConfig)
+void PostProcConfig()
 {
 	
 	if(port.empty()) // heh?
 		port=ACNG_DEF_PORT;
+
+	if(connectPermPattern == "~~~")
+	   connectPermPattern="^bugs.debian.org:443$";
 
 	// let's also apply the umask to the directory permissions
 	{
@@ -1063,7 +1068,7 @@ void PostProcConfig(bool bDumpConfig)
    
    if(!acfg::agentname.empty())
 	   acfg::agentheader=string("User-Agent: ")+acfg::agentname + "\r\n";
-   
+
    stripPrefixChars(acfg::reportpage, '/');
 
    trimString(acfg::requestapx);
@@ -1132,80 +1137,80 @@ void PostProcConfig(bool bDumpConfig)
 	   pipelinelen = 1;
    }
 
-   if (acfg::debug >= LOG_MORE || bDumpConfig)
+} // PostProcConfig
+
+void dump_config()
+{
+	ostream &cmine(cout);
+
+	for (auto& n2s : n2sTbl)
+		if (n2s.ptr)
+			cmine << n2s.name << " = " << *n2s.ptr << endl;
+
+	if (acfg::debug >= LOG_DEBUG)
 	{
-	   ostream &cmine(bDumpConfig ? cout : cerr);
-
-		for (auto& n2s: n2sTbl)
-			if (n2s.ptr)
-				cmine << n2s.name << " = " << *n2s.ptr << endl;
-
-		if (acfg::debug >= LOG_DEBUG)
+		cerr << "escaped version:" << endl;
+		for (const auto& n2s : n2sTbl)
 		{
-			cerr << "escaped version:" << endl;
-			for (const auto& n2s: n2sTbl)
+			if (n2s.ptr)
 			{
-				if (n2s.ptr)
+				cerr << n2s.name << " = ";
+				for (const char *p = n2s.ptr->c_str(); *p; p++)
 				{
-					cerr << n2s.name << " = ";
-					for (const char *p = n2s.ptr->c_str(); *p; p++)
-					{
-						if ('\\' == *p)
-							cmine << "\\\\";
-						else
-							cmine << *p;
-					}
-					cmine << endl;
+					if ('\\' == *p)
+						cmine << "\\\\";
+					else
+						cmine << *p;
 				}
+				cmine << endl;
 			}
 		}
-
-		for (const auto& n2i : n2iTbl)
-			if (n2i.ptr)
-				cmine << n2i.name << " = " << *n2i.ptr << endl;
 	}
 
+	for (const auto& n2i : n2iTbl)
+		if (n2i.ptr)
+			cmine << n2i.name << " = " << *n2i.ptr << endl;
+
 #ifndef DEBUG
-   if(acfg::debug >= LOG_DEBUG)
-	   cerr << "\n\nAdditional debugging information not compiled in.\n\n";
+	if (acfg::debug >= LOG_DEBUG)
+		cerr << "\n\nAdditional debugging information not compiled in.\n\n";
 #endif
-   
+
 #if 0 //def DEBUG
 #warning adding hook control pins
-   for(tMapString2Hostivec::iterator it = repoparms.begin();
-		   it!=repoparms.end() ; ++it)
-   {
-	   tHookHandler *p = new tHookHandler(it->first);
-	   p->downDuration=10;
-	   p->cmdCon = "logger wanna/connect";
-	   p->cmdRel = "logger wanna/disconnect";
-	   it->second.m_pHooks = p;
-   }
+	for(tMapString2Hostivec::iterator it = repoparms.begin();
+			it!=repoparms.end(); ++it)
+	{
+		tHookHandler *p = new tHookHandler(it->first);
+		p->downDuration=10;
+		p->cmdCon = "logger wanna/connect";
+		p->cmdRel = "logger wanna/disconnect";
+		it->second.m_pHooks = p;
+	}
 
+	if(debug == -42)
+	{
+		/*
+		 for(tMapString2Hostivec::const_iterator it=mapRepName2Backends.begin();
+		 it!=mapRepName2Backends.end(); it++)
+		 {
+		 for(tRepoData::const_iterator jit=it->second.begin();
+		 jit != it->second.end(); jit++)
+		 {
+		 cout << jit->ToURI() <<endl;
+		 }
+		 }
 
-   if(debug == -42)
-   {
-	   /*
-	   for(tMapString2Hostivec::const_iterator it=mapRepName2Backends.begin();
-			   it!=mapRepName2Backends.end(); it++)
-	   {
-		   for(tRepoData::const_iterator jit=it->second.begin();
-				   jit != it->second.end(); jit++)
-		   {
-			   cout << jit->ToURI() <<endl;
-		   }
-	   }
+		 for(tUrl2RepIter it=mapUrl2pVname.begin(); it!=mapUrl2pVname.end(); it++)
+		 {
+		 cout << it->first.ToURI(false) << " ___" << *(it->second) << endl;
+		 }
 
-	   for(tUrl2RepIter it=mapUrl2pVname.begin(); it!=mapUrl2pVname.end(); it++)
-	   {
-		   cout << it->first.ToURI(false) << " ___" << *(it->second) << endl;
-	   }
-
-	   exit(1);
-	   */
-   }
+		 exit(1);
+		 */
+	}
 #endif
-} // PostProcConfig
+}
 
 //! @brief Fires hook callbacks in the background thread
 time_t BackgroundCleanup()
@@ -1353,12 +1358,12 @@ bool CompileExpressions()
 			&& compat(rex[FILE_VOLATILE].extra, vfilepatEx.c_str())
 			&& compat(rex[FILE_WHITELIST].extra, wfilepatEx.c_str())
 			&& compat(rex[NASTY_PATH].pat, BADSTUFF_PATTERN)
-			&& compat(rex[PASSTHROUGH].pat, PTHOSTS_PATTERN.c_str())
 			&& compat(rex[FILE_SPECIAL_SOLID].pat, spfilepat.c_str())
 			&& compat(rex[FILE_SPECIAL_SOLID].extra, spfilepatEx.c_str())
 			&& compat(rex[FILE_SPECIAL_VOLATILE].pat, svfilepat.c_str())
 			&& compat(rex[FILE_SPECIAL_VOLATILE].extra, svfilepatEx.c_str())
-			);
+			&& (connectPermPattern == "~~~" ?
+			true : compat(rex[PASSTHROUGH].pat, connectPermPattern.c_str())));
 }
 
 inline bool MatchType(cmstring &in, eMatchType type)

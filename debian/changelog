@@ -1,3 +1,33 @@
+apt-cacher-ng (0.8.3-1~bpo80+1) jessie-backports; urgency=low
+
+  * Jessie backport from current Testing
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 08 May 2015 18:59:05 +0200
+
+apt-cacher-ng (0.8.3-1) unstable; urgency=medium
+
+  * New upstream version
+    + solves the expiration hickup with disappeared .bz2 file versions
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 02 May 2015 17:20:16 +0200
+
+apt-cacher-ng (0.8.2-1) unstable; urgency=low
+
+  * New upstream version
+    + forwarding of bugs.debian.org SOAP traffic through proxy cascades
+      and potential bugfixes of its transport code (closes: #775126)
+    + includes httpredir.debian.org in the mirror list (closes: #782643)
+    + adds routing of HTTPS traffic through proxy cascades (closes: #734581)
+    + improves HTTPS tunnel config documentation (closes: #779175)
+    + adds documentation and example on how to track SIGBUS restarts to the
+      (probably damaged) last open files (closes: #773825)
+
+  [ Felix Geyer ]
+  * added quiet option to systemctl calls to make logrotate less noisy
+    (closes: #782562)
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 29 Apr 2015 11:31:38 +0200
+
 apt-cacher-ng (0.8.1-1~bpo70+1) wheezy-backports; urgency=low
 
   * Minor version update
