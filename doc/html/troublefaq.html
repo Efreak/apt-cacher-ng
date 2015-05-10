@@ -18,10 +18,11 @@
 <li><a href="#debug">9.1 Debugging</a></li>
 <li><a href="#cleanup-damaged">9.2 Problem: keeps delivering damaged files</a></li>
 <li><a href="#cleanup-prob">9.3 Problem: regular expiration action reproducibly aborts</a></li>
-<li><a href="#prob">9.4 Problem: download fails with 503 ... status message</a></li>
-<li><a href="#prob-freeze">9.5 Problem: <code>apt-get</code> freezes when downloading files</a></li>
-<li><a href="#prob-bzip2">9.6 <code>apt-get</code> reports corrupted bzip2 data</a></li>
-<li><a href="#prob-eaddrinuse">9.7 Problem: <code>apt-cacher-ng</code> refuses to start with "Address already in use"</a></li>
+<li><a href="#sigbus-prob">9.4 Problem: cacher suddenly terminates, log reports IO errors</a></li>
+<li><a href="#prob">9.5 Problem: download fails with 503 ... status message</a></li>
+<li><a href="#prob-freeze">9.6 Problem: <code>apt-get</code> freezes when downloading files</a></li>
+<li><a href="#prob-bzip2">9.7 <code>apt-get</code> reports corrupted bzip2 data</a></li>
+<li><a href="#prob-eaddrinuse">9.8 Problem: <code>apt-cacher-ng</code> refuses to start with "Address already in use"</a></li>
 </ul></li>
 </ul>
 <h1><a name="troublefaq"></a>Chapter 9: Troubleshooting</h1>
@@ -39,7 +40,7 @@ Preliminary meanings of Debug option settings are:
 2: Some additional information appears within usual transfer/error logs
 </li>
 <li>
-4: extra debug information is written to apt-cacher.err (also enables lots of additional trace points when apt-cacher-ng binary is built with debug configuration, see <a href="#prob-freeze">section 9.5</a> for details)
+4: extra debug information is written to apt-cacher.err (also enables lots of additional trace points when apt-cacher-ng binary is built with debug configuration, see <a href="#prob-freeze">section 9.6</a> for details)
 </li>
 </ul>
 <p>
@@ -76,7 +77,22 @@ Unfortunately there is no simple and safe way to solve this. One method is setti
 <p>
 Another way is listing the index files of the faulty mirrors to a special file. It needs to be stored as "ignore_list" in the configuration directory and store one path name per line with paths relative to the cache directory, as seen in the error messages.
 </p>
-<h2><a name="prob"></a>9.4 Problem: download fails with 503 ... status message</h2>
+<h2><a name="sigbus-prob"></a>9.4 Problem: cacher suddenly terminates, log reports IO errors</h2>
+<p>
+For simplicity and memory saving reasons, apt-cacher-ng assumes that some files can be opened exclusively for reading and they don't suddenly become unreadable. Unfortunatelly, in some conditions and in case of IO errors, this doesn't work and the file systems sends a fatal signal and eventually terminates the program.
+</p>
+<p>
+To track this down to the likely reasons, it's possible to execute a custom script in the moment of the reception of the fatal signal. To do that, add something like this to the configuration:
+</p>
+<pre><code>BusAction = ls -l /proc/$PPID/ | mail -s SIGBUS! root
+</code></pre>
+<p>
+This command would send a list of opened files with paths to the "root" mail user, and the root shall check the state of those files (maybe run them through md5sum or similar).
+</p>
+<p>
+NOTE: Beware of the security implications of this configuration option. It runs regular shell code in context of the daemon user in a blocking way, so it may be vulnerable to symlink attacks and it will delay the automatic restart of the daemon through systemd.
+</p>
+<h2><a name="prob"></a>9.5 Problem: download fails with 503 ... status message</h2>
 <p>
 Code 503 usually represents an internal failure which could not be described correctly by other HTTP status codes. In the most cases it's caused by file system errors or incorrect cache directory setup, like files or directories with incorrect owner, missing write/read permissions for the effective user account or other system related exceptions like running out of disk space.
 </p>
@@ -89,7 +105,7 @@ Fixing permission problems shouldn't be a real challenge for system administrato
 <pre><code> chown -R apt-cacher-ng:apt-cacher-ng /var/cache/apt-cacher-ng
  chmod -R a+rX,g+rw,u+rw /var/cache/apt-cacher-ng
 </code></pre>
-<h2><a name="prob-freeze"></a>9.5 Problem: <code>apt-get</code> freezes when downloading files</h2>
+<h2><a name="prob-freeze"></a>9.6 Problem: <code>apt-get</code> freezes when downloading files</h2>
 <p>
 Solution: First, check:
 </p>
@@ -121,7 +137,7 @@ If nothing helps then you may have hit a spooky problem which is hard to track d
 <p>
 The value of debug can be varied to have different verbosity (see <a href="#debug">section 9.1</a> for more information about Debug levels).
 </p>
-<h2><a name="prob-bzip2"></a>9.6 <code>apt-get</code> reports corrupted bzip2 data</h2>
+<h2><a name="prob-bzip2"></a>9.7 <code>apt-get</code> reports corrupted bzip2 data</h2>
 <p>
 Symptoms: apt-get fails to run through "update" no matter what you do. And you may have get a message like this one.
 </p>
@@ -145,7 +161,7 @@ This might be one of Apt's problem with insufficient handling of errors, i.e. pa
 Another issue is more severe: old versions of apt-cacher-ng had a bug which could cause data corruption while resuming downloads however this problem appears only in unusual conditions. To make sure there are no broken files in your repository, run the Expiration task with content verification enabled, and also "immediate deletion" (or delete later after checking the list). See <a href="maint.html#cleanup-manual">section 7.1.1</a> for details.
 </li>
 </ul>
-<h2><a name="prob-eaddrinuse"></a>9.7 Problem: <code>apt-cacher-ng</code> refuses to start with "Address already in use"</h2>
+<h2><a name="prob-eaddrinuse"></a>9.8 Problem: <code>apt-cacher-ng</code> refuses to start with "Address already in use"</h2>
 <p>
 Another service is already listening on the port which apt-cacher-ng is configured to use. This might be the apt-cacher daemon which used the same port number by default. To identify the daemon behind that process, use the fuser utility, executing it as root for IPv4 and IPv6 protocol versions. Example:
 </p>
@@ -160,5 +176,5 @@ fuser -6 -v -n tcp 3142
 
 <hr><address>Comments to <a href='mailto:blade@debian.org'>blade@debian.org</a>
 <br>
-[Eduard Bloch, Mon, 06 Apr 2015 22:46:43 +0200]</address></body>
+[Eduard Bloch, Sun, 19 Apr 2015 10:25:49 +0200]</address></body>
 </html>

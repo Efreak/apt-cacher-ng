@@ -1,3 +1,28 @@
+apt-cacher-ng (0.8.3) TECHNICAL-DEBT-STRIKES-BACK; urgency=medium
+
+  * FIX: semi-smart replacement of .bz2 files with their .xz variants if the
+    .bz2 version is no longer available (current mess with the Debian archive)
+  * Code refactoring
+  * Semi-automated getting of Sourceforge mirror network URLs, list update
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 02 May 2015 16:22:45 +0200
+
+apt-cacher-ng (0.8.2) FOR-A-FEW-BYTES-MORE; urgency=low
+
+  * CHANGE: by default, bugs.debian.org:443 is permitted for CONNECT requests
+    if an extra proxy is configured
+  * FIX: correct detection and blacklisting of broken (permanently
+    disconnecting) hosts
+  * NEW: options to run a command upon SIGBUS and disable SSL checks
+  * Creating fresh connection for each bugs.d.o operation (attempt to fix
+    Debian bug #775126)
+  * Various fixes and workarounds for pass-through operations in proxy
+    cascades, for direct connects (HTTPS tunnels) and bugs.debian.org SOAP
+    activities
+  * Various bugfixes of program option parsing and return codes
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 29 Apr 2015 11:30:01 +0200
+
 apt-cacher-ng (0.8.1) JUST-A-LITTLE-BIT; urgency=low
 
   [Eduard Bloch]

@@ -7,7 +7,7 @@ FEDDEFAULT="repo.fedora-[234]..arch"
 FEDSTRING="${FEDSTRING:-$FEDDEFAULT}"
 if ! test -d "$DBTMP" ; then echo '$DBTMP not a directory, aborting' ; exit 1 ; fi
 burl='https://mirrors.fedoraproject.org/mirrorlist?ip=0.0.0.0&'
-wget "$burl""repo=rawhide&arch=invalid" -O "$DBTMP/repohints.txt"
+wget -q "$burl""repo=rawhide&arch=invalid" -O "$DBTMP/repohints.txt"
 rm -f "$DBTMP/meta.xml.txt"
 cat "$DBTMP/repohints.txt" | grep "$FEDSTRING" | while read x y ; do
    #echo heh? "$x $y"

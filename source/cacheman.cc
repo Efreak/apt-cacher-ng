@@ -28,6 +28,8 @@
 
 #ifdef DEBUG
 #define DEBUGIDX
+#warning enable, and it will spam a lot!
+//#define DEBUGSPAM
 #endif
 
 using namespace std;
@@ -164,7 +166,7 @@ bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 
 bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		tCacheOperation::eDlMsgPrio msgVerbosityLevel,
-		tFileItemPtr pFi, const tHttpUrl * pForcedURL)
+		tFileItemPtr pFi, const tHttpUrl * pForcedURL, unsigned hints)
 {
 
 	LOGSTART("tCacheMan::Download");
@@ -262,57 +264,85 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		}
 		else
 		{
+			// ok, cache location does not hint to a download source,
+			// try to resolve to an URL based on the old header information;
+			// if not possible, guessing by looking at related files and making up
+			// the URL as needed
+
 			if(bCachePathAsUriPlausible) // unless other rule matches, this path in cache should represent the remote URI
 				pResolvedDirectUrl=&parserPath;
 
 			// and prefer the source from xorig which is likely to deliver better result
 			if(hor.h[header::XORIG] && parserHead.SetHttpUrl(hor.h[header::XORIG], false))
 				pResolvedDirectUrl=&parserHead;
-			else if(flags.synthesized)
+			else if(flags.guessed)
 			{
-				auto xpath=sFilePathAbs;
-				// what's the usecase? Getting diffs for the index, or getting original file?
+				// might use a related file as reference
+
 				auto pos = sFilePathAbs.rfind(".diff/");
-				if (pos == stmiss) // usecase: getting original file
+				if (pos != stmiss)
 				{
-					cmstring * pSuf = nullptr;
-					for (auto& suf : compSuffixesAndEmpty)
-					{
-						if (endsWith(xpath, suf))
-						{
-							pSuf = &suf;
-							xpath.replace(xpath.size() - suf.size(), suf.size(),
-									sConstDiffIdxHead);
-							break;
-						}
-					}
-					ldbg("get example url from header " << xpath);
-					if (pSuf && hor.LoadFromFile(xpath) > 0 && hor.h[header::XORIG])
+					// ok, that's easy, looks like getting patches and the
+					// .diff/Index must be already there
+					auto xpath = sFilePathAbs.substr(0, pos) + sConstDiffIdxHead;
+					if (hor.LoadFromFile(xpath) > 0 && hor.h[header::XORIG])
 					{
 						xpath = hor.h[header::XORIG];
-						if(endsWith(xpath, diffIdxSfx))
-						{
-							ldbg("sample url is " << xpath);
-							xpath.erase(xpath.size()- diffIdxSfx.size());
-							xpath+=*pSuf;
-							if(parserHead.SetHttpUrl(xpath, false))
-								pResolvedDirectUrl = &parserHead;
-						}
-					}
-				}
-				else // ok, usecase: getting patches
-				{
-					auto xpath=sFilePathAbs.substr(0, pos)+sConstDiffIdxHead;
-					if(hor.LoadFromFile(xpath) > 0 && hor.h[header::XORIG])
-					{
-						xpath = hor.h[header::XORIG];
+						// got the URL of the original .diff/Index file?
 						ldbg("sample url is " << xpath);
 						if (endsWith(xpath, diffIdxSfx))
 						{
+							// yes, it is, replace the ending with the local part of the filename
 							xpath.erase(xpath.size() - diffIdxSfx.size());
 							xpath += sFilePathAbs.substr(pos);
 							if (parserHead.SetHttpUrl(xpath, false))
 								pResolvedDirectUrl = &parserHead;
+						}
+					}
+				}
+				else
+				{
+					// usecase: getting a non-pdiff file
+					// potential neighbors? something like:
+					static cmstring testsfxs[] =
+					{ ".diff/Index", ".bz2", ".gz", ".xz", ".lzma" };
+
+					// First, getting a "native" base path of that file, therefore
+					// chop of the compression suffix and append foo while testing
+					//
+					// after resolving, chop of foo from the URL and add the
+					// comp.suffix again
+					//
+					cmstring * pCompSuf = nullptr;
+					auto xBasePath = sFilePathAbs;
+					for (auto& testCompSuf : compSuffixesAndEmpty)
+					{
+						if (endsWith(xBasePath, testCompSuf))
+						{
+							pCompSuf = &testCompSuf;
+							xBasePath.erase(xBasePath.size()-testCompSuf.size());
+							break;
+						}
+					}
+
+					for (auto& foo : testsfxs)
+					{
+						ldbg("get example url from header of " << xBasePath);
+						if (pCompSuf && hor.LoadFromFile(xBasePath + foo + ".head") > 0 && hor.h[header::XORIG])
+						{
+							string urlcand = hor.h[header::XORIG];
+							if (endsWith(urlcand, foo))
+							{
+								// ok, looks plausible
+								ldbg("sample url is " << urlcand);
+								urlcand.erase(urlcand.size() - foo.size());
+								urlcand += *pCompSuf;
+								if (parserHead.SetHttpUrl(urlcand, false))
+								{
+									pResolvedDirectUrl = &parserHead;
+									break;
+								}
+							}
 						}
 					}
 				}
@@ -386,7 +416,11 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			// oh, that crap: in a repo, but no backends configured, and no original source
 			// to look at because head file is probably damaged :-(
 			// try to re-resolve relative to InRelease and retry download
-			SendChunkSZ("Warning, running out of download locations (probably corrupted cache). Trying an educated guess...<br>\n");
+			SendChunkSZ("<span class=\"WARNING\">"
+					"Warning, running out of download locations (probably corrupted "
+					"cache). Trying an educated guess...<br>\n"
+					")</span>\n<br>\n");
+
 			cmstring::size_type pos=sFilePathRel.length();
 			while(true)
 			{
@@ -422,6 +456,41 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 				if(!pos)
 					break;
 				pos--;
+			}
+		}
+		else if((hints&DL_HINT_GUESS_REPLACEMENT)
+				&& pFi->GetHeaderUnlocked().getStatus() == 404)
+		{
+			// another special case, slightly ugly :-(
+			// this is explicit hardcoded repair code
+			// for the removal of .bz2 compressed versions
+			// of various files
+			if (endsWithSzAr(sFilePathRel, "/Packages.bz2")
+					|| endsWithSzAr(sFilePathRel, "/Sources.bz2")
+					|| (StrHas(sFilePathRel, "i18n/Translation-") &&
+							endsWithSzAr(sFilePathRel, ".bz2")))
+
+			{
+				SendChunkSZ("Attempting to download the .xz version... ");
+				// if we have it already, use it as-is
+				if (!pResolvedDirectUrl)
+				{
+					auto p = pFi->GetHeaderUnlocked().h[header::XORIG];
+					if (p && parserHead.SetHttpUrl(p))
+						pResolvedDirectUrl = &parserHead;
+				}
+				if (pResolvedDirectUrl)
+				{
+					// XXX: maybe pointless copy, work around with a flag?
+					auto newurl(*pResolvedDirectUrl);
+					if (endsWithSzAr(newurl.sPath, ".bz2"))
+					{
+						newurl.sPath.erase(newurl.sPath.size() - 4);
+						newurl.sPath.append(".xz");
+						return Download(sFilePathRel.substr(0, sFilePathRel.size() - 4) + ".xz",
+								bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl);
+					}
+				}
 			}
 		}
 
@@ -609,7 +678,7 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 		string pfile(diffIdxPathRel.substr(0, diffIdxPathRel.size()-diffIdxSfx.size()+6)
 				+pit->patchName+".gz");
 		auto& flags=SetFlags(pfile);
-		flags.synthesized=true;
+		flags.guessed=true;
 		flags.hideDlErrors=true;
 		if(!Download(pfile, false, eMsgShow))
 		{
@@ -838,7 +907,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
 		cmstring *psTmpUnpackedAbs)
 {
-#ifdef DEBUG_FLAGS
+#ifdef DEBUG
 	SendFmt<< "Installing " << donorRel << "<br>\n";
 	bool nix=StrHas(donorRel, "debrep/dists/experimental/main/binary-amd64/Packages");
 #endif
@@ -864,22 +933,63 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 		if(donorRel == tgtCand)
 			continue;
 		const tIfileAttribs &flags=GetFlags(tgtCand);
-		if(!flags.vfile_ondisk)
-			continue;
-
-		if(FindCompIdx(donorRel) == FindCompIdx(tgtCand)) // same compression type -> replace it?
+		// exists somewhere else and same compression type? -> replace it
+		if(FindCompIdx(donorRel) == FindCompIdx(tgtCand))
 		{
-			// counts fresh file as injected, no need to recheck them in Inject()
-			if (flags.uptodate || Inject(donorRel, tgtCand))
-				nInjCount++;
+			if (flags.vfile_ondisk)
+			{
+				// counts fresh file as injected, no need to recheck them in Inject()
+				if (flags.uptodate || Inject(donorRel, tgtCand))
+					nInjCount++;
+				else
+					MTLOGASSERT(false, "Inject failed");
+			}
+#if 0 // little hack to make repairs faster (bz2 to xz) in case where there is an extra copy
+			// actually it's overkill for what it's good for,
+			// the alternative version download attempt
+			// fixes the issue good enough
 			else
-				MTLOGASSERT(false, "Inject failed");
+			{
+				// however, if it has bros lying around that are no longer
+				// tracked by upstream index then force its installation!
+				auto cpos=FindCompSfxPos(tgtCand);
+				string sBasename=tgtCand.substr(0, cpos);
+				for(auto& sfx : compSuffixesAndEmpty)
+				{
+					if(endsWith(tgtCand, sfx)) // same file, checked before
+						continue;
+					auto probeOtherSfx = sBasename+sfx;
+					if(!GetFlags(probeOtherSfx).vfile_ondisk)
+						continue;
+					// HIT! Install a copy and break
+					if (Inject(donorRel, tgtCand))
+					{
+						SendFmt << "<span class=\"WARNING\">"
+								"Warning: added a new file "
+								<< tgtCand << " from another source "
+								"because upstream index apparently "
+								"stopped listing the "
+								<< probeOtherSfx <<
+								"version</span><br>\n";
+						nInjCount++;
+						SetFlags(tgtCand) = flags;
+					}
+					break;
+				}
+			}
+#endif
 		}
 	}
 
 	// defuse some stuff located in the same directory, like .gz variants of .bz2 files
+	// and this REALLY means: ONLY THE SAME DIRECTORY!
+	// it disables alternative variants with different compressions
+	// and shall not affect the strict-path checking later
 	for (const auto& tgt: tgts)
 	{
+#ifdef DEBUG_EXTRA
+	SendFmt<< "Bro check for " << tgt << "<br>\n";
+#endif
 		auto& myState = GetFlags(tgt);
 		if(!myState.vfile_ondisk || !myState.uptodate || myState.parseignore)
 			continue;
@@ -891,6 +1001,9 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 		{
 			if(sux==compsuf) continue; // touch me not
 			mstring sBro = sBasename+compsuf;
+#ifdef DEBUG_EXTRA
+	SendFmt<< "Search bro: " << sBro << "<br>\n";
+#endif
 			auto kv=m_metaFilesRel.find(sBro);
 			if(kv!=m_metaFilesRel.end() && kv->second.vfile_ondisk)
 			{
@@ -977,7 +1090,7 @@ void tCacheOperation::UpdateVolatileFiles()
 
 
 	auto dbgState = [&]() {
-#ifdef DEBUGIDX
+#ifdef DEBUGSPAM
 	for (auto& f: m_metaFilesRel)
 		SendFmt << "State of " << f.first << ": "
 			<< f.second.alreadyparsed << "|"
@@ -987,7 +1100,7 @@ void tCacheOperation::UpdateVolatileFiles()
 			<< f.second.space << "|"
 			<< f.second.uptodate << "|"
 			<< f.second.vfile_ondisk << "|"
-			<< f.second.synthesized << "|<br>\n";
+			<< f.second.guessed << "|<br>\n";
 #endif
 	};
 	dbgState();
@@ -1026,22 +1139,28 @@ void tCacheOperation::UpdateVolatileFiles()
 			}
 	};
 
-	tStrMap releaseMap;
-	for(auto& iref : m_metaFilesRel)
+	// little helper to pick only one of Release OR InRelease from the same directory
+	tStrMap releaseFilesUniq;
+	for (auto sfx :
+	{ inRelKey, relKey })
 	{
-		auto& sPathRel=iref.first;
-		if(!endsWith(sPathRel, relKey) && !endsWith(sPathRel, inRelKey))
-			continue;
-		auto pos=sPathRel.rfind('/');
-		auto& fname=releaseMap[sPathRel.substr(0,pos)];
-		if(fname.empty())
-			fname=sPathRel.substr(pos);
+		for (auto& iref : m_metaFilesRel)
+		{
+			auto& sPathRel = iref.first;
+			if (endsWith(sPathRel, sfx))
+			{
+				auto pos = sPathRel.rfind('/');
+				auto& fname = releaseFilesUniq[sPathRel.substr(0, pos)];
+				if (fname.empty())
+					fname = sPathRel.substr(pos);
+			}
+		}
 	}
 
 	// iterate over initial *Releases files
-	for(auto& relRef : releaseMap)
+	for(auto& relRef : releaseFilesUniq)
 	{
-		const string &sPathRel=relRef.first+relRef.second;
+		cmstring sPathRel=relRef.first+relRef.second;
 
 		if(!Download(sPathRel, true, m_metaFilesRel[sPathRel].hideDlErrors
 					? eMsgHideErrors : eMsgShow))
@@ -1055,40 +1174,45 @@ void tCacheOperation::UpdateVolatileFiles()
 		}
 
 		m_metaFilesRel[sPathRel].uptodate=true;
-
+#ifdef DEBUG
+		SendFmt << "Start parsing " << sPathRel << "<br>";
+#endif
 		releaseStuffReceiver recvr;
 		ParseAndProcessMetaFile(recvr, sPathRel, EIDX_RELEASE);
 
 		if(recvr.m_file2cid.empty())
 			continue;
 
+		// first, look around for for .diff/Index files on disk and prepare their processing
 		for(const auto cid : recvr.m_file2cid)
 		{
 			// not diff index or not in cache?
 			if(!endsWith(cid.first, diffIdxSfx) || !GetFlags(cid.first).vfile_ondisk)
 				continue;
+			// found an ...diff/Index file!
 			string sBase=cid.first.substr(0, cid.first.size()-diffIdxSfx.size());
 			for(auto& suf : compSuffixesAndEmptyByRatio)
 			{
 				const auto& flags=GetFlags(sBase+suf);
 				if(flags.vfile_ondisk)
-					goto has_base;
+					goto has_base; // break 2 levels
 			}
-			// ok, not found, enforce any existing one?
+			// ok, not found, enforce dload of any existing patch base file?
 			for(auto& suf : compSuffixesAndEmptyByRatio)
 			{
 				if(ContHas(recvr.m_file2cid, (sBase+suf)))
 				{
-					SetFlags(sBase+suf).synthesized=true;
+					SetFlags(sBase+suf).guessed=true;
 					LOG("enforcing dl: " << (sBase+suf));
 					break;
 				}
 			}
-
 has_base:
 			;
 		}
 		dbgState();
+
+		// now refine all extracted information and store it in eqClasses for later processing
 		for(auto if2cid : recvr.m_file2cid)
 		{
 			string sNativeName=if2cid.first.substr(0, FindCompSfxPos(if2cid.first));
@@ -1402,17 +1526,19 @@ CONTINUE_NEXT_GROUP:
 	// fetch all remaining stuff
 	for(auto& idx2att : m_metaFilesRel)
 	{
-		if (idx2att.second.uptodate || idx2att.second.parseignore
-				|| (!idx2att.second.vfile_ondisk && !idx2att.second.synthesized))
+		if (idx2att.second.uptodate || idx2att.second.parseignore)
+			continue;
+		if(!idx2att.second.vfile_ondisk && !idx2att.second.guessed)
+			continue;
+		string sErr;
+		if(Download(idx2att.first, true,
+				idx2att.second.hideDlErrors ? eMsgHideErrors : eMsgShow,
+						tFileItemPtr(), 0, DL_HINT_GUESS_REPLACEMENT))
 		{
 			continue;
 		}
-		string sErr;
-		if(Download(idx2att.first, true, idx2att.second.hideDlErrors ? eMsgHideErrors : eMsgShow))
-			continue;
 		m_nErrorCount+=(!idx2att.second.forgiveDlErrors);
 	}
-
 }
 
 void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter)
