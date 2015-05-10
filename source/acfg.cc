@@ -996,7 +996,7 @@ void ReadConfigDirectory(const char *szPath)
 	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
 		ReadOneConfFile(src);
 #else
-	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bQuiet, bNoComplex);
+	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
 #endif
 	dump_proc_status();
 	if(debug & LOG_DEBUG)
