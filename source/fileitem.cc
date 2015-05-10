@@ -20,6 +20,7 @@ using namespace std;
 mstring sReplDir("_altStore" SZPATHSEP);
 
 static tFiGlobMap mapItems;
+static lockable mapItemsMx;
 
 header const & fileitem::GetHeaderUnlocked()
 {
@@ -716,7 +717,7 @@ inline void fileItemMgmt::Unreg()
 	if(!m_ptr) // unregistered before?
 		return;
 
-	lockguard managementLock(mapItems);
+	lockguard managementLock(mapItemsMx);
 
 	// invalid or not globally registered?
 	if(m_ptr->m_globRef == mapItems.end())
@@ -764,7 +765,7 @@ bool fileItemMgmt::PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 	MYTRY
 	{
 		mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
-		lockguard lockGlobalMap(mapItems);
+		lockguard lockGlobalMap(mapItemsMx);
 		tFiGlobMap::iterator it=mapItems.find(sPathRel);
 		if(it!=mapItems.end())
 		{
@@ -825,10 +826,12 @@ bool fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 
 	Unreg();
 
-	lockguard lockGlobalMap(mapItems);
+	lockguard lockGlobalMap(mapItemsMx);
 
 	if(ContHas(mapItems, spCustomFileItem->m_sPathRel))
 		return false; // conflict, another agent is already active
+
+#warning can use emplace instead?
 
 	spCustomFileItem->m_globRef = mapItems.insert(make_pair(spCustomFileItem->m_sPathRel,
 			spCustomFileItem));
@@ -852,7 +855,7 @@ void fileItemMgmt::RegisterFileitemLocalOnly(fileitem* replacement)
 time_t fileItemMgmt::BackgroundCleanup()
 {
 	LOGSTART2s("fileItemMgmt::BackgroundCleanup", GetTime());
-	lockguard lockGlobalMap(mapItems);
+	lockguard lockGlobalMap(mapItemsMx);
 	tFiGlobMap::iterator it, here;
 
 	time_t now=GetTime();

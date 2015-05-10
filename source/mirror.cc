@@ -370,7 +370,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 						if(!isalnum(uint(*p)) && !strchr(".-+:~",uint(*p)))
 							break;
 					if( !*p && CompDebVerLessThan(s, parts[1]))
-						sorted.push_back(s);
+						sorted.emplace_back(s);
 				}
 			}
 

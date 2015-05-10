@@ -162,7 +162,7 @@ void SetupConAndGo(int fd, const char *szClientName=NULL)
 				goto local_con_failure;
 			}
 
-			g_freshConQueue.push_back(c);
+			g_freshConQueue.emplace_back(c);
 			LOG("Connection to backlog, total count: " << g_freshConQueue.size());
 
 
@@ -232,7 +232,7 @@ void CreateUnixSocket() {
 	
 	if (0==listen(g_sockunix, SO_MAXCONN))
 	{
-		g_vecSocks.push_back(g_sockunix);
+		g_vecSocks.emplace_back(g_sockunix);
 		return;
 	}
 
@@ -260,7 +260,7 @@ void Setup()
 		
 		tStrVec sAdds;
 		if(bindaddr.empty())
-			sAdds.push_back(sEmptyString); // one dummy entry to get one NULL later
+			sAdds.emplace_back(sEmptyString); // one dummy entry to get one NULL later
 		else
 			Tokenize(bindaddr, SPACECHARS, sAdds);
 		for(auto& sad : sAdds)
@@ -296,7 +296,7 @@ void Setup()
 		    		goto error_listen;
 		    	
 			USRDBG( "created socket, fd: " << nSockFd);// << ", for bindaddr: "<<bindaddr);
-		    	g_vecSocks.push_back(nSockFd);
+		    	g_vecSocks.emplace_back(nSockFd);
 		    	
 		    	continue;
 

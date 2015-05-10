@@ -9,6 +9,7 @@ namespace filelocks {
 
 struct : public condition, public std::unordered_set<mstring> {} g_mmapLocks;
 
+#warning usecase wann?
 filelocks::flock::~flock()
 {
 	lockguard g(g_mmapLocks);

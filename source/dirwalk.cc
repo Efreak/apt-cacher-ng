@@ -19,20 +19,9 @@ extern int stupidfs;
 struct dnode
 {
 
-	struct dupeKey
-	{
-		dev_t dev;
-		ino_t ino;
-		bool operator<(const dupeKey &other) const
-		{
-			if(other.dev != dev)
-				return dev<other.dev;
-			return ino < other.ino;
-		}
-	};
-	typedef set<dupeKey> tDupeFilter;
+	typedef pair<dev_t,ino_t> tPairDevIno;
+	typedef set<tPairDevIno> tDupeFilter;
 	
-
 	dnode(dnode *parent) : m_parent(parent) {};
 	bool Walk(IFileHandler *, tDupeFilter*, bool bFollowSymlinks);
 
@@ -95,12 +84,10 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 	// also make sure we are not visiting the same directory through some symlink construct
 	if(pFilter)
 	{
-		dupeKey thisKey;
-		thisKey.dev=m_stinfo.st_dev;
-		thisKey.ino=m_stinfo.st_ino;
-		if(ContHas(*pFilter, thisKey))
-			return true;
-		pFilter->insert(thisKey);
+#warning test this with recursive links in import folder
+		auto key_isnew = pFilter->emplace(m_stinfo.st_dev, m_stinfo.st_ino);
+		if(!key_isnew.second)
+			return true; // visited this before
 	}
 
 //	cerr << "Opening: " << sPath<<endl;

@@ -283,7 +283,7 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 			acfg::g_bNoComplex = false;
 		}
 		else if(**p) // not empty
-			cmdvars.push_back(*p);
+			cmdvars.emplace_back(*p);
 
 #if SUPPWHASH
 		else if (!strncmp(*p, "-H", 2))

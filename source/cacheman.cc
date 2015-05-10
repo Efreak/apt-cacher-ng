@@ -1225,7 +1225,7 @@ has_base:
 					sCandId=it2->second;
 			}
 			tClassDesc &tgt=eqClasses[sCandId];
-			tgt.paths.push_back(if2cid.first);
+			tgt.paths.emplace_back(if2cid.first);
 
 			// pick up the id for bz2 verification later
 			if(tgt.bz2VersContId.second.empty() && endsWithSzAr(if2cid.first, ".bz2"))
@@ -1973,7 +1973,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					sDirHeader=sLine.substr(pos)+SZPATHSEP;
 			}
 			else if (bUse)
-				fileList.push_back(sLine);
+				fileList.emplace_back(sLine);
 			else if(sLine.empty()) // ok, time to commit the list
 			{
 				for (auto& fline : fileList)
@@ -2099,8 +2099,8 @@ void tCacheOperation::ProcessSeenMetaFiles(ifileprocessor &pkgHandler)
 
 void tCacheOperation::AddDelCbox(cmstring &sFileRel)
 {
-	std::pair<tStrSet::iterator,bool> ck = m_delCboxFilter.insert(sFileRel);
-	if(! ck.second)
+	auto ref_isnew = m_delCboxFilter.insert(sFileRel);
+	if(! ref_isnew.second)
 		return;
 
 	SendFmtRemote <<  "<label><input type=\"checkbox\" name=\"kf" << (nKillLfd++)
@@ -2136,7 +2136,7 @@ void tCacheOperation::PrintStats(cmstring &title)
 	{
 		total += f.second.space;
 		if(f.second.space)
-			sorted.insert(make_pair(f.second.space, &f.first));
+			sorted.emplace(f.second.space, &f.first);
 		if(sorted.size()>nMax)
 		{
 			sorted.erase(sorted.begin());

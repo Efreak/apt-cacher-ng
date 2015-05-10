@@ -110,7 +110,7 @@ bool pkgimport::ProcessRegular(cmstring &sPath, const struct stat &stinfo)
 			{
 				SendFmt << "<span class=\"WARNING\">Duplicate found, " << sPath << " vs. "
 						<< node.sPath << ", ignoring new entry.</span>\n<br>\n";
-				m_importRest.push_back(make_pair(fpr, tImpFileInfo(sPath, stinfo.st_mtime)));
+				m_importRest.emplace_back(fpr, tImpFileInfo(sPath, stinfo.st_mtime));
 			}
 		}
 	}

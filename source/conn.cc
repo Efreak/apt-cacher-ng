@@ -403,7 +403,7 @@ void con::WorkLoop() {
 					job * j = new job(m_pTmpHead, this);
 
 					j->PrepareDownload();
-					m_jobs2send.push_back(j);
+					m_jobs2send.emplace_back(j);
 #ifdef DEBUG
 					m_nProcessedJobs++;
 #endif
