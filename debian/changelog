@@ -1,3 +1,9 @@
+apt-cacher-ng (0.8.3-1~bpo80+2) jessie-backports; urgency=low
+
+  * Rebuilt with binary-arch packages
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 12 May 2015 20:07:28 +0200
+
 apt-cacher-ng (0.8.3-1~bpo80+1) jessie-backports; urgency=low
 
   * Jessie backport from current Testing
@@ -38,7 +44,7 @@ apt-cacher-ng (0.8.1-1) unstable; urgency=low
 
   * New upstream version
     + transition to libsystemd without -daemon where possible (closes: #779739)
-    + LTO disabled by default (closes: #777753)
+    + LTO disabled by default
     + *.o file download as volatile type (LP: #1078224)
     + more Fedora mirrors (Carlos Maddela, closes: #780555)
     + corrects handling of SPfilePatternEx (Carlos Maddela, closes: #780550)
