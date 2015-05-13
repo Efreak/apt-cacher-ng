@@ -63,10 +63,12 @@ public:
 	}
 };
 
+#ifdef SIGBUSHUNTING
 // this weird kludge is only needed in order to access this data from POSIX signal handlers
 // which needs to be both, reliable and lock-free
 tMmapEntry g_mmapMemory[10];
 lockable g_mmapMemoryLock;
+#endif
 
 class IDecompressor
 {
@@ -244,11 +246,6 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, uint nFakeTra
 	Close(); // reset to clean state
 	m_nEofLines=nFakeTrailingNewlines;
 
-	// this makes sure not to truncate file while it's mmaped
-	m_mmapLock = filelocks::Acquire(sFilename);
-	// namedmutex mmapMx(g_noTruncateLocks, sFilename);
-	// lockguard guardWriteMx(mmapMx);
-
 	m_fd = open(sFilename.c_str(), O_RDONLY);
 #ifdef SHRINKTEST
 	m_fd = open(sFilename.c_str(), O_RDWR);
@@ -318,6 +315,9 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, uint nFakeTra
 		return false;
 	}
 
+	// this makes sure not to truncate file while it's mmaped
+	m_mmapLock = TFileShrinkGuard::Acquire(statbuf);
+
 	// LFS on 32bit? That's not good for mmap. Don't risk incorrect behaviour.
 	if(uint64_t(statbuf.st_size) >  MAX_VAL(size_t))
     {
@@ -367,6 +367,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, uint nFakeTra
 	m_nCurLine=0;
 	m_bError = m_bEof = false;
 
+#ifdef SIGBUSHUNTING
 	{
 		// try to keep a thread reference in some free slot
 		lockguard g(g_mmapMemoryLock);
@@ -380,6 +381,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, uint nFakeTra
 			}
 		}
 	}
+#endif
 	return true;
 }
 
@@ -404,6 +406,7 @@ void filereader::Close()
 
 	if (m_szFileBuf != MAP_FAILED)
 	{
+#ifdef SIGBUSHUNTING
 		{
 			lockguard g(g_mmapMemoryLock);
 			for (auto &x : g_mmapMemory)
@@ -414,12 +417,14 @@ void filereader::Close()
 					x.valid = false;
 			}
 		}
+#endif
 
 		munmap(m_szFileBuf, m_nBufSize);
 		m_szFileBuf = (char*) MAP_FAILED;
 	}
 
 	checkforceclose(m_fd);
+	m_mmapLock.reset();
 	m_Dec.reset();
 
 	m_nBufSize=0;
@@ -436,15 +441,25 @@ std::atomic_int g_nThreadsToKill;
 
 void handle_sigbus()
 {
-	if(!acfg::sigbuscmd.empty())
+	if (!acfg::sigbuscmd.empty())
 	{
 		/*static char buf[21];
-		sprintf(buf, "%u", (unsigned) getpid());
-		setenv("ACNGPID", buf, 1);
-		*/
+		 sprintf(buf, "%u", (unsigned) getpid());
+		 setenv("ACNGPID", buf, 1);
+		 */
 		::ignore_value(system(acfg::sigbuscmd.c_str()));
 	}
+	else
+	{
+
+		aclog::err(
+				"FATAL ERROR: apparently an IO error occurred, while reading files. "
+						"Please check your system logs for related errors reports. Also consider "
+						"using the BusAction option, see Apt-Cacher NG Manual for details");
+	}
 #if 1
+
+#ifdef SIGBUSHUNTING
 	for (auto &x : g_mmapMemory)
 	{
 		if (!x.valid.load())
@@ -452,6 +467,7 @@ void handle_sigbus()
 		aclog::err(string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
 			+x.path+" . Please check your system logs for related errors.");
 	}
+#endif
 
 #else
 	// attempt to pass the signal around threads, stopping the one troublemaker

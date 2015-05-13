@@ -69,8 +69,7 @@ private:
 	// not to be copied
 	filereader& operator=(const filereader&);
 	filereader(const filereader&);
-
-	std::unique_ptr<filelocks::flock> m_mmapLock;
+	std::unique_ptr<TFileShrinkGuard> m_mmapLock;
 };
 
 extern uint_fast16_t hexmap[];

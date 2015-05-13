@@ -1,31 +1,35 @@
 #include "filelocks.h"
 
-#include <unordered_set>
+#include <utility>
 
 #include "lockable.h"
 #include "meta.h"
 
-namespace filelocks {
+using namespace std;
 
-struct : public condition, public std::unordered_set<mstring> {} g_mmapLocks;
+condition g_mmapLocksMx;
 
-#warning usecase wann?
-filelocks::flock::~flock()
+decltype(TFileShrinkGuard::g_mmapLocks) TFileShrinkGuard::g_mmapLocks;
+
+// little helper to exclude competing mmap and file shrinking operations
+TFileShrinkGuard::~TFileShrinkGuard()
 {
-	lockguard g(g_mmapLocks);
-	g_mmapLocks.erase(this->path);
+	lockguard g(g_mmapLocksMx);
+	g_mmapLocks.erase(m_it);
+	g_mmapLocksMx.notifyAll();
 }
 
-std::unique_ptr<flock> Acquire(const std::string& path)
+unique_ptr<TFileShrinkGuard> TFileShrinkGuard::Acquire(const struct stat& info)
 {
-	lockguard g(g_mmapLocks);
+	lockguard g(g_mmapLocksMx);
 	while(true) {
-		auto res(g_mmapLocks.emplace(path));
+		auto res = g_mmapLocks.emplace(make_pair(info.st_dev, info.st_ino));
 		if(res.second) // true if freshly inserted, false if there was an entry already
-			break;
-		g_mmapLocks.wait();
+		{
+			auto ret = new TFileShrinkGuard();
+			ret->m_it = res.first;
+			return unique_ptr<TFileShrinkGuard>(ret);
+		}
+		g_mmapLocksMx.wait();
 	}
-	return std::unique_ptr<flock>(new flock(path));
-}
-
 }

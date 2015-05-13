@@ -538,9 +538,6 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 				
 		mkbasedir(sPathAbs);
 
-		// this makes sure not to truncate file while it's mmaped
-		auto tempLock = filelocks::Acquire(sPathAbs);
-
 		m_filefd=open(sPathAbs.c_str(), flags, acfg::fileperms);
 		ldbg("file opened?! returned: " << m_filefd);
 		
@@ -586,6 +583,9 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		
 		if(0!=fstat(m_filefd, &stbuf) || !S_ISREG(stbuf.st_mode))
 			return withErrorAndKillFile("503 Not a regular file");
+
+		// this makes sure not to truncate file while it's mmaped
+		auto tempLock = TFileShrinkGuard::Acquire(stbuf);
 		
 		// crop, but only if the new size is smaller. MUST NEVER become larger (would fill with zeros)
 		if(m_nSizeChecked <= m_nSizeSeen)
