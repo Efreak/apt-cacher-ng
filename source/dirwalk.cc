@@ -84,10 +84,9 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 	// also make sure we are not visiting the same directory through some symlink construct
 	if(pFilter)
 	{
-#warning test this with recursive links in import folder
 		auto key_isnew = pFilter->emplace(m_stinfo.st_dev, m_stinfo.st_ino);
 		if(!key_isnew.second)
-			return true; // visited this before
+			return true; // visited this before, recursion detected
 	}
 
 //	cerr << "Opening: " << sPath<<endl;

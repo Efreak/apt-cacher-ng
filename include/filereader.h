@@ -64,7 +64,7 @@ private:
 	
 	int m_nEofLines;
 
-	std::auto_ptr<IDecompressor> m_Dec;
+	std::unique_ptr<IDecompressor> m_Dec;
 
 	// not to be copied
 	filereader& operator=(const filereader&);

@@ -831,11 +831,8 @@ bool fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 	if(ContHas(mapItems, spCustomFileItem->m_sPathRel))
 		return false; // conflict, another agent is already active
 
-#warning can use emplace instead?
-
-	spCustomFileItem->m_globRef = mapItems.insert(make_pair(spCustomFileItem->m_sPathRel,
-			spCustomFileItem));
-
+	spCustomFileItem->m_globRef = mapItems.emplace(spCustomFileItem->m_sPathRel,
+			spCustomFileItem);
 	spCustomFileItem->usercount=1;
 	m_ptr = spCustomFileItem;
 	return true;
