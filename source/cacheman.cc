@@ -803,6 +803,12 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 	if(GetFlags(to).uptodate)
 		return true;
 
+	auto sAbsFrom(SABSPATH(from)), sAbsTo(SABSPATH(to));
+
+	Cstat infoFrom(sAbsFrom), infoTo(sAbsTo);
+	if(infoFrom && infoTo && infoFrom.st_ino == infoTo.st_ino && infoFrom.st_dev == infoTo.st_dev)
+		return true;
+
 #ifdef DEBUG_FLAGS
 	bool nix = stmiss!=from.find("debrep/dists/squeeze/non-free/binary-amd64/");
 	SendFmt<<"Replacing "<<to<<" with " << from <<  "<br>\n";
@@ -814,7 +820,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 	{
 		pHead = &head;
 
-		if (head.LoadFromFile(SABSPATH(from+".head")) <= 0 || !head.h[header::CONTENT_LENGTH])
+		if (head.LoadFromFile(sAbsFrom+".head") <= 0 || !head.h[header::CONTENT_LENGTH])
 		{
 			MTLOGASSERT(0, "Cannot read " << from << ".head or bad data");
 			return false;
