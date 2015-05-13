@@ -32,6 +32,8 @@
 //#define DEBUGSPAM
 #endif
 
+#define MAX_TOP_COUNT 10
+
 using namespace std;
 
 static cmstring oldStylei18nIdx("/i18n/Index");
@@ -2125,12 +2127,11 @@ void tCacheOperation::SetCommonUserFlags(cmstring &cmd)
 	m_bTruncateDamaged=(cmd.find("truncNow")!=stmiss);
 }
 
-
 void tCacheOperation::PrintStats(cmstring &title)
 {
 	multimap<off_t, cmstring*> sorted;
 	off_t total=0;
-	const uint nMax = m_bVerbose ? (UINT_MAX-1) : 10;
+	const uint nMax = m_bVerbose ? (UINT_MAX-1) : MAX_TOP_COUNT;
 	uint hidden=0;
 	for(auto &f: m_metaFilesRel)
 	{
@@ -2146,7 +2147,7 @@ void tCacheOperation::PrintStats(cmstring &title)
 	if(!total)
 		return;
 	m_fmtHelper << "<br>\n<table><tr><td colspan=2><u>" << title;
-	if(!m_bVerbose)
+	if(!m_bVerbose && hidden>0)
 		m_fmtHelper << " (Top " << sorted.size() << ", " << hidden <<  " more not displayed)";
 	m_fmtHelper << "</u></td></tr>\n";
 	for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
