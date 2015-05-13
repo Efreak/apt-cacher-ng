@@ -280,8 +280,8 @@ struct tHostHint // could derive from pair but prefer to save some bytes with re
 #endif
 
 };
-class : public lockable, public multimap<tHostHint, std::pair<tTcpHandlePtr, time_t> >
-{} spareConPool;
+lockable spareConPoolMx;
+multimap<tHostHint, std::pair<tTcpHandlePtr, time_t> > spareConPool;
 
 tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, acfg::tRepoData::IHookHandler *pStateTracker
@@ -317,7 +317,7 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 	if(!nocache)
 	{
 		// mutex context
-		lockguard __g(spareConPool);
+		lockguard __g(spareConPoolMx);
 		auto it=spareConPool.find(key);
 		if(spareConPool.end() != it)
 		{
@@ -412,17 +412,17 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 	{
 #ifndef NOCONCACHE
 		time_t now = GetTime();
-		lockguard __g(spareConPool);
+		lockguard __g(spareConPoolMx);
 		ldbg("caching connection " << handle.get());
 
 		// a DOS?
 		if (spareConPool.size() < 50)
 		{
-			spareConPool.insert(make_pair(tHostHint(host, handle->GetPort()
+			spareConPool.emplace(tHostHint(host, handle->GetPort()
 #ifdef HAVE_SSL
 					, handle->m_bio
 #endif
-					), make_pair(handle, now)));
+					), make_pair(handle, now));
 
 #ifndef MINIBUILD
 			g_victor.ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
@@ -436,7 +436,7 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 
 time_t tcpconnect::BackgroundCleanup()
 {
-	lockguard __g(spareConPool);
+	lockguard __g(spareConPoolMx);
 	time_t now=GetTime();
 
 	fd_set rfds;
@@ -485,10 +485,10 @@ void tcpconnect::KillLastFile()
 
 void tcpconnect::dump_status()
 {
-	lockguard __g(spareConPool);
+	lockguard __g(spareConPoolMx);
 	tSS msg;
 	msg << "TCP connection cache:\n";
-	for (auto& x : spareConPool)
+	for (const auto& x : spareConPool)
 	{
 		if(! x.second.first)
 		{

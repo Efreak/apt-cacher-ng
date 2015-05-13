@@ -670,7 +670,7 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 
 	LOGSTART2("dlcon::EnqJob", todo->m_remoteUri.ToURI(false));
 */
-	m_qNewjobs.push_back(
+	m_qNewjobs.emplace_back(
 			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,
 							m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax));
 	wake();
@@ -1241,7 +1241,7 @@ void dlcon::WorkLoop()
 
 				cjob->AppendRequest(m_sendBuf, m_sXForwardedFor, proxy);
 				LOG("request added to buffer");
-				inpipe.push_back(cjob);
+				inpipe.emplace_back(cjob);
 				m_qNewjobs.pop_front();
 
 				if (m_nTempPipelineDisable > 0)

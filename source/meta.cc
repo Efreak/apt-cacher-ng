@@ -135,7 +135,7 @@ tStrVec::size_type Tokenize(const string & in, const char *sep,
 		pos2=in.find_first_of(sep, pos);
 		if (pos2==stmiss) // no more terminators, EOL
 			pos2=oob;
-		out.push_back(in.substr(pos, pos2-pos));
+		out.emplace_back(in.substr(pos, pos2-pos));
 		pos=pos2+1;
 	}
 
@@ -322,7 +322,7 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
 	if(0==wordexp(pattern.c_str(), &p, 0))
 	{
 		for(char **s=p.we_wordv; s<p.we_wordv+p.we_wordc;s++)
-			srcs.push_back(*s);
+			srcs.emplace_back(*s);
 		wordfree(&p);
 	}
 	else if(!bQuiet)
@@ -334,14 +334,14 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
 				NULL, &p))
 	{
 		for(char **s=p.gl_pathv; s<p.gl_pathv+p.gl_pathc;s++)
-			srcs.push_back(*s);
+			srcs.emplace_back(*s);
 		globfree(&p);
 	}
 	else if(!bQuiet)
 		cerr << "Warning: failed to find files for " << pattern <<endl;
 #else
 #warning Needs a file name expansion function, wordexp or glob
-	srcs.push_back(pattern);
+	srcs.emplace_back(pattern);
 #endif
 
 	return srcs;

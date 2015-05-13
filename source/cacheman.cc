@@ -32,6 +32,8 @@
 //#define DEBUGSPAM
 #endif
 
+#define MAX_TOP_COUNT 10
+
 using namespace std;
 
 static cmstring oldStylei18nIdx("/i18n/Index");
@@ -801,6 +803,12 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 	if(GetFlags(to).uptodate)
 		return true;
 
+	auto sAbsFrom(SABSPATH(from)), sAbsTo(SABSPATH(to));
+
+	Cstat infoFrom(sAbsFrom), infoTo(sAbsTo);
+	if(infoFrom && infoTo && infoFrom.st_ino == infoTo.st_ino && infoFrom.st_dev == infoTo.st_dev)
+		return true;
+
 #ifdef DEBUG_FLAGS
 	bool nix = stmiss!=from.find("debrep/dists/squeeze/non-free/binary-amd64/");
 	SendFmt<<"Replacing "<<to<<" with " << from <<  "<br>\n";
@@ -812,7 +820,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 	{
 		pHead = &head;
 
-		if (head.LoadFromFile(SABSPATH(from+".head")) <= 0 || !head.h[header::CONTENT_LENGTH])
+		if (head.LoadFromFile(sAbsFrom+".head") <= 0 || !head.h[header::CONTENT_LENGTH])
 		{
 			MTLOGASSERT(0, "Cannot read " << from << ".head or bad data");
 			return false;
@@ -1225,7 +1233,7 @@ has_base:
 					sCandId=it2->second;
 			}
 			tClassDesc &tgt=eqClasses[sCandId];
-			tgt.paths.push_back(if2cid.first);
+			tgt.paths.emplace_back(if2cid.first);
 
 			// pick up the id for bz2 verification later
 			if(tgt.bz2VersContId.second.empty() && endsWithSzAr(if2cid.first, ".bz2"))
@@ -1973,7 +1981,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					sDirHeader=sLine.substr(pos)+SZPATHSEP;
 			}
 			else if (bUse)
-				fileList.push_back(sLine);
+				fileList.emplace_back(sLine);
 			else if(sLine.empty()) // ok, time to commit the list
 			{
 				for (auto& fline : fileList)
@@ -2099,8 +2107,8 @@ void tCacheOperation::ProcessSeenMetaFiles(ifileprocessor &pkgHandler)
 
 void tCacheOperation::AddDelCbox(cmstring &sFileRel)
 {
-	std::pair<tStrSet::iterator,bool> ck = m_delCboxFilter.insert(sFileRel);
-	if(! ck.second)
+	auto ref_isnew = m_delCboxFilter.insert(sFileRel);
+	if(! ref_isnew.second)
 		return;
 
 	SendFmtRemote <<  "<label><input type=\"checkbox\" name=\"kf" << (nKillLfd++)
@@ -2125,18 +2133,17 @@ void tCacheOperation::SetCommonUserFlags(cmstring &cmd)
 	m_bTruncateDamaged=(cmd.find("truncNow")!=stmiss);
 }
 
-
 void tCacheOperation::PrintStats(cmstring &title)
 {
 	multimap<off_t, cmstring*> sorted;
 	off_t total=0;
-	const uint nMax = m_bVerbose ? (UINT_MAX-1) : 10;
+	const uint nMax = m_bVerbose ? (UINT_MAX-1) : MAX_TOP_COUNT;
 	uint hidden=0;
 	for(auto &f: m_metaFilesRel)
 	{
 		total += f.second.space;
 		if(f.second.space)
-			sorted.insert(make_pair(f.second.space, &f.first));
+			sorted.emplace(f.second.space, &f.first);
 		if(sorted.size()>nMax)
 		{
 			sorted.erase(sorted.begin());
@@ -2146,7 +2153,7 @@ void tCacheOperation::PrintStats(cmstring &title)
 	if(!total)
 		return;
 	m_fmtHelper << "<br>\n<table><tr><td colspan=2><u>" << title;
-	if(!m_bVerbose)
+	if(!m_bVerbose && hidden>0)
 		m_fmtHelper << " (Top " << sorted.size() << ", " << hidden <<  " more not displayed)";
 	m_fmtHelper << "</u></td></tr>\n";
 	for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)

@@ -127,7 +127,7 @@ tDeleter::tDeleter(const tRunParms& parms)
 				&& strtoul(tok.c_str()+2, &sep, 10)>0
 				&& sep && '=' == *sep)
 		{
-			files.push_back(UrlUnescape(sep+1));
+			files.emplace_back(UrlUnescape(sep+1));
 		}
 	}
 

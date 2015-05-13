@@ -334,7 +334,7 @@ inline void expiration::DropExceptionalVersions()
     		continue;
     	if(!version2trashGroup.empty() && !newkey.SamePkg(version2trashGroup.back()))
     		procGroup();
-    	version2trashGroup.push_back(newkey);
+    	version2trashGroup.emplace_back(newkey);
     }
     if(!version2trashGroup.empty())
     	procGroup();

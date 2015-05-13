@@ -320,7 +320,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 		if (acfg::debug&LOG_FLUSH)
 			cerr << "Fatal keyfile for " <<repname<<": "<<value <<endl;
 
-		where.m_keyfiles.push_back(value);
+		where.m_keyfiles.emplace_back(value);
 	}
 	else if(key=="deltasrc")
 	{
@@ -339,7 +339,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 		tHttpUrl cand;
 		if(value.empty() || cand.SetHttpUrl(value))
 		{
-			alt_proxies.push_back(cand);
+			alt_proxies.emplace_back(cand);
 			where.m_pProxy = & alt_proxies.back();
 		}
 		else
@@ -416,7 +416,7 @@ tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
 		}
 		srcs.clear();
 		for (auto& b2p : bname2path)
-			srcs.push_back(b2p.second);
+			srcs.emplace_back(b2p.second);
 	}
 	return srcs;
 }
@@ -432,10 +432,10 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 		_FixPostPreSlashes(url.sPath);
 
 		if (bAsBackend)
-			repoparms[repname].m_backends.push_back(url);
+			repoparms[repname].m_backends.emplace_back(url);
 		else
-			mapUrl2pVname[url.sHost+":"+url.GetPort()].push_back(
-					make_pair(url.sPath, GetRepoEntryRef(repname)));
+			mapUrl2pVname[url.sHost+":"+url.GetPort()].emplace_back(
+					url.sPath, GetRepoEntryRef(repname));
 	}
 	else
 	{
@@ -854,7 +854,7 @@ void ReadBackendsFile(const string & sFile, const string &sRepName)
 #ifdef DEBUG
 			cerr << "Backend: " << sRepName << " <-- " << entry.ToURI(false) <<endl;
 #endif		
-			repoparms[sRepName].m_backends.push_back(entry);
+			repoparms[sRepName].m_backends.emplace_back(entry);
 			nAddCount++;
 			entry.clear();
 		}
@@ -905,8 +905,7 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 		{
 			_FixPostPreSlashes(url.sPath);
 
-			mapUrl2pVname[url.sHost+":"+url.GetPort()].push_back(
-					make_pair(url.sPath, GetRepoEntryRef(sRepName)));
+			mapUrl2pVname[url.sHost+":"+url.GetPort()].emplace_back(url.sPath, GetRepoEntryRef(sRepName));
 #ifdef DEBUG
 						cerr << "Mapping: "<< url.ToURI(false)
 						<< " -> "<< sRepName <<endl;
@@ -938,8 +937,8 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 					tHttpUrl url;
 					url.sHost=host;
 					url.sPath=path;
-					mapUrl2pVname[url.sHost+":"+url.GetPort()].push_back(
-						make_pair(url.sPath, GetRepoEntryRef(sRepName)));
+					mapUrl2pVname[url.sHost+":"+url.GetPort()].emplace_back(url.sPath,
+							GetRepoEntryRef(sRepName));
 
 #ifdef DEBUG
 						cerr << "Mapping: "<< host << path
@@ -966,11 +965,11 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 		{
 			// help STL saving some memory
 			if(sPopularPath==val)
-				paths.push_back(sPopularPath);
+				paths.emplace_back(sPopularPath);
 			else
 			{
 				_FixPostPreSlashes(val);
-				paths.push_back(val);
+				paths.emplace_back(val);
 			}
 			continue;
 		}
@@ -996,7 +995,7 @@ void ReadConfigDirectory(const char *szPath)
 	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
 		ReadOneConfFile(src);
 #else
-	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bQuiet, bNoComplex);
+	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
 #endif
 	dump_proc_status();
 	if(debug & LOG_DEBUG)

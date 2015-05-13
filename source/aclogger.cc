@@ -141,7 +141,7 @@ inline deque<tRowData> GetStats()
 		tRowData d;
 		d.to = now - i * DAYSECONDS;
 		d.from = d.to - DAYSECONDS;
-		out.push_back(d);
+		out.emplace_back(d);
 	}
 
 	for (auto& log : ExpandFilePattern(acfg::logdir + SZPATHSEP "apt-cacher*.log", false))
