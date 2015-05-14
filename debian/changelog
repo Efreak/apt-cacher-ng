@@ -1,3 +1,9 @@
+apt-cacher-ng (0.8.3-1~bpo7+1) wheezy-backports-sloppy; urgency=low
+
+  * Targeting sloppy distribution and changed version following the new rules
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 14 May 2015 11:01:39 +0200
+
 apt-cacher-ng (0.8.3-1~bpo70+1) wheezy-backports; urgency=low
 
   * Minor version update for oldstable-backports
