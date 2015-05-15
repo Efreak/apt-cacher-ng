@@ -403,10 +403,7 @@ int main(int argc, const char **argv)
 		exit(0);
 	}
 
-	if (acfg::foreground)
-		return conserver::Run();
-
-	if (!fork_away())
+	if (!acfg::foreground && !fork_away())
 	{
 		tErrnoFmter ef("Failed to change to daemon mode");
 		cerr << ef << endl;

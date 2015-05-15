@@ -1,3 +1,10 @@
+apt-cacher-ng (0.8.4) REVENGE-OF-THE-ROTTEN-BITS; urgency=low
+
+  * Code refactoring, little memory consumption improvement
+  * FIX: creation of the PID file even in non-forking mode (Debian bug #784752)
+
+ -- 
+
 apt-cacher-ng (0.8.3) TECHNICAL-DEBT-STRIKES-BACK; urgency=medium
 
   * FIX: semi-smart replacement of .bz2 files with their .xz variants if the
