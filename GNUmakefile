@@ -19,7 +19,7 @@ apt-cacher-ng in.acng acngfs clean all: config
 config: build/.config-stamp
 
 build/.config-stamp: build/.dir-stamp CMakeLists.txt
-	cd build && cmake $(CMAKEOPTS) ..
+	cd build && cmake $(CMAKEOPTS) $(CURDIR)
 	@>$@
 
 build/.dir-stamp:

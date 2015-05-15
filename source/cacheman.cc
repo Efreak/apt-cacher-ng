@@ -2143,7 +2143,7 @@ void tCacheOperation::PrintStats(cmstring &title)
 	{
 		total += f.second.space;
 		if(f.second.space)
-			sorted.emplace(f.second.space, &f.first);
+			EMPLACE_PAIR(sorted,f.second.space, &f.first);
 		if(sorted.size()>nMax)
 		{
 			sorted.erase(sorted.begin());

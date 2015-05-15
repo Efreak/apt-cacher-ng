@@ -418,12 +418,12 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 		// a DOS?
 		if (spareConPool.size() < 50)
 		{
-			spareConPool.emplace(tHostHint(host, handle->GetPort()
 #ifdef HAVE_SSL
-					, handle->m_bio
+			tHostHint hint(host, handle->GetPort(), handle->m_bio);
+#else
+			tHostHint hint(host, handle->GetPort());
 #endif
-					), make_pair(handle, now));
-
+			EMPLACE_PAIR(spareConPool, hint, make_pair(handle, now));
 #ifndef MINIBUILD
 			g_victor.ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
 #endif

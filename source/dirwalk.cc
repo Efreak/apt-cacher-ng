@@ -84,9 +84,16 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 	// also make sure we are not visiting the same directory through some symlink construct
 	if(pFilter)
 	{
+#ifdef COMPATGCC47
+               auto thisKey(make_pair(m_stinfo.st_dev, m_stinfo.st_ino));
+               if(ContHas(*pFilter, thisKey))
+                       return true;
+               pFilter->insert(thisKey);
+#else
 		auto key_isnew = pFilter->emplace(m_stinfo.st_dev, m_stinfo.st_ino);
 		if(!key_isnew.second)
 			return true; // visited this before, recursion detected
+#endif
 	}
 
 //	cerr << "Opening: " << sPath<<endl;
