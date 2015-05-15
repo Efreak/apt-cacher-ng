@@ -3,9 +3,6 @@
 .settings
 *.swp
 *~
-build/*.h
-build/*ng*
-build/*ake*
 TODO.next
 dbgen/tmp/*
 doc/dev/*
@@ -17,3 +14,4 @@ murks
 dev
 dbgen/dbgenerator.tgz
 conf/zz_pt.conf
+build
