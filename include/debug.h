@@ -51,14 +51,9 @@ inline void dump_proc_status(){}; // strip away
 
 inline void dump_proc_status()
 {
-	using namespace std;
-	ifstream sf("/proc/self/status");
-	while (sf)
-	{
-		string s;
-		getline(sf, s);
-		cerr << s << endl;
-	}
+  std::ifstream sf("/proc/self/status");
+  if(sf.is_open())
+     std::cerr << st.rdbuf();
 };
 
 #endif
