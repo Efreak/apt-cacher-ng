@@ -197,50 +197,6 @@ public:
 	header & HeadRef() { return m_head; }
 };
 
-ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count)
-{
-	char buf[8192];
-	ssize_t totalcnt=0;
-	
-	if(!offset)
-	{
-		errno=EFAULT;
-		return -1;
-	}
-	if(lseek(in_fd, *offset, SEEK_SET)== (off_t)-1)
-		return -1;
-	while(count>0)
-	{
-		auto readcount=read(in_fd, buf, min(count, sizeof(buf)));
-		if(readcount<=0)
-		{
-			if(errno==EINTR || errno==EAGAIN)
-				continue;
-			else
-				return readcount;
-		}
-		
-		*offset+=readcount;
-		totalcnt+=readcount;
-		count-=readcount;
-		
-		for(decltype(readcount) nPos(0);nPos<readcount;)
-		{
-			auto r=write(out_fd, buf+nPos, readcount-nPos);
-			if(r==0) continue; // not nice but needs to deliver it
-			if(r<0)
-			{
-				if(errno==EAGAIN || errno==EINTR)
-					continue;
-				return r;
-			}
-			nPos+=r;
-		}
-	}
-	return totalcnt;
-}
-
-
 job::job(header *h, con *pParent) :
 	m_filefd(-1),
 	m_pParentCon(pParent),

@@ -11,7 +11,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <string>
-
+#include <list>
 
 #define LOCAL_DEBUG
 #include "debug.h"
@@ -44,9 +44,7 @@ using namespace std;
 
 #include "filereader.h"
 #include "csmapping.h"
-#ifdef DEBUG
 #include <regex.h>
-#endif
 
 #include "maintenance.h"
 
@@ -158,8 +156,78 @@ bool AppendPasswordHash(string &stringWithSalt, LPCSTR plainPass, size_t passLen
 }
 #endif
 
+bool patch_file(string sBase, string sPatch, string sResult)
+{
+	filereader frBase, frPatch;
+	if(!frBase.OpenFile(sBase, true) || !frPatch.OpenFile(sPatch, true))
+		return false;
+	typedef pair<LPCSTR, size_t> tPtrLen;
+	list<tPtrLen> idx;
+	auto buf = frBase.GetBuffer();
+	auto size = frBase.GetSize();
+	for (auto p = buf; p < buf + size;)
+	{
+		LPCSTR crNext = strchr(p, '\n');
+		if (crNext)
+		{
+			idx.emplace_back(p, crNext + 1 - p);
+			p = crNext + 1;
+		}
+		else
+		{
+			idx.emplace_back(p, buf + size - p);
+			break;
+		}
+	}
+#if 0
+	int i=10;
+	for(auto& kv : idx)
+	{
+		if(i--<0) break;
+		cerr << "O:" << string(kv.first, kv.second);
+	}
+#endif
+	size_t lastpos = idx.size(); // one-shift like in ed
+	auto lastiter = idx.rbegin();
+	auto patchChunk = [&](list<tPtrLen> chunk)
+			{
+		return false;
+		};
+
+	auto pbuf = frPatch.GetBuffer();
+	auto psize = frPatch.GetSize();
+	for (auto p = pbuf; p < pbuf + psize;)
+	{
+		LPCSTR crNext = strchr(p, '\n');
+		size_t len = 0;
+		LPCSTR line=p;
+		if (crNext)
+		{
+			len = crNext + 1 - p;
+			p = crNext + 1;
+		}
+		else
+		{
+			len = pbuf + psize - p;
+			p = pbuf + psize + 1; // break signal, actually
+		}
+		p=crNext+1;
+		// ok, got the line as line with len
+		//cerr << "patch line: " << string(line, len);
+		//cerr.flush();
+	}
+
+	return true;
+}
+
 void do_stuff_before_config()
 {
+	patch_file(
+			"dev/diff/Packages.orig",
+			"dev/diff/test.diff",
+			"dev/diff/patched"
+	);
+
 	LPCSTR envvar(nullptr);
 
 #ifdef DEBUG

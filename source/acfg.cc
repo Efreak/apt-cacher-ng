@@ -243,10 +243,10 @@ inline void _FixPostPreSlashes(string &val)
 		val.insert(0, "/", 1);
 }
 
-bool ReadOneConfFile(const string & szFilename)
+bool ReadOneConfFile(const string & szFilename, bool bReadErrorIsFatal=true)
 {
 	tCfgIter itor(szFilename);
-	itor.reader.CheckGoodState(true, &szFilename);
+	itor.reader.CheckGoodState(bReadErrorIsFatal, &szFilename);
 
 	NoCaseStringMap dupeCheck;
 
@@ -977,7 +977,7 @@ tRepoData::~tRepoData()
 	delete m_pHooks;
 }
 
-void ReadConfigDirectory(const char *szPath)
+void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 {
 	dump_proc_status();
 	char buf[PATH_MAX];
@@ -988,9 +988,9 @@ void ReadConfigDirectory(const char *szPath)
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
-		ReadOneConfFile(src);
+		ReadOneConfFile(src, bReadErrorIsFatal);
 #else
-	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
+	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bReadErrorIsFatal);
 #endif
 	dump_proc_status();
 	if(debug & LOG_DEBUG)

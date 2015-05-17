@@ -47,7 +47,7 @@ extern int conprotos[2];
 extern std::atomic_bool degraded;
 
 bool SetOption(const mstring &line, NoCaseStringMap *pDupeChecker);
-void ReadConfigDirectory(const char*);
+void ReadConfigDirectory(const char*, bool bReadErrorIsFatal=true);
 
 //! Prepare various things resulting from variable combinations, etc.
 void PostProcConfig();
