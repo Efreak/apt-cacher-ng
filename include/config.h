@@ -50,5 +50,5 @@
 //! Time after which the pooled sockets are considered EOLed
 #define TIME_SOCKET_EXPIRE_CLOSE 33
 
-#endif // __CONFIG_H
+#endif // __CONFIG_H_
 

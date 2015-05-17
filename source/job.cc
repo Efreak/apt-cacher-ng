@@ -928,8 +928,10 @@ job::eJobResult job::SendData(int confd)
 				
 				case(STATE_ALLDONE):
 					LOG("State: STATE_ALLDONE?");
+				// no break
 				case (STATE_ERRORCONT):
 					LOG("or STATE_ERRORCONT?");
+				// no break
 				case(STATE_FINISHJOB):
 					LOG("or STATE_FINISHJOB");
 					{
@@ -940,6 +942,7 @@ job::eJobResult job::SendData(int confd)
 					}
 					break;
 				case(STATE_TODISCON):
+						// no break
 				default:
 					return R_DISCON;
 			}

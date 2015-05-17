@@ -1953,8 +1953,8 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 	case EIDX_RELEASE:
 		info.fpr.csType = CSTYPE_SHA1;
 		sStartMark="SHA1:";
-		// fall-through, parser follows
-
+		// parser follows
+		//no break
 	case EIDX_RFC822WITHLISTS:
 		// common info object does not help here because there are many entries, and directory
 		// could appear after the list :-(

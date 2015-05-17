@@ -11,7 +11,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <string>
-#include <list>
+
 
 #define LOCAL_DEBUG
 #include "debug.h"
@@ -44,7 +44,9 @@ using namespace std;
 
 #include "filereader.h"
 #include "csmapping.h"
+#ifdef DEBUG
 #include <regex.h>
+#endif
 
 #include "maintenance.h"
 
@@ -55,9 +57,6 @@ void log_handler(int signum);
 void dump_handler(int signum);
 void handle_sigbus();
 void check_algos();
-
-//void DispatchAndRunMaintTask(cmstring &cmd, int fd, const char *auth);
-int wcat(LPCSTR url, LPCSTR proxy);
 
 typedef struct sigaction tSigAct;
 
@@ -90,233 +89,11 @@ inline bool fork_away()
 }
 #endif
 
-#if SUPPWHASH
-
-int hashpwd()
-{
-#ifdef HAVE_SSL
-	string plain;
-	uint32_t salt=0;
-	for(uint i=10; i; --i)
-	{
-		if(RAND_bytes(reinterpret_cast<unsigned char*>(&salt), 4) >0)
-			break;
-		else
-			salt=0;
-		sleep(1);
-	}
-	if(!salt) // ok, whatever...
-	{
-		uintptr_t pval = reinterpret_cast<uintptr_t>(&plain);
-		srandom(uint(time(0)) + uint(pval) +uint(getpid()));
-		salt=random();
-		timespec ts;
-		clock_gettime(CLOCK_BOOTTIME, &ts);
-		for(auto c=(ts.tv_nsec+ts.tv_sec)%1024 ; c; c--)
-			salt=random();
-	}
-	string crypass = BytesToHexString(reinterpret_cast<const uint8_t*>(&salt), 4);
-#ifdef DEBUG
-	plain="moopa";
-#else
-	cin >> plain;
-#endif
-	trimString(plain);
-	if(!AppendPasswordHash(crypass, plain.data(), plain.size()))
-		return EXIT_FAILURE;
-	cout << crypass <<endl;
-	return EXIT_SUCCESS;
-#else
-	cerr << "OpenSSL not available, hashing functionality disabled." <<endl;
-	return EXIT_FAILURE;
-#endif
-}
-
-
-bool AppendPasswordHash(string &stringWithSalt, LPCSTR plainPass, size_t passLen)
-{
-	if(stringWithSalt.length()<8)
-		return false;
-
-	uint8_t sum[20];
-	if(1!=PKCS5_PBKDF2_HMAC_SHA1(plainPass, passLen,
-			(unsigned char*) (stringWithSalt.data()+stringWithSalt.size()-8), 8,
-			NUM_PBKDF2_ITERATIONS,
-			sizeof(sum), (unsigned char*) sum))
-		return false;
-	stringWithSalt+=EncodeBase64((LPCSTR)sum, 20);
-	stringWithSalt+="00";
-#warning dbg
-	// checksum byte
-	uint8_t pCs=0;
-	for(char c : stringWithSalt)
-		pCs+=c;
-	stringWithSalt+=BytesToHexString(&pCs, 1);
-	return true;
-}
-#endif
-
-bool patch_file(string sBase, string sPatch, string sResult)
-{
-	filereader frBase, frPatch;
-	if(!frBase.OpenFile(sBase, true) || !frPatch.OpenFile(sPatch, true))
-		return false;
-	typedef pair<LPCSTR, size_t> tPtrLen;
-	list<tPtrLen> idx;
-	auto buf = frBase.GetBuffer();
-	auto size = frBase.GetSize();
-	for (auto p = buf; p < buf + size;)
-	{
-		LPCSTR crNext = strchr(p, '\n');
-		if (crNext)
-		{
-			idx.emplace_back(p, crNext + 1 - p);
-			p = crNext + 1;
-		}
-		else
-		{
-			idx.emplace_back(p, buf + size - p);
-			break;
-		}
-	}
-#if 0
-	int i=10;
-	for(auto& kv : idx)
-	{
-		if(i--<0) break;
-		cerr << "O:" << string(kv.first, kv.second);
-	}
-#endif
-	size_t lastpos = idx.size(); // one-shift like in ed
-	auto lastiter = idx.rbegin();
-	auto patchChunk = [&](list<tPtrLen> chunk)
-			{
-		return false;
-		};
-
-	auto pbuf = frPatch.GetBuffer();
-	auto psize = frPatch.GetSize();
-	for (auto p = pbuf; p < pbuf + psize;)
-	{
-		LPCSTR crNext = strchr(p, '\n');
-		size_t len = 0;
-		LPCSTR line=p;
-		if (crNext)
-		{
-			len = crNext + 1 - p;
-			p = crNext + 1;
-		}
-		else
-		{
-			len = pbuf + psize - p;
-			p = pbuf + psize + 1; // break signal, actually
-		}
-		p=crNext+1;
-		// ok, got the line as line with len
-		//cerr << "patch line: " << string(line, len);
-		//cerr.flush();
-	}
-
-	return true;
-}
-
-void do_stuff_before_config()
-{
-	patch_file(
-			"dev/diff/Packages.orig",
-			"dev/diff/test.diff",
-			"dev/diff/patched"
-	);
-
-	LPCSTR envvar(nullptr);
-
-#ifdef DEBUG
-	cerr << "Pandora: " << sizeof(regex_t) << endl;
-	/*
-	// PLAYGROUND
-	if (argc < 2)
-		return -1;
-
-	acfg::tHostInfo hi;
-	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1]) << endl;
-	cout << "Host: " << hi.sHost << ", Port: " << hi.sPort << ", Path: "
-			<< hi.sPath << endl;
-	return 0;
-
-	bool Bz2compressFile(const char *, const char*);
-	return !Bz2compressFile(argv[1], argv[2]);
-
-	char tbuf[40];
-	FormatCurrentTime(tbuf);
-	std::cerr << tbuf << std::endl;
-	exit(1);
-	*/
-	envvar = getenv("PARSEIDX");
-	if (envvar)
-	{
-		int parseidx_demo(LPCSTR);
-		exit(parseidx_demo(envvar));
-	}
-#endif
-
-	envvar = getenv("GETSUM");
-	if (envvar)
-	{
-		uint8_t csum[20];
-		string s(envvar);
-		off_t resSize;
-		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
-		if(!ok)
-		{
-			perror("");
-			exit(1);
-		}
-		for (uint i = 0; i < sizeof(csum); i++)
-			printf("%02x", csum[i]);
-		printf("\n");
-		envvar = getenv("REFSUM");
-		if (ok && envvar)
-		{
-			if(CsEqual(envvar, csum, sizeof(csum)))
-			{
-				printf("IsOK\n");
-				exit(0);
-			}
-			else
-			{
-				printf("Diff\n");
-				exit(1);
-			}
-		}
-		exit(0);
-	}
-
-	envvar=getenv("TOBASE64");
-	if(envvar)
-	{
-		std::cout << EncodeBase64Auth(envvar);
-		exit(EXIT_SUCCESS);
-	}
-	envvar=getenv("BECURL");
-	if(envvar)
-		exit(wcat(envvar, getenv("http_proxy")));
-}
-
 void parse_options(int argc, const char **argv, bool& bStartCleanup)
 {
-
 	bool bExtraVerb=false;
 	LPCSTR szCfgDir=nullptr;
-	LPCSTR szReTest=nullptr;
-	bool bDumpCfg=false;
 	std::vector<LPCSTR> cmdvars;
-
-	LPCSTR PRINTCFGVAR=getenv("PRINTCFGVAR");
-	if(PRINTCFGVAR)
-	{
-		acfg::g_bNoComplex = true;
-		acfg::g_bQuiet = true;
-	}
 
 	for (auto p=argv+1; p<argv+argc; p++)
 	{
@@ -335,28 +112,6 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 			else
 				usage(2);
 		}
-		else if (!strcmp(*p, "-p"))
-		{
-			bDumpCfg = true;
-			// might need external stuff
-			acfg::g_bNoComplex = false;
-		}
-		else if (!strcmp(*p, "--retest"))
-		{
-			++p;
-			if(p>=argv+argc)
-				exit(EXIT_FAILURE);
-			szReTest = *p;
-			// might need external stuff
-			acfg::g_bNoComplex = false;
-		}
-		else if(**p) // not empty
-			cmdvars.emplace_back(*p);
-
-#if SUPPWHASH
-		else if (!strncmp(*p, "-H", 2))
-			exit(hashpwd());
-#endif
 	}
 
 	if(szCfgDir)
@@ -370,33 +125,6 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 
 	if(bExtraVerb)
 		acfg::debug |= (LOG_DEBUG|LOG_MORE);
-
-	if(bDumpCfg)
-	{
-		acfg::dump_config();
-		exit(EXIT_SUCCESS);
-	}
-
-	if(szReTest)
-	{
-		LPCSTR ReTest(LPCSTR);
-		std::cout << ReTest(szReTest) << std::endl;
-		exit(EXIT_SUCCESS);
-	}
-
-	if(PRINTCFGVAR)
-	{
-		auto ps(acfg::GetStringPtr(PRINTCFGVAR));
-		if(ps)
-		{
-			cout << *ps << endl;
-			exit(EXIT_SUCCESS);
-		}
-		auto pi(acfg::GetIntPtr(PRINTCFGVAR));
-		if(pi)
-			cout << *pi << endl;
-		exit(pi ? EXIT_SUCCESS : EXIT_FAILURE);
-	}
 
 }
 
@@ -441,8 +169,6 @@ int main(int argc, const char **argv)
 
 	bool bRunCleanup=false;
 
-	do_stuff_before_config();
-
 	parse_options(argc, argv, bRunCleanup);
 
 	if(!aclog::open())
@@ -454,7 +180,6 @@ int main(int argc, const char **argv)
 
 	check_algos();
 	setup_sighandler();
-
 
 	SetupCacheDir();
 
@@ -529,7 +254,7 @@ static void SetupCacheDir()
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 	tSS buf;
-	buf << cacheDirSlash << "testfile." <<42*tv.tv_usec*tv.tv_sec;
+	buf << cacheDirSlash << "testfile." << tv.tv_usec * tv.tv_sec * (LPCSTR(buf.wptr()) - LPCSTR(&tv));
 	mkbasedir(buf.c_str()); // try or force its directory creation
 	int t=open( buf.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 00644);
 	if (t>=0)
@@ -580,64 +305,3 @@ void sig_handler(int signum)
 		return;
 	}
 }
-
-#include "dlcon.h"
-#include "fileio.h"
-#include "fileitem.h"
-
-int wcat(LPCSTR surl, LPCSTR proxy)
-{
-
-	acfg::dnscachetime=0;
-	acfg::persistoutgoing=0;
-	acfg::badredmime.clear();
-	acfg::redirmax=10;
-
-	if(proxy)
-		if(acfg::proxy_info.SetHttpUrl(proxy))
-			return -1;
-	tHttpUrl url;
-	if(!surl || !url.SetHttpUrl(surl))
-		return -2;
-	dlcon dl(true);
-
-	class tPrintItem : public fileitem
-	{
-		public:
-			tPrintItem()
-			{
-				m_bAllowStoreData=false;
-				m_nSizeChecked = m_nSizeSeen = 0;
-			};
-			virtual FiStatus Setup(bool) override
-			{
-				m_nSizeChecked = m_nSizeSeen = 0;
-				return m_status = FIST_INITED;
-			}
-			virtual int GetFileFd() override { return 1; }; // something, don't care for now
-			virtual bool DownloadStartedStoreHeader(const header &h, const char *,
-					bool, bool&) override
-			{
-				m_head = h;
-				return true;
-			}
-			virtual bool StoreFileData(const char *data, unsigned int size) override
-			{
-				if(!size)
-					m_status = FIST_COMPLETE;
-
-				return (size==fwrite(data, sizeof(char), size, stdout));
-			}
-			ssize_t SendData(int , int, off_t &, size_t ) override
-			{
-				return 0;
-			}
-	};
-
-	auto fi=std::make_shared<tPrintItem>();
-	dl.AddJob(fi, &url, nullptr, nullptr);
-	dl.WorkLoop();
-	return (fi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
-			&& fi->GetHeaderUnlocked().getStatus() == 200) ? EXIT_SUCCESS : -3;
-}
-
