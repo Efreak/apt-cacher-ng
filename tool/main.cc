@@ -23,6 +23,7 @@
 #include <cstring>
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <list>
 
@@ -53,7 +54,7 @@ LPCSTR ReTest(LPCSTR);
 
 
 // dummies to satisfy references to cleaner callbacks
-cleaner::cleaner() {}
+cleaner::cleaner() : m_thr(pthread_t()) {}
 cleaner::~cleaner() {}
 void cleaner::ScheduleFor(time_t, cleaner::eType) {}
 cleaner g_victor;
@@ -62,7 +63,6 @@ cleaner g_victor;
 
 static void usage(int retCode = 0)
 {
-#warning fixme, text
 	(retCode ? cout : cerr) <<
 		"Usage: acngtool command parameter... [options]\n\n"
 			"command := { printvar, cfgdump, retest, patch, curl, encb64 }\n"
@@ -147,7 +147,7 @@ int patch_file(string sBase, string sPatch, string sResult)
 {
 	filereader frBase, frPatch;
 	if(!frBase.OpenFile(sBase, true) || !frPatch.OpenFile(sPatch, true))
-		return false;
+		return -2;
 	typedef pair<LPCSTR, size_t> tPtrLen;
 	list<tPtrLen> idx;
 	auto buf = frBase.GetBuffer();
@@ -174,15 +174,54 @@ int patch_file(string sBase, string sPatch, string sResult)
 		cerr << "O:" << string(kv.first, kv.second);
 	}
 #endif
-	size_t lastpos = idx.size(); // one-shift like in ed
-	auto lastiter = idx.rbegin();
+	// start at the fake position after EOF
+	unsigned long cursor = idx.size()+1; // one-shifted like in ed
+	auto iter = idx.end();
 	auto patchChunk = [&](list<tPtrLen> chunk)
 			{
-		return false;
-		};
+		if(chunk.empty())
+			return false;
+		auto pline = chunk.front().first;
+		auto len = chunk.front().second;
+		unsigned long rangeStart, rangeEnd;
+		char op = 0x0;
+		auto n = sscanf(pline, "%lu,%lu%c\n", &rangeStart, &rangeEnd, &op);
+		//cerr << n <<endl;
+		if(n == 1) // good enough
+			rangeEnd = rangeStart, op=pline[len-2];
+		if(rangeStart>idx.size() || rangeEnd>idx.size() || rangeStart>rangeEnd)
+			return false;
+		if(rangeStart > cursor)
+		{
+			cursor = idx.size()+1;
+			iter = idx.end();
+		}
+		while(rangeStart < cursor) // good enough since diff delivers patches in reverse order
+		{
+			iter--;
+			cursor--;
+		}
+		// delete old stuff that will be replaced
+		// ok, cursor remains at range start
+		if(op != 'a')
+		{
+			while(rangeEnd >= rangeStart)
+				iter = chunk.erase(iter), rangeEnd--;
+		}
+		else // append AFTER that line
+			iter++, cursor++;
+
+		auto beginNew = chunk.begin();
+		beginNew++;
+		iter = idx.insert(iter, beginNew, chunk.end());
+
+		return true;
+
+			};
 
 	auto pbuf = frPatch.GetBuffer();
 	auto psize = frPatch.GetSize();
+	list<tPtrLen> chunk;
 	for (auto p = pbuf; p < pbuf + psize;)
 	{
 		LPCSTR crNext = strchr(p, '\n');
@@ -202,9 +241,26 @@ int patch_file(string sBase, string sPatch, string sResult)
 		// ok, got the line as line with len
 		//cerr << "patch line: " << string(line, len);
 		//cerr.flush();
+		bool gogo = (len == 2 && *line == '.');
+		if(!gogo)
+			chunk.emplace_back(line, len);
+		if(chunk.size() == 1 && line[len-2] == 'd')
+			gogo = true; // no terminator
+		if(gogo)
+		{
+			if(!patchChunk(chunk))
+				exit(-5);
+			chunk.clear();
+		}
 	}
+	ofstream res(sResult.c_str());
+	if(!res.is_open())
+		return -3;
 
-	return 0;
+	for(auto& kv : idx)
+		res.write(kv.first, kv.second);
+	res.flush();
+	return res.good() ? 0 : -4;
 }
 
 
@@ -392,7 +448,6 @@ int main(int argc, const char **argv)
 			usage(3);
 		return(patch_file(argv[2], argv[3], argv[4]));
 				/*
-#warning parm parsing and check
 			"dev/diff/Packages.orig",
 			"dev/diff/test.diff",
 			"dev/diff/patched"
