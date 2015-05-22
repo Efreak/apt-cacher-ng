@@ -1,6 +1,7 @@
 
 #include "meta.h"
 
+#undef _GNU_SOURCE // XSI strerror_r
 #include <string.h>
 #include <errno.h>
 
@@ -276,16 +277,11 @@ tErrnoFmter::tErrnoFmter(const char *prefix)
 	if(prefix)
 		assign(prefix);
 
-#ifdef _GNU_SOURCE
-//#warning COMPILER BUG DETECTED -- _GNU_SOURCE was preset in C++ mode
-	append(strerror_r(errno, buf, sizeof(buf)-1));
-#else
 	int err=errno;
 	if(strerror_r(err, buf, sizeof(buf)-1))
 		append(tSS() << "UNKNOWN ERROR: " << err);
 	else
 		append(buf);
-#endif
 }
 
 #ifdef DEBUG

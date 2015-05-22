@@ -77,9 +77,6 @@ extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS;
 #ifndef SO_MAXCONN
 #define SO_MAXCONN 250
 #endif
-#if defined(__linux__)
-#include <sys/socketvar.h>
-#endif
 
 //#define PATHSEP "/"
 int getUUID();
