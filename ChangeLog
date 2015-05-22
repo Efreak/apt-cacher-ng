@@ -1,3 +1,12 @@
+apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
+
+  * Moved some of the rarely used functionality into a helper tool
+
+  [ Felix Janda <felix.janda@posteo.de> ]
+  * Compilation fixes for the MUSL C library
+
+ -- 
+
 apt-cacher-ng (0.8.3) TECHNICAL-DEBT-STRIKES-BACK; urgency=medium
 
   * FIX: semi-smart replacement of .bz2 files with their .xz variants if the
