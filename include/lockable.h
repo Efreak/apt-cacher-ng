@@ -26,7 +26,7 @@ class lockable
 public:
 	inline lockable()
 	{
-		pthread_mutex_init(&m_obj_mutex, NULL);
+		pthread_mutex_init(&m_obj_mutex, nullptr);
 	}
 	virtual ~lockable()
 	{
@@ -126,7 +126,7 @@ public:
 	inline condition() :
 			lockable()
 	{
-		pthread_cond_init(&m_obj_cond, NULL);
+		pthread_cond_init(&m_obj_cond, nullptr);
 	}
 	~condition()
 	{

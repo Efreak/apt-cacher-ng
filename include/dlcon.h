@@ -23,7 +23,7 @@ typedef std::list<tDlJobPtr> tDljQueue;
 class dlcon : public lockable
 { 
     public:
-        dlcon(bool bManualExecution, mstring *xff=NULL);
+        dlcon(bool bManualExecution, mstring *xff=nullptr);
         ~dlcon();
 
         void WorkLoop();

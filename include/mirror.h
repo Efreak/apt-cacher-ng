@@ -31,7 +31,7 @@ protected:
 	off_t m_totalSize=0, m_totalHave=0;
 	tStrSet m_pathFilter;
 
-	const tHttpUrl *m_pDeltaSrc=NULL;
+	const tHttpUrl *m_pDeltaSrc=nullptr;
 	tStrPos m_repCutLen=0;
 
 	bool ConfigDelta(cmstring &sPathRel);

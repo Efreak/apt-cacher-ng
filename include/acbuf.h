@@ -14,8 +14,8 @@
 class acbuf
 {
     public:
-        inline acbuf() : r(0), w(0), m_nCapacity(0), m_buf(NULL) {};
-    	virtual ~acbuf() { free(m_buf); m_buf=NULL; }
+        inline acbuf() : r(0), w(0), m_nCapacity(0), m_buf(nullptr) {};
+    	virtual ~acbuf() { free(m_buf); m_buf=nullptr; }
     	inline bool empty() const { return w==r;}
     	//! Count of the data inside
         inline unsigned int size() const { return w-r;}
@@ -34,7 +34,7 @@ class acbuf
         inline char *wptr() { return m_buf+w;};
         //! Return pointer to read valid data from
         inline const char *rptr() const { return m_buf+r; }
-        //! like rptr but appends a NULL terminator
+        //! like rptr but appends a nullptr terminator
         inline const char *c_str() const { m_buf[w]=0x0; return rptr();}
         //! Equivalent to drop(size()), drops all data
         inline void clear() {w=r=0;}

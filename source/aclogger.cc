@@ -91,7 +91,7 @@ void err(const char *msg, const char *client)
 	}
 	
 	static char buf[32];
-	const time_t tm=time(NULL);
+	const time_t tm=time(nullptr);
 	ctime_r(&tm, buf);
 	buf[24]=0;
 	fErr << buf << '|';
@@ -135,7 +135,7 @@ inline deque<tRowData> GetStats()
 	string sDataFile=acfg::cachedir+SZPATHSEP"_stats_dat";
 	deque<tRowData> out;
 	
-	time_t now = time(NULL);
+	time_t now = time(nullptr);
 
 	for (int i = 0; i < 7; i++)
 	{

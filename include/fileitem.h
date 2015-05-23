@@ -64,7 +64,7 @@ public:
 	bool CheckUsableRange_unlocked(off_t nRangeLastByte);
 
 	// returns when the state changes to complete or error
-	FiStatus WaitForFinish(int *httpCode=NULL);
+	FiStatus WaitForFinish(int *httpCode=nullptr);
 
 	bool SetupClean(bool bForce=false);
 	

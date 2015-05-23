@@ -24,10 +24,10 @@ con::con(int fdId, const char *c) :
 	m_confd(fdId),
     m_bStopActivity(false),
     m_dlerthr(0),
-    m_pDlClient(NULL),
-    m_pTmpHead(NULL)
+    m_pDlClient(nullptr),
+    m_pTmpHead(nullptr)
 {
-	if(c) // if NULL, pick up later when sent by the wrapper
+	if(c) // if nullptr, pick up later when sent by the wrapper
 		m_sClientHost=c;
 
     LOGSTART2("con::con", "fd: " << fdId << ", clienthost: " << c);
@@ -54,15 +54,15 @@ con::~con() {
     if(m_pDlClient) 
     {
     	m_pDlClient->SignalStop();
-    	pthread_join(m_dlerthr, NULL);
+    	pthread_join(m_dlerthr, nullptr);
     	
     	delete m_pDlClient;
-    	m_pDlClient=NULL;
+    	m_pDlClient=nullptr;
     }
     if(m_pTmpHead)
     {
     	delete m_pTmpHead;
-    	m_pTmpHead=NULL;
+    	m_pTmpHead=nullptr;
     }
     aclog::flush();
 }
@@ -203,7 +203,7 @@ public:
 			if(serverBufIn.freecapa()>0)
 				FD_SET(ofd, &rfds);
 
-			int nReady=select(maxfd, &rfds, &wfds, NULL, NULL);
+			int nReady=select(maxfd, &rfds, &wfds, nullptr, nullptr);
 			if (nReady<0)
 				return;
 
@@ -268,7 +268,7 @@ void con::WorkLoop() {
         if(inBuf.freecapa()==0)
         	return; // shouldn't even get here
         
-        job *pjSender(NULL);
+        job *pjSender(nullptr);
     
         if ( !m_jobs2send.empty())
 		{
@@ -282,7 +282,7 @@ void con::WorkLoop() {
         struct timeval tv;
         tv.tv_sec = acfg::nettimeout;
         tv.tv_usec = 23;
-        int ready = select(maxfd+1, &rfds, &wfds, NULL, &tv);
+        int ready = select(maxfd+1, &rfds, &wfds, nullptr, &tv);
         
         if(ready == 0)
         {
@@ -409,7 +409,7 @@ void con::WorkLoop() {
 #endif
 				}
 
-				m_pTmpHead=NULL; // owned by job now
+				m_pTmpHead=nullptr; // owned by job now
 			}
         	MYCATCH(bad_alloc&)
         	{
@@ -433,7 +433,7 @@ void con::WorkLoop() {
 				{
 					m_jobs2send.pop_front(); 						
 					delete pjSender;
-					pjSender=NULL;
+					pjSender=nullptr;
 		
 					ldbg("Remaining jobs to send: " << m_jobs2send.size());
 					break;
@@ -450,7 +450,7 @@ void con::WorkLoop() {
 void * _StartDownloader(void *pVoidDler)
 {
 	static_cast<dlcon*>(pVoidDler) -> WorkLoop();
-	return NULL;
+	return nullptr;
 }
 
 bool con::SetupDownloader(const char *pszOrigin)
@@ -482,13 +482,13 @@ bool con::SetupDownloader(const char *pszOrigin)
 		return false;
 	}
 
-	if (0==pthread_create(&m_dlerthr, NULL, _StartDownloader,
+	if (0==pthread_create(&m_dlerthr, nullptr, _StartDownloader,
 			(void *)m_pDlClient))
 	{
 		return true;
 	}
 	delete m_pDlClient;
-	m_pDlClient=NULL;
+	m_pDlClient=nullptr;
 	return false;
 }
 

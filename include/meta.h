@@ -140,7 +140,7 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
       for(LPCSTR pWhat=needles; *pWhat ; pWhat++)
          if(*pWhat==*pWhere)
             return pWhere;
-   return NULL;
+   return nullptr;
 }
 
 typedef std::vector<mstring> tStrVec;
@@ -473,7 +473,7 @@ struct tCurrentTime
 {
 	char buf[30];
 	uint len;
-	inline tCurrentTime() { len=FormatTime(buf, time(NULL)); }
+	inline tCurrentTime() { len=FormatTime(buf, time(nullptr)); }
 	inline operator mstring() { return mstring(buf, len); }
 };
 
@@ -491,7 +491,7 @@ void DelTree(cmstring &what);
 
 struct tErrnoFmter: public mstring
 {
-	tErrnoFmter(LPCSTR prefix = NULL);
+	tErrnoFmter(LPCSTR prefix = nullptr);
 };
 
 mstring EncodeBase64Auth(cmstring &sPwdString);

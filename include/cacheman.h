@@ -118,7 +118,7 @@ protected:
 	};
 	bool Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(),
-			const tHttpUrl *pForcedURL=NULL, unsigned hints=0);
+			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0);
 #define DL_HINT_GUESS_REPLACEMENT 0x1
 
 	// internal helper variables
@@ -140,7 +140,7 @@ protected:
 
 	bool GetAndCheckHead(cmstring & sHeadfile, cmstring &sFilePathRel, off_t nWantedSize);
 	bool Inject(cmstring &fromRel, cmstring &toRel,
-			bool bSetIfileFlags=true, const header *pForcedHeader=NULL, bool bTryLink=false);
+			bool bSetIfileFlags=true, const header *pForcedHeader=nullptr, bool bTryLink=false);
 
 	void PrintStats(cmstring &title);
 	mstring m_processedIfile;
@@ -161,7 +161,7 @@ private:
 	tContId2eqClass m_eqClasses;
 
 	bool Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
-			cmstring *psTmpUnpackedAbs=NULL);
+			cmstring *psTmpUnpackedAbs=nullptr);
 	void InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter);
 	tCacheOperation(const tCacheOperation&);
 	tCacheOperation& operator=(const tCacheOperation&);

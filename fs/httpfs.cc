@@ -95,7 +95,7 @@ struct tDlDesc
 struct tDlDescLocal : public tDlDesc
 {
 	FILE *pFile;
-	tDlDescLocal(cmstring &path, uint ftype) : tDlDesc(path, ftype), pFile(NULL)
+	tDlDescLocal(cmstring &path, uint ftype) : tDlDesc(path, ftype), pFile(nullptr)
 	{
 	};
 
@@ -120,7 +120,7 @@ struct tDlDescLocal : public tDlDesc
 	{
 		if(pFile)
 			fclose(pFile);
-		pFile=NULL;
+		pFile=nullptr;
 	};
 
 	int Read(char *retbuf, const char *path, off_t pos, size_t len)
@@ -554,7 +554,7 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 					if(0==p->Stat(stbuf))
 						goto desc_opened;
 					delete p;
-					p=NULL;
+					p=nullptr;
 				}
 		}
 

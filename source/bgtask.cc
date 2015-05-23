@@ -79,7 +79,7 @@ void tSpecOpDetachable::Run()
 	SendChunkedPageHeader("200 OK", "text/html");
 
 	tSS deco;
-	const char *mark(NULL);
+	const char *mark(nullptr);
 	if(m_szDecoFile &&
 			( deco.initFromFile((acfg::confdir+SZPATHSEP+m_szDecoFile).c_str())
 					|| (!acfg::suppdir.empty() &&
@@ -283,7 +283,7 @@ void tBgTester::Action()
 		char buf[1024];
 		time_t t;
 		struct tm *tmp;
-		t = time(NULL);
+		t = time(nullptr);
 		tmp = localtime(&t);
 		strftime(buf, sizeof(buf), "%c", tmp);
 		SendFmt << buf << "<br>\n";

@@ -150,7 +150,7 @@ string & tSpecialRequest::GetHostname()
 		if (0==getsockname(m_parms.fd, (struct sockaddr *)&ss, &slen) && 0
 				==getnameinfo((struct sockaddr*) &ss, sizeof(ss), hbuf,
 						sizeof(hbuf),
-						NULL, 0, NI_NUMERICHOST))
+						nullptr, 0, NI_NUMERICHOST))
 		{
 			const char *p=hbuf;
 			bool bAddBrs(false);
@@ -273,7 +273,7 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 	switch (parms.type)
 	{
 	case workNotSpecial:
-		return NULL;
+		return nullptr;
 	case workExExpire:
 	case workExList:
 	case workExPurge:
@@ -304,7 +304,7 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 	case workJStats:
 		return new jsonstats(parms);
 	}
-	return NULL;
+	return nullptr;
 }
 
 void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd)

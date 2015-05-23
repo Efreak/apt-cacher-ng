@@ -53,7 +53,7 @@ string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt;
 tStrMap localdirs;
 static class : public lockable, public NoCaseStringMap {} mimemap;
 
-std::bitset<TCP_PORT_MAX> *pUserPorts = NULL;
+std::bitset<TCP_PORT_MAX> *pUserPorts = nullptr;
 
 struct MapNameToString
 {
@@ -505,7 +505,7 @@ void _AddHooksFile(cmstring& vname)
 		else if (strcasecmp("DownTimeout", p) == 0)
 		{
 			errno = 0;
-			uint n = strtoul(val.c_str(), NULL, 10);
+			uint n = strtoul(val.c_str(), nullptr, 10);
 			if (!errno)
 				hs.downDuration = n;
 		}
@@ -1362,9 +1362,9 @@ bool CompileExpressions()
 
 inline bool MatchType(cmstring &in, eMatchType type)
 {
-	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, NULL, 0))
+	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, nullptr, 0))
 		return true;
-	if(rex[type].extra && !regexec(rex[type].extra, in.c_str(), 0, NULL, 0))
+	if(rex[type].extra && !regexec(rex[type].extra, in.c_str(), 0, nullptr, 0))
 		return true;
 	return false;
 }
@@ -1440,7 +1440,7 @@ bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat)
 bool MatchUncacheable(const string & in, NOCACHE_PATTYPE type)
 {
 	for(const auto& patre: (type == NOCACHE_REQ) ? vecReqPatters : vecTgtPatterns)
-		if(!regexec(&patre, in.c_str(), 0, NULL, 0))
+		if(!regexec(&patre, in.c_str(), 0, nullptr, 0))
 			return true;
 	return false;
 }

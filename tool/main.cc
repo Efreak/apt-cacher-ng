@@ -516,7 +516,7 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 	auto fi=std::make_shared<tPrintItem>();
 	dl.AddJob(fi, &url, nullptr, nullptr);
 	dl.WorkLoop();
-	return (fi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
+	return (fi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE
 			&& fi->GetHeaderUnlocked().getStatus() == 200) ? EXIT_SUCCESS : -3;
 }
 

@@ -35,11 +35,11 @@ public:
 	//! @return False on errors.
 	bool GetOneLine(mstring & sOut, bool bForceUncompress=false);
 	uint GetCurrentLine() const { return m_nCurLine;} ;
-	bool CheckGoodState(bool bTerminateOnErrors, cmstring *reportFilePath=NULL) const;
+	bool CheckGoodState(bool bTerminateOnErrors, cmstring *reportFilePath=nullptr) const;
 	
-	bool GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *pDumpFile=NULL);
+	bool GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *pDumpFile=nullptr);
 	static bool GetChecksum(const mstring & sFileName, int csType, uint8_t out[],
-			bool bTryUnpack, off_t &scannedSize, FILE *pDumpFile=NULL);
+			bool bTryUnpack, off_t &scannedSize, FILE *pDumpFile=nullptr);
 
 	inline const char *GetBuffer() const { return m_szFileBuf; };
 	inline size_t GetSize() const { return m_nBufSize; };

@@ -60,7 +60,7 @@ protected:
 
 public:
 	tPassThroughFitem(std::string s) :
-	m_pData(NULL), m_nConsumable(0), m_nConsumed(0)
+	m_pData(nullptr), m_nConsumable(0), m_nConsumed(0)
 	{
 		m_sPathRel = s;
 		m_bAllowStoreData=false;
@@ -116,7 +116,7 @@ public:
 
 			dbgline;
 			m_nConsumable=0;
-			m_pData=NULL;
+			m_pData=nullptr;
 			return m_nConsumed;
 		}
 		return true;
@@ -688,7 +688,7 @@ report_overload:
 
 report_notallowed:
 	SetErrorResponse((tSS() << "403 Forbidden file type or location: " << sReqPath).c_str(),
-			NULL, "403 Forbidden file type or location");
+			nullptr, "403 Forbidden file type or location");
 //    USRDBG( sRawUriPath + " -- ACCESS FORBIDDEN");
     return ;
 

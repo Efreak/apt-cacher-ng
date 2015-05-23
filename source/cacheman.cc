@@ -51,7 +51,7 @@ tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
 	m_bScanInternals(false), m_bByPath(false), m_bByChecksum(false), m_bSkipHeaderChecks(false),
 	m_bTruncateDamaged(false),
 	m_nErrorCount(0),
-	m_nProgIdx(0), m_nProgTell(1), m_pDlcon(NULL)
+	m_nProgIdx(0), m_nProgTell(1), m_pDlcon(nullptr)
 {
 	m_szDecoFile="maint.html";
 	m_gMaintTimeNow=GetTime();
@@ -61,7 +61,7 @@ tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
 tCacheOperation::~tCacheOperation()
 {
 	delete m_pDlcon;
-	m_pDlcon=NULL;
+	m_pDlcon=nullptr;
 }
 
 bool tCacheOperation::ProcessOthers(const string &, const struct stat &)
@@ -375,7 +375,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix);
 
 	m_pDlcon->WorkLoop();
-	if (pFi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
+	if (pFi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE
 			&& pFi->GetHeaderUnlocked().getStatus() == 200)
 	{
 		bSuccess = true;
@@ -654,10 +654,10 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 			else if(tmp[0] == "SHA1-Patches:")
 				eSection=ePatches;
 			else
-				return NULL;
+				return nullptr;
 		}
 		else if(nTokens) // not null but weird count
-			return NULL; // error
+			return nullptr; // error
 	}
 
 	return ret.csType != CSTYPE_INVALID ? &ret : nullptr;
@@ -882,9 +882,9 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 			if (Setup(true) > fileitem::FIST_COMPLETE)
 				return false;
 			bool bNix(false);
-			if (!fileitem_with_storage::DownloadStartedStoreHeader(head, NULL, false, bNix))
+			if (!fileitem_with_storage::DownloadStartedStoreHeader(head, nullptr, false, bNix))
 				return false;
-			if(!StoreFileData(data.GetBuffer(), data.GetSize()) || ! StoreFileData(NULL, 0))
+			if(!StoreFileData(data.GetBuffer(), data.GetSize()) || ! StoreFileData(nullptr, 0))
 				return false;
 			if(GetStatus() != FIST_COMPLETE)
 				return false;
@@ -1333,7 +1333,7 @@ strip_next_class:
 		int nProbeCnt(3);
 		string patchidxFileToUse;
 		deque<tPatchEntry> patchList;
-		tFingerprint *pEndSum(NULL);
+		tFingerprint *pEndSum(nullptr);
 		tPListConstIt itPatchStart;
 
 		if(CheckStopSignal())

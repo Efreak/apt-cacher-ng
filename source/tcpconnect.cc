@@ -113,7 +113,7 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 	tv.tv_sec = timeout;
 	tv.tv_usec = 0;
 
-	if ((stflags = fcntl(sockfd, F_GETFL, NULL)) < 0)
+	if ((stflags = fcntl(sockfd, F_GETFL, nullptr)) < 0)
 		return -1;
 
 	// Set to non-blocking mode.
@@ -128,7 +128,7 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 				// Wait for connection.
 				FD_ZERO(&wfds);
 				FD_SET(sockfd, &wfds);
-				res = select(sockfd+1, NULL, &wfds, NULL, &tv);
+				res = select(sockfd+1, nullptr, &wfds, nullptr, &tv);
 				if (res < 0)
 				{
 					if (EINTR != errno)
@@ -245,7 +245,7 @@ void tcpconnect::Disconnect()
 
 #ifdef HAVE_SSL
 	if(m_bio)
-		BIO_free_all(m_bio), m_bio=NULL;
+		BIO_free_all(m_bio), m_bio=nullptr;
 #endif
 
 	m_lastFile.reset();
@@ -416,7 +416,7 @@ time_t tcpconnect::BackgroundCleanup()
 	struct timeval tv;
 	tv.tv_sec = 0;
 	tv.tv_usec = 1;
-	int r=select(nMaxFd + 1, &rfds, NULL, NULL, &tv);
+	int r=select(nMaxFd + 1, &rfds, nullptr, nullptr, &tv);
 	// on error, also do nothing, or stop when r fds are processed
 	for (auto it = spareConPool.begin(); r>0 && it != spareConPool.end(); r--)
 	{
@@ -468,7 +468,7 @@ void tcpconnect::dump_status()
 #ifdef HAVE_SSL
 bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 {
-	SSL * ssl(NULL);
+	SSL * ssl(nullptr);
 	int hret(0);
 	LPCSTR perr(0);
 	mstring ebuf;
@@ -524,7 +524,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  		struct timeval tv;
  		tv.tv_sec = acfg::nettimeout;
  		tv.tv_usec = 0;
-		int nReady=select(m_conFd+1, &rfds, &wfds, NULL, &tv);
+		int nReady=select(m_conFd+1, &rfds, &wfds, nullptr, &tv);
 		if(!nReady)
 		{
 			perr="Socket timeout";

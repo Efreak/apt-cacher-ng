@@ -134,24 +134,24 @@ void setup_sighandler()
 
 	sigfillset(&act.sa_mask);
 	act.sa_handler = &sig_handler;
-	sigaction(SIGBUS, &act, NULL);
-	sigaction(SIGTERM, &act, NULL);
-	sigaction(SIGINT, &act, NULL);
-	sigaction(SIGQUIT, &act, NULL);
+	sigaction(SIGBUS, &act, nullptr);
+	sigaction(SIGTERM, &act, nullptr);
+	sigaction(SIGINT, &act, nullptr);
+	sigaction(SIGQUIT, &act, nullptr);
 
 	act.sa_handler = &dump_handler;
-	sigaction(SIGUSR2, &act, NULL);
+	sigaction(SIGUSR2, &act, nullptr);
 
 	act.sa_handler = &log_handler;
-	sigaction(SIGUSR1, &act, NULL);
+	sigaction(SIGUSR1, &act, nullptr);
 
 	act.sa_handler = SIG_IGN;
-	sigaction(SIGPIPE, &act, NULL);
+	sigaction(SIGPIPE, &act, nullptr);
 #ifdef SIGIO
-	sigaction(SIGIO, &act, NULL);
+	sigaction(SIGIO, &act, nullptr);
 #endif
 #ifdef SIGXFSZ
-	sigaction(SIGXFSZ, &act, NULL);
+	sigaction(SIGXFSZ, &act, nullptr);
 #endif
 }
 
@@ -207,7 +207,7 @@ int main(int argc, const char **argv)
 	{
 		mkbasedir(acfg::pidfile);
 		FILE *PID_FILE = fopen(acfg::pidfile.c_str(), "w");
-		if (PID_FILE != NULL)
+		if (PID_FILE != nullptr)
 		{
 			fprintf(PID_FILE, "%d", getpid());
 			checkForceFclose(PID_FILE);
@@ -252,7 +252,7 @@ static void SetupCacheDir()
 	}
 
 	struct timeval tv;
-	gettimeofday(&tv, NULL);
+	gettimeofday(&tv, nullptr);
 	tSS buf;
 	buf << cacheDirSlash << "testfile." << tv.tv_usec * tv.tv_sec * (LPCSTR(buf.wptr()) - LPCSTR(&tv));
 	mkbasedir(buf.c_str()); // try or force its directory creation
@@ -297,7 +297,7 @@ void sig_handler(int signum)
 		tSigAct act = tSigAct();
 		sigfillset(&act.sa_mask);
 		act.sa_handler = SIG_DFL;
-		if (sigaction(signum, &act, NULL))
+		if (sigaction(signum, &act, nullptr))
 			abort(); // shouldn't be needed, but have a sane fallback in case
 		raise(signum);
 	}

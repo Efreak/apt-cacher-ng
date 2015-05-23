@@ -569,7 +569,7 @@ struct tDlJob
 			{
 				ldbg("STATE_FINISHJOB");
 				m_DlState = STATE_GETHEADER;
-				m_pStorage->StoreFileData(NULL, 0);
+				m_pStorage->StoreFileData(nullptr, 0);
 				return HINT_DONE | m_eReconnectASAP;
 			}
 			else if (m_DlState == STATE_GETCHUNKHEAD)
@@ -584,7 +584,7 @@ struct tDlJob
 					inBuf.drop(1);
 				}
 				const char *crlf(0), *pStart(inBuf.c_str());
-				if (!inBuf.size() || NULL == (crlf = strstr(pStart, "\r\n")))
+				if (!inBuf.size() || nullptr == (crlf = strstr(pStart, "\r\n")))
 				{
 					inBuf.move();
 					return HINT_MORE;
@@ -757,7 +757,7 @@ inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 			goto proc_data;
 		}
 
-		r=select(nMaxFd + 1, &rfds, &wfds, NULL, &tv);
+		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, &tv);
 		ldbg("returned: " << r << ", errno: " << errno);
 
 		if (r < 0)
@@ -911,7 +911,7 @@ inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 			{
 				ldbg("why EAGAIN/EINTR after getting it from select?");
 //				timespec sleeptime = { 0, 432000000 };
-//				nanosleep(&sleeptime, NULL);
+//				nanosleep(&sleeptime, nullptr);
 				goto loop_again;
 			}
 			else if (r == 0)
@@ -1319,7 +1319,7 @@ void dlcon::WorkLoop()
 			}
 
 			timespec sleeptime = { 0, 325000000 };
-			nanosleep(&sleeptime, NULL);
+			nanosleep(&sleeptime, nullptr);
 
 			// trying to resume that job secretly, unless user disabled the use of range (we
 			// cannot resync the sending position ATM, throwing errors to user for now)

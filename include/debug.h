@@ -37,9 +37,9 @@ inline void dump_proc_status(){}; // strip away
 #define LOG(x) LOGLVL(LOG_DEBUG, x)
 
 #define LOGSTART(x) t_logger __logobj(x, this);
-#define LOGSTARTs(x) t_logger __logobj(x, NULL);
+#define LOGSTARTs(x) t_logger __logobj(x, nullptr);
 #define LOGSTART2(x, y) t_logger __logobj(x, this); LOGLVL(LOG_DEBUG, y /* << "@" __FILE__ ":" << __LINE__  */ )
-#define LOGSTART2s(x, y) t_logger __logobj(x, NULL); LOGLVL(LOG_DEBUG, y /*<< "@" __FILE__ ":" << __LINE__ */ )
+#define LOGSTART2s(x, y) t_logger __logobj(x, nullptr); LOGLVL(LOG_DEBUG, y /*<< "@" __FILE__ ":" << __LINE__ */ )
 
 #define dbgprint(x) std::cerr << x << std::endl;
 
