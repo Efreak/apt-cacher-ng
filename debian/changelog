@@ -1,6 +1,8 @@
-apt-cacher-ng (0.8.3-2) unstable; urgency=low
+apt-cacher-ng (0.8.4-1) UNRELEASED; urgency=low
 
-  * WIP
+  * New upstream version
+    + Fixes creation of pidfile even in foregeround mode (closes: #784752)
+  * Added pt_BR.po update (by Adriano Rafael Gomes, closes: #785471)
 
  -- 
 
