@@ -4,6 +4,7 @@ apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
   * FIX: creation of the PID file even in non-forking mode (Debian bug #784752)
   * Moving some functionality not relevant for server operation to a dedicated
     tool "acngtool"
+  * VFilePattern extension, [#314924] Allow access to CentOS images
 
   [ Felix Janda <felix.janda@posteo.de> ]
   * Compilation fixes for the MUSL C library
