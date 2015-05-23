@@ -1,6 +1,7 @@
 build/acngfs /usr/lib/apt-cacher-ng
 build/apt-cacher-ng /usr/sbin
 build/in.acng /usr/lib/apt-cacher-ng
+build/acngtool /usr/lib/apt-cacher-ng
 scripts/urlencode-fixer.pl /usr/lib/apt-cacher-ng
 scripts/distkill.pl /usr/lib/apt-cacher-ng
 conf/*mirror* /usr/lib/apt-cacher-ng
