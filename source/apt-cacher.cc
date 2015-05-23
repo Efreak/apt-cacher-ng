@@ -108,10 +108,11 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 			++p;
 			if (p < argv + argc)
 				szCfgDir = *p;
-
 			else
 				usage(2);
 		}
+		else if(**p) // not empty
+			cmdvars.emplace_back(*p);
 	}
 
 	if(szCfgDir)
