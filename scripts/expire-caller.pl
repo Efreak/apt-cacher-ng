@@ -37,7 +37,7 @@ sub toBase64
    {
       # dirty little helper
       $ENV{"TOBASE64"}=$src;
-      return `/usr/sbin/apt-cacher-ng`;
+      return `/usr/lib/apt-cacher-ng/acngtool encb64 "$TOBASE64"`;
    }
 }
 
