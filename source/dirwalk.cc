@@ -75,7 +75,7 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 	// ok, we are a directory, scan it and descend where needed
 
 	// seen this in the path before? symlink cycle?
-	for(dnode *cur=m_parent; cur!=NULL; cur=cur->m_parent)
+	for(dnode *cur=m_parent; cur!=nullptr; cur=cur->m_parent)
 	{
 		if (m_stinfo.st_dev == cur->m_stinfo.st_dev && m_stinfo.st_ino == cur->m_stinfo.st_ino)
 			return true;
@@ -84,9 +84,16 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 	// also make sure we are not visiting the same directory through some symlink construct
 	if(pFilter)
 	{
+#ifdef COMPATGCC47
+               auto thisKey(make_pair(m_stinfo.st_dev, m_stinfo.st_ino));
+               if(ContHas(*pFilter, thisKey))
+                       return true;
+               pFilter->insert(thisKey);
+#else
 		auto key_isnew = pFilter->emplace(m_stinfo.st_dev, m_stinfo.st_ino);
 		if(!key_isnew.second)
 			return true; // visited this before, recursion detected
+#endif
 	}
 
 //	cerr << "Opening: " << sPath<<endl;
@@ -98,7 +105,7 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 	dnode childbuf(this);
 	bool bRet(true);
 	
-	while ( NULL != (dp = readdir(dir)) )
+	while ( nullptr != (dp = readdir(dir)) )
 	{
 		if (strcmp(dp->d_name, ".") && strcmp(dp->d_name, ".."))
 		{
@@ -127,9 +134,9 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 bool DirectoryWalk(const string & sRoot, IFileHandler *h, bool bFilterDoubleDirVisit,
 		bool bFollowSymlinks)
 {
-	dnode root(NULL);
+	dnode root(nullptr);
 	dnode::tDupeFilter filter;
 	root.sPath=sRoot; 
-	return root.Walk(h, bFilterDoubleDirVisit ? &filter : NULL, bFollowSymlinks);
+	return root.Walk(h, bFilterDoubleDirVisit ? &filter : nullptr, bFollowSymlinks);
 }
 

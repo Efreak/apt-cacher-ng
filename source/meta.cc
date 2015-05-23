@@ -331,7 +331,7 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
 #elif defined(HAVE_GLOB)
 	auto p=glob_t();
 	if(0==glob(pattern.c_str(), GLOB_DOOFFS | (bSorted ? 0 : GLOB_NOSORT),
-				NULL, &p))
+			nullptr, &p))
 	{
 		for(char **s=p.gl_pathv; s<p.gl_pathv+p.gl_pathc;s++)
 			srcs.emplace_back(*s);

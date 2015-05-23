@@ -10,6 +10,13 @@ INCLUDE(CheckTypeSize)
 INCLUDE(TestBigEndian)
 INCLUDE(CheckLibraryExists)
 
+IF(NOT DEFINED(PREFIX))
+set(PREFIX "/usr/local" CACHE STRING "Target installation space")
+ENDIF()
+IF(NOT DEFINED(CFGDIR))
+	set(CFGDIR "/etc/apt-cacher-ng" CACHE STRING "Location of system-wide configuration files")
+ENDIF()
+
 # Various feature checks
 CHECK_INCLUDE_FILES ("sys/param.h;sys/mount.h" HAVE_SYS_MOUNT_H)
 CHECK_INCLUDE_FILES ("sys/vfs.h" HAVE_SYS_VFS_H)
@@ -32,7 +39,7 @@ list(APPEND AcngLdList pthread)
 
 # common required flags to be used later for CMAKE_REQUIRED_FLAGS and the build,
 # CXXFLAGS (via initial CMAKE_CXX_FLAGS) extends and overrides them
-SET(ACNG_CXXFLAGS_COMMON " -pthread -g -O2 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
+SET(ACNG_CXXFLAGS_COMMON " -pthread -g -O2 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 -DNOMINMAX ${CMAKE_CXX_FLAGS}")
 # same for linker flags, imported from LDFLAGS environment var
 SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
 
@@ -104,7 +111,7 @@ endif()
 #CHECK_INCLUDE_FILES("gzip.h" HAVE_ZLIB)
 FIND_PATH(HAVE_ZLIB zlib.h )
 if(HAVE_ZLIB)
-	list(APPEND AcngLdList z)
+	list(APPEND CompLibs z)
 	INCLUDE_DIRECTORIES(${HAVE_ZLIB})
 else(HAVE_ZLIB)
    message(FATAL_ERROR "!! apt-cacher-ng requires gzip library and development files ${HAVE_ZLIB}")
@@ -115,7 +122,7 @@ if (BZIP2_FOUND)
    SET(HAVE_LIBBZ2 1)
    MARK_AS_ADVANCED(HAVE_LIBBZ2)
 	INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIR})
-	list(APPEND AcngLdList bz2)
+	list(APPEND CompLibs bz2)
 else (BZIP2_FOUND)
    message("!! apt-cacher-ng requires bzip2 library and development files for bz2 format support")
 endif (BZIP2_FOUND)
@@ -125,7 +132,7 @@ SET(CMAKE_REQUIRED_LIBRARIES lzma)
 FILE(READ test/build/HAVE_LZMA.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LZMA)
 IF(HAVE_LZMA)
-   list(APPEND AcngLdList lzma)
+	list(APPEND CompLibs lzma)
 ELSE(HAVE_LZMA)
    MESSAGE("!! XZ (liblzma) not found or not working, disabling support")
    SET(HAVE_LZMA )
@@ -151,7 +158,7 @@ SET(CMAKE_REQUIRED_LIBRARIES wrap)
 FILE(READ test/build/HAVE_LIBWRAP.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LIBWRAP)
 IF(HAVE_LIBWRAP)
-   list(APPEND AcngLdList wrap)
+	list(APPEND AcngLdList wrap)
 ELSE(HAVE_LIBWRAP)
    MESSAGE("!! libwrap development files not usable, disabling support")
    SET(HAVE_LIBWRAP)
@@ -198,7 +205,7 @@ CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_DAEMON)
 
 FIND_LIBRARY(HAVE_SOCKETLIB socket) # separate socket lib looks like Solaris-like environment
 if(HAVE_SOCKETLIB)
-   link_libraries(socket nsl)
+   LIST(APPEND NetworkLibs socket nsl)
 endif(HAVE_SOCKETLIB)
 
 INCLUDE(FindPkgConfig)
@@ -249,14 +256,22 @@ SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
 ADD_EXECUTABLE(apt-cacher-ng ${SRCS})
 list(REMOVE_DUPLICATES AcngLdList)
-TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList} ${lsd_LDFLAGS} ${EXTRA_LIBS_ACNG})
+TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList}  ${CompLibs} ${NetworkLibs} ${lsd_LDFLAGS} ${EXTRA_LIBS_ACNG})
 # I'd like this method more but apparently LINK_FLAGS is always prepended, no way to append it
 #SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES LINK_FLAGS "${lsd_LDFLAGS}")
 SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} ${lsd_CFLAGS}")
 
 ADD_EXECUTABLE(in.acng client/client.cc)
 SET_TARGET_PROPERTIES(in.acng PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} -DMINIBUILD")
-TARGET_LINK_LIBRARIES(in.acng ${EXTRA_LIBS_INETD})
+TARGET_LINK_LIBRARIES(in.acng ${NetworkLibs} ${EXTRA_LIBS_INETD})
+
+ADD_EXECUTABLE(acngtool tool/main.cc source/acfg.cc source/meta.cc source/dlcon.cc
+	source/tcpconnect.cc source/acfg_defaults.cc source/acbuf.cc
+	source/filereader.cc source/fileitem.cc source/acbuf.cc source/aclogger.cc
+	source/fileio.cc source/filelocks.cc source/header.cc source/caddrinfo.cc
+	)
+SET_TARGET_PROPERTIES(acngtool PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON}")
+TARGET_LINK_LIBRARIES(acngtool ${SSL_LIB_LIST} ${CompLibs} ${EXTRA_LIBS_INETD})
 
 # -DEXTRA_LIBS_INETD=-lsupc++
 # funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used
@@ -290,9 +305,9 @@ if(fuse_FOUND AND HAVE_FUSE_25)
    #message("uhm: ${fuse_CFLAGS} -- ${acngfs_cflags} -- ${fuse_LDFLAGS} -- ${HAVE_DLOPEN}")
    SET_TARGET_PROPERTIES(acngfs PROPERTIES COMPILE_FLAGS "${acngfs_cflags}" )
    if(HAVE_DLOPEN)
-      TARGET_LINK_LIBRARIES(acngfs dl pthread ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
+      TARGET_LINK_LIBRARIES(acngfs dl pthread  ${NetworkLibs} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
    else(HAVE_DLOPEN)
-      TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
+      TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS}  ${NetworkLibs} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
    endif(HAVE_DLOPEN)
 
 else(fuse_FOUND AND HAVE_FUSE_25)

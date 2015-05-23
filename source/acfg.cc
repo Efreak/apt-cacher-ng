@@ -53,7 +53,7 @@ string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt;
 tStrMap localdirs;
 static class : public lockable, public NoCaseStringMap {} mimemap;
 
-std::bitset<TCP_PORT_MAX> *pUserPorts = NULL;
+std::bitset<TCP_PORT_MAX> *pUserPorts = nullptr;
 
 struct MapNameToString
 {
@@ -243,10 +243,10 @@ inline void _FixPostPreSlashes(string &val)
 		val.insert(0, "/", 1);
 }
 
-bool ReadOneConfFile(const string & szFilename)
+bool ReadOneConfFile(const string & szFilename, bool bReadErrorIsFatal=true)
 {
 	tCfgIter itor(szFilename);
-	itor.reader.CheckGoodState(true, &szFilename);
+	itor.reader.CheckGoodState(bReadErrorIsFatal, &szFilename);
 
 	NoCaseStringMap dupeCheck;
 
@@ -391,12 +391,7 @@ tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
 					auto nam(GetBaseName(s));
 					if(bAddDefault)
 					nam.erase(nam.size()-8);
-#if __GNUC__ >= 4 && __GNUC_MINOR__ < 8
-					if(bname2path.find(nam) == bname2path.end())
-						bname2path[nam]=s;
-#else
-					bname2path.emplace(nam, s);
-#endif
+					EMPLACE_PAIR(bname2path, nam, s);
 				}
 
 			}
@@ -510,7 +505,7 @@ void _AddHooksFile(cmstring& vname)
 		else if (strcasecmp("DownTimeout", p) == 0)
 		{
 			errno = 0;
-			uint n = strtoul(val.c_str(), NULL, 10);
+			uint n = strtoul(val.c_str(), nullptr, 10);
 			if (!errno)
 				hs.downDuration = n;
 		}
@@ -982,7 +977,7 @@ tRepoData::~tRepoData()
 	delete m_pHooks;
 }
 
-void ReadConfigDirectory(const char *szPath)
+void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 {
 	dump_proc_status();
 	char buf[PATH_MAX];
@@ -993,9 +988,9 @@ void ReadConfigDirectory(const char *szPath)
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
-		ReadOneConfFile(src);
+		ReadOneConfFile(src, bReadErrorIsFatal);
 #else
-	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
+	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bReadErrorIsFatal);
 #endif
 	dump_proc_status();
 	if(debug & LOG_DEBUG)
@@ -1367,9 +1362,9 @@ bool CompileExpressions()
 
 inline bool MatchType(cmstring &in, eMatchType type)
 {
-	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, NULL, 0))
+	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, nullptr, 0))
 		return true;
-	if(rex[type].extra && !regexec(rex[type].extra, in.c_str(), 0, NULL, 0))
+	if(rex[type].extra && !regexec(rex[type].extra, in.c_str(), 0, nullptr, 0))
 		return true;
 	return false;
 }
@@ -1445,7 +1440,7 @@ bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat)
 bool MatchUncacheable(const string & in, NOCACHE_PATTYPE type)
 {
 	for(const auto& patre: (type == NOCACHE_REQ) ? vecReqPatters : vecTgtPatterns)
-		if(!regexec(&patre, in.c_str(), 0, NULL, 0))
+		if(!regexec(&patre, in.c_str(), 0, nullptr, 0))
 			return true;
 	return false;
 }

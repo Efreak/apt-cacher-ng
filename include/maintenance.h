@@ -44,7 +44,8 @@ public:
 		workCOUNTSTATS,
 		workSTYLESHEET,
 		workTraceStart,
-		workTraceEnd
+		workTraceEnd,
+		workJStats
 	};
 	struct tRunParms
 	{
@@ -73,7 +74,6 @@ protected:
 	bool SendRawData(const char *data, size_t len, int flags);
 
 	mstring & GetHostname();
-	//void SendDecoration(bool bBegin, const char *szDecoFile=NULL);
 	void SendChunkedPageHeader(const char *httpstatus, const char *mimetype);
 	LPCSTR m_szDecoFile = nullptr;
 	LPCSTR GetTaskName();

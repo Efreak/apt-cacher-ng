@@ -60,7 +60,7 @@ protected:
 
 public:
 	tPassThroughFitem(std::string s) :
-	m_pData(NULL), m_nConsumable(0), m_nConsumed(0)
+	m_pData(nullptr), m_nConsumable(0), m_nConsumed(0)
 	{
 		m_sPathRel = s;
 		m_bAllowStoreData=false;
@@ -116,7 +116,7 @@ public:
 
 			dbgline;
 			m_nConsumable=0;
-			m_pData=NULL;
+			m_pData=nullptr;
 			return m_nConsumed;
 		}
 		return true;
@@ -196,50 +196,6 @@ public:
 	bool StoreFileData(const char *, unsigned int) override {return false;};
 	header & HeadRef() { return m_head; }
 };
-
-ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count)
-{
-	char buf[8192];
-	ssize_t totalcnt=0;
-	
-	if(!offset)
-	{
-		errno=EFAULT;
-		return -1;
-	}
-	if(lseek(in_fd, *offset, SEEK_SET)== (off_t)-1)
-		return -1;
-	while(count>0)
-	{
-		auto readcount=read(in_fd, buf, min(count, sizeof(buf)));
-		if(readcount<=0)
-		{
-			if(errno==EINTR || errno==EAGAIN)
-				continue;
-			else
-				return readcount;
-		}
-		
-		*offset+=readcount;
-		totalcnt+=readcount;
-		count-=readcount;
-		
-		for(decltype(readcount) nPos(0);nPos<readcount;)
-		{
-			auto r=write(out_fd, buf+nPos, readcount-nPos);
-			if(r==0) continue; // not nice but needs to deliver it
-			if(r<0)
-			{
-				if(errno==EAGAIN || errno==EINTR)
-					continue;
-				return r;
-			}
-			nPos+=r;
-		}
-	}
-	return totalcnt;
-}
-
 
 job::job(header *h, con *pParent) :
 	m_filefd(-1),
@@ -732,7 +688,7 @@ report_overload:
 
 report_notallowed:
 	SetErrorResponse((tSS() << "403 Forbidden file type or location: " << sReqPath).c_str(),
-			NULL, "403 Forbidden file type or location");
+			nullptr, "403 Forbidden file type or location");
 //    USRDBG( sRawUriPath + " -- ACCESS FORBIDDEN");
     return ;
 
@@ -972,8 +928,10 @@ job::eJobResult job::SendData(int confd)
 				
 				case(STATE_ALLDONE):
 					LOG("State: STATE_ALLDONE?");
+				// no break
 				case (STATE_ERRORCONT):
 					LOG("or STATE_ERRORCONT?");
+				// no break
 				case(STATE_FINISHJOB):
 					LOG("or STATE_FINISHJOB");
 					{
@@ -984,6 +942,7 @@ job::eJobResult job::SendData(int confd)
 					}
 					break;
 				case(STATE_TODISCON):
+						// no break
 				default:
 					return R_DISCON;
 			}

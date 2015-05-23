@@ -84,7 +84,7 @@ bool pkgimport::ProcessRegular(cmstring &sPath, const struct stat &stinfo)
 			/*	if ( (IsIndexDiff(sPath) && fpr.ScanFile(sPath, CSTYPE_SHA1, true))
 			 || (!IsIndexDiff(sPath) && fpr.ScanFile(sPath, CSTYPE_MD5, false)))
 			 */
-			if (!fpr.ScanFile(sPath, ctp, false, NULL))
+			if (!fpr.ScanFile(sPath, ctp, false, nullptr))
 			{
 				SendFmt << "<span class=\"ERROR\">Error checking " << sPath << "</span>\n<br>\n";
 				continue;

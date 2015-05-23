@@ -77,9 +77,6 @@ extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS;
 #ifndef SO_MAXCONN
 #define SO_MAXCONN 250
 #endif
-#if defined(__linux__)
-#include <sys/socketvar.h>
-#endif
 
 //#define PATHSEP "/"
 int getUUID();
@@ -143,7 +140,7 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
       for(LPCSTR pWhat=needles; *pWhat ; pWhat++)
          if(*pWhat==*pWhere)
             return pWhere;
-   return NULL;
+   return nullptr;
 }
 
 typedef std::vector<mstring> tStrVec;
@@ -476,7 +473,7 @@ struct tCurrentTime
 {
 	char buf[30];
 	uint len;
-	inline tCurrentTime() { len=FormatTime(buf, time(NULL)); }
+	inline tCurrentTime() { len=FormatTime(buf, time(nullptr)); }
 	inline operator mstring() { return mstring(buf, len); }
 };
 
@@ -494,11 +491,18 @@ void DelTree(cmstring &what);
 
 struct tErrnoFmter: public mstring
 {
-	tErrnoFmter(LPCSTR prefix = NULL);
+	tErrnoFmter(LPCSTR prefix = nullptr);
 };
 
 mstring EncodeBase64Auth(cmstring &sPwdString);
 mstring EncodeBase64(LPCSTR data, uint len);
+
+#if __GNUC__ == 4 && __GNUC_MINOR__ < 8
+#define COMPATGCC47
+#define EMPLACE_PAIR(M,K,V) if(M.find(K) == M.end()) M.insert(std::make_pair(K,V))
+#else
+#define EMPLACE_PAIR(M,K,V) M.emplace(K,V)
+#endif
 
 #endif // _META_H
 

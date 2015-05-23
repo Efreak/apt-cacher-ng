@@ -60,7 +60,7 @@ int main(int argc, char **argv)
 		
 	
 	if (getnameinfo((struct sockaddr*) &ss, sizeof(ss), hbuf, sizeof(hbuf), 
-			NULL, 0, NI_NUMERICHOST))
+			nullptr, 0, NI_NUMERICHOST))
 	{
 		printf("ERROR: could not resolve hostname\n");
 		return 1;
@@ -115,7 +115,7 @@ int main(int argc, char **argv)
 		if(bufToD.freecapa()>0)
 			FD_SET(in, &rfds);
 		
-		int nReady=select(maxfd, &rfds, &wfds, NULL, NULL);
+		int nReady=select(maxfd, &rfds, &wfds, nullptr, nullptr);
 		if (nReady<0)
 		{
 			fputs("Select failure.\n", stdout);

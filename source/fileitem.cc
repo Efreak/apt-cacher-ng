@@ -933,7 +933,7 @@ void fileItemMgmt::dump_status()
 					<< item.second->m_nSizeSeen
 					<< "\n\tGotAt: " << item.second->m_nTimeDlStarted << "\n\n";
 		}
-		aclog::err(fmt.c_str(), NULL);
+		aclog::err(fmt.c_str(), nullptr);
 	}
 	aclog::flush();
 }

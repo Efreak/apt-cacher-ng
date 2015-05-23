@@ -52,7 +52,7 @@ inline bool check_read_state(int fd)
 	FD_ZERO(&rfds);
 	FD_SET(fd, &rfds);
 	struct timeval tv = { 0, 0};
-	return (1 == select(fd + 1, &rfds, NULL, NULL, &tv) && FD_ISSET(fd, &rfds));
+	return (1 == select(fd + 1, &rfds, nullptr, nullptr, &tv) && FD_ISSET(fd, &rfds));
 }
 
 

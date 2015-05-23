@@ -50,5 +50,13 @@
 //! Time after which the pooled sockets are considered EOLed
 #define TIME_SOCKET_EXPIRE_CLOSE 33
 
-#endif // __CONFIG_H
+#define COMMA ,
+#ifdef HAVE_SSL
+#define IFSSLORFALSE(x) x
+#define SSL_OPT_ARG(x) COMMA x
+#else
+#define IFSSLORFALSE(x) false
+#define SSL_OPT_ARG(x)
+#endif
 
+#endif // __CONFIG_H

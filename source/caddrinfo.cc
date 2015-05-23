@@ -74,7 +74,7 @@ CAddrInfo::~CAddrInfo()
 
 CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sPort, string &sErrorMsgBuf)
 {
-	//time_t timeExpired=time(NULL)+acfg::dnscachetime;
+	//time_t timeExpired=time(nullptr)+acfg::dnscachetime;
 	time_t now(time(0));
 	mstring dnsKey=sHostname+":"+sPort;
 

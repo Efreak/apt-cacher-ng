@@ -51,7 +51,7 @@ tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
 	m_bScanInternals(false), m_bByPath(false), m_bByChecksum(false), m_bSkipHeaderChecks(false),
 	m_bTruncateDamaged(false),
 	m_nErrorCount(0),
-	m_nProgIdx(0), m_nProgTell(1), m_pDlcon(NULL)
+	m_nProgIdx(0), m_nProgTell(1), m_pDlcon(nullptr)
 {
 	m_szDecoFile="maint.html";
 	m_gMaintTimeNow=GetTime();
@@ -61,7 +61,7 @@ tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
 tCacheOperation::~tCacheOperation()
 {
 	delete m_pDlcon;
-	m_pDlcon=NULL;
+	m_pDlcon=nullptr;
 }
 
 bool tCacheOperation::ProcessOthers(const string &, const struct stat &)
@@ -375,7 +375,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix);
 
 	m_pDlcon->WorkLoop();
-	if (pFi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
+	if (pFi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE
 			&& pFi->GetHeaderUnlocked().getStatus() == 200)
 	{
 		bSuccess = true;
@@ -654,14 +654,15 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 			else if(tmp[0] == "SHA1-Patches:")
 				eSection=ePatches;
 			else
-				return NULL;
+				return nullptr;
 		}
 		else if(nTokens) // not null but weird count
-			return NULL; // error
+			return nullptr; // error
 	}
 
 	return ret.csType != CSTYPE_INVALID ? &ret : nullptr;
 }
+
 
 bool tCacheOperation::PatchFile(const string &srcRel,
 		const string &diffIdxPathRel, tPListConstIt pit, tPListConstIt itEnd,
@@ -694,7 +695,7 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 
 		SetFlags(pfile).parseignore=true; // not an ifile, never parse this
 		::mkbasedir(sFinalPatch);
-		if(!pf.p && ! (pf.p=fopen(sFinalPatch.c_str(), "w")))
+		if(!pf.p && ! (pf.p=fopen(sFinalPatch.c_str(), "w+")))
 		{
 			SendChunk("Failed to create intermediate patch file, stop patching...<br>");
 			return false;
@@ -732,7 +733,7 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 		SendChunk("Patching...<br>");
 
 	tSS cmd;
-	cmd << "cd '" << CACHE_BASE << "_actmp' && red --silent patch.base < combined.diff";
+	cmd << "cd '" << CACHE_BASE << "_actmp' && red --silent patch.base < " << sFinalPatch;
 	if (::system(cmd.c_str()))
 	{
 		MTLOGASSERT(false, "Command failed: " << cmd);
@@ -881,9 +882,9 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 			if (Setup(true) > fileitem::FIST_COMPLETE)
 				return false;
 			bool bNix(false);
-			if (!fileitem_with_storage::DownloadStartedStoreHeader(head, NULL, false, bNix))
+			if (!fileitem_with_storage::DownloadStartedStoreHeader(head, nullptr, false, bNix))
 				return false;
-			if(!StoreFileData(data.GetBuffer(), data.GetSize()) || ! StoreFileData(NULL, 0))
+			if(!StoreFileData(data.GetBuffer(), data.GetSize()) || ! StoreFileData(nullptr, 0))
 				return false;
 			if(GetStatus() != FIST_COMPLETE)
 				return false;
@@ -1332,7 +1333,7 @@ strip_next_class:
 		int nProbeCnt(3);
 		string patchidxFileToUse;
 		deque<tPatchEntry> patchList;
-		tFingerprint *pEndSum(NULL);
+		tFingerprint *pEndSum(nullptr);
 		tPListConstIt itPatchStart;
 
 		if(CheckStopSignal())
@@ -1403,7 +1404,7 @@ strip_next_class:
 				MTLOGDEBUG("#### Testing file: " << pathRel << " as patch base candidate");
 				if (probe.ScanFile(absPath, CSTYPE_SHA1, true, df.p))
 				{
-					df.close(); // write the whole file to disk ASAP!
+					fflush(df.p); // write the whole file to disk ASAP!
 
 					if(CheckStopSignal())
 						return;
@@ -1452,7 +1453,7 @@ strip_next_class:
 							SendFmt << "Found patching base candidate, unpacked to "
 								<< sPatchBaseAbs << "<br>";
 
-						if (PatchFile(sPatchBaseAbs, patchidxFileToUse, itPatchStart,
+						if (df.close(), PatchFile(sPatchBaseAbs, patchidxFileToUse, itPatchStart,
 									patchList.end(), pEndSum))
 						{
 
@@ -1952,8 +1953,8 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 	case EIDX_RELEASE:
 		info.fpr.csType = CSTYPE_SHA1;
 		sStartMark="SHA1:";
-		// fall-through, parser follows
-
+		// parser follows
+		//no break
 	case EIDX_RFC822WITHLISTS:
 		// common info object does not help here because there are many entries, and directory
 		// could appear after the list :-(
@@ -2143,7 +2144,7 @@ void tCacheOperation::PrintStats(cmstring &title)
 	{
 		total += f.second.space;
 		if(f.second.space)
-			sorted.emplace(f.second.space, &f.first);
+			EMPLACE_PAIR(sorted,f.second.space, &f.first);
 		if(sorted.size()>nMax)
 		{
 			sorted.erase(sorted.begin());

@@ -1,6 +1,7 @@
 
 #include "meta.h"
 
+#undef _GNU_SOURCE // XSI strerror_r
 #include <string.h>
 #include <errno.h>
 
@@ -90,7 +91,7 @@ void err(const char *msg, const char *client)
 	}
 	
 	static char buf[32];
-	const time_t tm=time(NULL);
+	const time_t tm=time(nullptr);
 	ctime_r(&tm, buf);
 	buf[24]=0;
 	fErr << buf << '|';
@@ -134,7 +135,7 @@ inline deque<tRowData> GetStats()
 	string sDataFile=acfg::cachedir+SZPATHSEP"_stats_dat";
 	deque<tRowData> out;
 	
-	time_t now = time(NULL);
+	time_t now = time(nullptr);
 
 	for (int i = 0; i < 7; i++)
 	{
@@ -276,16 +277,11 @@ tErrnoFmter::tErrnoFmter(const char *prefix)
 	if(prefix)
 		assign(prefix);
 
-#ifdef _GNU_SOURCE
-//#warning COMPILER BUG DETECTED -- _GNU_SOURCE was preset in C++ mode
-	append(strerror_r(errno, buf, sizeof(buf)-1));
-#else
 	int err=errno;
 	if(strerror_r(err, buf, sizeof(buf)-1))
 		append(tSS() << "UNKNOWN ERROR: " << err);
 	else
 		append(buf);
-#endif
 }
 
 #ifdef DEBUG

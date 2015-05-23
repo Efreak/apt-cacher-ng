@@ -715,7 +715,7 @@ void expiration::LoadPreviousData(bool bForceInsert)
 
 	while(reader.GetOneLine(sLine))
 	{
-		char *eptr(NULL);
+		char *eptr(nullptr);
 		auto s = sLine.c_str();
 		time_t timestamp = strtoull(s, &eptr, 10);
 		if (!eptr || *eptr != '\t' || !timestamp || timestamp > m_gMaintTimeNow) // where is the DeLorean?

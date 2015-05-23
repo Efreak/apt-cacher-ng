@@ -64,7 +64,7 @@ struct tFingerprint {
 		size=newsize;
 		return true;
 	}
-	bool ScanFile(const mstring & path, const CSTYPES eCstype, bool bUnpack, FILE *fDump=NULL)
+	bool ScanFile(const mstring & path, const CSTYPES eCstype, bool bUnpack, FILE *fDump=nullptr)
 	{
 		if(eCstype != CSTYPE_MD5 && CSTYPE_SHA1 != eCstype)
 			return false; // unsupported
@@ -113,7 +113,7 @@ struct tFingerprint {
 		if(size != GetFileSize(sFile, -2))
 			return false;
 		tFingerprint probe;
-		if(!probe.ScanFile(sFile, csType, false, NULL))
+		if(!probe.ScanFile(sFile, csType, false, nullptr))
 			return false;
 		return probe == *this;
 	}

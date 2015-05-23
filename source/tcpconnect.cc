@@ -19,6 +19,7 @@
 #include "fileio.h"
 #include "fileitem.h"
 #include "cleaner.h"
+#include <tuple>
 
 using namespace std;
 
@@ -68,7 +69,7 @@ tcpconnect::~tcpconnect()
 }
 
 /*! \brief Helper to flush data stream contents reliable and close the connection then
- * DUDES, who write TCP implementations... why can this just not be done easy and reliable? Why do we need hacks like termsocket?
+ * DUDES, who write TCP implementations... why can this just not be done easy and reliable? Why do we need hacks like the method below?
  For details, see: http://blog.netherlabs.nl/articles/2009/01/18/the-ultimate-so_linger-page-or-why-is-my-tcp-not-reliable
  *
  */
@@ -112,7 +113,7 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 	tv.tv_sec = timeout;
 	tv.tv_usec = 0;
 
-	if ((stflags = fcntl(sockfd, F_GETFL, NULL)) < 0)
+	if ((stflags = fcntl(sockfd, F_GETFL, nullptr)) < 0)
 		return -1;
 
 	// Set to non-blocking mode.
@@ -127,7 +128,7 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 				// Wait for connection.
 				FD_ZERO(&wfds);
 				FD_SET(sockfd, &wfds);
-				res = select(sockfd+1, NULL, &wfds, NULL, &tv);
+				res = select(sockfd+1, nullptr, &wfds, nullptr, &tv);
 				if (res < 0)
 				{
 					if (EINTR != errno)
@@ -184,7 +185,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 	// always consider first family, afterwards stop when no more specified
 	for (uint i=0; i< _countof(acfg::conprotos) && (0==i || acfg::conprotos[i]!=PF_UNSPEC); ++i)
 	{
-		for (struct addrinfo *pInfo = dns->m_addrInfo; pInfo; pInfo = pInfo->ai_next)
+		for (auto pInfo = dns->m_addrInfo; pInfo; pInfo = pInfo->ai_next)
 		{
 			if (acfg::conprotos[i] != PF_UNSPEC && acfg::conprotos[i] != pInfo->ai_family)
 				continue;
@@ -244,44 +245,16 @@ void tcpconnect::Disconnect()
 
 #ifdef HAVE_SSL
 	if(m_bio)
-		BIO_free_all(m_bio), m_bio=NULL;
+		BIO_free_all(m_bio), m_bio=nullptr;
 #endif
 
 	m_lastFile.reset();
 
 	termsocket_quick(m_conFd);
 }
-
-using namespace std;
-struct tHostHint // could derive from pair but prefer to save some bytes with references
-{
-	cmstring pHost, pPort;
-#ifdef HAVE_SSL
-	bool bSsled;
-	inline tHostHint(cmstring &h, cmstring &p, bool bSsl) : pHost(h), pPort(p), bSsled(bSsl) {};
-	bool operator<(const tHostHint &b) const
-	{
-		int rel=pHost.compare(b.pHost);
-		if(rel)
-			return rel < 0;
-		if(pPort != b.pPort)
-			return pPort < b.pPort;
-		return bSsled < b.bSsled;
-	}
-#else
-	inline tHostHint(cmstring &h, cmstring &p) : pHost(h), pPort(p) {};
-		bool operator<(const tHostHint &b) const
-		{
-			int rel=pHost.compare(b.pHost);
-			if(rel)
-				return rel < 0;
-			return pPort < b.pPort;
-		}
-#endif
-
-};
 lockable spareConPoolMx;
-multimap<tHostHint, std::pair<tTcpHandlePtr, time_t> > spareConPool;
+multimap<tuple<string,string SSL_OPT_ARG(bool) >,
+		std::pair<tTcpHandlePtr, time_t> > spareConPool;
 
 tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, acfg::tRepoData::IHookHandler *pStateTracker
@@ -300,11 +273,7 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 #endif
 
 	bool bReused=false;
-	tHostHint key(sHostname, sPort
-#ifdef HAVE_SSL
-			, bSsl
-#endif
-	);
+	auto key = make_tuple(sHostname, sPort SSL_OPT_ARG(bSsl) );
 
 #ifdef NOCONCACHE
 	p.reset(new tcpconnect(pStateTracker));
@@ -381,15 +350,6 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 		handle->m_pStateObserver = nullptr;
 	}
 
-	/*
-	if(handle->m_bIsTunnel)
-	{
-		ldbg("disconnecting an upgraded connection, drop " << handle.get());
-		handle.reset();
-		return;
-	}
-	*/
-
 	if(! acfg::persistoutgoing)
 	{
 		ldbg("not caching outgoing connections, drop " << handle.get());
@@ -418,12 +378,8 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 		// a DOS?
 		if (spareConPool.size() < 50)
 		{
-			spareConPool.emplace(tHostHint(host, handle->GetPort()
-#ifdef HAVE_SSL
-					, handle->m_bio
-#endif
-					), make_pair(handle, now));
-
+			EMPLACE_PAIR(spareConPool, make_tuple(host, handle->GetPort()
+					SSL_OPT_ARG(handle->m_bio) ), make_pair(handle, now));
 #ifndef MINIBUILD
 			g_victor.ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
 #endif
@@ -447,7 +403,7 @@ time_t tcpconnect::BackgroundCleanup()
 	for (auto it = spareConPool.begin(); it != spareConPool.end();)
 	{
 		if (now >= (it->second.second + TIME_SOCKET_EXPIRE_CLOSE))
-			spareConPool.erase(it++);
+			it = spareConPool.erase(it);
 		else
 		{
 			int fd = it->second.first->GetFD();
@@ -460,12 +416,12 @@ time_t tcpconnect::BackgroundCleanup()
 	struct timeval tv;
 	tv.tv_sec = 0;
 	tv.tv_usec = 1;
-	int r=select(nMaxFd + 1, &rfds, NULL, NULL, &tv);
+	int r=select(nMaxFd + 1, &rfds, nullptr, nullptr, &tv);
 	// on error, also do nothing, or stop when r fds are processed
 	for (auto it = spareConPool.begin(); r>0 && it != spareConPool.end(); r--)
 	{
 		if(FD_ISSET(it->second.first->GetFD(), &rfds))
-			spareConPool.erase(it++);
+			it = spareConPool.erase(it);
 		else
 			++it;
 	}
@@ -497,9 +453,8 @@ void tcpconnect::dump_status()
 		}
 
 		msg << x.second.first->m_conFd << ": for "
-				<< x.first.pHost << ":" << x.first.pPort
+				<< get<0>(x.first) << ":" << get<1>(x.first)
 				<< ", recycled at " << x.second.second
-				//<< ", is a tunnel?: " << x.second.first->m_bIsTunnel
 				<< "\n";
 	}
 #ifdef DEBUG
@@ -513,7 +468,7 @@ void tcpconnect::dump_status()
 #ifdef HAVE_SSL
 bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 {
-	SSL * ssl(NULL);
+	SSL * ssl(nullptr);
 	int hret(0);
 	LPCSTR perr(0);
 	mstring ebuf;
@@ -525,8 +480,9 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 		if (!m_ctx)
 			goto ssl_init_fail;
 
-		SSL_CTX_load_verify_locations(m_ctx, acfg::cafile.empty() ? NULL : acfg::cafile.c_str(),
-			acfg::capath.empty() ? NULL : acfg::capath.c_str());
+		SSL_CTX_load_verify_locations(m_ctx,
+				acfg::cafile.empty() ? nullptr : acfg::cafile.c_str(),
+			acfg::capath.empty() ? nullptr : acfg::capath.c_str());
 
 	}
 
@@ -568,7 +524,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  		struct timeval tv;
  		tv.tv_sec = acfg::nettimeout;
  		tv.tv_usec = 0;
-		int nReady=select(m_conFd+1, &rfds, &wfds, NULL, &tv);
+		int nReady=select(m_conFd+1, &rfds, &wfds, nullptr, &tv);
 		if(!nReady)
 		{
 			perr="Socket timeout";

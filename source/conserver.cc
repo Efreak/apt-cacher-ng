@@ -87,7 +87,7 @@ void * ThreadAction(void *)
 	g_nAllConThreadCount--;
 	g_nStandbyThreads--;
 
-	return NULL;
+	return nullptr;
 }
 
 bool CreateDetachedThread(void *(*__start_routine)(void *))
@@ -98,7 +98,7 @@ bool CreateDetachedThread(void *(*__start_routine)(void *))
 	if (pthread_attr_init(&attr))
 		return false;
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	bool bOK = (0 == pthread_create(&thr, &attr, __start_routine, NULL));
+	bool bOK = (0 == pthread_create(&thr, &attr, __start_routine, nullptr));
 	pthread_attr_destroy(&attr);
 	return bOK;
 }
@@ -129,7 +129,7 @@ inline bool SpawnThreadsAsNeeded()
 }
 
 
-void SetupConAndGo(int fd, const char *szClientName=NULL)
+void SetupConAndGo(int fd, const char *szClientName=nullptr)
 {
 	LOGSTART2s("SetupConAndGo", fd);
 
@@ -137,7 +137,7 @@ void SetupConAndGo(int fd, const char *szClientName=NULL)
 		szClientName="";
 	
 	USRDBG( "Client name: " << szClientName);
-	con *c(NULL);
+	con *c(nullptr);
 
 	{
 		// thread pool control, and also see Shutdown(), protect from
@@ -260,7 +260,7 @@ void Setup()
 		
 		tStrVec sAdds;
 		if(bindaddr.empty())
-			sAdds.emplace_back(sEmptyString); // one dummy entry to get one NULL later
+			sAdds.emplace_back(sEmptyString); // one dummy entry to get one nullptr later
 		else
 			Tokenize(bindaddr, SPACECHARS, sAdds);
 		for(auto& sad : sAdds)
@@ -268,7 +268,7 @@ void Setup()
 			trimString(sad);
 		    struct addrinfo *res, *p;
 		    
-		    if(0!=getaddrinfo(bindaddr.empty() ? NULL : sad.c_str(),
+		    if(0!=getaddrinfo(bindaddr.empty() ? nullptr : sad.c_str(),
 				   port.c_str(), &hints, &res))
 			   goto error_getaddrinfo;
 		    
@@ -368,7 +368,7 @@ int Run()
 		for(auto soc: g_vecSocks) FD_SET(soc, &rfds);
 		
 		//cerr << "Polling..." <<endl;
-		int nReady=select(maxfd, &rfds, &wfds, NULL, NULL);
+		int nReady=select(maxfd, &rfds, &wfds, nullptr, nullptr);
 		if (nReady<0)
 		{
 			if(errno == EINTR)
@@ -385,7 +385,7 @@ int Run()
 
 			if(g_sockunix == soc)
 			{
-				int fd = accept(g_sockunix, NULL, NULL);
+				int fd = accept(g_sockunix, nullptr, nullptr);
 				if (fd>=0)
 				{
 					set_nb(fd);
@@ -412,7 +412,7 @@ int Run()
 					USRDBG( "Detected incoming connection from the TCP socket");
 
 					if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf),
-									NULL, 0, NI_NUMERICHOST))
+									nullptr, 0, NI_NUMERICHOST))
 					{
 						aclog::err("ERROR: could not resolve hostname for incoming TCP host");
 						termsocket_quick(fd);

@@ -74,7 +74,7 @@ class IDecompressor
 {
 public:
 	bool eof=false;
-	mstring *psError = NULL;
+	mstring *psError = nullptr;
 	virtual ~IDecompressor() {};
 	virtual bool UncompMore(char *szInBuf, size_t nBufSize, size_t &nBufPos, acbuf &UncompBuf) =0;
 	virtual bool Init() =0;
@@ -344,7 +344,7 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, uint nFakeTra
 	}
 	else
 	{
-		m_szFileBuf = NULL;
+		m_szFileBuf = nullptr;
 		m_nBufSize = 0;
 	}
 	
@@ -746,18 +746,18 @@ bool Bz2compressFile(const char *pathIn, const char*pathOut)
 {
 	bool bRet=false;
 	filereader reader;
-	FILE *f(NULL);
-	BZFILE *bzf(NULL);
+	FILE *f(nullptr);
+	BZFILE *bzf(nullptr);
 	int nError(0);
 
 	if(!reader.OpenFile(pathIn, true))
 		return false;
 
-	if(NULL !=(f = fopen(pathOut, "w")))
+	if(nullptr !=(f = fopen(pathOut, "w")))
 	{
 		if(!ferror(f))
 		{
-			if(NULL != (bzf = BZ2_bzWriteOpen( &nError, f, 9, 0, 30)))
+			if(nullptr != (bzf = BZ2_bzWriteOpen( &nError, f, 9, 0, 30)))
 			{
 				if(BZ_OK == nError)
 				{

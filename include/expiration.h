@@ -15,7 +15,7 @@ struct tDiskFileInfo
 	tFingerprint fpr;
 };
 
-class expiration : public tCacheOperation, ifileprocessor
+class expiration : public tCacheOperation, public ifileprocessor
 {
 public:
 	// XXX: g++ 4.7 is not there yet... using tCacheOperation::tCacheOperation;

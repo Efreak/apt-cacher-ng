@@ -7,6 +7,7 @@
 #include "expiration.h"
 #include "pkgimport.h"
 #include "showinfo.h"
+#include "jsonstats.h"
 #include "mirror.h"
 #include "aclogger.h"
 #include "filereader.h"
@@ -149,7 +150,7 @@ string & tSpecialRequest::GetHostname()
 		if (0==getsockname(m_parms.fd, (struct sockaddr *)&ss, &slen) && 0
 				==getnameinfo((struct sockaddr*) &ss, sizeof(ss), hbuf,
 						sizeof(hbuf),
-						NULL, 0, NI_NUMERICHOST))
+						nullptr, 0, NI_NUMERICHOST))
 		{
 			const char *p=hbuf;
 			bool bAddBrs(false);
@@ -195,6 +196,7 @@ LPCSTR tSpecialRequest::GetTaskName()
 	case workDELETECONFIRM: return "Manual File Deletion (Confirmed)";
 	case workCOUNTSTATS: return "Status Report With Statistics";
 	case workSTYLESHEET: return "CSS";
+	case workJStats: return "Stats";
 	}
 	return "SpecialOperation";
 }
@@ -255,7 +257,8 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 			{"doDeleteYes=", workDELETE},
 			{"doCount=", workCOUNTSTATS},
 			{"doTraceStart=", workTraceStart},
-			{"doTraceEnd=", workTraceEnd}
+			{"doTraceEnd=", workTraceEnd},
+			{"doJStats", workJStats}
 	};
 	for(auto& needle: matches)
 		if(StrHasFrom(cmd, needle.trigger, epos))
@@ -270,7 +273,7 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 	switch (parms.type)
 	{
 	case workNotSpecial:
-		return NULL;
+		return nullptr;
 	case workExExpire:
 	case workExList:
 	case workExPurge:
@@ -298,8 +301,10 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 		return new tDeleter(parms);
 	case workSTYLESHEET:
 		return new tStyleCss(parms);
+	case workJStats:
+		return new jsonstats(parms);
 	}
-	return NULL;
+	return nullptr;
 }
 
 void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd)

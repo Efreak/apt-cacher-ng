@@ -26,3 +26,5 @@
 #cmakedefine HAVE_SD_NOTIFY
 #cmakedefine HAVE_LINUX_EVENTFD
 #cmakedefine ACVERSION "@ACVERSION@"
+#cmakedefine CFGDIR "@CFGDIR@"
+

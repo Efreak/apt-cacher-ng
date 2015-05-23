@@ -17,7 +17,7 @@ struct t_logger
 	t_logger(const char *szFuncName, const void * ptr); // starts the logger, shifts stack depth
 	~t_logger();
 	tSS & GetFmter();
-	void Write(const char *pFile=NULL, unsigned int nLine=0);
+	void Write(const char *pFile=nullptr, unsigned int nLine=0);
 private:
 	tSS m_strm;
 	pthread_t m_id;
@@ -41,7 +41,7 @@ namespace aclog
       bool open();
       void close(bool bReopen);
       void transfer(char cLogType, uint64_t nCount, const char *szClient, const char *szPath);
-      void err(const char *msg, const char *client=NULL);
+      void err(const char *msg, const char *client=nullptr);
       void misc(const mstring & sLine, const char cLogType='M');
       inline void err(cmstring &msg) { err(msg.c_str()); }
       inline void err(const tSS& msg) { err(msg.c_str()); }

@@ -67,7 +67,7 @@ header::header(const header &s)
  m_nEstimLength(s.m_nEstimLength)
 {
 	for (uint i = 0; i < HEADPOS_MAX; i++)
-		h[i] = s.h[i] ? strdup(s.h[i]) : NULL;
+		h[i] = s.h[i] ? strdup(s.h[i]) : nullptr;
 }
 
 header& header::operator=(const header& s)
@@ -79,7 +79,7 @@ header& header::operator=(const header& s)
 	{
 		if (h[i])
 			free(h[i]);
-		h[i] = s.h[i] ? strdup(s.h[i]) : NULL;
+		h[i] = s.h[i] ? strdup(s.h[i]) : nullptr;
 	}
 	return *this;
 }
@@ -214,7 +214,7 @@ void header::set(eHeadPos i, const char *val)
 	if (h[i])
 	{
 		free(h[i]);
-		h[i]=NULL;
+		h[i]=nullptr;
 	}
 	if(val)
 		h[i] = strdup(val);
@@ -225,7 +225,7 @@ void header::set(eHeadPos i, const char *val, size_t len)
 	if(!val)
 	{
 		free(h[i]);
-		h[i]=NULL;
+		h[i]=nullptr;
 		return;
 	}
 	h[i] = (char*) realloc(h[i], len+1);

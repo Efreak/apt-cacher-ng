@@ -109,7 +109,7 @@ void cleaner::WorkLoop()
 inline void * CleanerThreadAction(void *pVoid)
 {
 	static_cast<cleaner*>(pVoid)->WorkLoop();
-	return NULL;
+	return nullptr;
 }
 
 void cleaner::ScheduleFor(time_t when, eType what)
@@ -119,7 +119,7 @@ void cleaner::ScheduleFor(time_t when, eType what)
 	{
 		Init();
 		stamps[what] = when;
-		pthread_create(&m_thr, NULL, CleanerThreadAction, (void *)this);
+		pthread_create(&m_thr, nullptr, CleanerThreadAction, (void *)this);
 	}
 	else
 	{
@@ -145,7 +145,7 @@ void cleaner::Stop()
 		stamps[cleaner::TYPE_STOPSCHED] = 1;
 		notifyAll();
 	}
-    pthread_join(m_thr, NULL);
+    pthread_join(m_thr, nullptr);
 
     setLockGuard;
     m_thr = 0;
