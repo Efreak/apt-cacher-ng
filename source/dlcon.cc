@@ -1130,12 +1130,8 @@ void dlcon::WorkLoop()
 							sErrorMsg,
 							&bUsed,
 							m_qNewjobs.front()->GetConnStateTracker(),
-#ifdef HAVE_SSL
-						tgt.bSSL,
-#else
-						false
-#endif
-						timeout, fresh);
+							IFSSLORFALSE(tgt.bSSL),
+							timeout, fresh);
 			}	;
 
 				auto& cjob = m_qNewjobs.front();
