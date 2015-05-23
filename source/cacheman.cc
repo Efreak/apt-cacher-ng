@@ -663,6 +663,7 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 	return ret.csType != CSTYPE_INVALID ? &ret : nullptr;
 }
 
+
 bool tCacheOperation::PatchFile(const string &srcRel,
 		const string &diffIdxPathRel, tPListConstIt pit, tPListConstIt itEnd,
 		const tFingerprint *verifData)
@@ -694,7 +695,7 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 
 		SetFlags(pfile).parseignore=true; // not an ifile, never parse this
 		::mkbasedir(sFinalPatch);
-		if(!pf.p && ! (pf.p=fopen(sFinalPatch.c_str(), "w")))
+		if(!pf.p && ! (pf.p=fopen(sFinalPatch.c_str(), "w+")))
 		{
 			SendChunk("Failed to create intermediate patch file, stop patching...<br>");
 			return false;
@@ -732,7 +733,7 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 		SendChunk("Patching...<br>");
 
 	tSS cmd;
-	cmd << "cd '" << CACHE_BASE << "_actmp' && red --silent patch.base < combined.diff";
+	cmd << "cd '" << CACHE_BASE << "_actmp' && red --silent patch.base < " << sFinalPatch;
 	if (::system(cmd.c_str()))
 	{
 		MTLOGASSERT(false, "Command failed: " << cmd);
@@ -1403,7 +1404,7 @@ strip_next_class:
 				MTLOGDEBUG("#### Testing file: " << pathRel << " as patch base candidate");
 				if (probe.ScanFile(absPath, CSTYPE_SHA1, true, df.p))
 				{
-					df.close(); // write the whole file to disk ASAP!
+					fflush(df.p); // write the whole file to disk ASAP!
 
 					if(CheckStopSignal())
 						return;
@@ -1452,7 +1453,7 @@ strip_next_class:
 							SendFmt << "Found patching base candidate, unpacked to "
 								<< sPatchBaseAbs << "<br>";
 
-						if (PatchFile(sPatchBaseAbs, patchidxFileToUse, itPatchStart,
+						if (df.close(), PatchFile(sPatchBaseAbs, patchidxFileToUse, itPatchStart,
 									patchList.end(), pEndSum))
 						{
 
@@ -1952,8 +1953,8 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 	case EIDX_RELEASE:
 		info.fpr.csType = CSTYPE_SHA1;
 		sStartMark="SHA1:";
-		// fall-through, parser follows
-
+		// parser follows
+		//no break
 	case EIDX_RFC822WITHLISTS:
 		// common info object does not help here because there are many entries, and directory
 		// could appear after the list :-(
@@ -2143,7 +2144,7 @@ void tCacheOperation::PrintStats(cmstring &title)
 	{
 		total += f.second.space;
 		if(f.second.space)
-			sorted.emplace(f.second.space, &f.first);
+			EMPLACE_PAIR(sorted,f.second.space, &f.first);
 		if(sorted.size()>nMax)
 		{
 			sorted.erase(sorted.begin());

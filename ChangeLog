@@ -1,9 +1,14 @@
 apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
 
-  * Moved some of the rarely used functionality into a helper tool
+  * Code refactoring, little memory consumption improvement
+  * FIX: creation of the PID file even in non-forking mode (Debian bug #784752)
+  * Moving some functionality not relevant for server operation to a dedicated
+    tool "acngtool"
 
   [ Felix Janda <felix.janda@posteo.de> ]
   * Compilation fixes for the MUSL C library
+
+TODO: adapt debian packaging, include PREFIX and CFGDIR
 
  -- 
 

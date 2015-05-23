@@ -243,10 +243,10 @@ inline void _FixPostPreSlashes(string &val)
 		val.insert(0, "/", 1);
 }
 
-bool ReadOneConfFile(const string & szFilename)
+bool ReadOneConfFile(const string & szFilename, bool bReadErrorIsFatal=true)
 {
 	tCfgIter itor(szFilename);
-	itor.reader.CheckGoodState(true, &szFilename);
+	itor.reader.CheckGoodState(bReadErrorIsFatal, &szFilename);
 
 	NoCaseStringMap dupeCheck;
 
@@ -391,12 +391,7 @@ tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
 					auto nam(GetBaseName(s));
 					if(bAddDefault)
 					nam.erase(nam.size()-8);
-#if __GNUC__ >= 4 && __GNUC_MINOR__ < 8
-					if(bname2path.find(nam) == bname2path.end())
-						bname2path[nam]=s;
-#else
-					bname2path.emplace(nam, s);
-#endif
+					EMPLACE_PAIR(bname2path, nam, s);
 				}
 
 			}
@@ -982,7 +977,7 @@ tRepoData::~tRepoData()
 	delete m_pHooks;
 }
 
-void ReadConfigDirectory(const char *szPath)
+void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 {
 	dump_proc_status();
 	char buf[PATH_MAX];
@@ -993,9 +988,9 @@ void ReadConfigDirectory(const char *szPath)
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
-		ReadOneConfFile(src);
+		ReadOneConfFile(src, bReadErrorIsFatal);
 #else
-	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
+	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bReadErrorIsFatal);
 #endif
 	dump_proc_status();
 	if(debug & LOG_DEBUG)

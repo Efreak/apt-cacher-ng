@@ -7,6 +7,7 @@
 #include "expiration.h"
 #include "pkgimport.h"
 #include "showinfo.h"
+#include "jsonstats.h"
 #include "mirror.h"
 #include "aclogger.h"
 #include "filereader.h"
@@ -195,6 +196,7 @@ LPCSTR tSpecialRequest::GetTaskName()
 	case workDELETECONFIRM: return "Manual File Deletion (Confirmed)";
 	case workCOUNTSTATS: return "Status Report With Statistics";
 	case workSTYLESHEET: return "CSS";
+	case workJStats: return "Stats";
 	}
 	return "SpecialOperation";
 }
@@ -255,7 +257,8 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 			{"doDeleteYes=", workDELETE},
 			{"doCount=", workCOUNTSTATS},
 			{"doTraceStart=", workTraceStart},
-			{"doTraceEnd=", workTraceEnd}
+			{"doTraceEnd=", workTraceEnd},
+			{"doJStats", workJStats}
 	};
 	for(auto& needle: matches)
 		if(StrHasFrom(cmd, needle.trigger, epos))
@@ -298,6 +301,8 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 		return new tDeleter(parms);
 	case workSTYLESHEET:
 		return new tStyleCss(parms);
+	case workJStats:
+		return new jsonstats(parms);
 	}
 	return NULL;
 }

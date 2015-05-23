@@ -190,11 +190,11 @@ public:
 			off_t skipBytes;
 			int nErr;
 
-			ssize_t SendData(int, int, off_t&, size_t)
+			ssize_t SendData(int, int, off_t&, size_t) override
 			{
 				return 0;
 			} // nothing to send
-			bool StoreFileData(const char *p, unsigned int count)
+			bool StoreFileData(const char *p, unsigned int count) override
 			{
 				if (count == 0)
 				{
@@ -228,7 +228,7 @@ public:
 			}
 #define SETERROR { nErr=__LINE__; return false;}
 			bool &m_isFirst;
-			bool DownloadStartedStoreHeader(const header &head, const char*, bool bRestarted, bool&)
+			bool DownloadStartedStoreHeader(const header &head, const char*, bool bRestarted, bool&) override
 			{
 				_cerr(head.frontLine<<endl);
 				m_head = head; // XXX: bloat, only status line and contlen required
@@ -356,7 +356,7 @@ public:
 		class tFitemProbe: public fileitem
 		{
 		public:
-			ssize_t SendData(int, int, off_t&, size_t)
+			ssize_t SendData(int, int, off_t&, size_t) override
 			{
 				return 0;
 			} // nothing to send

@@ -23,7 +23,11 @@ unique_ptr<TFileShrinkGuard> TFileShrinkGuard::Acquire(const struct stat& info)
 {
 	lockguard g(g_mmapLocksMx);
 	while(true) {
-		auto res = g_mmapLocks.emplace(make_pair(info.st_dev, info.st_ino));
+#ifdef COMPATGCC47
+		auto res = g_mmapLocks.insert(make_pair(info.st_dev, info.st_ino));
+#else
+		auto res = g_mmapLocks.emplace(info.st_dev, info.st_ino);
+#endif
 		if(res.second) // true if freshly inserted, false if there was an entry already
 		{
 			auto ret = new TFileShrinkGuard();
