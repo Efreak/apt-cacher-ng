@@ -167,26 +167,35 @@ int patch_file(string sBase, string sPatch, string sResult)
 			break;
 		}
 	}
+
+	unsigned long rangeStart(0), rangeLast(0);
 	auto patchChunk = [&](LPCSTR pline, size_t len, deque<tPtrLen> chunk)
-			{
-		unsigned long rangeStart, rangeEnd;
+	{
 		char op = 0x0;
-		auto n = sscanf(pline, "%lu,%lu%c\n", &rangeStart, &rangeEnd, &op);
-		//cerr << n <<endl;
+		auto n = sscanf(pline, "%lu,%lu%c\n", &rangeStart, &rangeLast, &op);
 		if(n == 1) // good enough
-			rangeEnd = rangeStart, op=pline[len-2];
-		if(rangeStart>idx.size() || rangeEnd>idx.size() || rangeStart>rangeEnd)
+			rangeLast = rangeStart, op = pline[len-2];
+			if(rangeStart>idx.size() || rangeLast>idx.size() || rangeStart>rangeLast)
 			return false;
-		// delete old stuff that will be replaced if not appending
-		if(op == 'a')
-			rangeStart++;
-		else
-			idx.erase(idx.begin() + rangeStart, idx.begin() + rangeEnd + 1);
-
-		idx.insert(idx.begin() + rangeStart, chunk.begin(), chunk.end());
-		return true;
-
-			};
+			if(op == 'a')
+			idx.insert(idx.begin() + (size_t) rangeStart + 1, chunk.begin(), chunk.end());
+			else
+			{
+				size_t i=0;
+				for(; i < chunk.size(); ++i, ++rangeStart)
+				{
+					if(rangeStart <= rangeLast)
+					idx[rangeStart] = chunk[i];
+					else
+						break; // new stuff bigger than replaced range
+				}
+				if(i<chunk.size()) // not enough space :-(
+					idx.insert(idx.begin() + (size_t) rangeStart, chunk.begin() + i, chunk.end());
+				else if(rangeStart-1 != rangeLast)// less data now?
+					idx.erase(idx.begin() + (size_t) rangeStart, idx.begin() + (size_t) rangeLast + 1);
+			}
+			return true;
+		};
 
 	auto pbuf = frPatch.GetBuffer();
 	auto psize = frPatch.GetSize();
@@ -209,42 +218,30 @@ int patch_file(string sBase, string sPatch, string sResult)
 			p = pbuf + psize + 1; // break signal, actually
 		}
 		p=crNext+1;
-		// ok, got the line as line with len
-		//cerr << "patch line: " << string(line, len);
-		//cerr.flush();
-
-		/* FIXME: single new dot workaround like this
-		$ diff x y --ed
-22a
-..
-.
-s/.//
-18a
-
-
-.
-7c
-
-.
-1c
-BUTHORS
-.
-
-		 */
 
 		bool gogo = (len == 2 && *line == '.');
 		if(!gogo)
 		{
 			if(!cmdlen)
 			{
+				if(!strncmp("s/.//\n", line, 6))
+				{
+					// oh, that's the fix-the-last-line command :-(
+					if(rangeStart)
+						idx[rangeStart].first = ".\n", idx[rangeStart].second=2;
+					continue;
+				}
+
 				cmdlen = len;
 				cmd = line;
+
+				if(len>2 && line[len-2] == 'd')
+					gogo = true; // no terminator to expect
 			}
 			else
 				chunk.emplace_back(line, len);
 		}
-		if(chunk.size() == 0 && len>1 && line[len-2] == 'd')
-			gogo = true; // no terminator
+
 		if(gogo)
 		{
 			if(!patchChunk(cmd, cmdlen, chunk))
@@ -260,6 +257,7 @@ BUTHORS
 	for(const auto& kv : idx)
 		res.write(kv.first, kv.second);
 	res.flush();
+//	dump_proc_status_always();
 	return res.good() ? 0 : -4;
 }
 

@@ -6,6 +6,9 @@
 #include "aclogger.h"
 #include "meta.h"
 
+#include <fstream>
+#include <iostream>
+
 #ifdef DEBUG
 #include <assert.h>
 #define ASSERT(x) assert(x)
@@ -30,9 +33,6 @@ inline void dump_proc_status(){}; // strip away
 
 #else
 
-#include <fstream>
-#include <iostream>
-
 #define LOGLVL(n, x) if(acfg::debug&n){ __logobj.GetFmter() << x; __logobj.Write(__FILE__,__LINE__); }
 #define LOG(x) LOGLVL(LOG_DEBUG, x)
 
@@ -47,9 +47,12 @@ inline void dump_proc_status(){}; // strip away
 
 #define dbgline ldbg("mark")
 #define DBGQLOG(x) {aclog::err(tSS()<< x);}
+#define dump_proc_status dump_proc_status_always
+
+#endif
 
 
-inline void dump_proc_status()
+inline void dump_proc_status_always()
 {
 	using namespace std;
 	ifstream sf("/proc/self/status");
@@ -61,6 +64,5 @@ inline void dump_proc_status()
 	}
 };
 
-#endif
 
 #endif // __DEBUG_H__
