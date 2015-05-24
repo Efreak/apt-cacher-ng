@@ -167,12 +167,8 @@ int patch_file(string sBase, string sPatch, string sResult)
 			break;
 		}
 	}
-	auto patchChunk = [&](deque<tPtrLen> chunk)
+	auto patchChunk = [&](LPCSTR pline, size_t len, deque<tPtrLen> chunk)
 			{
-		if(chunk.empty())
-			return false;
-		auto pline = chunk.front().first;
-		auto len = chunk.front().second;
 		unsigned long rangeStart, rangeEnd;
 		char op = 0x0;
 		auto n = sscanf(pline, "%lu,%lu%c\n", &rangeStart, &rangeEnd, &op);
@@ -187,9 +183,7 @@ int patch_file(string sBase, string sPatch, string sResult)
 		else
 			idx.erase(idx.begin() + rangeStart, idx.begin() + rangeEnd + 1);
 
-		auto beginNew = chunk.begin();
-		beginNew++;
-		idx.insert(idx.begin() + rangeStart, beginNew, chunk.end());
+		idx.insert(idx.begin() + rangeStart, chunk.begin(), chunk.end());
 		return true;
 
 			};
@@ -197,6 +191,8 @@ int patch_file(string sBase, string sPatch, string sResult)
 	auto pbuf = frPatch.GetBuffer();
 	auto psize = frPatch.GetSize();
 	deque<tPtrLen> chunk;
+	LPCSTR cmd =0;
+	size_t cmdlen = 0;
 	for (auto p = pbuf; p < pbuf + psize;)
 	{
 		LPCSTR crNext = strchr(p, '\n');
@@ -216,16 +212,45 @@ int patch_file(string sBase, string sPatch, string sResult)
 		// ok, got the line as line with len
 		//cerr << "patch line: " << string(line, len);
 		//cerr.flush();
+
+		/* FIXME: single new dot workaround like this
+		$ diff x y --ed
+22a
+..
+.
+s/.//
+18a
+
+
+.
+7c
+
+.
+1c
+BUTHORS
+.
+
+		 */
+
 		bool gogo = (len == 2 && *line == '.');
 		if(!gogo)
-			chunk.emplace_back(line, len);
-		if(chunk.size() == 1 && line[len-2] == 'd')
+		{
+			if(!cmdlen)
+			{
+				cmdlen = len;
+				cmd = line;
+			}
+			else
+				chunk.emplace_back(line, len);
+		}
+		if(chunk.size() == 0 && len>1 && line[len-2] == 'd')
 			gogo = true; // no terminator
 		if(gogo)
 		{
-			if(!patchChunk(chunk))
-				exit(-5);
+			if(!patchChunk(cmd, cmdlen, chunk))
+				exit(55);
 			chunk.clear();
+			cmdlen = 0;
 		}
 	}
 	ofstream res(sResult.c_str());
