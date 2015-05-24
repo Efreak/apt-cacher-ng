@@ -149,9 +149,10 @@ int patch_file(string sBase, string sPatch, string sResult)
 	if(!frBase.OpenFile(sBase, true) || !frPatch.OpenFile(sPatch, true))
 		return -2;
 	typedef pair<LPCSTR, size_t> tPtrLen;
-	list<tPtrLen> idx;
+	deque<tPtrLen> idx;
 	auto buf = frBase.GetBuffer();
 	auto size = frBase.GetSize();
+	idx.emplace_back(buf, 0); // dummy entry to avoid -1 calculations because of ed numbering style
 	for (auto p = buf; p < buf + size;)
 	{
 		LPCSTR crNext = strchr(p, '\n');
@@ -166,18 +167,7 @@ int patch_file(string sBase, string sPatch, string sResult)
 			break;
 		}
 	}
-#if 0
-	int i=10;
-	for(auto& kv : idx)
-	{
-		if(i--<0) break;
-		cerr << "O:" << string(kv.first, kv.second);
-	}
-#endif
-	// start at the fake position after EOF
-	unsigned long cursor = idx.size()+1; // one-shifted like in ed
-	auto iter = idx.end();
-	auto patchChunk = [&](list<tPtrLen> chunk)
+	auto patchChunk = [&](deque<tPtrLen> chunk)
 			{
 		if(chunk.empty())
 			return false;
@@ -191,43 +181,22 @@ int patch_file(string sBase, string sPatch, string sResult)
 			rangeEnd = rangeStart, op=pline[len-2];
 		if(rangeStart>idx.size() || rangeEnd>idx.size() || rangeStart>rangeEnd)
 			return false;
-		if(rangeStart > cursor)
-		{
-			cursor = idx.size()+1;
-			iter = idx.end();
-		}
-		while(rangeStart < cursor) // good enough since diff delivers patches in reverse order
-		{
-			iter--;
-			cursor--;
-		}
-		// delete old stuff that will be replaced
-		// ok, cursor remains at range start
-		if(op != 'a')
-		{
-			while(rangeEnd >= rangeStart)
-				iter = chunk.erase(iter), rangeEnd--;
-		}
-		else // append AFTER that line
-			iter++, cursor++;
+		// delete old stuff that will be replaced if not appending
+		if(op == 'a')
+			rangeStart++;
+		else
+			idx.erase(idx.begin() + rangeStart, idx.begin() + rangeEnd + 1);
 
 		auto beginNew = chunk.begin();
 		beginNew++;
-#ifdef COMPATGCC47
-#warning Untested extra code for gcc 4.7 in the patch function... might work incorrectly
-		idx.insert(iter, beginNew, chunk.end());
-		for(int i=chunk.size();i>1; --i)
-			iter--;
-#else
-		iter = idx.insert(iter, beginNew, chunk.end());
-#endif
+		idx.insert(idx.begin() + rangeStart, beginNew, chunk.end());
 		return true;
 
 			};
 
 	auto pbuf = frPatch.GetBuffer();
 	auto psize = frPatch.GetSize();
-	list<tPtrLen> chunk;
+	deque<tPtrLen> chunk;
 	for (auto p = pbuf; p < pbuf + psize;)
 	{
 		LPCSTR crNext = strchr(p, '\n');
@@ -263,7 +232,7 @@ int patch_file(string sBase, string sPatch, string sResult)
 	if(!res.is_open())
 		return -3;
 
-	for(auto& kv : idx)
+	for(const auto& kv : idx)
 		res.write(kv.first, kv.second);
 	res.flush();
 	return res.good() ? 0 : -4;
@@ -403,6 +372,26 @@ int main(int argc, const char **argv)
 	if(argc<2)
 		usage(1);
 	string cmd(argv[1]);
+#if 0
+	if (cmd == "wcl")
+	{
+		if (argc < 3)
+			usage(2);
+		filereader r;
+		if (!r.OpenFile(argv[2], true))
+		{
+			cerr << r.getSErrorString() << endl;
+			return EXIT_FAILURE;
+		}
+		size_t count = 0;
+		auto p = r.GetBuffer();
+		auto e = p + r.GetSize();
+		for (;p < e; ++p)
+			count += (*p == '\n');
+		cout << count << endl;
+		exit(EXIT_SUCCESS);
+	}
+#endif
 	if(cmd == "encb64")
 	{
 		if(argc<3)
