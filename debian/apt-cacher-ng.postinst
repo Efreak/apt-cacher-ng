@@ -139,7 +139,7 @@ if [ "$1" = "configure" ]; then
       keep|"")
          # but making sure that it's really set to something sensible in the
          # config, otherwise replace with the default
-         if ! TESTPATH=$(PRINTCFGVAR=CacheDir $BINPATH -c $CFG 2>/dev/null) ; then
+         if ! TESTPATH=$($TOOL printvar CacheDir -c $CFG 2>/dev/null) ; then
             # ok, some IO trouble is bad but in this case just behave like it
             # did in the former times with a static /v/c/a-c-n folder setting
             CDIR=/var/cache/$NAME
