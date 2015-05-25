@@ -16,7 +16,7 @@ Build and installation instructions:
  - if an error occurs during configuration: read the message, solve the
    problem, run "make distclean" and retry with "make"
  - if a GCC internal compiler error appears, try:
-   make distclean ; make NOLTO=1
+   make distclean ; make CMAKEOPTS=-DUSE_LTO=off
  - when done, copy build/apt-cacher-ng and build/in.acng to /usr/local/sbin
 
 Configure to run on system startup:

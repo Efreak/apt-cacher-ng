@@ -1,11 +1,7 @@
 
 ifneq ($(DEBUG),)
 	 CXXFLAGS += -g -O0 -DDEBUG
-	 CMAKEOPTS += -DADDDEBUGSRC=1 --debug-trycompile --debug-output
-endif
-
-ifneq ($(NOLTO),)
-	CMAKEOPTS += -DNOLTO=1
+	 CMAKEOPTS += -DADDDEBUGSRC=on -DUSE_LTO=off --debug-trycompile --debug-output
 endif
 
 export CXXFLAGS
