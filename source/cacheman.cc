@@ -733,7 +733,13 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 		SendChunk("Patching...<br>");
 
 	tSS cmd;
-	cmd << "cd '" << CACHE_BASE << "_actmp' && red --silent patch.base < " << sFinalPatch;
+	cmd << "cd '" << CACHE_BASE << "_actmp' && ";
+	auto act = acfg::suppdir + SZPATHSEP "acngtool";
+	if(!acfg::suppdir.empty() && 0==access(act.c_str(), X_OK))
+		cmd << "'" << act << "' patch patch.base " << sFinalPatch << " patch.result";
+	else
+		cmd << " red --silent patch.base < " << sFinalPatch;
+
 	if (::system(cmd.c_str()))
 	{
 		MTLOGASSERT(false, "Command failed: " << cmd);

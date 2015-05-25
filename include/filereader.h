@@ -46,6 +46,11 @@ public:
 
 	void Close();
 
+	const mstring& getSErrorString() const
+	{
+		return m_sErrorString;
+	}
+
 private:
 
 	bool m_bError, m_bEof;

@@ -497,7 +497,7 @@ struct tErrnoFmter: public mstring
 mstring EncodeBase64Auth(cmstring &sPwdString);
 mstring EncodeBase64(LPCSTR data, uint len);
 
-#if __GNUC__ == 4 && __GNUC_MINOR__ < 8
+#if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
 #define COMPATGCC47
 #define EMPLACE_PAIR(M,K,V) if(M.find(K) == M.end()) M.insert(std::make_pair(K,V))
 #else

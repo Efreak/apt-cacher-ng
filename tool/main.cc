@@ -143,15 +143,51 @@ bool AppendPasswordHash(string &stringWithSalt, LPCSTR plainPass, size_t passLen
 }
 #endif
 
+typedef pair<LPCSTR, size_t> tPtrLen;
+typedef deque<tPtrLen> tPatchSequence;
+
+// might need to access the last line externally
+unsigned long rangeStart(0), rangeLast(0);
+
+inline bool patchChunk(tPatchSequence& idx, LPCSTR pline, size_t len, tPatchSequence chunk)
+{
+	char op = 0x0;
+	auto n = sscanf(pline, "%lu,%lu%c\n", &rangeStart, &rangeLast, &op);
+	if (n == 1) // good enough
+		rangeLast = rangeStart, op = pline[len - 2];
+	else if(n!=3)
+		return false; // bad instruction
+	if (rangeStart > idx.size() || rangeLast > idx.size() || rangeStart > rangeLast)
+		return false;
+	if (op == 'a')
+		idx.insert(idx.begin() + (size_t) rangeStart + 1, chunk.begin(), chunk.end());
+	else
+	{
+		size_t i = 0;
+		for (; i < chunk.size(); ++i, ++rangeStart)
+		{
+			if (rangeStart <= rangeLast)
+				idx[rangeStart] = chunk[i];
+			else
+				break; // new stuff bigger than replaced range
+		}
+		if (i < chunk.size()) // not enough space :-(
+			idx.insert(idx.begin() + (size_t) rangeStart, chunk.begin() + i, chunk.end());
+		else if (rangeStart - 1 != rangeLast) // less data now?
+			idx.erase(idx.begin() + (size_t) rangeStart, idx.begin() + (size_t) rangeLast + 1);
+	}
+	return true;
+}
+
 int patch_file(string sBase, string sPatch, string sResult)
 {
 	filereader frBase, frPatch;
 	if(!frBase.OpenFile(sBase, true) || !frPatch.OpenFile(sPatch, true))
 		return -2;
-	typedef pair<LPCSTR, size_t> tPtrLen;
-	list<tPtrLen> idx;
 	auto buf = frBase.GetBuffer();
 	auto size = frBase.GetSize();
+	tPatchSequence idx;
+	idx.emplace_back(buf, 0); // dummy entry to avoid -1 calculations because of ed numbering style
 	for (auto p = buf; p < buf + size;)
 	{
 		LPCSTR crNext = strchr(p, '\n');
@@ -166,68 +202,12 @@ int patch_file(string sBase, string sPatch, string sResult)
 			break;
 		}
 	}
-#if 0
-	int i=10;
-	for(auto& kv : idx)
-	{
-		if(i--<0) break;
-		cerr << "O:" << string(kv.first, kv.second);
-	}
-#endif
-	// start at the fake position after EOF
-	unsigned long cursor = idx.size()+1; // one-shifted like in ed
-	auto iter = idx.end();
-	auto patchChunk = [&](list<tPtrLen> chunk)
-			{
-		if(chunk.empty())
-			return false;
-		auto pline = chunk.front().first;
-		auto len = chunk.front().second;
-		unsigned long rangeStart, rangeEnd;
-		char op = 0x0;
-		auto n = sscanf(pline, "%lu,%lu%c\n", &rangeStart, &rangeEnd, &op);
-		//cerr << n <<endl;
-		if(n == 1) // good enough
-			rangeEnd = rangeStart, op=pline[len-2];
-		if(rangeStart>idx.size() || rangeEnd>idx.size() || rangeStart>rangeEnd)
-			return false;
-		if(rangeStart > cursor)
-		{
-			cursor = idx.size()+1;
-			iter = idx.end();
-		}
-		while(rangeStart < cursor) // good enough since diff delivers patches in reverse order
-		{
-			iter--;
-			cursor--;
-		}
-		// delete old stuff that will be replaced
-		// ok, cursor remains at range start
-		if(op != 'a')
-		{
-			while(rangeEnd >= rangeStart)
-				iter = chunk.erase(iter), rangeEnd--;
-		}
-		else // append AFTER that line
-			iter++, cursor++;
-
-		auto beginNew = chunk.begin();
-		beginNew++;
-#ifdef COMPATGCC47
-#warning Untested extra code for gcc 4.7 in the patch function... might work incorrectly
-		idx.insert(iter, beginNew, chunk.end());
-		for(int i=chunk.size();i>1; --i)
-			iter--;
-#else
-		iter = idx.insert(iter, beginNew, chunk.end());
-#endif
-		return true;
-
-			};
 
 	auto pbuf = frPatch.GetBuffer();
 	auto psize = frPatch.GetSize();
-	list<tPtrLen> chunk;
+	tPatchSequence chunk;
+	LPCSTR cmd =0;
+	size_t cmdlen = 0;
 	for (auto p = pbuf; p < pbuf + psize;)
 	{
 		LPCSTR crNext = strchr(p, '\n');
@@ -244,28 +224,52 @@ int patch_file(string sBase, string sPatch, string sResult)
 			p = pbuf + psize + 1; // break signal, actually
 		}
 		p=crNext+1;
-		// ok, got the line as line with len
-		//cerr << "patch line: " << string(line, len);
-		//cerr.flush();
+
 		bool gogo = (len == 2 && *line == '.');
 		if(!gogo)
-			chunk.emplace_back(line, len);
-		if(chunk.size() == 1 && line[len-2] == 'd')
-			gogo = true; // no terminator
+		{
+			if(!cmdlen)
+			{
+				if(!strncmp("s/.//\n", line, 6))
+				{
+					// oh, that's the fix-the-last-line command :-(
+					if(rangeStart)
+						idx[rangeStart].first = ".\n", idx[rangeStart].second=2;
+					continue;
+				}
+				else if(line[0] == 'w')
+					continue; // don't care, we know the target
+
+				cmdlen = len;
+				cmd = line;
+
+				if(len>2 && line[len-2] == 'd')
+					gogo = true; // no terminator to expect
+			}
+			else
+				chunk.emplace_back(line, len);
+		}
+
 		if(gogo)
 		{
-			if(!patchChunk(chunk))
-				exit(-5);
+			if(!patchChunk(idx, cmd, cmdlen, chunk))
+			{
+				cerr << "Bad patch line: ";
+				cerr.write(cmd, cmdlen);
+				exit(EINVAL);
+			}
 			chunk.clear();
+			cmdlen = 0;
 		}
 	}
 	ofstream res(sResult.c_str());
 	if(!res.is_open())
 		return -3;
 
-	for(auto& kv : idx)
+	for(const auto& kv : idx)
 		res.write(kv.first, kv.second);
 	res.flush();
+//	dump_proc_status_always();
 	return res.good() ? 0 : -4;
 }
 
@@ -371,7 +375,7 @@ void parse_options(int argc, const char **argv)
 		if(!info || !S_ISDIR(info.st_mode))
 		{
 			cerr << "Failed to open config directory: " << szCfgDir;
-			exit(-2);
+			exit(EXIT_FAILURE);
 		}
 		acfg::ReadConfigDirectory(szCfgDir, false);
 	}
@@ -403,6 +407,26 @@ int main(int argc, const char **argv)
 	if(argc<2)
 		usage(1);
 	string cmd(argv[1]);
+#if 0
+	if (cmd == "wcl")
+	{
+		if (argc < 3)
+			usage(2);
+		filereader r;
+		if (!r.OpenFile(argv[2], true))
+		{
+			cerr << r.getSErrorString() << endl;
+			return EXIT_FAILURE;
+		}
+		size_t count = 0;
+		auto p = r.GetBuffer();
+		auto e = p + r.GetSize();
+		for (;p < e; ++p)
+			count += (*p == '\n');
+		cout << count << endl;
+		exit(EXIT_SUCCESS);
+	}
+#endif
 	if(cmd == "encb64")
 	{
 		if(argc<3)
@@ -453,11 +477,6 @@ int main(int argc, const char **argv)
 		if(argc!=5)
 			usage(3);
 		return(patch_file(argv[2], argv[3], argv[4]));
-				/*
-			"dev/diff/Packages.orig",
-			"dev/diff/test.diff",
-			"dev/diff/patched"
-	*/
 	}
 
 	usage(4);
@@ -516,7 +535,16 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 	auto fi=std::make_shared<tPrintItem>();
 	dl.AddJob(fi, &url, nullptr, nullptr);
 	dl.WorkLoop();
-	return (fi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE
-			&& fi->GetHeaderUnlocked().getStatus() == 200) ? EXIT_SUCCESS : -3;
+	if(fi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE)
+	{
+		auto st=fi->GetHeaderUnlocked().getStatus();
+		if(st == 200)
+			return EXIT_SUCCESS;
+		if (st>=500)
+			return EIO;
+		if (st>=400)
+			return EACCES;
+	}
+	return EXIT_FAILURE;
 }
 
