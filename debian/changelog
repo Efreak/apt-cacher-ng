@@ -3,6 +3,8 @@ apt-cacher-ng (0.8.4-1) UNRELEASED; urgency=low
   * New upstream version
     + Fixes creation of pidfile even in foregeround mode (closes: #784752)
   * Added pt_BR.po update (by Adriano Rafael Gomes, closes: #785471)
+  * Getting rid of "ed" recommendation, new version brings a faster
+    replacement (closes: #772529)
 
  -- 
 
