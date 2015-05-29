@@ -6,7 +6,7 @@ apt-cacher-ng (0.8.4-1) UNRELEASED; urgency=low
   * Getting rid of "ed" recommendation, new version brings a faster
     replacement (closes: #772529)
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Mon, 25 May 2015 16:48:10 +0200
 
 apt-cacher-ng (0.8.3-1) unstable; urgency=medium
 
