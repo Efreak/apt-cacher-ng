@@ -2,6 +2,7 @@
 ifneq ($(DEBUG),)
 	 CXXFLAGS += -g -O0 -DDEBUG
 	 CMAKEOPTS += -DADDDEBUGSRC=on -DUSE_LTO=off --debug-trycompile --debug-output
+	 XMAKEFLAGS = DEBUG=1
 endif
 
 export CXXFLAGS
@@ -10,7 +11,7 @@ export LDFLAGS
 # pass down to cmake's Makefile, but all targets depend on config
 default: all
 apt-cacher-ng in.acng acngfs acngtool clean all: config
-	@$(MAKE) -C build $@
+	@$(MAKE) $(XMAKEFLAGS) -C build $@
 
 config: build/.config-stamp
 

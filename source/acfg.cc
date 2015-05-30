@@ -1006,6 +1006,7 @@ void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 
 void PostProcConfig()
 {
+	mapUrl2pVname.rehash(mapUrl2pVname.size());
 	
 	if(port.empty()) // heh?
 		port=ACNG_DEF_PORT;
@@ -1078,7 +1079,7 @@ void PostProcConfig()
 	   mkbasedir(acfg::pidfile);
 
    if(nettimeout < 5) {
-	   cerr << "Warning, NetworkTimeout too small, assuming 5." << endl;
+	   cerr << "Warning, NetworkTimeout value too small, using: 5." << endl;
 	   nettimeout = 5;
    }
 

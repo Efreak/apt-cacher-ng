@@ -342,7 +342,10 @@ void do_stuff_before_config()
 
 #endif
 
-void parse_options(int argc, const char **argv)
+
+tStrVec non_opt_args;
+
+void parse_options(int argc, const char **argv, bool bExtractNonOpts=false)
 {
 	LPCSTR szCfgDir=CFGDIR;
 	std::vector<LPCSTR> cmdvars;
@@ -382,7 +385,14 @@ void parse_options(int argc, const char **argv)
 
 	for(auto& keyval : cmdvars)
 		if(!acfg::SetOption(keyval, 0))
-			usage(EXIT_FAILURE);
+			non_opt_args.emplace_back(keyval);
+
+	if(!bExtractNonOpts && !non_opt_args.empty())
+	{
+		for(auto& x: non_opt_args)
+			cerr << "Bad option: " << x << endl;
+		usage(EXIT_FAILURE);
+	}
 
 	acfg::PostProcConfig();
 }
@@ -425,6 +435,40 @@ int main(int argc, const char **argv)
 			count += (*p == '\n');
 		cout << count << endl;
 		exit(EXIT_SUCCESS);
+	}
+#endif
+#if 0
+	if (cmd == "benchmark")
+	{
+		dump_proc_status_always();
+		acfg::g_bQuiet = true;
+		acfg::g_bNoComplex = false;
+		parse_options(argc - 2, argv + 2, true);
+		acfg::PostProcConfig();
+		string s;
+		tHttpUrl u;
+		int res=0;
+/*
+		acfg::tRepoResolvResult hm;
+		tHttpUrl wtf;
+		wtf.SetHttpUrl(non_opt_args.front());
+		acfg::GetRepNameAndPathResidual(wtf, hm);
+*/
+		while(cin)
+		{
+			std::getline(cin, s);
+			s += "/xtest.deb";
+			if(u.SetHttpUrl(s))
+			{
+				acfg::tRepoResolvResult xdata;
+				acfg::GetRepNameAndPathResidual(u, xdata);
+				cout << s << " -> "
+						<< (xdata.psRepoName ? "matched" : "not matched")
+						<< endl;
+			}
+		}
+		dump_proc_status_always();
+		exit(res);
 	}
 #endif
 	if(cmd == "encb64")
