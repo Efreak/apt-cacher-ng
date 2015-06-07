@@ -8,6 +8,10 @@ apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
   * LTO is default option again, removed NOLTO hack (use CMAKEOPTS to disable)
   * Compilation fixes for the MUSL C library (by Felix Janda
     <felix.janda@posteo.de>)
+  * Redirection of plain http POSTs to bugs.debian.org is now always
+    redirected to https style URL.
+FIXME: test
+
 
  -- 
 

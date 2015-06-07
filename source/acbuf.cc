@@ -81,7 +81,7 @@ int acbuf::sysread(int fd, unsigned int maxlen)
     return(n);
 }
 
-bool tSS::send(int nConFd, mstring& sErrorStatus)
+bool tSS::send(int nConFd, mstring* sErrorStatus)
 {
 	while (!empty())
 	{
@@ -102,16 +102,19 @@ bool tSS::send(int nConFd, mstring& sErrorStatus)
 				auto r=::select(nConFd + 1, nullptr, &wfds, nullptr, &tv);
 				if(!r && errno != EINTR)
 				{
-					sErrorStatus = "502 Socket timeout";
+					if(sErrorStatus)
+						*sErrorStatus = "502 Socket timeout";
 					return false;
 				}
 				continue;
 			}
 
 #ifdef MINIBUILD
-			sErrorStatus = "502 Socket error";
+			if(sErrorStatus)
+				*sErrorStatus = "502 Socket error";
 #else
-			sErrorStatus = tErrnoFmter("502 Socket error, ");
+			if(sErrorStatus)
+				*sErrorStatus = tErrnoFmter("502 Socket error, ");
 #endif
 			return false;
 		}
@@ -119,7 +122,7 @@ bool tSS::send(int nConFd, mstring& sErrorStatus)
 	return true;
 }
 
-bool tSS::recv(int nConFd, mstring& sErrorStatus)
+bool tSS::recv(int nConFd, mstring* sErrorStatus)
 {
 	struct timeval tv
 	{ acfg::nettimeout, 0 };
@@ -132,7 +135,8 @@ bool tSS::recv(int nConFd, mstring& sErrorStatus)
 		if(errno == EINTR)
 			return true;
 
-		sErrorStatus = "502 Socket timeout";
+		if(sErrorStatus)
+			*sErrorStatus = "502 Socket timeout";
 		return false;
 	}
 	// must be readable
@@ -140,9 +144,11 @@ bool tSS::recv(int nConFd, mstring& sErrorStatus)
 	if(r<=0)
 	{
 #ifdef MINIBUILD
-			sErrorStatus = "502 Socket error";
+		if(sErrorStatus)
+			*sErrorStatus = "502 Socket error";
 #else
-			sErrorStatus = tErrnoFmter("502 Socket error, ");
+			if(sErrorStatus)
+				*sErrorStatus = tErrnoFmter("502 Socket error, ");
 #endif
 			return false;
 	}
