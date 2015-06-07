@@ -1,4 +1,5 @@
 #!/bin/bash
+test "$http_proxy" || echo NOTE: proxy not set
 
 apt-cache search abc > samplepkgs
 cat >body.txt <<HERE 
@@ -49,5 +50,5 @@ HEAD
 ) | sed -e 's,$,\r,g'
 cat body.txt
 ) | socket localhost 3142 > response.txt
-grep 200.*OK response.txt
+grep 200.*OK response.txt || (echo Err, not 200 ; exit 1)
 rm -f response.txt samplepkgs body.txt
