@@ -603,14 +603,14 @@ bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 
 	try
 	{
-		if (!fmt.send(m_conFd, sError))
+		if (!fmt.send(m_conFd, &sError))
 			return false;
 
 		fmt.clear();
 		while (true)
 		{
 			fmt.setsize(4000);
-			if (!fmt.recv(m_conFd, sError))
+			if (!fmt.recv(m_conFd, &sError))
 				return false;
 			if(fmt.freecapa()<=0)
 			{
