@@ -25,24 +25,25 @@ struct eHeadPos2label
 {
 	header::eHeadPos pos;
 	const char *str;
+	size_t len;
 };
 
 eHeadPos2label mapId2Headname[] =
 {
-		{ header::LAST_MODIFIED, "Last-Modified"},
-		{ header::CONTENT_LENGTH, "Content-Length"},
-		{ header::CONNECTION, "Connection"},
-		{ header::CONTENT_TYPE, "Content-Type"},
-		{ header::IF_MODIFIED_SINCE, "If-Modified-Since"},
-		{ header::RANGE, "Range"},
-		{ header::IFRANGE, "If-Range"},
-		{ header::CONTENT_RANGE, "Content-Range"},
-		{ header::PROXY_CONNECTION, "Proxy-Connection"},
-		{ header::TRANSFER_ENCODING, "Transfer-Encoding"},
-		{ header::AUTHORIZATION, "Authorization"},
-		{ header::LOCATION, "Location" },
-		{ header::XFORWARDEDFOR, "X-Forwarded-For"},
-		{ header::XORIG, "X-Original-Source"}
+		{ header::LAST_MODIFIED, WITHLEN("Last-Modified")},
+		{ header::CONTENT_LENGTH, WITHLEN("Content-Length")},
+		{ header::CONNECTION, WITHLEN("Connection")},
+		{ header::CONTENT_TYPE, WITHLEN("Content-Type")},
+		{ header::IF_MODIFIED_SINCE, WITHLEN("If-Modified-Since")},
+		{ header::RANGE, WITHLEN("Range")},
+		{ header::IFRANGE, WITHLEN("If-Range")},
+		{ header::CONTENT_RANGE, WITHLEN("Content-Range")},
+		{ header::PROXY_CONNECTION, WITHLEN("Proxy-Connection")},
+		{ header::TRANSFER_ENCODING, WITHLEN("Transfer-Encoding")},
+		{ header::AUTHORIZATION, WITHLEN("Authorization")},
+		{ header::LOCATION, WITHLEN("Location")},
+		{ header::XFORWARDEDFOR, WITHLEN("X-Forwarded-For")},
+		{ header::XORIG, WITHLEN("X-Original-Source")}
 };
 #endif
 #if 0 // nonsense... save a penny, waste an hour
@@ -126,6 +127,7 @@ inline int header::Load(const char * const in, uint maxlen)
 		return -1;
 
 	const char *posNext=in;
+	auto lastLineIdx = HEADPOS_MAX;
 
 	while (true)
 	{
@@ -159,6 +161,22 @@ inline int header::Load(const char * const in, uint maxlen)
 			continue;
 		}
 
+		if(*szBegin == ' ' || *szBegin == '\t') // oh, a multiline?
+		{
+			if(lastLineIdx == HEADPOS_MAX || !h[lastLineIdx])
+				return -1;
+			auto xl=strlen(h[lastLineIdx]);
+			auto nlen=end-szBegin;
+			if(nlen<2) // empty but prefixed line, there might be continuation
+				continue;
+			if( ! (h[lastLineIdx] = (char*) realloc(h[lastLineIdx], xl+nlen+ 1)))
+				continue;
+			memcpy(h[lastLineIdx]+xl, szBegin, end-szBegin);
+			h[lastLineIdx][xl]=' ';
+			h[lastLineIdx][xl+nlen]='\0';
+			continue;
+		}
+
 		// end is on the last relevant char now
 		const char *sep=(const char*) memchr(szBegin, ':', end-szBegin);
 		if (!sep)
@@ -171,15 +189,16 @@ inline int header::Load(const char * const in, uint maxlen)
 		while (sep<end && isspace((uint)*sep))
 			sep++;
 		
-		for(const auto& id2key : mapId2Headname)
+		for(const auto& xh : mapId2Headname)
 		{
-			if (strncasecmp(id2key.str, key, keyLen))
+			if (xh.len != keyLen || key[xh.len] != ':' || strncasecmp(xh.str, key, keyLen))
 				continue;
 			uint l=end-sep;
-			if( ! (h[id2key.pos] = (char*) realloc(h[id2key.pos], l+1)))
+			lastLineIdx = xh.pos;
+			if( ! (h[xh.pos] = (char*) realloc(h[xh.pos], l+1)))
 				continue;
-			memcpy(h[id2key.pos], sep, l);
-			h[id2key.pos][l]='\0';
+			memcpy(h[xh.pos], sep, l);
+			h[xh.pos][l]='\0';
 			break;
 		}
 	}

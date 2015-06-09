@@ -10,7 +10,8 @@ apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
     <felix.janda@posteo.de>)
   * Redirection of plain http POSTs to bugs.debian.org is now always
     redirected to https style URL.
-FIXME: test
+  * FIX: HTTP header parser supports multilines, also solved potentialy
+    incorrect parsing in some cases (identical prefix of header name)
 
 
  -- 
