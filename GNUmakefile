@@ -53,7 +53,7 @@ tarball: doc notdebianbranch nosametarball
 tarball-remove:
 	rm -f ../$(DISTNAME).tar.xz ../tarballs/$(DEBSRCNAME) ../$(DEBSRCNAME) ../build-area/$(DEBSRCNAME)
 
-release: test noremainingwork tarball
+release: checktest noremainingwork tarball
 	git tag upstream/$(TAGVERSION)
 
 unrelease: tarball-remove
@@ -80,9 +80,13 @@ doxy:
 	doxygen Doxyfile
 	see doc/dev/html/index.html
 
+checktest:
+	test -e build/testok || (echo Should run the test suite before release... ; exit 1)
+
 test:
 	bash -x test/cmdline/apt-cacher-ng.sh
-	cd test/misc && bash soaptest.sh
+#	cd test/misc && bash soaptest.sh
+	touch build/testok
 
 # execute them always and consider done afterwards
 .PHONY: gendbs clean distclean config conf/gentoo_mirrors.gz test
