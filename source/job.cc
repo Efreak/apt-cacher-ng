@@ -73,7 +73,7 @@ public:
 	}
 	virtual int GetFileFd() override
 			{ return SPECIAL_FD; }; // something, don't care for now
-	virtual bool DownloadStartedStoreHeader(const header & h, const char *,
+	virtual bool DownloadStartedStoreHeader(const header & h, size_t, const char *,
 			bool, bool&) override
 	{
 		setLockGuard;
@@ -190,7 +190,7 @@ public:
 		m_head.set(header::CONTENT_LENGTH, m_nSizeChecked);
 	}
 	// never used to store data
-	bool DownloadStartedStoreHeader(const header &, const char *, bool, bool&)
+	bool DownloadStartedStoreHeader(const header &, size_t, const char *, bool, bool&)
 	override
 	{return false;};
 	bool StoreFileData(const char *, unsigned int) override {return false;};
@@ -449,7 +449,7 @@ inline bool job::ParseRange()
 	return false;
 }
 
-void job::PrepareDownload() {
+void job::PrepareDownload(LPCSTR headBuf) {
 
     LOGSTART("job::PrepareDownload");
     
@@ -663,7 +663,8 @@ MYTRY
 
 					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.get(),
 							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
-							bHaveRedirects ? &repoMapping.sRestPath : nullptr))
+							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
+							bPtMode ? headBuf : nullptr))
 				{
 					ldbg("Download job enqueued for " << m_sFileLoc);
 				}
@@ -804,9 +805,6 @@ job::eJobResult job::SendData(int confd)
 					const char *szErr = BuildAndEnqueHeader(fistate, nGoodDataSize, respHead);
 					if(szErr) THROW_ERROR(szErr);
 					USRDBG("Response header to be sent in the next cycle: \n" << m_sendbuf );
-#ifdef DEBUG
-#warning TODO: review the life cycle, might avoid one select call in the function above (prio:low)
-#endif
 					return R_AGAIN;
 				}
 				case(STATE_HEADER_SENT):

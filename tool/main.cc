@@ -143,7 +143,6 @@ bool AppendPasswordHash(string &stringWithSalt, LPCSTR plainPass, size_t passLen
 }
 #endif
 
-typedef pair<LPCSTR, size_t> tPtrLen;
 typedef deque<tPtrLen> tPatchSequence;
 
 // might need to access the last line externally
@@ -418,6 +417,7 @@ int main(int argc, const char **argv)
 		usage(1);
 	string cmd(argv[1]);
 #if 0
+#warning line reader test enabled
 	if (cmd == "wcl")
 	{
 		if (argc < 3)
@@ -434,10 +434,30 @@ int main(int argc, const char **argv)
 		for (;p < e; ++p)
 			count += (*p == '\n');
 		cout << count << endl;
+
 		exit(EXIT_SUCCESS);
 	}
 #endif
 #if 0
+#warning header parser enabled
+	if (cmd == "htest")
+	{
+		header h;
+		h.LoadFromFile(argv[2]);
+		cout << string(h.ToString()) << endl;
+
+		h.clear();
+		filereader r;
+		r.OpenFile(argv[2]);
+		std::vector<std::pair<std::string, std::string>> oh;
+		h.Load(r.GetBuffer(), r.GetSize(), &oh);
+		for(auto& r : oh)
+			cout << "X:" << r.first << " to " << r.second;
+		exit(0);
+	}
+#endif
+#if 0
+#warning benchmark enabled
 	if (cmd == "benchmark")
 	{
 		dump_proc_status_always();
@@ -557,7 +577,7 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 				return m_status = FIST_INITED;
 			}
 			virtual int GetFileFd() override { return 1; }; // something, don't care for now
-			virtual bool DownloadStartedStoreHeader(const header &h, const char *,
+			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
 					bool, bool&) override
 			{
 				m_head = h;
@@ -577,7 +597,7 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 	};
 
 	auto fi=std::make_shared<tPrintItem>();
-	dl.AddJob(fi, &url, nullptr, nullptr);
+	dl.AddJob(fi, &url, nullptr, nullptr, 0);
 	dl.WorkLoop();
 	if(fi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE)
 	{

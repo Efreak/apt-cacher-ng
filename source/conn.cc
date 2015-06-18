@@ -72,115 +72,117 @@ namespace RawPassThrough
 
 #define POSTMARK "POST http://bugs.debian.org:80/"
 
-	inline static bool CheckListbugs(const header &ph)
-	{
-		return (0 == ph.frontLine.compare(0, _countof(POSTMARK) - 1, POSTMARK));
-	}
-	inline static void RedirectBto2https(int fdClient, cmstring& uri)
-		{
-		tSS clientBufOut;
-		clientBufOut << "HTTP/1.1 302 Redirect\r\nLocation: "
-				<< "https://bugs.debian.org:443/";
-		constexpr auto offset = _countof(POSTMARK)-6;
-		clientBufOut.append(uri.c_str()+offset, uri.size()-offset);
-		clientBufOut << "\r\nConnection: close\r\n\r\n";
-		clientBufOut.send(fdClient);
+inline static bool CheckListbugs(const header &ph)
+{
+	return (0 == ph.frontLine.compare(0, _countof(POSTMARK) - 1, POSTMARK));
+}
+inline static void RedirectBto2https(int fdClient, cmstring& uri)
+{
+	tSS clientBufOut;
+	clientBufOut << "HTTP/1.1 302 Redirect\r\nLocation: " << "https://bugs.debian.org:443/";
+	constexpr auto offset = _countof(POSTMARK) - 6;
+	clientBufOut.append(uri.c_str() + offset, uri.size() - offset);
+	clientBufOut << "\r\nConnection: close\r\n\r\n";
+	clientBufOut.send(fdClient);
+	// XXX: there is a minor risk of confusing the client if the POST body is bigger than the
+	// incoming buffer (probably 64k). But OTOH we shutdown the connection properly, so a not
+	// fully stupid client should cope with that. Maybe this should be investigate better.
+	return;
+}
+void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
+{
+	tTcpHandlePtr m_spOutCon;
+
+	string sErr;
+	tSS clientBufOut;
+	clientBufOut.setsize(32 * 1024); // out to be enough for any BTS response
+
+	// arbitrary target/port, client cares about SSL handshake and other stuff
+	tHttpUrl url;
+	if (!url.SetHttpUrl(uri))
 		return;
-		}
-	void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
+	if (acfg::proxy_info.sHost.empty())
 	{
-		tTcpHandlePtr m_spOutCon;
-
-		string sErr;
-		tSS clientBufOut;
-		clientBufOut.setsize(32*1024); // out to be enough for any BTS response
-
-		// arbitrary target/port, client cares about SSL handshake and other stuff
-		tHttpUrl url;
-		if (!url.SetHttpUrl(uri))
-			return;
-		if (acfg::proxy_info.sHost.empty())
-		{
-			m_spOutCon = tcpconnect::CreateConnected(url.sHost, url.GetPort(), sErr, 0, 0,
-			false, acfg::nettimeout, true);
-		}
-		else
-		{
-			// switch to HTTPS tunnel in order to get a direct connection through the proxy
-			m_spOutCon = tcpconnect::CreateConnected(acfg::proxy_info.sHost, acfg::proxy_info.GetPort(), sErr,
-					0, 0, false, acfg::nettimeout, true);
-
-			if (m_spOutCon)
-			{
-				if (!m_spOutCon->StartTunnel(tHttpUrl(url.sHost, url.GetPort(),
-				true), sErr, &acfg::proxy_info.sUserPass, false))
-				{
-					m_spOutCon.reset();
-				}
-			}
-		}
+		m_spOutCon = tcpconnect::CreateConnected(url.sHost, url.GetPort(), sErr, 0, 0,
+		false, acfg::nettimeout, true);
+	}
+	else
+	{
+		// switch to HTTPS tunnel in order to get a direct connection through the proxy
+		m_spOutCon = tcpconnect::CreateConnected(acfg::proxy_info.sHost, acfg::proxy_info.GetPort(),
+				sErr, 0, 0, false, acfg::nettimeout, true);
 
 		if (m_spOutCon)
-			clientBufOut << "HTTP/1.0 200 Connection established\r\n\r\n";
-		else
 		{
-			clientBufOut << "HTTP/1.0 502 CONNECT error: " << sErr << "\r\n\r\n";
-			clientBufOut.send(fdClient);
-			return;
+			if (!m_spOutCon->StartTunnel(tHttpUrl(url.sHost, url.GetPort(),
+			true), sErr, &acfg::proxy_info.sUserPass, false))
+			{
+				m_spOutCon.reset();
+			}
 		}
+	}
 
-		if(!m_spOutCon)
+	if (m_spOutCon)
+		clientBufOut << "HTTP/1.0 200 Connection established\r\n\r\n";
+	else
+	{
+		clientBufOut << "HTTP/1.0 502 CONNECT error: " << sErr << "\r\n\r\n";
+		clientBufOut.send(fdClient);
+		return;
+	}
+
+	if (!m_spOutCon)
+		return;
+
+	// for convenience
+	int ofd = m_spOutCon->GetFD();
+	acbuf &serverBufOut = clientBufIn, &serverBufIn = clientBufOut;
+
+	int maxfd = 1 + std::max(fdClient, ofd);
+
+	while (true)
+	{
+		fd_set rfds, wfds;
+		FD_ZERO(&rfds);
+		FD_ZERO(&wfds);
+
+		// can send to client?
+		if (clientBufOut.size() > 0)
+			FD_SET(fdClient, &wfds);
+
+		// can receive from client?
+		if (clientBufIn.freecapa() > 0)
+			FD_SET(fdClient, &rfds);
+
+		if (serverBufOut.size() > 0)
+			FD_SET(ofd, &wfds);
+
+		if (serverBufIn.freecapa() > 0)
+			FD_SET(ofd, &rfds);
+
+		int nReady = select(maxfd, &rfds, &wfds, nullptr, nullptr);
+		if (nReady < 0)
 			return;
 
-		// for convenience
-		int ofd = m_spOutCon->GetFD();
-		acbuf &serverBufOut = clientBufIn, &serverBufIn = clientBufOut;
-
-		int maxfd=1+std::max(fdClient, ofd);
-
-		while (true)
-		{
-			fd_set rfds, wfds;
-			FD_ZERO(&rfds);
-			FD_ZERO(&wfds);
-
-			// can send to client?
-			if(clientBufOut.size()>0)
-				FD_SET(fdClient, &wfds);
-
-			// can receive from client?
-			if(clientBufIn.freecapa()>0)
-				FD_SET(fdClient, &rfds);
-
-			if(serverBufOut.size()>0)
-				FD_SET(ofd, &wfds);
-
-			if(serverBufIn.freecapa()>0)
-				FD_SET(ofd, &rfds);
-
-			int nReady=select(maxfd, &rfds, &wfds, nullptr, nullptr);
-			if (nReady<0)
+		if (FD_ISSET(ofd, &wfds))
+			if (serverBufOut.syswrite(ofd) < 0)
 				return;
 
-			if(FD_ISSET(ofd, &wfds))
-				if(serverBufOut.syswrite(ofd)<0)
-					return;
+		if (FD_ISSET(fdClient, &wfds))
+			if (clientBufOut.syswrite(fdClient) < 0)
+				return;
 
-			if(FD_ISSET(fdClient, &wfds))
-				if(clientBufOut.syswrite(fdClient)<0)
-					return;
+		if (FD_ISSET(ofd, &rfds))
+			if (serverBufIn.sysread(ofd) <= 0)
+				return;
 
-			if(FD_ISSET(ofd, &rfds))
-				if(serverBufIn.sysread(ofd)<=0)
-					return;
-
-			if(FD_ISSET(fdClient, &rfds))
-				if(clientBufIn.sysread(fdClient)<=0)
-					return;
-		}
-		return;
-	};
-};
+		if (FD_ISSET(fdClient, &rfds))
+			if (clientBufIn.sysread(fdClient) <= 0)
+				return;
+	}
+	return;
+}
+}
 
 void con::WorkLoop() {
 
@@ -292,10 +294,11 @@ void con::WorkLoop() {
 					return;
 				}
 
-				inBuf.drop(nHeadBytes);
-
 				if(m_pTmpHead->type == header::CONNECT)
 				{
+
+					inBuf.drop(nHeadBytes);
+
 					tSplitWalk iter(&m_pTmpHead->frontLine);
 					if(iter.Next() && iter.Next())
 					{
@@ -315,6 +318,9 @@ void con::WorkLoop() {
 				
 				if (m_sClientHost.empty()) // may come from wrapper... MUST identify itself
 				{
+
+					inBuf.drop(nHeadBytes);
+
 					if(m_pTmpHead->h[header::XORIG] && *(m_pTmpHead->h[header::XORIG]))
 					{
 						m_sClientHost=m_pTmpHead->h[header::XORIG];
@@ -325,12 +331,13 @@ void con::WorkLoop() {
 				}
 
 				ldbg("Parsed REQUEST:" << m_pTmpHead->frontLine);
-				ldbg("Rest: " << inBuf.size());
+				ldbg("Rest: " << (inBuf.size()-nHeadBytes));
 
 				{
 					job * j = new job(m_pTmpHead, this);
+					j->PrepareDownload(inBuf.rptr());
+					inBuf.drop(nHeadBytes);
 
-					j->PrepareDownload();
 					m_jobs2send.emplace_back(j);
 #ifdef DEBUG
 					m_nProcessedJobs++;

@@ -372,7 +372,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		}
 	}
 
-	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix);
+	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix, 0);
 
 	m_pDlcon->WorkLoop();
 	if (pFi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE
@@ -847,7 +847,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 		{
 		}
 		// noone else should attempt to store file through it
-		virtual bool DownloadStartedStoreHeader(const header &, const char *,
+		virtual bool DownloadStartedStoreHeader(const header &, size_t, const char *,
 				bool, bool&) override
 		{
 			return false;
@@ -888,7 +888,8 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 			if (Setup(true) > fileitem::FIST_COMPLETE)
 				return false;
 			bool bNix(false);
-			if (!fileitem_with_storage::DownloadStartedStoreHeader(head, nullptr, false, bNix))
+			if (!fileitem_with_storage::DownloadStartedStoreHeader(head, 0,
+					nullptr, false, bNix))
 				return false;
 			if(!StoreFileData(data.GetBuffer(), data.GetSize()) || ! StoreFileData(nullptr, 0))
 				return false;

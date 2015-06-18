@@ -2,7 +2,7 @@
 ifneq ($(DEBUG),)
 	 CXXFLAGS += -g -O0 -DDEBUG
 	 CMAKEOPTS += -DADDDEBUGSRC=on -DUSE_LTO=off --debug-trycompile --debug-output
-	 XMAKEFLAGS = DEBUG=1
+	 XMAKEFLAGS = DEBUG=1 VERBOSE=1
 endif
 
 export CXXFLAGS

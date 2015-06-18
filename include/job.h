@@ -38,7 +38,7 @@ class job {
       ~job();
       //  __attribute__((externally_visible))  
       
-      void PrepareDownload();
+      void PrepareDownload(LPCSTR headBuf);
 
       /*
        * Start or continue returning the file.

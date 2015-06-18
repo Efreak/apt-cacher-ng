@@ -20,7 +20,6 @@
 
 using namespace std;
 
-#if 1
 struct eHeadPos2label
 {
 	header::eHeadPos pos;
@@ -45,7 +44,16 @@ eHeadPos2label mapId2Headname[] =
 		{ header::XFORWARDEDFOR, WITHLEN("X-Forwarded-For")},
 		{ header::XORIG, WITHLEN("X-Original-Source")}
 };
-#endif
+
+std::vector<tPtrLen> header::GetKnownHeaders()
+{
+	std::vector<tPtrLen> ret;
+	ret.reserve(_countof(mapId2Headname));
+	for (auto& x : mapId2Headname)
+		ret.emplace_back(x.str, x.len);
+	return ret;
+}
+
 #if 0 // nonsense... save a penny, waste an hour
 struct tHeadLabelMap
 {
@@ -64,8 +72,7 @@ struct tHeadLabelMap
 
 header::header(const header &s)
 :type(s.type),
- frontLine(s.frontLine),
- m_nEstimLength(s.m_nEstimLength)
+ frontLine(s.frontLine)
 {
 	for (uint i = 0; i < HEADPOS_MAX; i++)
 		h[i] = s.h[i] ? strdup(s.h[i]) : nullptr;
@@ -75,7 +82,6 @@ header& header::operator=(const header& s)
 {
 	type=s.type;
 	frontLine=s.frontLine;
-	m_nEstimLength=s.m_nEstimLength;
 	for (uint i = 0; i < HEADPOS_MAX; ++i)
 	{
 		if (h[i])
@@ -97,7 +103,6 @@ void header::clear()
 		del((eHeadPos) i);
 	frontLine.clear();
 	type=INVALID;
-	m_nEstimLength=0;
 }
 
 void header::del(eHeadPos i)
@@ -106,7 +111,8 @@ void header::del(eHeadPos i)
 	h[i]=0;
 }
 
-inline int header::Load(const char * const in, uint maxlen)
+int header::Load(LPCSTR const in, uint maxlen,
+		std::vector<std::pair<std::string, std::string>> *pNotForUs)
 {
 	if(maxlen<9)
 		return 0;
@@ -126,14 +132,14 @@ inline int header::Load(const char * const in, uint maxlen)
 	else
 		return -1;
 
-	const char *posNext=in;
+	auto posNext=in;
 	auto lastLineIdx = HEADPOS_MAX;
 
 	while (true)
 	{
-		const char *szBegin=posNext;
+		auto szBegin=posNext;
 		uint pos=szBegin-in;
-		const char *end=(const char*) memchr(szBegin, '\r', maxlen-pos);
+		auto end=(LPCSTR) memchr(szBegin, '\r', maxlen-pos);
 		if (!end)
 			return 0;
 		if (end+1>=in+maxlen)
@@ -141,11 +147,8 @@ inline int header::Load(const char * const in, uint maxlen)
 
 		if (szBegin==end)
 		{
-			if (end[1]=='\n')
-			{
-				m_nEstimLength=end+2-in;
-				return m_nEstimLength; // end detected
-			}
+			if (end[1]=='\n') // DONE HERE!
+				return end+2-in;
 
 			return -1; // looks like crap
 		}
@@ -163,15 +166,26 @@ inline int header::Load(const char * const in, uint maxlen)
 
 		if(*szBegin == ' ' || *szBegin == '\t') // oh, a multiline?
 		{
-			if(lastLineIdx == HEADPOS_MAX || !h[lastLineIdx])
-				return -1;
-			auto xl=strlen(h[lastLineIdx]);
 			auto nlen=end-szBegin;
 			if(nlen<2) // empty but prefixed line, there might be continuation
 				continue;
-			if( ! (h[lastLineIdx] = (char*) realloc(h[lastLineIdx], xl+nlen+ 1)))
+
+			if(lastLineIdx == HEADPOS_NOTFORUS)
+			{
+				if(pNotForUs)
+				{
+					if(pNotForUs->empty()) // heh?
+						return -4;
+					pNotForUs->back().second.append(szBegin, nlen+2);
+				}
 				continue;
-			memcpy(h[lastLineIdx]+xl, szBegin, end-szBegin);
+			}
+			else if(lastLineIdx == HEADPOS_MAX || !h[lastLineIdx])
+				return -4;
+			auto xl=strlen(h[lastLineIdx]);
+			if( ! (h[lastLineIdx] = (char*) realloc(h[lastLineIdx], xl+nlen + 1)))
+				continue;
+			memcpy(h[lastLineIdx]+xl, szBegin, nlen);
 			h[lastLineIdx][xl]=' ';
 			h[lastLineIdx][xl+nlen]='\0';
 			continue;
@@ -182,13 +196,15 @@ inline int header::Load(const char * const in, uint maxlen)
 		if (!sep)
 			return -1;
 		
-		const char *key = szBegin;
+		auto key = szBegin;
 		size_t keyLen=sep-szBegin;
 
 		sep++;
 		while (sep<end && isspace((uint)*sep))
 			sep++;
 		
+		lastLineIdx = HEADPOS_NOTFORUS;
+
 		for(const auto& xh : mapId2Headname)
 		{
 			if (xh.len != keyLen || key[xh.len] != ':' || strncasecmp(xh.str, key, keyLen))
@@ -196,11 +212,14 @@ inline int header::Load(const char * const in, uint maxlen)
 			uint l=end-sep;
 			lastLineIdx = xh.pos;
 			if( ! (h[xh.pos] = (char*) realloc(h[xh.pos], l+1)))
-				continue;
+				return -3;
 			memcpy(h[xh.pos], sep, l);
 			h[xh.pos][l]='\0';
 			break;
 		}
+		if(pNotForUs && lastLineIdx == HEADPOS_NOTFORUS)
+			pNotForUs->emplace_back(string(key,keyLen),
+					string(szBegin+keyLen, end+2-(szBegin+keyLen)));
 	}
 	return -2;
 }
