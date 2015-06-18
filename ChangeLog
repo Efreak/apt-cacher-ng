@@ -12,6 +12,7 @@ apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
     redirected to https style URL.
   * FIX: HTTP header parser supports multilines, also solved potentialy
     incorrect parsing in some cases (identical prefix of header name)
+  * Added recent Ubuntu release names (vivid, wily) to mirror checker
 
 
  -- 
