@@ -37,7 +37,7 @@ const static tStrPos stmiss(cmstring::npos);
 typedef unsigned short USHORT;
 typedef unsigned char UCHAR;
 typedef const char * LPCSTR;
-
+typedef std::pair<LPCSTR, size_t> tPtrLen;
 #define citer const_iterator
 
 #define CPATHSEPUNX '/'
@@ -503,6 +503,8 @@ mstring EncodeBase64(LPCSTR data, uint len);
 #else
 #define EMPLACE_PAIR(M,K,V) M.emplace(K,V)
 #endif
+
+typedef std::vector<std::pair<std::string, std::string>> tLPS;
 
 #endif // _META_H
 

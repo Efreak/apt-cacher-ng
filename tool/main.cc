@@ -143,7 +143,6 @@ bool AppendPasswordHash(string &stringWithSalt, LPCSTR plainPass, size_t passLen
 }
 #endif
 
-typedef pair<LPCSTR, size_t> tPtrLen;
 typedef deque<tPtrLen> tPatchSequence;
 
 // might need to access the last line externally
@@ -342,7 +341,10 @@ void do_stuff_before_config()
 
 #endif
 
-void parse_options(int argc, const char **argv)
+
+tStrVec non_opt_args;
+
+void parse_options(int argc, const char **argv, bool bExtractNonOpts=false)
 {
 	LPCSTR szCfgDir=CFGDIR;
 	std::vector<LPCSTR> cmdvars;
@@ -382,7 +384,14 @@ void parse_options(int argc, const char **argv)
 
 	for(auto& keyval : cmdvars)
 		if(!acfg::SetOption(keyval, 0))
-			usage(EXIT_FAILURE);
+			non_opt_args.emplace_back(keyval);
+
+	if(!bExtractNonOpts && !non_opt_args.empty())
+	{
+		for(auto& x: non_opt_args)
+			cerr << "Bad option: " << x << endl;
+		usage(EXIT_FAILURE);
+	}
 
 	acfg::PostProcConfig();
 }
@@ -408,6 +417,7 @@ int main(int argc, const char **argv)
 		usage(1);
 	string cmd(argv[1]);
 #if 0
+#warning line reader test enabled
 	if (cmd == "wcl")
 	{
 		if (argc < 3)
@@ -424,7 +434,61 @@ int main(int argc, const char **argv)
 		for (;p < e; ++p)
 			count += (*p == '\n');
 		cout << count << endl;
+
 		exit(EXIT_SUCCESS);
+	}
+#endif
+#if 0
+#warning header parser enabled
+	if (cmd == "htest")
+	{
+		header h;
+		h.LoadFromFile(argv[2]);
+		cout << string(h.ToString()) << endl;
+
+		h.clear();
+		filereader r;
+		r.OpenFile(argv[2]);
+		std::vector<std::pair<std::string, std::string>> oh;
+		h.Load(r.GetBuffer(), r.GetSize(), &oh);
+		for(auto& r : oh)
+			cout << "X:" << r.first << " to " << r.second;
+		exit(0);
+	}
+#endif
+#if 0
+#warning benchmark enabled
+	if (cmd == "benchmark")
+	{
+		dump_proc_status_always();
+		acfg::g_bQuiet = true;
+		acfg::g_bNoComplex = false;
+		parse_options(argc - 2, argv + 2, true);
+		acfg::PostProcConfig();
+		string s;
+		tHttpUrl u;
+		int res=0;
+/*
+		acfg::tRepoResolvResult hm;
+		tHttpUrl wtf;
+		wtf.SetHttpUrl(non_opt_args.front());
+		acfg::GetRepNameAndPathResidual(wtf, hm);
+*/
+		while(cin)
+		{
+			std::getline(cin, s);
+			s += "/xtest.deb";
+			if(u.SetHttpUrl(s))
+			{
+				acfg::tRepoResolvResult xdata;
+				acfg::GetRepNameAndPathResidual(u, xdata);
+				cout << s << " -> "
+						<< (xdata.psRepoName ? "matched" : "not matched")
+						<< endl;
+			}
+		}
+		dump_proc_status_always();
+		exit(res);
 	}
 #endif
 	if(cmd == "encb64")
@@ -513,7 +577,7 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 				return m_status = FIST_INITED;
 			}
 			virtual int GetFileFd() override { return 1; }; // something, don't care for now
-			virtual bool DownloadStartedStoreHeader(const header &h, const char *,
+			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
 					bool, bool&) override
 			{
 				m_head = h;
@@ -533,7 +597,7 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 	};
 
 	auto fi=std::make_shared<tPrintItem>();
-	dl.AddJob(fi, &url, nullptr, nullptr);
+	dl.AddJob(fi, &url, nullptr, nullptr, 0);
 	dl.WorkLoop();
 	if(fi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE)
 	{

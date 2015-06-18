@@ -111,8 +111,8 @@ public:
     inline tSS & clean() { clear(); return *this;}
     inline tSS & append(const char *data, size_t len) { add(data,len); return *this; }
     // similar to syswrite but adapted to socket behavior and reports error codes as HTTP status lines
-    bool send(int nConFd, mstring& sErrorStatus);
-    bool recv(int nConFd, mstring& sErrorStatus);
+    bool send(int nConFd, mstring* sErrorStatus=nullptr);
+    bool recv(int nConFd, mstring* sErrorStatus=nullptr);
 
 protected:
     char fmtbuf[22];

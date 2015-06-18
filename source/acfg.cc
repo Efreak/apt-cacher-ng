@@ -674,13 +674,18 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 				BARF("Invalid proxy specification, aborting...");
 		}
 	}
-	else if(CHECKOPTKEY("LocalDirs") && !g_bNoComplex)
+	else if(CHECKOPTKEY("LocalDirs"))
 	{
+		if(g_bNoComplex)
+			return true;
 		_ParseLocalDirs(value);
 		return !localdirs.empty();
 	}
-	else if(0==strncasecmp(key.c_str(), "Remap-", 6) && !g_bNoComplex)
+	else if(0==strncasecmp(key.c_str(), "Remap-", 6))
 	{
+		if(g_bNoComplex)
+			return true;
+
 		string vname=key.substr(6, key.npos);
 		if(vname.empty())
 		{
@@ -1006,6 +1011,7 @@ void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 
 void PostProcConfig()
 {
+	mapUrl2pVname.rehash(mapUrl2pVname.size());
 	
 	if(port.empty()) // heh?
 		port=ACNG_DEF_PORT;
@@ -1078,7 +1084,7 @@ void PostProcConfig()
 	   mkbasedir(acfg::pidfile);
 
    if(nettimeout < 5) {
-	   cerr << "Warning, NetworkTimeout too small, assuming 5." << endl;
+	   cerr << "Warning, NetworkTimeout value too small, using: 5." << endl;
 	   nettimeout = 5;
    }
 

@@ -93,6 +93,8 @@ struct tDlJob
 		STATE_FINISHJOB
 	} tDlState;
 
+	string m_extraHeaders;
+
 	tHttpUrl m_remoteUri;
 	const tHttpUrl *m_pCurBackend=nullptr;
 
@@ -135,6 +137,31 @@ struct tDlJob
 	{
 		if (m_pStorage)
 			m_pStorage->DecDlRefCount(sErrorMsg.empty() ? sGenericError : sErrorMsg);
+	}
+
+	inline void ExtractCustomHeaders(LPCSTR reqHead)
+	{
+		if(!reqHead)
+			return;
+		header h;
+		tLPS cheaders;
+		h.Load(reqHead, std::numeric_limits<int>::max(), &cheaders);
+		if(cheaders.empty())
+			return;
+		for(const auto& ch: cheaders)
+		{
+			// some headers are reserved (actually all starting with those prefixes
+			if(strncasecmp(ch.first.c_str(), WITHLEN("Host")) &&
+					strncasecmp(ch.first.c_str(), WITHLEN("Proxy-Authorization")) &&
+					strncasecmp(ch.first.c_str(), WITHLEN("Cache-Control")) &&
+					strncasecmp(ch.first.c_str(), WITHLEN("Accept")) &&
+					strncasecmp(ch.first.c_str(), WITHLEN("User-Agent"))
+					)
+			{
+				m_extraHeaders += ch.first;
+				m_extraHeaders += ch.second;
+			}
+		}
 	}
 
 	inline string RemoteUri(bool bUrlEncoded)
@@ -361,7 +388,9 @@ struct tDlJob
 		if (acfg::exporigin && !xff.empty())
 			head << "X-Forwarded-For: " << xff << "\r\n";
 
-		head << acfg::requestapx << "Accept: */*\r\nAccept-Encoding: identity\r\nConnection: "
+		head << acfg::requestapx
+				<< m_extraHeaders
+				<< "Accept: */*\r\nAccept-Encoding: identity\r\nConnection: "
 				<< (acfg::persistoutgoing ? "keep-alive\r\n\r\n" : "close\r\n\r\n");
 
 #ifdef SPAM
@@ -427,10 +456,10 @@ struct tDlJob
 				bool bHotItem = (m_DlState == STATE_REGETHEADER);
 				dbgline;
 
-				int l = h.LoadFromBuf(inBuf.rptr(), inBuf.size());
-				if (0 == l)
+				auto hDataLen = h.LoadFromBuf(inBuf.rptr(), inBuf.size());
+				if (0 == hDataLen)
 					return HINT_MORE;
-				if (l<0)
+				if (hDataLen<0)
 				{
 					dbgline;
 					sErrorMsg = "500 Invalid header";
@@ -438,8 +467,8 @@ struct tDlJob
 					return EFLAG_MIRROR_BROKEN | HINT_DISCON | HINT_KILL_LAST_FILE;
 				}
 
-				ldbg("contents: " << std::string(inBuf.rptr(), l));
-				inBuf.drop(l);
+				ldbg("contents: " << std::string(inBuf.rptr(), hDataLen));
+				inBuf.drop(hDataLen);
 				if (h.type != header::ANSWER)
 				{
 					dbgline;
@@ -542,7 +571,8 @@ struct tDlJob
 					DropDnsCache();
 				}
 
-				if(!m_pStorage->DownloadStartedStoreHeader(h, inBuf.rptr(), bHotItem, bDoRetry))
+				if(!m_pStorage->DownloadStartedStoreHeader(h, hDataLen,
+						inBuf.rptr(), bHotItem, bDoRetry))
 				{
 					if(bDoRetry)
 						return EFLAG_LOST_CON | HINT_DISCON; // recoverable
@@ -653,7 +683,7 @@ void dlcon::wake()
 
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const acfg::tRepoData *pBackends,
-		cmstring *sPatSuffix)
+		cmstring *sPatSuffix, LPCSTR reqHead)
 {
 	if(!pForcedUrl)
 	{
@@ -673,6 +703,9 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 	m_qNewjobs.emplace_back(
 			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,
 							m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax));
+
+	m_qNewjobs.back()->ExtractCustomHeaders(reqHead);
+
 	wake();
 	return true;
 }

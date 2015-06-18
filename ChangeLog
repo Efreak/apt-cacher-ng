@@ -3,13 +3,21 @@ apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
   * Code refactoring, little memory consumption improvements
   * FIX: creation of the PID file even in non-forking mode (Debian bug #784752)
   * Moving some functionality not relevant for server operation to a dedicated
-    tool "acngtool"
+    tool called "acngtool"
   * VFilePattern extension, [#314924] Allow access to CentOS images
   * LTO is default option again, removed NOLTO hack (use CMAKEOPTS to disable)
   * Compilation fixes for the MUSL C library (by Felix Janda
     <felix.janda@posteo.de>)
+  * Redirection of plain http POSTs to bugs.debian.org is now always
+    redirected to https style URL.
+  * FIX: HTTP header parser supports multilines, also solved potentialy
+    incorrect parsing in some cases (identical prefix of header name)
+  * Added recent Ubuntu release names (vivid, wily) to mirror checker
+  * NEW: when uncached operation is active (DontCache* options), most custom
+    headers are passed to the remote servers (Alioth task 314773)
+  * Mirror database update
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Thu, 18 Jun 2015 21:59:04 +0200
 
 apt-cacher-ng (0.8.3) TECHNICAL-DEBT-STRIKES-BACK; urgency=medium
 

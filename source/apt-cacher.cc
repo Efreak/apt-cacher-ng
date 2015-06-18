@@ -219,7 +219,7 @@ int main(int argc, const char **argv)
 }
 
 static void usage(int retCode) {
-	cout <<"Usage: apt-cacher [options] [ -c configdir ] <var=value ...>\n\n"
+	cout <<"Usage: apt-cacher-ng [options] [ -c configdir ] <var=value ...>\n\n"
 		"Options:\n"
 		"-h: this help message\n"
 		"-c: configuration directory\n"

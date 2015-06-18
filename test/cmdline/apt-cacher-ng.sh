@@ -2,6 +2,7 @@
 set -e
 set -x
 exe=build/apt-cacher-ng
+tool=build/acngtool
 test -x $exe
 TMP=$(mktemp -d)
 PORT=$(( 11222 + $RANDOM / 2 ))
@@ -35,27 +36,28 @@ grep -i usage $TMP/y.txt
 grep -i help $TMP/y.txt
 grep -i See $TMP/y.txt
 
-BECURL=http://www.example.org $exe > $TMP/dump
+$tool curl http://www.example.org > $TMP/dump
 grep illustrative $TMP/dump
-! REFSUM=/dev/nada12341254324534125ljksaldfkj2345 GETSUM=sans-serif $exe
-export REFSUM=$(sha1sum $TMP/dump | cut -c1-40)
-GETSUM=$TMP/dump $exe
+#! REFSUM=/dev/nada12341254324534125ljksaldfkj2345 GETSUM=sans-serif $exe
+#export REFSUM=$(sha1sum $TMP/dump | cut -c1-40)
+#GETSUM=$TMP/dump $exe
 
-test "c2Fucy1zZXJpZg==" = $(TOBASE64=sans-serif $exe)
+test "c2Fucy1zZXJpZg==" = $($tool encb64 sans-serif)
 
+# test expiration
 mkdir -p $TMP/srv
 touch $TMP/srv/foo.deb
 $exe foreground=0 logdir=$TMP CacheDir:$TMP port:$PORT pidfile=$TMP/x.pid ExTreshold:0 -e
 ! test -e $TMP/srv/foo.deb
 
-$exe --retest http://srv/foo.deb
-$exe --retest http://srv/foo.deb | grep FILE_SOLID
-$exe --retest http://srv/InRelease | grep FILE_VOLAT
-$exe --retest http://srv/InRelease.html | grep NOMATCH
-$exe "VfilePatternEx:.*html" --retest http://srv/InRelease.html | grep VOLATIL
-$exe "PfilePatternEx:.*html" --retest http://srv/InRelease.html | grep SOLID
+$tool retest http://srv/foo.deb
+$tool retest http://srv/foo.deb | grep FILE_SOLID
+$tool retest http://srv/InRelease | grep FILE_VOLAT
+$tool retest http://srv/InRelease.html | grep NOMATCH
+$tool retest http://srv/InRelease.html "VfilePatternEx:.*html" | grep VOLATIL
+$tool retest http://srv/InRelease.html "PfilePatternEx:.*html" | grep SOLID
 
-$exe -p > $TMP/vars
-PRINTCFGVAR=useragent $exe | grep Apt-Cacher-NG
+$tool cfgdump > $TMP/vars
+$tool printvar useragent | grep Apt-Cacher-NG
 
 rm -rf $TMP

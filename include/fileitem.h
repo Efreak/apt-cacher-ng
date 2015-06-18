@@ -41,7 +41,8 @@ public:
 	
 	// downloader instruments
 	//typedef extended_bool<bool, false> SuccessWithTransErrorFlag;
-	virtual bool DownloadStartedStoreHeader(const header & h, const char *pNextData,
+	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+			const char *pNextData,
 			bool bForcedRestart, bool &bDoCleanRestart) =0;
 	void IncDlRefCount();
 	void DecDlRefCount(const mstring & sReasonStatusLine);
@@ -107,7 +108,8 @@ public:
 	virtual ~fileitem_with_storage();
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
-	virtual bool DownloadStartedStoreHeader(const header & h, const char *pNextData,
+	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+			const char *pNextData,
 			bool bForcedRestart, bool&) override;
 	virtual bool StoreFileData(const char *data, unsigned int size) override;
 

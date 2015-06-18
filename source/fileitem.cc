@@ -303,7 +303,8 @@ inline void _LogWithErrno(const char *msg, const string & sFile)
 
 #ifndef MINIBUILD
 
-bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const char *pNextData,
+bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+		const char *pNextData,
 		bool bForcedRestart, bool &bDoCleanRetry)
 {
 	LOGSTART("fileitem::DownloadStartedStoreHeader");
@@ -338,7 +339,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 	if(m_bCheckFreshness)
 		m_nTimeDlStarted = GetTime();
 
-	m_nIncommingCount+=h.m_nEstimLength;
+	m_nIncommingCount+=hDataLen;
 
 	// optional optimization: hints for the filesystem resp. kernel
 	off_t hint_start(0), hint_length(0);

@@ -39,7 +39,7 @@ list(APPEND AcngLdList pthread)
 
 # common required flags to be used later for CMAKE_REQUIRED_FLAGS and the build,
 # CXXFLAGS (via initial CMAKE_CXX_FLAGS) extends and overrides them
-SET(ACNG_CXXFLAGS_COMMON " -pthread -g -O2 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 -DNOMINMAX ${CMAKE_CXX_FLAGS}")
+SET(ACNG_CXXFLAGS_COMMON " -pthread -g -O2 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
 # same for linker flags, imported from LDFLAGS environment var
 SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
 
@@ -51,7 +51,7 @@ IF(CMAKE_SYSTEM MATCHES "Darwin")
 ENDIF(CMAKE_SYSTEM MATCHES "Darwin")
 
 IF(CMAKE_SYSTEM MATCHES "CYGWIN")
-   SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__  ")
+   SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__ -DNOMINMAX ")
 ENDIF()
 
 FILE(READ test/build/testcxx11.cc CXX11_TESTSRC)

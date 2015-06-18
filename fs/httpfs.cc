@@ -228,7 +228,7 @@ public:
 			}
 #define SETERROR { nErr=__LINE__; return false;}
 			bool &m_isFirst;
-			bool DownloadStartedStoreHeader(const header &head, const char*, bool bRestarted, bool&) override
+			bool DownloadStartedStoreHeader(const header &head, size_t, const char*, bool bRestarted, bool&) override
 			{
 				_cerr(head.frontLine<<endl);
 				m_head = head; // XXX: bloat, only status line and contlen required
@@ -307,7 +307,7 @@ public:
 
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
-		dler.AddJob(spFi, &uri);
+		dler.AddJob(spFi, &uri, 0, 0, 0);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		pFi->WaitForFinish(&nHttpCode);
@@ -368,7 +368,7 @@ public:
 			{
 				m_bHeadOnly = true;
 			}
-			bool DownloadStartedStoreHeader(const header &head, const char*,
+			bool DownloadStartedStoreHeader(const header &head, size_t, const char*,
 					bool bRestart, bool&) override
 			{
 				if(bRestart)
@@ -380,7 +380,7 @@ public:
 			}
 		};
 		auto probe(make_shared<tFitemProbe>());
-		dler.AddJob(probe, &uri);
+		dler.AddJob(probe, &uri, 0, 0, 0);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
