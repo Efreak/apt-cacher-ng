@@ -1,12 +1,12 @@
-apt-cacher-ng (0.8.4-1) UNRELEASED; urgency=low
+apt-cacher-ng (0.8.4-1) experimental; urgency=low
 
   * New upstream version
-    + Fixes creation of pidfile even in foregeround mode (closes: #784752)
+    + Fixes creation of pidfile even in foreground mode (closes: #784752)
   * Added pt_BR.po update (by Adriano Rafael Gomes, closes: #785471)
   * Getting rid of "ed" recommendation, new version brings a faster
     replacement (closes: #772529)
 
- -- Eduard Bloch <blade@debian.org>  Mon, 25 May 2015 16:48:10 +0200
+ -- Eduard Bloch <blade@debian.org>  Thu, 18 Jun 2015 22:28:00 +0200
 
 apt-cacher-ng (0.8.3-1) unstable; urgency=medium
 
