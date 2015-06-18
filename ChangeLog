@@ -15,9 +15,9 @@ apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
   * Added recent Ubuntu release names (vivid, wily) to mirror checker
   * NEW: when uncached operation is active (DontCache* options), most custom
     headers are passed to the remote servers (Alioth task 314773)
+  * Mirror database update
 
-
- -- 
+ -- Eduard Bloch <blade@debian.org>  Thu, 18 Jun 2015 21:59:04 +0200
 
 apt-cacher-ng (0.8.3) TECHNICAL-DEBT-STRIKES-BACK; urgency=medium
 

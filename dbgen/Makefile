@@ -39,7 +39,7 @@ get_ubu_input:
 	cmp sig-ubuntu $(DBTMP)/sig-ubuntu 2>/dev/null || cp $(DBTMP)/sig-ubuntu sig-ubuntu 
 
 get_fedora_input:
-	wget -q -O $(DBTMP)/fsnap_raw https://mirrors.fedoraproject.org/publiclist/
+	wget -q -O $(DBTMP)/fsnap_raw https://admin.fedoraproject.org/mirrormanager/mirrors/EPEL/7/x86_64
 	tr '"' '\n' < $(DBTMP)/fsnap_raw | grep -iE '^http.*(linux|epel)/?$$' > $(DBTMP)/fsnap_
 	bash fedorasrcs.sh >> $(DBTMP)/fsnap_
 	cat $(DBTMP)/fsnap_ extra/fedora_mirrors $(CONFDIR)/fedora_mirrors | sort -u > $(DBTMP)/fsnap
