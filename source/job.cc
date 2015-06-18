@@ -664,7 +664,7 @@ MYTRY
 					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.get(),
 							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
 							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
-							bPtMode ? headBuf : nullptr))
+									(LPCSTR) ( bPtMode ? headBuf : nullptr)))
 				{
 					ldbg("Download job enqueued for " << m_sFileLoc);
 				}
