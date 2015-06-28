@@ -23,6 +23,8 @@ using namespace std;
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
 
+#define MAX_RETRY 5
+
 static cmstring sGenericError("567 Unknown download error occured");
 
 std::atomic_uint g_nDlCons(0);
@@ -929,14 +931,20 @@ inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 
 #ifdef DISCO_FAILURE
 #warning hej
-			static int fakeFail=3;
+			static int fakeFail=-123;
+			if(fakeFail == -123)
+			{
+				srand(getpid());
+				fakeFail = rand()%123;
+			}
 			if( fakeFail-- < 0)
 			{
 //				LOGLVL(LOG_DEBUG, "\n#################\nFAKING A FAILURE\n###########\n");
 				r=0;
-				fakeFail=10;
+				fakeFail=rand()%123;
 				errno = EROFS;
-				r = -errno;
+				//r = -errno;
+				shutdown(con.get()->GetFD(), SHUT_RDWR);
 			}
 #endif
 
@@ -1075,8 +1083,7 @@ void dlcon::WorkLoop()
 
 	bool bStopRequesting=false; // hint to stop adding request headers until the connection is restarted
 
-	int nLostConTolerance=0;
-#define MAX_RETRY 5
+	int nLostConTolerance=MAX_RETRY;
 
 	auto BlacklistMirror = [&](tDlJobPtr & job)
 	{
@@ -1350,6 +1357,8 @@ void dlcon::WorkLoop()
 				BlacklistMirror(inpipe.front());
 				nLostConTolerance=MAX_RETRY;
 			}
+
+			con.reset();
 
 			timespec sleeptime = { 0, 325000000 };
 			nanosleep(&sleeptime, nullptr);
