@@ -1,3 +1,9 @@
+apt-cacher-ng (0.8.5) ECREATIVITYFAILURE; urgency=low
+
+  * 
+
+ -- 
+
 apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
 
   * Code refactoring, little memory consumption improvements
