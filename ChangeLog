@@ -1,6 +1,7 @@
 apt-cacher-ng (0.8.5) ECREATIVITYFAILURE; urgency=low
 
-  * 
+  * FIX: special recovery trick from remote connection disconnects was failing
+    on the first occurence since at least version 0.7.4
 
  -- 
 
