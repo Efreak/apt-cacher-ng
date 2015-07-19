@@ -28,6 +28,12 @@ INCLUDE_DIRECTORIES(. ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
 FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
 
+LIST(APPEND TOOLSRCS tool/main.cc source/acfg.cc source/meta.cc source/dlcon.cc
+	source/tcpconnect.cc source/acfg_defaults.cc source/acbuf.cc
+	source/filereader.cc source/fileitem.cc source/acbuf.cc source/aclogger.cc
+	source/fileio.cc source/filelocks.cc source/header.cc source/caddrinfo.cc)
+
+
 IF(NOT DEFINED(ACVERSION))
 FILE(READ "${CMAKE_SOURCE_DIR}/VERSION" ACVERSION)
 string(REPLACE "\n" "" ACVERSION ${ACVERSION})
@@ -52,6 +58,10 @@ ENDIF(CMAKE_SYSTEM MATCHES "Darwin")
 
 IF(CMAKE_SYSTEM MATCHES "CYGWIN")
    SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__ -DNOMINMAX ")
+
+option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" off)
+ELSE()
+option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" on)
 ENDIF()
 
 FILE(READ test/build/testcxx11.cc CXX11_TESTSRC)
@@ -74,7 +84,6 @@ else()
    endif()
 endif()
 
-option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" on)
 if(USE_LTO)
 SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} -flto")
 SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN} -flto ")
@@ -140,6 +149,7 @@ IF(HAVE_SSL)
    LIST(REMOVE_ITEM SRCS "${CMAKE_SOURCE_DIR}/source/md5.cc")
 ELSE(HAVE_SSL)
    MESSAGE("!! OpenSSL not found or not working, disabling support")
+   LIST(APPEND TOOLSRCS "${CMAKE_SOURCE_DIR}/source/sha1.cc" "${CMAKE_SOURCE_DIR}/source/md5.cc")
    SET(HAVE_SSL )
    SET(SSL_LIB_LIST )
 ENDIF(HAVE_SSL)
@@ -173,7 +183,7 @@ CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_FADVISE)
 FILE(READ test/build/HAVE_MADVISE.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_MADVISE)
 
-if("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 
    FILE(READ test/build/HAVE_LINUX_FALLOCATE.cc TESTSRC)
    CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LINUX_FALLOCATE)
@@ -256,11 +266,7 @@ ADD_EXECUTABLE(in.acng client/client.cc)
 SET_TARGET_PROPERTIES(in.acng PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} -DMINIBUILD")
 TARGET_LINK_LIBRARIES(in.acng ${NetworkLibs} ${EXTRA_LIBS_INETD})
 
-ADD_EXECUTABLE(acngtool tool/main.cc source/acfg.cc source/meta.cc source/dlcon.cc
-	source/tcpconnect.cc source/acfg_defaults.cc source/acbuf.cc
-	source/filereader.cc source/fileitem.cc source/acbuf.cc source/aclogger.cc
-	source/fileio.cc source/filelocks.cc source/header.cc source/caddrinfo.cc
-	)
+ADD_EXECUTABLE(acngtool ${TOOLSRCS})
 SET_TARGET_PROPERTIES(acngtool PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON}")
 TARGET_LINK_LIBRARIES(acngtool ${SSL_LIB_LIST} ${CompLibs} ${EXTRA_LIBS_INETD})
 

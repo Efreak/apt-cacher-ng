@@ -1,7 +1,7 @@
 #include <acbuf.h>
 #include <aclogger.h>
 #include <fcntl.h>
-#include <openssl/evp.h>
+
 #include <stddef.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -33,7 +33,7 @@ using namespace std;
 #include <errno.h>
 
 #ifdef HAVE_SSL
-/* OpenSSL headers */
+#include <openssl/evp.h>
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
 #include "openssl/err.h"

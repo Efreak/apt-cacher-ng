@@ -5,7 +5,11 @@
 #include <acbuf.h>
 #include <aclogger.h>
 #include <fcntl.h>
+
+#ifdef HAVE_SSL
 #include <openssl/evp.h>
+#endif
+
 #include <stddef.h>
 #include <sys/stat.h>
 #include <sys/types.h>

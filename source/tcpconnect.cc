@@ -582,6 +582,8 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	return false;
 }
 
+#endif
+
 bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 		cmstring *psAuthorization, bool bDoSSL)
 {
@@ -640,13 +642,15 @@ bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 
 		m_sHostName = realTarget.sHost;
 		m_sPort = realTarget.GetPort();
-
+#ifdef HAVE_SSL
 		if (bDoSSL && !SSLinit(sError, m_sHostName, m_sPort))
 		{
 			m_sHostName.clear();
 			return false;
 		}
-
+#else
+		(void) bDoSSL;
+#endif
 	}
 	catch(...)
 	{
@@ -655,4 +659,3 @@ bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 	return true;
 }
 
-#endif
