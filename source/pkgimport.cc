@@ -405,7 +405,7 @@ void pkgimport::_LoadKeyCache()
 		in>>sz;
 		std::getline(in, cs); // newline
 		fpr.size=sz;
-
+#warning error checking...
 		in>>csType;
 		std::getline(in, cs); // newline
 

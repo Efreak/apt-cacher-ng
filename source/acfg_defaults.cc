@@ -61,6 +61,7 @@ string wfilepat(INFOLDER
 		"|(Packages|Sources)" COMPRLIST "?" // hm... private repos without Release file :-(
 		"|Translation[^/]*" COMPRLIST "?" // to be checked, but they should never really go anywhere
 		"|.*\\.xml" // SUSE
+		"|setup\\.bz2(.sig)?" // Cygwin
 		"|" ALXPATTERN // Arch Linux
 		"|[a-z]+32.exe"
 		")$");

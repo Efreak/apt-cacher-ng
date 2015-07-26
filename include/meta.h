@@ -381,7 +381,7 @@ public:
 	}
 	inline mstring str(){ return s.substr(start, len); }
 	inline operator mstring() { return str(); }
-//	inline LPCSTR rest() { return s.c_str() + start; }
+	inline LPCSTR remainder() { return s.c_str() + start; }
 };
 
 //bool CreateDetachedThread(void *(*threadfunc)(void *));

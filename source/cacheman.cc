@@ -1692,9 +1692,13 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 		// directory starting in dists/?
 		// The assumption doesn't however apply to the d-i checksum
 		// lists, those refer to themselves only.
+		//
+		// similar considerations for Cygwin setup
 
 		if(idxType != EIDX_MD5DILIST && stmiss!=(pos=sCurFilesReferenceDirRel.rfind("/dists/")))
-			sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+1);
+			sPkgBaseDir = sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+1);
+		else if(idxType == EIDX_CYGSETUP && stmiss!=(pos=sCurFilesReferenceDirRel.rfind("/cygwin/")))
+			sPkgBaseDir = sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+8);
 		else
 			sPkgBaseDir=sCurFilesReferenceDirRel;
 	}
@@ -1841,32 +1845,21 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 			if(CheckStopSignal())
 				return true;
 
-			static const string cygkeys[]={"install: ", "source: "};
-
-			trimBack(sLine);
-			for(auto& ckey: cygkeys)
+			uint begin(0);
+			if(startsWithSz(sLine, "install: "))
+				begin=9;
+			else if(startsWithSz(sLine, "source: "))
+				begin=8;
+			else
+				continue;
+			tSplitWalk split(&sLine, SPACECHARS, begin);
+			if(split.Next() && info.SetFromPath(split, sPkgBaseDir)
+					&& split.Next() && info.SetSize(split.remainder())
+					&& split.Next() && info.fpr.SetCs(split))
 			{
-				if(!startsWith(sLine, ckey))
-					continue;
-				if (3 == Tokenize(sLine, "\t ", vsMetrics, false, ckey.length())
-						&& info.fpr.SetCs(vsMetrics[2], CSTYPE_MD5)
-						&& 0>= (info.fpr.size=atoofft(vsMetrics[1].c_str(), -2)))
-				{
-					tStrPos pos = vsMetrics[0].rfind(SZPATHSEPUNIX);
-					if (pos == stmiss)
-					{
-						info.sFileName = vsMetrics[0];
-						info.sDirectory = sCurFilesReferenceDirRel;
-					}
-					else
-					{
-						info.sFileName = vsMetrics[0].substr(pos + 1);
-						info.sDirectory = sCurFilesReferenceDirRel + vsMetrics[0].substr(0, pos + 1);
-					}
-					ret.HandlePkgEntry(info);
-					info.SetInvalid();
-				}
+				ret.HandlePkgEntry(info);
 			}
+			info.SetInvalid();
 		}
 		break;
 	case EIDX_SUSEREPO:
@@ -1914,6 +1907,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 			}
 		}
 		break;
+#warning have sha2 now, also support http://ftp.uni-kl.de/debian/dists/jessie/main/installer-amd64/current/images/SHA256SUMS
 	case EIDX_MD5DILIST:
 		LOG("Plain list of filenames and md5sums");
 		while(reader.GetOneLine(sLine))
