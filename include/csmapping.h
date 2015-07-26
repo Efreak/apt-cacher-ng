@@ -6,15 +6,39 @@
 #include "filereader.h"
 #include "fileio.h"
 
-
-#define MAXCSLEN 20
+// XXX: allocate this dynamically?
+#define MAXCSLEN 64
 
 typedef enum {
    CSTYPE_INVALID=0,
    CSTYPE_MD5=1,
    CSTYPE_SHA1=2,
-   CSTYPE_SHA256=3
+   CSTYPE_SHA256=3,
+   CSTYPE_SHA512=4
 } CSTYPES;
+
+inline CSTYPES GuessCStype(unsigned short len)
+{
+	switch(len)
+	{
+	case 16: return CSTYPE_MD5;
+	case 20: return CSTYPE_SHA1;
+	case 32: return CSTYPE_SHA256;
+	case 64: return CSTYPE_SHA512;
+	default: return CSTYPE_INVALID;
+	}
+}
+inline unsigned short GetCSTypeLen(CSTYPES t)
+{
+	switch(t)
+	{
+	case CSTYPE_MD5: return 16;
+	case CSTYPE_SHA1: return 20;
+	case CSTYPE_SHA256: return 32;
+	case CSTYPE_SHA512: return 54;
+	default: return 0;
+	}
+}
 
 class csumBase
 {
@@ -25,7 +49,7 @@ public:
 	static std::unique_ptr<csumBase> GetChecker(CSTYPES);
 };
 
-// kind of file identity, compares by file size and checksum (MD5 or SHA1)
+// kind of file identity, compares by file size and checksum (MD5 or SHA*)
 struct tFingerprint {
 	off_t size =0;
 	CSTYPES csType =CSTYPE_INVALID;
@@ -38,23 +62,29 @@ struct tFingerprint {
 		memcpy(csum, a.csum, sizeof(csum));
 	};
 	
-	bool SetCs(const mstring & hexString, CSTYPES eCstype)
+	bool SetCs(const mstring & hexString, CSTYPES eCstype = CSTYPE_INVALID)
 	{
-		if(hexString.empty()
-				|| (eCstype!=CSTYPE_MD5 && eCstype!=CSTYPE_SHA1)
-				|| (eCstype==CSTYPE_MD5 && 32 != hexString.length())
-				|| (eCstype==CSTYPE_SHA1 && 40 != hexString.length()))
+		auto l = hexString.size();
+		if(!l || l%2) // weird sizes...
+			return false;
+		if(eCstype == CSTYPE_INVALID)
+		{
+			eCstype = GuessCStype(hexString.size() / 2);
+			if(eCstype == CSTYPE_INVALID)
+				return false;
+		}
+		else if(l != 2*GetCSTypeLen(eCstype))
 			return false;
 
 		csType=eCstype;
-		return CsAsciiToBin(hexString.c_str(), csum, CSTYPE_MD5==csType?16:20);
+		return CsAsciiToBin(hexString.c_str(), csum, l/2);
 	}
 	void Set(uint8_t *pData, CSTYPES eCstype, off_t newsize)
 	{
 		size=newsize;
 		csType=eCstype;
 		if(pData)
-			memcpy(csum, pData, CSTYPE_MD5==csType?16:20);
+			memcpy(csum, pData, GetCSTypeLen(eCstype));
 	}
 
 	inline bool Set(cmstring & hexString, CSTYPES eCstype, off_t newsize)
@@ -66,7 +96,7 @@ struct tFingerprint {
 	}
 	bool ScanFile(const mstring & path, const CSTYPES eCstype, bool bUnpack, FILE *fDump=nullptr)
 	{
-		if(eCstype != CSTYPE_MD5 && CSTYPE_SHA1 != eCstype)
+		if(! GetCSTypeLen(eCstype))
 			return false; // unsupported
 		csType=eCstype;
 		return filereader::GetChecksum(path, eCstype, csum, bUnpack, size, fDump);
@@ -78,7 +108,7 @@ struct tFingerprint {
 	}
 	mstring GetCsAsString() const
 	{
-		return BytesToHexString(csum, CSTYPE_MD5==csType?16:20);
+		return BytesToHexString(csum, GetCSTypeLen(csType));
 	}
 	LPCSTR GetCsName() const
 	{
@@ -87,6 +117,7 @@ struct tFingerprint {
 		case CSTYPE_MD5: return "Md5";
 		case CSTYPE_SHA1: return "Sha1";
 		case CSTYPE_SHA256: return "Sha256";
+		case CSTYPE_SHA512: return "Sha512";
 		default: return "Other";
 		}
 	}
@@ -96,7 +127,7 @@ struct tFingerprint {
 	}
 	inline bool csEquals(const tFingerprint& other) const
 	{
-		return 0==memcmp(csum, other.csum, csType==CSTYPE_MD5 ? 16 : 20);
+		return 0==memcmp(csum, other.csum, GetCSTypeLen(csType));
 	}
 	inline bool operator==(const tFingerprint & other) const
 	{
@@ -123,7 +154,7 @@ struct tFingerprint {
 			return csType<other.csType;
 		if(size!=other.size)
 			return size<other.size;
-		return memcmp(csum, other.csum, csType==CSTYPE_MD5 ? 16 : 20) < 0;
+		return memcmp(csum, other.csum, GetCSTypeLen(csType)) < 0;
 	}
 };
 
@@ -141,6 +172,32 @@ struct tRemoteFileInfo
 	}
 	inline bool IsUsable() {
 		return (!sFileName.empty() && fpr.csType!=CSTYPE_INVALID && fpr.size>0);
+	}
+	bool SetFromPath(cmstring &sPath, cmstring &sBaseDir)
+	{
+		if (sPath.empty())
+			return false;
+
+		tStrPos pos = sPath.rfind(SZPATHSEPUNIX);
+		if (pos == stmiss)
+		{
+			sFileName = sPath;
+			sDirectory = sBaseDir;
+		}
+		else
+		{
+			sFileName = sPath.substr(pos + 1);
+			sDirectory = sBaseDir + sPath.substr(0, pos + 1);
+		}
+		return true;
+	}
+	inline bool SetSize(LPCSTR szSize)
+	{
+		auto l = atoofft(szSize, -2);
+		if(l<0)
+			return false;
+		fpr.size = l;
+		return true;
 	}
 };
 

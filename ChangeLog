@@ -4,6 +4,7 @@ apt-cacher-ng (0.8.5) ECREATIVITYFAILURE; urgency=low
     on the first occurence since at least version 0.7.4
   * Changed default pipeline depth to 10 for better compatibility with stupid
     middleboxes
+  * Added SHA2 method implementations from http://www.ouah.org/ogay/sha2/
 
  -- 
 
