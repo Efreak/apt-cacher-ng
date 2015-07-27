@@ -1178,6 +1178,7 @@ void dlcon::WorkLoop()
 				auto proxy = m_bProxyTot ? nullptr : prefProxy(cjob);
 				auto& peerHost = cjob->GetPeerHost();
 
+#ifdef HAVE_SSL
 				if(peerHost.bSSL)
 				{
 					if(proxy)
@@ -1194,6 +1195,7 @@ void dlcon::WorkLoop()
 						con = doconnect(peerHost, acfg::nettimeout, false);
 				}
 				else
+#endif
 				{
 					if(proxy)
 					{

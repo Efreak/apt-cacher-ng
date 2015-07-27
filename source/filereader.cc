@@ -11,6 +11,7 @@
 
 #include "md5.h"
 #include "sha1.h"
+#include "sha2.h"
 #include "csmapping.h"
 #include "aclogger.h"
 #include "filelocks.h"
@@ -615,13 +616,27 @@ bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
 
 #ifndef MINIBUILD
 
-#ifdef HAVE_SSL
+#ifdef USE_SSL_CS
 class csumSHA1 : public csumBase, public SHA_CTX
 {
 public:
 	csumSHA1() { SHA1_Init(this); }
 	void add(const char *data, size_t size) override { SHA1_Update(this, (const void*) data, size); }
 	void finish(uint8_t* ret) override { SHA1_Final(ret, this); }
+};
+class csumSHA256 : public csumBase, public SHA256_CTX
+{
+public:
+	csumSHA256() { SHA256_Init(this); }
+	void add(const char *data, size_t size) override { SHA256_Update(this, (const void*) data, size); }
+	void finish(uint8_t* ret) override { SHA256_Final(ret, this); }
+};
+class csumSHA512 : public csumBase, public SHA512_CTX
+{
+public:
+	csumSHA512() { SHA512_Init(this); }
+	void add(const char *data, size_t size) override { SHA512_Update(this, (const void*) data, size); }
+	void finish(uint8_t* ret) override { SHA512_Final(ret, this); }
 };
 class csumMD5 : public csumBase, public MD5_CTX
 {
@@ -637,6 +652,20 @@ public:
 	csumSHA1() { sha_init(this); }
 	void add(const char *data, size_t size) override { sha_update(this, (SHA_BYTE*) data, size); }
 	void finish(uint8_t* ret) override { sha_final(ret, this); }
+};
+class csumSHA256 : public csumBase, public sha256_ctx
+{
+public:
+	csumSHA256() { sha256_init(this); }
+	void add(const char *data, size_t size) override { sha256_update(this, (uint8_t*) data, size); }
+	void finish(uint8_t* ret) override { sha256_final(this, ret); }
+};
+class csumSHA512 : public csumBase, public sha512_ctx
+{
+public:
+	csumSHA512() { sha512_init(this); }
+	void add(const char *data, size_t size) override { sha512_update(this, (SHA_BYTE*) data, size); }
+	void finish(uint8_t* ret) override { sha512_final(this, ret); }
 };
 class csumMD5 : public csumBase, public md5_state_s
 {
@@ -654,8 +683,13 @@ std::unique_ptr<csumBase> csumBase::GetChecker(CSTYPES type)
 	case CSTYPE_MD5:
 		return std::unique_ptr<csumBase>(new csumMD5);
 	case CSTYPE_SHA1:
-	default: // for now
 		return std::unique_ptr<csumBase>(new csumSHA1);
+	case CSTYPE_SHA256:
+		return std::unique_ptr<csumBase>(new csumSHA256);
+	case CSTYPE_SHA512:
+		return std::unique_ptr<csumBase>(new csumSHA512);
+	default: // for now
+		return std::unique_ptr<csumBase>();
 	}
 }
 

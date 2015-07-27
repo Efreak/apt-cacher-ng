@@ -170,60 +170,47 @@ public:
 	mstring ToURI(bool bEscaped) const;
 	mstring sHost, sPath, sUserPass;
 
-#ifdef HAVE_SSL
 	bool bSSL=false;
 	inline cmstring & GetProtoPrefix() const
 	{
 		return bSSL ? PROT_PFX_HTTPS : PROT_PFX_HTTP;
 	}
-#else
-	inline cmstring & GetProtoPrefix() const
-	{
-		return PROT_PFX_HTTP;
-	}
-#endif
 
-	tHttpUrl & operator=(const tHttpUrl &a) 
+	tHttpUrl & operator=(const tHttpUrl &a)
 	{
-		sHost=a.sHost; sPort=a.sPort; sPath=a.sPath; sUserPass=a.sUserPass;
-#ifdef HAVE_SSL
-		bSSL=a.bSSL;
-#endif
+		sHost = a.sHost;
+		sPort = a.sPort;
+		sPath = a.sPath;
+		sUserPass = a.sUserPass;
+		bSSL = a.bSSL;
 		return *this;
-	};
+	}
 	bool operator==(const tHttpUrl &a) const
 	{
-		return a.sHost==sHost && a.sPort == sPort
-				&& a.sPath == sPath && a.sUserPass == sUserPass
-#ifdef HAVE_SSL
-				&& a.bSSL == bSSL
-#endif
-				;
-	};
-	bool operator!=(const tHttpUrl &a) const
+		return a.sHost == sHost && a.sPort == sPort && a.sPath == sPath
+				&& a.sUserPass == sUserPass && a.bSSL == bSSL;
+	}
+	;bool operator!=(const tHttpUrl &a) const
 	{
-		return ! (a==*this);
+		return !(a == *this);
 	}
-	inline void clear() { sHost.clear(); sPort.clear(); sPath.clear();
-	sUserPass.clear();
-#ifdef HAVE_SSL
-	bSSL=false;
-#endif
+	inline void clear()
+	{
+		sHost.clear();
+		sPort.clear();
+		sPath.clear();
+		sUserPass.clear();
+		bSSL = false;
 	}
-
-
-	inline cmstring& GetDefaultPortForProto() const { return
-#ifdef HAVE_SSL
-			bSSL ? sDefPortHTTPS : sDefPortHTTP;
-#else
-	sDefPortHTTP;
-#endif
+	inline cmstring& GetDefaultPortForProto() const {
+		return bSSL ? sDefPortHTTPS : sDefPortHTTP;
 	}
 	inline cmstring& GetPort() const { return !sPort.empty() ? sPort : GetDefaultPortForProto(); }
 
-
-	inline tHttpUrl(cmstring &host, cmstring& port, bool ssl)
-	: sPort(port), sHost(host), bSSL(ssl) {};
+	inline tHttpUrl(cmstring &host, cmstring& port, bool ssl) :
+			sPort(port), sHost(host), bSSL(ssl)
+	{
+	}
 	inline tHttpUrl() =default;
 };
 
@@ -394,7 +381,7 @@ public:
 	}
 	inline mstring str(){ return s.substr(start, len); }
 	inline operator mstring() { return str(); }
-//	inline LPCSTR rest() { return s.c_str() + start; }
+	inline LPCSTR remainder() { return s.c_str() + start; }
 };
 
 //bool CreateDetachedThread(void *(*threadfunc)(void *));

@@ -2,8 +2,13 @@ apt-cacher-ng (0.8.5) ECREATIVITYFAILURE; urgency=low
 
   * FIX: special recovery trick from remote connection disconnects was failing
     on the first occurence since at least version 0.7.4
-  * Changed default pipeline depth to 10 for better compatibility with stupid
-    middleboxes
+  * FIX: Changed default pipeline depth to 10 for better compatibility with
+    stupid middleboxes
+  * NEW: Added SHA2 method implementations from http://www.ouah.org/ogay/sha2/
+  * FIX: expiration code for Cygwin data
+    + file entry parsing with SHA512 variants
+    + correct resolution of base path, fixing path and checksum verification
+    + added setup.bz2 to whitelist
 
  -- 
 
