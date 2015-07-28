@@ -262,7 +262,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 				&& !pRepoDesc->m_backends.empty())
 		{
 			ldbg("will use backend mode, subdirectory is path suffix relative to backend uri");
-			sRemoteSuffix=parserPath.sPath;
+			sRemoteSuffix=parserPath.sPath.substr(1);
 		}
 		else
 		{
