@@ -142,10 +142,9 @@ tStrVec::size_type Tokenize(const string & in, const char *sep,
 	return (out.size()-nBefore);
 }
 
-void StrSubst(string &contents, const string &from, const string &to)
+void StrSubst(string &contents, const string &from, const string &to, tStrPos pos)
 {
-	tStrPos pos;
-	while (stmiss!=(pos=contents.find(from)))
+	while (stmiss!=(pos=contents.find(from, pos)))
 	{
 		contents.replace(pos, from.length(), to);
 		pos+=to.length();

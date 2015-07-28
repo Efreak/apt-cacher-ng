@@ -635,15 +635,9 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 	tStrPos pos2, pos = sPathRel.rfind("/installer-");
 	if(pos!=stmiss && stmiss !=(pos2=sPathRel.find("/images/", pos)))
 	{
-		AddIFileCandidate(sPathRel.substr(0, pos2+8)+"MD5SUMS");
+		AddIFileCandidate(sPathRel.substr(0, pos2+8)+"SHA256SUMS");
 		auto idir = sPathRel.substr(0, pos2 + 8);
-		/* XXX: support of sha256 is required. Do only MD5SUMS for now.
-		 if(!ContHas(m_indexFilesRel, idir+"SHA256SUMS"))
-		 {
-		 */
-		// folder doesn't have sha256 version but that's ok. At least md5 version is there.
-		// XXX: change that when "oldstable" also has sha256 version
-		auto& idesc = m_metaFilesRel[idir + "MD5SUMS"];
+		auto& idesc = m_metaFilesRel[idir + "SHA256SUMS"];
 		/* pretend that it's there but not usable so the refreshing code will try to get at
 		 * least one copy for that location if it's needed there
 		 */
