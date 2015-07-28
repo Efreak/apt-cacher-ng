@@ -76,7 +76,7 @@ bool pkgimport::ProcessRegular(cmstring &sPath, const struct stat &stinfo)
 		if(m_precachedList.find(sPath)!=m_precachedList.end())
 			return true; // have that already, somewhere...
 		
-		for (CSTYPES ctp = CSTYPE_MD5; ctp <= CSTYPE_SHA1; ctp=CSTYPES(int(ctp)+1))
+		for (CSTYPES ctp : { CSTYPE_MD5, CSTYPE_SHA1, CSTYPE_SHA512 } )
 		{
 
 			// get the most likely requested contents id
@@ -95,9 +95,8 @@ bool pkgimport::ProcessRegular(cmstring &sPath, const struct stat &stinfo)
 				continue;
 			}
 
-			SendFmt << "<font color=blue>Checked " << sPath << " (" << (ctp == CSTYPE_MD5
-					? "MD5"
-					: "SHA1") << " fingerprint created)</font><br>\n";
+			SendFmt << "<font color=blue>Checked " << sPath << " (" << GetCsName(ctp)
+					<< " fingerprint created)</font><br>\n";
 
 			// add this entry immediately if needed and get its reference
 			tImpFileInfo & node = m_importMap[fpr];
@@ -395,22 +394,21 @@ void pkgimport::_LoadKeyCache()
 /*	if(m_bVerbose)
 		SendChunk("Loading fingerprints from key cache... \n");
 		*/
-	off_t sz(-1);
 	int csType(CSTYPE_INVALID);
 
 	for(;;)
 	{
 		info.bFileUsed=false;
 
-		in>>sz;
-		std::getline(in, cs); // newline
-		fpr.size=sz;
-#warning error checking...
+		std::getline(in, cs);
+		if((fpr.size=atoofft(cs.c_str(), -2)) < 0)
+			return;
 		in>>csType;
 		std::getline(in, cs); // newline
 
 		std::getline(in, cs); // checksum line
-		fpr.SetCs(cs, (CSTYPES)csType);
+		if(!fpr.SetCs(cs, (CSTYPES)csType))
+			return;
 
 		std::getline(in, info.sPath);
 		info.sPath.insert(0, m_sSrcPath+SZPATHSEP);
