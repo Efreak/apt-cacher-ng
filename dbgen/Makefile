@@ -81,7 +81,7 @@ $(CONFDIR)/sfnet_mirrors: sig-sfsnap
 $(CONFDIR)/ubuntu_mirrors: sig-ubuntu ubuntuscan.sh
 	bash ubuntuscan.sh $@ $(DBTMP)/usnap $(DBTMP) "/pool/" "main"
 
-$(CONFDIR)/cygwin_mirrors: sig-cygwin
+$(CONFDIR)/cygwin_mirrors:
 	wget -q -O $(DBTMP)/cyg_raw http://cygwin.com/mirrors.lst
 	grep ^http: $(DBTMP)/cyg_raw | cut -f1 -d\; | sort -u > $(CONFDIR)/cygwin_mirrors
 
