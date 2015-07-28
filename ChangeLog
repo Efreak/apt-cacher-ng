@@ -4,11 +4,15 @@ apt-cacher-ng (0.8.5) ECREATIVITYFAILURE; urgency=low
     on the first occurence since at least version 0.7.4
   * FIX: Changed default pipeline depth to 10 for better compatibility with
     stupid middleboxes
-  * NEW: Added SHA2 method implementations from http://www.ouah.org/ogay/sha2/
+  * NEW: Added SHA2 support and for non OpenSSL usage: implementations from
+    http://www.ouah.org/ogay/sha2/
   * FIX: expiration code for Cygwin data
     + file entry parsing with SHA512 variants
     + correct resolution of base path, fixing path and checksum verification
     + added setup.bz2 to whitelist
+  * FIX: in maintenance task downloads, strip double slashes from remote URLs
+    which were added on repo-mapped paths (Debian bug #793356)
+    
 
  -- 
 
