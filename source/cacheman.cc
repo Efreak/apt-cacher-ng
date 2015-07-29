@@ -2186,7 +2186,7 @@ int parseidx_demo(LPCSTR file)
 		virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override
 		{
 			cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
-					<< "Checksum-" << entry.fpr.GetCsName() << ": " << entry.fpr.GetCsAsString()
+					<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
 					<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
 		}
 		virtual bool ProcessRegular(const mstring &, const struct stat &) override {return true;}
