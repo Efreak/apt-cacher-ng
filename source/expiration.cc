@@ -637,6 +637,16 @@ void expiration::PurgeMaintLogs()
 		::unlink(s.c_str());
 #endif
 	}
+	if(!m_killBill.empty())
+	{
+		SendChunk(WITHLEN("Removing deprecated files...<br>\n"));
+		for(const auto &s: m_killBill)
+		{
+			SendChunk(s+"<br>\n");
+			::unlink(SZABSPATH(s));
+		}
+	}
+
 }
 
 bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stinfo)
@@ -806,3 +816,7 @@ inline bool expiration::CheckAndReportError()
 	return false;
 }
 
+void expiration::MarkObsolete(cmstring& sPathRel)
+{
+	m_killBill.emplace_back(sPathRel);
+}

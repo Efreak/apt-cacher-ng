@@ -13,6 +13,7 @@ apt-cacher-ng (0.8.5) ECREATIVITYFAILURE; urgency=low
   * FIX: in maintenance task downloads, strip double slashes from remote URLs
     which were added on repo-mapped paths (Debian bug #793356)
   * Database update
+  * Added a helper to remove deprecated bz2 versions of index files ASAP
 
  -- 
 

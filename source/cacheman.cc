@@ -489,8 +489,13 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 					{
 						newurl.sPath.erase(newurl.sPath.size() - 4);
 						newurl.sPath.append(".xz");
-						return Download(sFilePathRel.substr(0, sFilePathRel.size() - 4) + ".xz",
-								bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl);
+						if(Download(sFilePathRel.substr(0, sFilePathRel.size() - 4) + ".xz",
+								bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl))
+						{
+							MarkObsolete(sFilePathRel);
+							return true;
+						}
+						return false;
 					}
 				}
 			}
