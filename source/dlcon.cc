@@ -23,7 +23,7 @@ using namespace std;
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
 
-#define MAX_RETRY 5
+#define MAX_RETRY 11
 
 static cmstring sGenericError("567 Unknown download error occured");
 
