@@ -10,6 +10,9 @@
 # ACNGIP=10.0.1.3
 # export ACNGIP
 
-if test -r /usr/lib/apt-cacher-ng/expire-caller.pl ; then
-   perl /usr/lib/apt-cacher-ng/expire-caller.pl || echo Please check error messages in one of: $(ls -t /var/log/apt-cacher-ng/maint*.log.html | head -n5)
+# make sure that the service runs on localhost
+if systemctl -q is-active apt-cacher-ng || test -e /var/run/apt-cacher-ng/pid ; then
+   if test -r /usr/lib/apt-cacher-ng/expire-caller.pl ; then
+      perl /usr/lib/apt-cacher-ng/expire-caller.pl || echo Please check error messages in one of: $(ls -t /var/log/apt-cacher-ng/maint*.log.html | head -n5)
+   fi
 fi
