@@ -1,7 +1,9 @@
-apt-cacher-ng (0.8.5) ECREATIVITYFAILURE; urgency=low
+apt-cacher-ng (0.8.5) WHERENOVERSIONHASGONEBEFORE; urgency=low
 
-  * FIX: special recovery trick from remote connection disconnects was failing
-    on the first occurence since at least version 0.7.4
+  * FIX: smart reconnection code (for sudden remote disconnects) was not
+    working as intended since at least version 0.7.4 (however, this was
+    covered by other issues and became visible after recent changes related to
+    connection forwarding)
   * FIX: Changed default pipeline depth to 10 for better compatibility with
     stupid middleboxes
   * NEW: Added SHA2 support and for non OpenSSL usage: implementations from
@@ -12,10 +14,13 @@ apt-cacher-ng (0.8.5) ECREATIVITYFAILURE; urgency=low
     + added setup.bz2 to whitelist
   * FIX: in maintenance task downloads, strip double slashes from remote URLs
     which were added on repo-mapped paths (Debian bug #793356)
+  * CHANGE: in configuration parsing (adding contents from linked files), a
+    <something>.default file was not considered if <something> file was found
+    (even if <something> was unreadable or didn't have useful contents)
   * Database update
   * Added a helper to remove deprecated bz2 versions of index files ASAP
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Thu, 30 Jul 2015 23:28:51 +0200
 
 apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
 
