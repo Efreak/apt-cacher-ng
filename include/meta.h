@@ -152,6 +152,7 @@ tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool b
 /*inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
 {out.clear(); if(tokens.empty()) return; for(const auto& tok: tokens)out+=(sep + tok);}
 */
+void StrSubst(mstring &contents, const mstring &from, const mstring &to, tStrPos start=0);
 
 // TODO: __attribute__((externally_visible))
 bool ParseKeyValLine(const mstring & sIn, mstring & sOutKey, mstring & sOutVal);
@@ -212,6 +213,8 @@ public:
 	{
 	}
 	inline tHttpUrl() =default;
+	// evil method that should only be called for specific purposes in certain locations
+	tHttpUrl* NormalizePath() { StrSubst(sPath, "//", "/"); return this; }
 };
 
 #define POKE(x) for(;;) { ssize_t n=write(x, "", 1); if(n>0 || (EAGAIN!=errno && EINTR!=errno)) break;  }
@@ -226,7 +229,6 @@ bool CsAsciiToBin(LPCSTR a, uint8_t b[], unsigned short binLength);
 
 typedef const unsigned char CUCHAR;
 bool CsEqual(LPCSTR a, uint8_t b[], unsigned short binLength);
-void StrSubst(mstring &contents, const mstring &from, const mstring &to);
 
 #if SIZEOF_LONG == 8
 // _FILE_OFFSET_BITS mostly irrelevant. But if it's set, watch out for user's "experiments".

@@ -58,7 +58,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				auto finish_bad = [&]()->bool
 				{
 					if (m_damageList.is_open()) m_damageList << sPathRel << "\n";
-					SendChunk(" (adding to damage list)");
+					SendChunk(" (treating as damaged file...) ");
 					AddDelCbox(sPathRel);
 					SendChunk(CLASSEND);
 					return true;
@@ -71,10 +71,25 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				ADDSPACE(size);
 				return false;
 			};
+
+			// like finish_good but prints the file, and only in verbose mode
 			auto report_good = [&](off_t size)->bool
 			{
 				// ok, package matched, contents ok if checked, drop it from the removal list
 				if (m_bVerbose) SendFmt << GCLASS << sPathRel << CLASSEND;
+				ADDSPACE(size);
+				return false;
+			};
+
+			// volatile files, not certain, print an action checkbox though
+			auto report_weird_volatile = [&](off_t size)->bool
+			{
+				if(m_bVerbose)
+				{
+					SendFmt << WCLASS << sPathRel << " (invalid but volatile, ignoring...) ";
+					AddDelCbox(sPathRel);
+					SendChunk(CLASSEND);
+				}
 				ADDSPACE(size);
 				return false;
 			};
@@ -194,9 +209,21 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			if(entry.fpr.size<0 || (descHave.fpr.size == entry.fpr.size))
 				return report_good(lenFromStat);
 
+			// like the check above but this time we might compare also the uncompressed size
+			// which is relevant for some types of vfiles
 			if(descHave.fpr.size > entry.fpr.size)
 			{
 				report_oversize:
+				/*
+				 *
+				 *
+ERROR: size mismatch on debrep/dists/jessie/contrib/i18n/Translation-en.bz2 (adding to damage list)Tag
+repro: check by path, after a minor distro upgrade
+				 */
+				// don't really care but let the user truncate
+				if(rechecks::GetFiletype(sPathRel) == rechecks::FILE_VOLATILE)
+					return report_weird_volatile(lenFromStat);
+
 				SendFmt << ECLASS << "size mismatch on " << sPathRel;
 				return finish_bad();
 			}
@@ -208,8 +235,9 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			{
 				if(m_bVerbose)
 				{
-					SendFmt << WCLASS << " incomplete download, keeping "
-					<< sPathRel;
+					SendFmt << WCLASS << sPathRel
+							<< " (incomplete download, ignoring...) ";
+					AddDelCbox(sPathRel);
 					return finish_good(lenFromStat);
 				}
 				// just continue silently
@@ -505,6 +533,7 @@ void expiration::Action()
 	SetCommonUserFlags(m_parms.cmd);
 
 	m_bIncompleteIsDamaged=StrHas(m_parms.cmd, "incomAsDamaged");
+	m_bScanVolatileContents=StrHas(m_parms.cmd, "scanVolatile");
 
 	SendChunk("<b>Locating potentially expired files in the cache...</b><br>\n");
 
@@ -608,6 +637,16 @@ void expiration::PurgeMaintLogs()
 		::unlink(s.c_str());
 #endif
 	}
+	if(!m_killBill.empty())
+	{
+		SendChunk(WITHLEN("Removing deprecated files...<br>\n"));
+		for(const auto &s: m_killBill)
+		{
+			SendChunk(s+"<br>\n");
+			::unlink(SZABSPATH(s));
+		}
+	}
+
 }
 
 bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stinfo)
@@ -635,21 +674,20 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 	tStrPos pos2, pos = sPathRel.rfind("/installer-");
 	if(pos!=stmiss && stmiss !=(pos2=sPathRel.find("/images/", pos)))
 	{
-		AddIFileCandidate(sPathRel.substr(0, pos2+8)+"MD5SUMS");
 		auto idir = sPathRel.substr(0, pos2 + 8);
-		/* XXX: support of sha256 is required. Do only MD5SUMS for now.
-		 if(!ContHas(m_indexFilesRel, idir+"SHA256SUMS"))
-		 {
-		 */
-		// folder doesn't have sha256 version but that's ok. At least md5 version is there.
-		// XXX: change that when "oldstable" also has sha256 version
-		auto& idesc = m_metaFilesRel[idir + "MD5SUMS"];
+		auto& flags = m_metaFilesRel[idir +"SHA256SUMS"];
+
 		/* pretend that it's there but not usable so the refreshing code will try to get at
 		 * least one copy for that location if it's needed there
 		 */
-		idesc.vfile_ondisk = true;
-		idesc.uptodate = false;
-//		}
+		if(!flags.vfile_ondisk)
+		{
+			flags.eIdxType = EIDX_SHA256DILIST;
+			flags.vfile_ondisk = true;
+			flags.uptodate = false;
+		}
+		// and last but not least - care only about the modern version of that index
+		m_metaFilesRel.erase(idir + "MD5SUMS");
 	}
 	uint stripLen=0;
     if (endsWithSzAr(sPathRel, ".head"))
@@ -778,3 +816,7 @@ inline bool expiration::CheckAndReportError()
 	return false;
 }
 
+void expiration::MarkObsolete(cmstring& sPathRel)
+{
+	m_killBill.emplace_back(sPathRel);
+}

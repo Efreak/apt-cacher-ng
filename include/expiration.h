@@ -43,7 +43,10 @@ protected:
 	void DropExceptionalVersions();
 
 	std::ofstream m_damageList;
-	bool m_bIncompleteIsDamaged = false;
+	bool m_bIncompleteIsDamaged = false, m_bScanVolatileContents = false;
+
+	void MarkObsolete(cmstring&) override;
+	tStrVec m_killBill;
 
 private:
 	int m_nPrevFailCount =0;

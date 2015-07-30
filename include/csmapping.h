@@ -39,6 +39,17 @@ inline unsigned short GetCSTypeLen(CSTYPES t)
 	default: return 0;
 	}
 }
+inline LPCSTR GetCsName(CSTYPES csType)
+{
+	switch(csType)
+	{
+	case CSTYPE_MD5: return "Md5";
+	case CSTYPE_SHA1: return "Sha1";
+	case CSTYPE_SHA256: return "Sha256";
+	case CSTYPE_SHA512: return "Sha512";
+	default: return "Other";
+	}
+}
 
 class csumBase
 {
@@ -109,17 +120,6 @@ struct tFingerprint {
 	mstring GetCsAsString() const
 	{
 		return BytesToHexString(csum, GetCSTypeLen(csType));
-	}
-	LPCSTR GetCsName() const
-	{
-		switch(csType)
-		{
-		case CSTYPE_MD5: return "Md5";
-		case CSTYPE_SHA1: return "Sha1";
-		case CSTYPE_SHA256: return "Sha256";
-		case CSTYPE_SHA512: return "Sha512";
-		default: return "Other";
-		}
 	}
 	operator mstring() const
 	{

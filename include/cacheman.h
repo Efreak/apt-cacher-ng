@@ -59,7 +59,8 @@ protected:
 		EIDX_XMLRPMLIST,
 		EIDX_RFC822WITHLISTS,
 		EIDX_TRANSIDX,
-		EIDX_MD5DILIST
+		EIDX_MD5DILIST,
+		EIDX_SHA256DILIST
 	};
 	struct tIfileAttribs
 	{
@@ -152,9 +153,8 @@ protected:
 	struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
 	typedef std::map<tContId, tClassDesc> tContId2eqClass;
 
-	// ugly solution to migrate to changed remote structures
-	tStrMap m_fallback_hints;
-	bool m_fallbacks_were_used = false;
+	// add certain files to the kill bill, to be removed after the activity is done
+	virtual void MarkObsolete(cmstring&) {};
 
 private:
 

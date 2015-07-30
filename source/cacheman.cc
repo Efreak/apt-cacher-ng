@@ -272,11 +272,11 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			// the URL as needed
 
 			if(bCachePathAsUriPlausible) // unless other rule matches, this path in cache should represent the remote URI
-				pResolvedDirectUrl=&parserPath;
+				pResolvedDirectUrl = parserPath.NormalizePath();
 
 			// and prefer the source from xorig which is likely to deliver better result
 			if(hor.h[header::XORIG] && parserHead.SetHttpUrl(hor.h[header::XORIG], false))
-				pResolvedDirectUrl=&parserHead;
+				pResolvedDirectUrl = parserHead.NormalizePath();
 			else if(flags.guessed)
 			{
 				// might use a related file as reference
@@ -298,7 +298,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 							xpath.erase(xpath.size() - diffIdxSfx.size());
 							xpath += sFilePathAbs.substr(pos);
 							if (parserHead.SetHttpUrl(xpath, false))
-								pResolvedDirectUrl = &parserHead;
+								pResolvedDirectUrl = parserHead.NormalizePath();
 						}
 					}
 				}
@@ -341,7 +341,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 								urlcand += *pCompSuf;
 								if (parserHead.SetHttpUrl(urlcand, false))
 								{
-									pResolvedDirectUrl = &parserHead;
+									pResolvedDirectUrl = parserHead.NormalizePath();
 									break;
 								}
 							}
@@ -489,8 +489,13 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 					{
 						newurl.sPath.erase(newurl.sPath.size() - 4);
 						newurl.sPath.append(".xz");
-						return Download(sFilePathRel.substr(0, sFilePathRel.size() - 4) + ".xz",
-								bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl);
+						if(Download(sFilePathRel.substr(0, sFilePathRel.size() - 4) + ".xz",
+								bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl))
+						{
+							MarkObsolete(sFilePathRel);
+							return true;
+						}
+						return false;
 					}
 				}
 			}
@@ -1664,6 +1669,9 @@ tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(cmstring &sP
 	if (sPureIfileName == "MD5SUMS" && StrHas(sPath, "/installer-"))
 		return EIDX_MD5DILIST;
 
+	if (sPureIfileName == "SHA256SUMS" && StrHas(sPath, "/installer-"))
+		return EIDX_SHA256DILIST;
+
 	return EIDX_UNSUPPORTED;
 }
 
@@ -1907,9 +1915,10 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 			}
 		}
 		break;
-#warning have sha2 now, also support http://ftp.uni-kl.de/debian/dists/jessie/main/installer-amd64/current/images/SHA256SUMS
+		// like http://ftp.uni-kl.de/debian/dists/jessie/main/installer-amd64/current/images/SHA256SUMS
 	case EIDX_MD5DILIST:
-		LOG("Plain list of filenames and md5sums");
+	case EIDX_SHA256DILIST:
+		LOG("Plain list of filenames and checksums");
 		while(reader.GetOneLine(sLine))
 		{
 			if(CheckStopSignal())
@@ -1917,7 +1926,8 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 
 			tSplitWalk split(&sLine, SPACECHARS);
 			info.fpr.size=-1;
-			if( split.Next() && info.fpr.SetCs(split, CSTYPE_MD5)
+			if( split.Next() && info.fpr.SetCs(split,
+					idxType == EIDX_MD5DILIST ? CSTYPE_MD5 : CSTYPE_SHA256)
 					&& split.Next() && (info.sFileName = split).size()>0)
 			{
 				info.sDirectory = sCurFilesReferenceDirRel;
@@ -2181,7 +2191,7 @@ int parseidx_demo(LPCSTR file)
 		virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override
 		{
 			cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
-					<< "Checksum-" << entry.fpr.GetCsName() << ": " << entry.fpr.GetCsAsString()
+					<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
 					<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
 		}
 		virtual bool ProcessRegular(const mstring &, const struct stat &) override {return true;}
