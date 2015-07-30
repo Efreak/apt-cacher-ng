@@ -163,8 +163,8 @@ MapNameToInt n2iTbl[] = {
 		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10}
 };
 
-void ReadRewriteFile(const string & sFile, const string & sRepName);
-void ReadBackendsFile(const string & sFile, const string &sRepName);
+uint ReadBackendsFile(const string & sFile, const string &sRepName);
+uint ReadRewriteFile(const string & sFile, cmstring& sRepName);
 
 map<cmstring, tRepoData> repoparms;
 typedef decltype(repoparms)::iterator tPairRepoNameData;
@@ -350,9 +350,8 @@ inline void AddRemapFlag(const string & token, const string &repname)
 	}
 }
 
-tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
+tStrDeq ExpandFileTokens(cmstring &token)
 {
-	tStrDeq srcs;
 	string sPath = token.substr(5);
 	if (sPath.empty())
 		BARF("Bad file spec for repname, file:?");
@@ -361,59 +360,26 @@ tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
 	{
 		if (!bAbs)
 			sPath = confdir + sPathSep + sPath;
-		srcs = ExpandFilePattern(sPath, true);
+		return ExpandFilePattern(sPath, true);
 	}
-	else
-	{
-		tStrMap bname2path;
-#ifdef DEBUG
-		bool bp=(token == "file:backends_gentoo");
-#endif
-		auto lookup = [&sPath, &srcs, &bname2path](bool bAddDefault)
-		{
-			for (const auto& dir : { &confdir, &suppdir })
-			{
-				// chop slashes. That should not be required but better be sure.
-				while(endsWithSzAr(*dir, sPathSep) && dir->size()>1)
-				dir->resize(dir->size()-1);
-
-				auto pat=(cmstring) *dir + sPathSep + sPath;
-				if(bAddDefault)
-					pat+=".default";
-				//cerr << "heh, token: " << token << " in dir: " << *dir << " to: " << pat;
-				srcs = ExpandFilePattern(pat, true);
-				if (srcs.size() == 1 && !Cstat(srcs.front()))
-					continue;// file not existing, wildcard returned
-
-				// hits in confdir will overwrite those from suppdir
-				for (auto& s: srcs)
-				{
-					auto nam(GetBaseName(s));
-					if(bAddDefault)
-					nam.erase(nam.size()-8);
-					EMPLACE_PAIR(bname2path, nam, s);
-				}
-
-			}
-		};
-		lookup(false);
-		if(bUseDefaultFallback && bname2path.empty())
-		{
-			if(debug>4)
-				cerr << "Looking for fallback version: " << sPath << ".default" <<endl;
-			lookup(true);
-		}
-
-		if (bname2path.empty())
-		{
-			cerr << "WARNING: No URL list file matching " << token
-					<< " found in config or support directories." << endl;
-		}
-		srcs.clear();
-		for (auto& b2p : bname2path)
-			srcs.emplace_back(b2p.second);
-	}
-	return srcs;
+	auto pat = confdir + sPathSep + sPath;
+	StrSubst(pat, "//", "/");
+	auto res = ExpandFilePattern(pat, true);
+	if (res.size() == 1 && !Cstat(res.front()))
+		res.clear(); // not existing, wildcard returned
+	pat = suppdir + sPathSep + sPath;
+	StrSubst(pat, "//", "/");
+	auto suppres = ExpandFilePattern(pat, true);
+	if (suppres.size() == 1 && !Cstat(suppres.front()))
+		return res; // errrr... done here
+	// merge them
+	tStrSet dupeFil;
+	for(const auto& s: res)
+		dupeFil.emplace(GetBaseName(s));
+	for(const auto& s: suppres)
+		if(!ContHas(dupeFil, GetBaseName(s)))
+			res.emplace_back(s);
+	return res;
 }
 
 inline void AddRemapInfo(bool bAsBackend, const string & token,
@@ -434,13 +400,15 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 	}
 	else
 	{
-		for(auto& src : ExpandFileTokens(token, true))
-		{
-			if (bAsBackend)
-				ReadBackendsFile(src, repname);
-			else
-				ReadRewriteFile(src, repname);
-		}
+		auto func = bAsBackend ? ReadBackendsFile : ReadRewriteFile;
+		uint count = 0;
+		for(auto& src : ExpandFileTokens(token))
+			count += func(src, repname);
+		if(!count)
+			for(auto& src : ExpandFileTokens(token + ".default"))
+				count = func(src, repname);
+		if(!count && !g_bQuiet)
+			cerr << "WARNING: No configuration was read from " << token << endl;
 	}
 }
 
@@ -822,10 +790,9 @@ const tRepoData * GetRepoData(cmstring &vname)
 	return & it->second;
 }
 
-void ReadBackendsFile(const string & sFile, const string &sRepName)
+uint ReadBackendsFile(const string & sFile, const string &sRepName)
 {
-
-	int nAddCount=0;
+	uint nAddCount=0;
 	string key, val;
 	tHttpUrl entry;
 
@@ -837,7 +804,7 @@ void ReadBackendsFile(const string & sFile, const string &sRepName)
 	{
 		if(debug&6)
 			cerr << "No backend data found, file ignored."<<endl;
-		return;
+		return 0;
 	}
 	
 	while(itor.Next())
@@ -871,6 +838,7 @@ void ReadBackendsFile(const string & sFile, const string &sRepName)
 					<< itor.reader.GetCurrentLine());
 		}
 	}
+	return nAddCount;
 }
 
 void ShutDown()
@@ -882,8 +850,9 @@ void ShutDown()
 /* This parses also legacy files, i.e. raw RFC-822 formated mirror catalogue from the
  * Debian archive maintenance repository.
  */
-void ReadRewriteFile(const string & sFile, cmstring& sRepName)
+uint ReadRewriteFile(const string & sFile, cmstring& sRepName)
 {
+	uint nAddCount=0;
 	filereader reader;
 	if(debug>4)
 		cerr << "Reading rewrite file: " << sFile <<endl;
@@ -893,23 +862,25 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 	tStrVec hosts, paths;
 	string sLine, key, val;
 	tHttpUrl url;
-	
-	while(reader.GetOneLine(sLine))
+
+	while (reader.GetOneLine(sLine))
 	{
 		trimFront(sLine);
 
-		if (0==sLine.compare(0, 1, "#"))
+		if (0 == sLine.compare(0, 1, "#"))
 			continue;
 
 		if (url.SetHttpUrl(sLine))
 		{
 			_FixPostPreSlashes(url.sPath);
 
-			mapUrl2pVname[url.sHost+":"+url.GetPort()].emplace_back(url.sPath, GetRepoEntryRef(sRepName));
+			mapUrl2pVname[url.sHost + ":" + url.GetPort()].emplace_back(url.sPath,
+					GetRepoEntryRef(sRepName));
 #ifdef DEBUG
-						cerr << "Mapping: "<< url.ToURI(false)
-						<< " -> "<< sRepName <<endl;
+			cerr << "Mapping: " << url.ToURI(false) << " -> " << sRepName << endl;
 #endif
+
+			++nAddCount;
 			continue;
 		}
 
@@ -944,6 +915,8 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 						cerr << "Mapping: "<< host << path
 						<< " -> "<< sRepName <<endl;
 #endif
+
+						++nAddCount;
 				}
 			}
 			hosts.clear();
@@ -974,6 +947,8 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 			continue;
 		}
 	}
+
+	return nAddCount;
 }
 
 
@@ -1411,7 +1386,7 @@ inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool 
 	}
 	else if(!bRecursiveCall) // don't go further than one level
 	{
-		tStrDeq srcs = acfg::ExpandFileTokens(token, true);
+		tStrDeq srcs = acfg::ExpandFileTokens(token);
 		for(const auto& src: srcs)
 		{
 			acfg::tCfgIter itor(src);
