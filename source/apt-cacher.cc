@@ -294,6 +294,8 @@ void sig_handler(int signum)
 	case (SIGQUIT): {
 		g_victor.Stop();
 		aclog::close(false);
+    if (!acfg::pidfile.empty())
+       unlink(acfg::pidfile.c_str());
 		// and then terminate, resending the signal to default handler
 		tSigAct act = tSigAct();
 		sigfillset(&act.sa_mask);
