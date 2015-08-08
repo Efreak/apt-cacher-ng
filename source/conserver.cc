@@ -37,10 +37,10 @@ using namespace std;
 #define AF_INET6        23              /* IP version 6 */
 #endif
 
-
 namespace conserver
 {
 
+int yes(1);
 
 int g_sockunix(-1);
 vector<int> g_vecSocks;
@@ -198,7 +198,6 @@ void CreateUnixSocket() {
 	string & sPath=acfg::fifopath;
 	auto addr_unx = sockaddr_un();
 	
-	int jo=1;
 	size_t size = sPath.length()+1+offsetof(struct sockaddr_un, sun_path);
 	
 	auto die=[]() {
@@ -222,7 +221,7 @@ void CreateUnixSocket() {
 	unlink(sPath.c_str());
 	
 	g_sockunix = socket(PF_UNIX, SOCK_STREAM, 0);
-	setsockopt(g_sockunix, SOL_SOCKET, SO_REUSEADDR, &jo, sizeof(jo));
+	setsockopt(g_sockunix, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 
 	if (g_sockunix<0)
 		die();
@@ -231,12 +230,7 @@ void CreateUnixSocket() {
 		die();
 	
 	if (0==listen(g_sockunix, SO_MAXCONN))
-	{
 		g_vecSocks.emplace_back(g_sockunix);
-		return;
-	}
-
-
 }
 
 void Setup()
@@ -256,21 +250,15 @@ void Setup()
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE;
 		hints.ai_family = 0;
-		int yes(1);
 		
-		tStrVec sAdds;
-		if(bindaddr.empty())
-			sAdds.emplace_back(sEmptyString); // one dummy entry to get one nullptr later
-		else
-			Tokenize(bindaddr, SPACECHARS, sAdds);
-		for(auto& sad : sAdds)
+		auto conaddr = [hints](LPCSTR addi)
 		{
-			trimString(sad);
 		    struct addrinfo *res, *p;
-		    
-		    if(0!=getaddrinfo(bindaddr.empty() ? nullptr : sad.c_str(),
-				   port.c_str(), &hints, &res))
-			   goto error_getaddrinfo;
+		    if(0!=getaddrinfo(addi, port.c_str(), &hints, &res))
+			   {
+			    perror("Error resolving address for binding");
+			    return;
+			   }
 		    
 		    for(p=res; p; p=p->ai_next)
 		    {
@@ -279,16 +267,15 @@ void Setup()
 					goto error_socket;
 
 				// if we have a dual-stack IP implementation (like on Linux) then
-				// explicitely disable the shadow v4 listener. Otherwise it might be
-				// bound, or maybe not, and then maybe because of the dual-behaviour,
-				// or maybe because of real errors; we just cannot know for sure but
-				// we have to.
+				// explicitly disable the shadow v4 listener. Otherwise it might be
+				// bound or maybe not, and then just sometimes because of configurable
+				// dual-behavior, or maybe because of real errors;
+				// we just cannot know for sure but we need to.
 #if defined(IPV6_V6ONLY) && defined(SOL_IPV6)
 				if(p->ai_family==AF_INET6)
 					setsockopt(nSockFd, SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
-#endif		    	
+#endif
 				setsockopt(nSockFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-				
 				
 		    	if (::bind(nSockFd, p->ai_addr, p->ai_addrlen))
 		    		goto error_bind;
@@ -327,11 +314,20 @@ void Setup()
 				forceclose(nSockFd);
 		    }
 		    freeaddrinfo(res);
-		    continue;
-		    
-		    error_getaddrinfo:
-		    perror("Error resolving address for binding");
+		};
+
+		tSplitWalk sp(&bindaddr);
+		if(sp.Next())
+		{
+			do
+			{
+				conaddr(sp.str().c_str());
+			}
+			while(sp.Next());
 		}
+		else
+			conaddr(nullptr);
+
 		if(g_vecSocks.empty())
 		{
 			cerr << "No socket(s) could be created/prepared. "
