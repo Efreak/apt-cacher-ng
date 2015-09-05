@@ -1,3 +1,11 @@
+apt-cacher-ng (0.8.5-2) unstable; urgency=low
+
+  * Check for systemd presence before looking for running instance of the
+    daemon in the cron job (thanks to Dominic Hargreaves and Harald Dunkel,
+    closes: #794923)
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 05 Sep 2015 16:32:06 +0200
+
 apt-cacher-ng (0.8.5-1) unstable; urgency=low
 
   * New upstream version
