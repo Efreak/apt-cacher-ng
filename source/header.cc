@@ -159,7 +159,7 @@ int header::Load(LPCSTR const in, uint maxlen,
 		
 		if (frontLine.empty())
 		{
-			frontLine.assign(in, end-in);
+			frontLine.assign(in, string::size_type(end-in));
 			trimBack(frontLine);
 			continue;
 		}

@@ -12,7 +12,7 @@ namespace acfg
 {
 
 string cachedir("/var/tmp"), logdir("/var/tmp"), fifopath, pidfile, reportpage,
-confdir, adminauth, bindaddr, mirrorsrcs, suppdir("/usr/lib/apt-cacher-ng"),
+confdir, adminauth, adminauthB64, bindaddr, mirrorsrcs, suppdir("/usr/lib/apt-cacher-ng"),
 capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 
 #define INFOLDER "(^|.*/)"

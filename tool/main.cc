@@ -53,17 +53,146 @@ using namespace std;
 #include "cleaner.h"
 
 
-int wcat(LPCSTR url, LPCSTR proxy);
-LPCSTR ReTest(LPCSTR);
-
-
 // dummies to satisfy references to cleaner callbacks
 cleaner::cleaner() : m_thr(pthread_t()) {}
 cleaner::~cleaner() {}
 void cleaner::ScheduleFor(time_t, cleaner::eType) {}
 cleaner g_victor;
 
+struct IFitemFactory
+{
+	virtual SHARED_PTR<fileitem> Create() =0;
+	virtual ~IFitemFactory() =default;
+};
 
+struct CPrintItemFactory : public IFitemFactory
+{
+	virtual SHARED_PTR<fileitem> Create()
+	{
+		class tPrintItem : public fileitem
+		{
+		public:
+			tPrintItem()
+			{
+				m_bAllowStoreData=false;
+				m_nSizeChecked = m_nSizeSeen = 0;
+			};
+			virtual FiStatus Setup(bool) override
+			{
+				m_nSizeChecked = m_nSizeSeen = 0;
+				return m_status = FIST_INITED;
+			}
+			virtual int GetFileFd() override
+			{	return 1;}; // something, don't care for now
+			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
+					bool, bool&) override
+			{
+				m_head = h;
+				return true;
+			}
+			virtual bool StoreFileData(const char *data, unsigned int size) override
+			{
+				if(!size)
+				m_status = FIST_COMPLETE;
+
+				return (size==fwrite(data, sizeof(char), size, stdout));
+			}
+			ssize_t SendData(int , int, off_t &, size_t ) override
+			{
+				return 0;
+			}
+		};
+		return make_shared<tPrintItem>();
+	}
+};
+
+struct CReportItemFactory : public IFitemFactory
+{
+	virtual SHARED_PTR<fileitem> Create()
+	{
+		class tRepItem : public fileitem
+		{
+			acbuf lineBuf;
+			string m_key = maark;
+			tStrVec m_errMsg;
+
+		public:
+
+			tRepItem()
+			{
+				m_bAllowStoreData=false;
+				m_nSizeChecked = m_nSizeSeen = 0;
+				lineBuf.setsize(1<<16);
+				memset(lineBuf.wptr(), 0, 1<<16);
+			};
+			virtual FiStatus Setup(bool) override
+			{
+				m_nSizeChecked = m_nSizeSeen = 0;
+				return m_status = FIST_INITED;
+			}
+			virtual int GetFileFd() override
+			{	return 1;}; // something, don't care for now
+			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
+					bool, bool&) override
+			{
+				m_head = h;
+				return true;
+			}
+			virtual bool StoreFileData(const char *data, unsigned int size) override
+			{
+				if(!size)
+				{
+					m_status = FIST_COMPLETE;
+				}
+				auto consumed = std::min(size, lineBuf.freecapa());
+				memcpy(lineBuf.wptr(), data, consumed);
+				lineBuf.got(consumed);
+				for(;;)
+				{
+					LPCSTR p = lineBuf.rptr();
+					auto end = mempbrk(p, "\r\n", lineBuf.size());
+					if(!end)
+						break;
+					string s(p, end-p);
+					lineBuf.drop(s.length()+1);
+					if(startsWith(s, m_key))
+					{
+						// that's for us... "<key><type> content\n"
+						char *endchar = nullptr;
+						p = s.c_str();
+						auto val = strtoul(p + m_key.length(), &endchar, 10);
+						if(!endchar || !*endchar)
+							continue; // heh? shall not finish here
+						switch(ControLineType(val))
+						{
+						case ControLineType::BeforeError:
+							m_errMsg.emplace_back(endchar, s.size() - (endchar - p));
+							break;
+						case ControLineType::Error:
+							for(auto l : m_errMsg)
+								cerr << l << endl;
+							m_errMsg.clear();
+							cerr << string(endchar, s.size() - (endchar - p)) << endl;
+							break;
+						default:
+							continue;
+						}
+					}
+				}
+				return true;
+			}
+			ssize_t SendData(int , int, off_t &, size_t ) override
+			{
+				return 0;
+			}
+		};
+		return make_shared<tRepItem>();
+	}
+};
+
+int wcat(LPCSTR url, LPCSTR proxy, IFitemFactory*, dl_con_factory *pdlconfa = &g_tcp_con_factory);
+
+LPCSTR ReTest(LPCSTR);
 
 static void usage(int retCode = 0)
 {
@@ -180,6 +309,100 @@ inline bool patchChunk(tPatchSequence& idx, LPCSTR pline, size_t len, tPatchSequ
 			idx.erase(idx.begin() + (size_t) rangeStart, idx.begin() + (size_t) rangeLast + 1);
 	}
 	return true;
+}
+
+int maint_job()
+{
+	LPCSTR envh = getenv("HOSTNAME");
+	if (!envh)
+		envh = "localhost";
+	LPCSTR req = getenv("ACNGREQ");
+	if (!req)
+		req = "?doExpire=Start+Expiration&abortOnErrors=aOe";
+
+	tSS urlPath;
+	urlPath << "http://";
+	if(!acfg::adminauth.empty())
+		urlPath << acfg::adminauth << "@";
+	urlPath << envh << ":" << acfg::port;
+
+	if(acfg::reportpage.empty())
+		return -1;
+	if(acfg::reportpage[0] != '/')
+		urlPath << '/';
+	urlPath << acfg::reportpage << req;
+
+	CReportItemFactory fac;
+
+	int s = -1;
+	if (!acfg::fifopath.empty())
+	{
+#ifdef DEBUG
+		cerr << "Socket path: " << acfg::fifopath << endl;
+#endif
+		s = socket(PF_UNIX, SOCK_STREAM, 0);
+		if (s >= 0)
+		{
+			struct sockaddr_un addr;
+			addr.sun_family = PF_UNIX;
+			strcpy(addr.sun_path, acfg::fifopath.c_str());
+			socklen_t adlen = acfg::fifopath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
+			if (0 != connect(s, (struct sockaddr*) &addr, adlen))
+			{
+				s = -1;
+#ifdef DEBUG
+				perror("connect");
+#endif
+			}
+			else
+			{
+				//identify myself
+				tSS ids;
+				ids << "GET / HTTP/1.0\r\nX-Original-Source: localhost\r\n\r\n";
+				if (!ids.send(s))
+					s = -1;
+			}
+		}
+	}
+
+	if(s>=0) // use hot unix socket
+	{
+		struct udsFac: public dl_con_factory
+		{
+			int m_sockfd = -1;
+			udsFac(int n) : m_sockfd(n) {}
+
+			void RecycleIdleConnection(tDlStreamHandle & handle)
+			{}
+			virtual tDlStreamHandle CreateConnected(cmstring &, cmstring &, mstring &, bool *,
+					acfg::tRepoData::IHookHandler *, bool, int, bool)
+			{
+				struct udsconnection : public tcpconnect
+				{
+					udsconnection(int s) : tcpconnect(nullptr)
+					{
+						m_conFd = s;
+						m_ssl = nullptr;
+						m_bio = nullptr;
+
+						// must match the URL parameters
+						m_sHostName = "localhost";
+						m_sPort = acfg::port;
+
+					}
+				};
+				return make_shared<udsconnection>(m_sockfd);
+			}
+			void dump_status() {}
+
+		} udsfac(s);
+		wcat(urlPath.c_str(), nullptr, &fac, &udsfac);
+	}
+	else // ok, try the TCP path
+	{
+		wcat(urlPath.c_str(), getenv("http_proxy"), &fac);
+	}
+	return 0;
 }
 
 int patch_file(string sBase, string sPatch, string sResult)
@@ -507,7 +730,10 @@ int main(int argc, const char **argv)
 		if(argc<3)
 			usage(2);
 		else
-			exit(wcat(argv[2], getenv("http_proxy")));
+		{
+			CPrintItemFactory fac;
+			exit(wcat(argv[2], getenv("http_proxy"), &fac));
+		}
 	}
 	if(cmd == "printvar" || cmd == "retest" || cmd == "cfgdump")
 	{
@@ -546,14 +772,24 @@ int main(int argc, const char **argv)
 			usage(3);
 		return(patch_file(argv[2], argv[3], argv[4]));
 	}
+	if(cmd == "maint")
+	{
+		if(argc<2)
+			usage(4);
+
+		acfg::g_bQuiet = true;
+		acfg::g_bNoComplex = true; // no DB for just single variables
+		parse_options(argc-2, argv+2);
+
+		return(maint_job());
+	}
 
 	usage(4);
 	return -1;
 }
 
-int wcat(LPCSTR surl, LPCSTR proxy)
+int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, dl_con_factory *pDlconFac)
 {
-
 	acfg::dnscachetime=0;
 	acfg::persistoutgoing=0;
 	acfg::badredmime.clear();
@@ -565,45 +801,12 @@ int wcat(LPCSTR surl, LPCSTR proxy)
 	tHttpUrl url;
 	if(!surl || !url.SetHttpUrl(surl))
 		return -2;
-	dlcon dl(true);
+	dlcon dl(true, nullptr, pDlconFac);
 
-	class tPrintItem : public fileitem
-	{
-		public:
-			tPrintItem()
-			{
-				m_bAllowStoreData=false;
-				m_nSizeChecked = m_nSizeSeen = 0;
-			};
-			virtual FiStatus Setup(bool) override
-			{
-				m_nSizeChecked = m_nSizeSeen = 0;
-				return m_status = FIST_INITED;
-			}
-			virtual int GetFileFd() override { return 1; }; // something, don't care for now
-			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
-					bool, bool&) override
-			{
-				m_head = h;
-				return true;
-			}
-			virtual bool StoreFileData(const char *data, unsigned int size) override
-			{
-				if(!size)
-					m_status = FIST_COMPLETE;
-
-				return (size==fwrite(data, sizeof(char), size, stdout));
-			}
-			ssize_t SendData(int , int, off_t &, size_t ) override
-			{
-				return 0;
-			}
-	};
-
-	auto fi=std::make_shared<tPrintItem>();
+	auto fi=fac->Create();
 	dl.AddJob(fi, &url, nullptr, nullptr, 0);
 	dl.WorkLoop();
-	if(fi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE)
+	if(fi->GetStatus() != fileitem::FIST_COMPLETE)
 	{
 		auto st=fi->GetHeaderUnlocked().getStatus();
 		if(st == 200)

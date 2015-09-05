@@ -1,4 +1,14 @@
-apt-cacher-ng (0.8.5) WHERENOVERSIONHASGONEBEFORE; urgency=low
+apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
+
+  * Removed timestamps from generated gzip files
+  * FIX: more "smart" switching between InRelease and Release file versions in
+    expiration runs, triggered by a 404
+  * NEW: moved the expiration caller script functionality to acngtool and made
+    it more defensive
+
+ -- Eduard Bloch <blade@debian.org>  Sat, 05 Sep 2015 16:58:05 +0200
+
+apt-cacher-ng (0.8.5) WHERE-NO-VERSION-HAS-GONE-BEFORE; urgency=low
 
   * FIX: smart reconnection code (for sudden remote disconnects) was not
     working as intended since at least version 0.7.4 (however, this was

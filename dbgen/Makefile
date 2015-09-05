@@ -95,14 +95,14 @@ $(CONFDIR)/deb_mirrors.gz: sig-debian deburlgen.pl
 	-zcat $@ >> $(DBTMP)/dsnap.urls
 	sort -u < $(DBTMP)/dsnap.urls > $(DBTMP)/dsnap.urls_sorted
 	bash ubuntuscan.sh $(CONFDIR)/deb_mirrors $(DBTMP)/dsnap.urls_sorted $(DBTMP) "/dists"
-	gzip -f -9 $(CONFDIR)/deb_mirrors
+	gzip -nf9 $(CONFDIR)/deb_mirrors
 
 $(CONFDIR)/debvol_mirrors.gz: sig-debian deburlgen.pl
 	perl deburlgen.pl Volatile-http < $(DBTMP)/dsnap > $(DBTMP)/debvol.urls
 	-zcat $@ >> $(DBTMP)/debvol.urls
 	sort -u < $(DBTMP)/debvol.urls > $(DBTMP)/debvol.urls_sorted
 	bash ubuntuscan.sh $(CONFDIR)/debvol_mirrors $(DBTMP)/debvol.urls_sorted $(DBTMP) "/dists"
-	gzip -f -9 $(CONFDIR)/debvol_mirrors
+	gzip -nf9 $(CONFDIR)/debvol_mirrors
 
 $(CONFDIR)/gentoo_mirrors.gz:
 	cd conf && sh ../gentoo_mirrors.sh

@@ -22,33 +22,17 @@
 
 class tcpconnect;
 class fileitem;
-typedef std::shared_ptr<tcpconnect> tTcpHandlePtr;
+typedef std::shared_ptr<tcpconnect> tDlStreamHandle;
 
 class tcpconnect
 {
 public:
 	virtual ~tcpconnect();
 
-	static SHARED_PTR<tcpconnect> CreateConnected(cmstring &sHostname, cmstring &sPort,
-			mstring &sErrOut,
-			bool *pbSecondHand,
-			acfg::tRepoData::IHookHandler *pStateTracker
-			,bool ssl
-			,int timeout
-			,bool mustbevirgin
-	);
-
-	/// Moves the connection handle to the reserve pool (resets the specified sptr).
-	/// Should only be supplied with IDLE connection handles in a sane state.
-	static void RecycleIdleConnection(tTcpHandlePtr & handle);
-	static time_t BackgroundCleanup();
-
-	inline int GetFD() { return m_conFd; }
+	virtual int GetFD() { return m_conFd; }
 	inline cmstring & GetHostname() { return m_sHostName; }
 	inline cmstring & GetPort() { return m_sPort; }
 	void Disconnect();
-
-	static void dump_status();
 
 #ifdef HAVE_SSL
 	inline BIO* GetBIO() { return m_bio;};
@@ -64,8 +48,6 @@ protected:
 
 	std::weak_ptr<fileitem> m_lastFile;
 
-	static std::atomic_uint g_nconns;
-
 public:
 	//! @brief Remember the file name belonging to the recently initiated transfer
 	inline void KnowLastFile(WEAK_PTR<fileitem> spRemItem) { m_lastFile = spRemItem; }
@@ -78,13 +60,41 @@ private:
 	bool _Connect(mstring &sErrOut, int timeout);
 	acfg::tRepoData::IHookHandler *m_pStateObserver=nullptr;
 
+protected:
 #ifdef HAVE_SSL
 	BIO *m_bio = nullptr;
 	SSL_CTX * m_ctx = nullptr;
 	SSL * m_ssl = nullptr;
 	bool SSLinit(mstring &sErr, cmstring &host, cmstring &port);
 #endif
+
+	friend class dl_con_factory;
 };
+
+class dl_con_factory
+{
+public:
+	/// Moves the connection handle to the reserve pool (resets the specified sptr).
+	/// Should only be supplied with IDLE connection handles in a sane state.
+	virtual void RecycleIdleConnection(tDlStreamHandle & handle);
+	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
+				mstring &sErrOut,
+				bool *pbSecondHand,
+				acfg::tRepoData::IHookHandler *pStateTracker
+				,bool ssl
+				,int timeout
+				,bool mustbevirgin
+		);
+	virtual ~dl_con_factory() =default;
+	void dump_status();
+	time_t BackgroundCleanup();
+protected:
+	friend class tcpconnect;
+	static std::atomic_uint g_nconns;
+};
+
+extern dl_con_factory g_tcp_con_factory;
+
 /*
 // little tool for related classes, helps counting all object instances
 class instcount

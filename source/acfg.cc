@@ -730,7 +730,8 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 	}
 	else if(CHECKOPTKEY("AdminAuth"))
 	{
-	   adminauth=EncodeBase64Auth(value);
+	   adminauth=value;
+	   adminauthB64=EncodeBase64Auth(value);
 #if SUPPWHASH
 	   bIsHashedPwd=false;
 	}
@@ -1242,7 +1243,7 @@ lockable authLock;
 
 int CheckAdminAuth(LPCSTR auth)
 {
-	if(acfg::adminauth.empty())
+	if(acfg::adminauthB64.empty())
 		return 0;
 	if(!auth || !*auth)
 		return 1; // request it from user
@@ -1252,7 +1253,7 @@ int CheckAdminAuth(LPCSTR auth)
 	while(*p && isspace((uint) *p)) ++p;
 
 #ifndef SUPPWHASH
-	return adminauth.compare(p) == 0 ? 0 : 1;
+	return adminauthB64.compare(p) == 0 ? 0 : 1;
 
 #else
 

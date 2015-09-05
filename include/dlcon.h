@@ -23,7 +23,7 @@ typedef std::list<tDlJobPtr> tDljQueue;
 class dlcon : public lockable
 { 
     public:
-        dlcon(bool bManualExecution, mstring *xff=nullptr);
+        dlcon(bool bManualExecution, mstring *xff=nullptr, dl_con_factory *pConFactory = &g_tcp_con_factory);
         ~dlcon();
 
         void WorkLoop();
@@ -45,6 +45,7 @@ class dlcon : public lockable
     	friend struct tDlJob;
     	
     	tDljQueue m_qNewjobs;
+    	dl_con_factory* m_pConFactory;
 
 #ifdef HAVE_LINUX_EVENTFD
     	int m_wakeventfd = -1;
@@ -66,7 +67,7 @@ class dlcon : public lockable
     	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
     	tSS m_sendBuf, m_inBuf;
 
-    	uint ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &qActive);
+    	uint ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &qActive);
 
     	// Disable pipelining for the next # requests. Actually used as crude workaround for the
     	// concept limitation (because of automata over a couple of function) and its

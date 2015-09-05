@@ -807,10 +807,9 @@ inline bool expiration::CheckAndReportError()
 {
 	if (m_nErrorCount > 0 && m_bErrAbort)
 	{
-		SendFmt << sAbortMsg <<
-				((m_nPrevFailCount+(m_nErrorCount>0) > acfg::exsupcount)
-				? "<!-- TELL:THE:ADMIN -->"
-						: "<!-- NOT:TELLING:THE:ADMIN:YET -->");
+		SendFmt << sAbortMsg;
+		if(m_nPrevFailCount+(m_nErrorCount>0) > acfg::exsupcount)
+			SendFmt << "\n<!--\n" maark << int(ControLineType::Error) << sAbortMsg << "\n-->\n";
 		return true;
 	}
 	return false;
