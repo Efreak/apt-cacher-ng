@@ -9,4 +9,4 @@ wget --save-headers -q http://www.gentoo.org/main/en/mirrors3.xml -O - \
 	-e '/<name/{s,^,#,g;p}' \
 	-e '/<uri/{/protocol="http"/{s/.*<uri[^>]\+>//g;s/<\/uri>//g;p}}' \
   ; echo -e "\n# Default GeoDNS routed access\nhttp://distfiles.gentoo.org/" ; \
-  ) | gzip -9 >${OUTFILE}.gz
+  ) | gzip -nf9 >${OUTFILE}.gz
