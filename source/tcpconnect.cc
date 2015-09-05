@@ -37,12 +37,13 @@ atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 #include <openssl/err.h>
 #endif
 
-std::atomic_uint tcpconnect::g_nconns(0);
+std::atomic_uint dl_con_factory::g_nconns(0);
+dl_con_factory g_tcp_con_factory;
 
 tcpconnect::tcpconnect(acfg::tRepoData::IHookHandler *pObserver) : m_pStateObserver(pObserver)
 {
 	if(acfg::maxdlspeed != RESERVED_DEFVAL)
-		g_nconns.fetch_add(1);
+		dl_con_factory::g_nconns.fetch_add(1);
 	if(pObserver)
 		pObserver->OnAccess();
 }
@@ -52,7 +53,7 @@ tcpconnect::~tcpconnect()
 	LOGSTART("tcpconnect::~tcpconnect, terminating outgoing connection class");
 	Disconnect();
 	if(acfg::maxdlspeed != RESERVED_DEFVAL)
-		g_nconns.fetch_add(-1);
+		dl_con_factory::g_nconns.fetch_add(-1);
 #ifdef HAVE_SSL
 	if(m_ctx)
 	{
@@ -254,16 +255,16 @@ void tcpconnect::Disconnect()
 }
 lockable spareConPoolMx;
 multimap<tuple<string,string SSL_OPT_ARG(bool) >,
-		std::pair<tTcpHandlePtr, time_t> > spareConPool;
+		std::pair<tDlStreamHandle, time_t> > spareConPool;
 
-tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
+tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, acfg::tRepoData::IHookHandler *pStateTracker
 		,bool bSsl, int timeout, bool nocache)
 {
 	LOGSTART2s("tcpconnect::CreateConnected", "hostname: " << sHostname << ", port: " << sPort
 			<< (bSsl?" with ssl":" , no ssl"));
 
-	tTcpHandlePtr p;
+	tDlStreamHandle p;
 #ifndef HAVE_SSL
 	if(bSsl)
 	{
@@ -337,7 +338,7 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 	return p;
 }
 
-void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
+void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
 {
 	if(!handle)
 		return;
@@ -390,7 +391,7 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 	handle.reset();
 }
 
-time_t tcpconnect::BackgroundCleanup()
+time_t dl_con_factory::BackgroundCleanup()
 {
 	lockguard __g(spareConPoolMx);
 	time_t now=GetTime();
@@ -439,7 +440,7 @@ void tcpconnect::KillLastFile()
 #endif
 }
 
-void tcpconnect::dump_status()
+void dl_con_factory::dump_status()
 {
 	lockguard __g(spareConPoolMx);
 	tSS msg;
@@ -658,4 +659,5 @@ bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 	}
 	return true;
 }
+
 

@@ -2,6 +2,7 @@
 //#define LOCAL_DEBUG
 #include "debug.h"
 
+#include "cacheman.h"
 #include "expiration.h"
 #include "lockable.h"
 #include "acfg.h"
@@ -497,6 +498,47 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 						}
 						return false;
 					}
+				}
+			}
+			else if(endsWithSzAr(sFilePathRel, "/InRelease")
+			|| endsWithSzAr(sFilePathRel, "/Release"))
+			{
+				SendChunkSZ("Attempting to download alternative release file... ");
+				// if we have it already, use it as-is
+				if (!pResolvedDirectUrl)
+				{
+					auto p = pFi->GetHeaderUnlocked().h[header::XORIG];
+					if (p && parserHead.SetHttpUrl(p))
+						pResolvedDirectUrl = &parserHead;
+				}
+				if (pResolvedDirectUrl)
+				{
+					// XXX: maybe pointless copy, work around with a flag?
+					// just toggle it
+					auto newurl(*pResolvedDirectUrl);
+					auto tgt(sFilePathRel);
+					if(endsWithSzAr(newurl.sPath, "/Release"))
+					{
+						newurl.sPath.erase(newurl.sPath.size()-7);
+						tgt.erase(newurl.sPath.size()-7);
+						newurl.sPath.append("InRelease");
+						tgt.append("InRelease");
+					}
+					else if(endsWithSzAr(newurl.sPath, "/InRelease"))
+					{
+						newurl.sPath.erase(newurl.sPath.size()-9);
+						tgt.erase(newurl.sPath.size()-9);
+						newurl.sPath.append("Release");
+						tgt.append("Release");
+					}
+					else // heh, invalid resolution?
+						return false;
+					if (Download(tgt, bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl))
+					{
+						MarkObsolete(sFilePathRel);
+						return true;
+					}
+					return false;
 				}
 			}
 		}
@@ -1183,8 +1225,9 @@ void tCacheOperation::UpdateVolatileFiles()
 	{
 		cmstring sPathRel=relRef.first+relRef.second;
 
-		if(!Download(sPathRel, true, m_metaFilesRel[sPathRel].hideDlErrors
-					? eMsgHideErrors : eMsgShow))
+		if(!Download(sPathRel, true,
+				m_metaFilesRel[sPathRel].hideDlErrors ? eMsgHideErrors : eMsgShow,
+						tFileItemPtr(), 0, DL_HINT_GUESS_REPLACEMENT))
 		{
 			m_nErrorCount+=(!m_metaFilesRel[sPathRel].hideDlErrors);
 
@@ -2124,8 +2167,9 @@ void tCacheOperation::AddDelCbox(cmstring &sFileRel)
 		return;
 
 	SendFmtRemote <<  "<label><input type=\"checkbox\" name=\"kf" << (nKillLfd++)
-			<< "\" value=\"" << sFileRel << "\">Tag</label>";
-
+			<< "\" value=\"" << sFileRel << "\">Tag</label>"
+			"\n<!--\n" maark << int(ControLineType::Error) << "Problem with "
+			<< sFileRel << "\n-->\n";
 }
 void tCacheOperation::TellCount(uint nCount, off_t nSize)
 {

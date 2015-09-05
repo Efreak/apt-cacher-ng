@@ -69,7 +69,7 @@ void cleaner::WorkLoop()
 			break;
 
 		case TYPE_EXCONNS:
-			time_nextcand = tcpconnect::BackgroundCleanup();
+			time_nextcand = g_tcp_con_factory.BackgroundCleanup();
 			USRDBG("tcpconnect::ExpireCache, nextRunTime now: " << time_nextcand);
 			break;
 
@@ -165,7 +165,7 @@ void cleaner::dump_status()
 void dump_handler(int) {
 	fileItemMgmt::dump_status();
 	g_victor.dump_status();
-	tcpconnect::dump_status();
+	g_tcp_con_factory.dump_status();
 	acfg::dump_trace();
 }
 

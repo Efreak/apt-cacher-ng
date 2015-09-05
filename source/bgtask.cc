@@ -100,7 +100,7 @@ void tSpecOpDetachable::Run()
 		}
 	}
 
-	tSS msg;
+	tSS logPath;
 
 	tProgTrackPtr pTracked;
 
@@ -110,11 +110,11 @@ void tSpecOpDetachable::Run()
 		if(!pTracked) // ok, not running yet -> become the log source then
 		{
 			m_pTracker = make_shared<tProgressTracker>();
-			msg.clear();
 			time_t nMaintId=time(0);
 
-			msg<<acfg::logdir<<CPATHSEP<< MAINT_PFX << nMaintId << ".log.html";
-			m_reportStream.open(msg.c_str(), ios::out);
+			logPath.clear();
+			logPath<<acfg::logdir<<CPATHSEP<< MAINT_PFX << nMaintId << ".log.html";
+			m_reportStream.open(logPath.c_str(), ios::out);
 			if(m_reportStream.is_open())
 			{
 				m_reportStream << LOG_DECO_START;
@@ -154,9 +154,10 @@ void tSpecOpDetachable::Run()
 
 			if(!fd)
 			{
-				msg<<acfg::logdir<<CPATHSEP<<MAINT_PFX << pTracked->id << ".log.html";
-				fd=open(msg.c_str(), O_RDONLY);
-				msg.clear();
+				logPath.clear();
+				logPath<<acfg::logdir<<CPATHSEP<<MAINT_PFX << pTracked->id << ".log.html";
+				fd=open(logPath.c_str(), O_RDONLY);
+
 				if(fd>=0)
 				{
 					set_nb(fd);
@@ -169,7 +170,7 @@ void tSpecOpDetachable::Run()
 				}
 
 			}
-
+			tSS msg;
 			msg.sysread(fd); // can be more than tracker reported. checks need to consider this
 			SendChunk(msg.data(), msg.length());
 			nSent+=msg.length();
@@ -197,7 +198,13 @@ void tSpecOpDetachable::Run()
 			SendFmt << "Maintenance task <b>" << GetTaskName()
 					<< "</b>, apt-cacher-ng version: " ACVERSION;
 			SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
-					<< "\">Cancel</a>)";
+					<< "\">Cancel</a>)"
+					<< "\n<!--\n" << maark << int(ControLineType::BeforeError)
+					<< "Maintenance Task: " << GetTaskName() << "\n"
+					<< maark << int(ControLineType::BeforeError)
+					<< "See file " << logPath << " for more details.\n-->\n"
+//					<< "<!--\n" << maark << int(ControLineType::Error) << "test\n-->\n"
+					;
 			SendFmt << "<br>\n";
 			SendChunkRemoteOnly(WITHLEN("<form id=\"mainForm\" action=\"#top\">\n"));
 
