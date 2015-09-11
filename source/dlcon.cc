@@ -29,8 +29,9 @@ static cmstring sGenericError("567 Unknown download error occured");
 
 std::atomic_uint g_nDlCons(0);
 
-dlcon::dlcon(bool bManualExecution, string *xff) :
-		m_bStopASAP(false), m_bManualMode(bManualExecution), m_nTempPipelineDisable(0),
+dlcon::dlcon(bool bManualExecution, string *xff, dl_con_factory *pConFactory) :
+		m_pConFactory(pConFactory), m_bStopASAP(false), m_bManualMode(bManualExecution),
+		m_nTempPipelineDisable(0),
 		m_bProxyTot(false)
 {
 	LOGSTART("dlcon::dlcon");
@@ -736,7 +737,7 @@ dlcon::~dlcon()
   g_nDlCons--;
 }
 
-inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &inpipe)
+inline uint dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &inpipe)
 {
 	LOGSTART2("dlcon::ExchangeData",
 			"qsize: " << inpipe.size() << ", sendbuf size: "
@@ -1078,7 +1079,7 @@ void dlcon::WorkLoop()
 	}
 
 	tDljQueue inpipe;
-	tTcpHandlePtr con;
+	tDlStreamHandle con;
 	uint loopRes=0;
 
 	bool bStopRequesting=false; // hint to stop adding request headers until the connection is restarted
@@ -1125,7 +1126,7 @@ void dlcon::WorkLoop()
         		if(inpipe.empty())
         		{
         			if(con)
-        				tcpconnect::RecycleIdleConnection(con);
+        				m_pConFactory->RecycleIdleConnection(con);
         			return;
         		}
         	}
@@ -1165,7 +1166,7 @@ void dlcon::WorkLoop()
 
 				auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
 				{
-					return tcpconnect::CreateConnected(tgt.sHost,
+					return m_pConFactory->CreateConnected(tgt.sHost,
 							tgt.GetPort(),
 							sErrorMsg,
 							&bUsed,
@@ -1323,7 +1324,7 @@ void dlcon::WorkLoop()
 			if (con && !(loopRes & all_err))
 			{
 				dbgline;
-				tcpconnect::RecycleIdleConnection(con);
+				m_pConFactory->RecycleIdleConnection(con);
 				continue;
 			}
 		}
@@ -1347,7 +1348,7 @@ void dlcon::WorkLoop()
         	// reinsert them into the new task list and continue
 
         	// if conn was not reset above then it should be in good shape
-        	tcpconnect::RecycleIdleConnection(con);
+        	m_pConFactory->RecycleIdleConnection(con);
         	goto move_jobs_back_to_q;
         }
 

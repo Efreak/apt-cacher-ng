@@ -91,7 +91,7 @@ inline static void RedirectBto2https(int fdClient, cmstring& uri)
 }
 void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 {
-	tTcpHandlePtr m_spOutCon;
+	tDlStreamHandle m_spOutCon;
 
 	string sErr;
 	tSS clientBufOut;
@@ -103,13 +103,13 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 		return;
 	if (acfg::proxy_info.sHost.empty())
 	{
-		m_spOutCon = tcpconnect::CreateConnected(url.sHost, url.GetPort(), sErr, 0, 0,
+		m_spOutCon = g_tcp_con_factory.CreateConnected(url.sHost, url.GetPort(), sErr, 0, 0,
 		false, acfg::nettimeout, true);
 	}
 	else
 	{
 		// switch to HTTPS tunnel in order to get a direct connection through the proxy
-		m_spOutCon = tcpconnect::CreateConnected(acfg::proxy_info.sHost, acfg::proxy_info.GetPort(),
+		m_spOutCon = g_tcp_con_factory.CreateConnected(acfg::proxy_info.sHost, acfg::proxy_info.GetPort(),
 				sErr, 0, 0, false, acfg::nettimeout, true);
 
 		if (m_spOutCon)

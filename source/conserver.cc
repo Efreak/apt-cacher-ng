@@ -253,6 +253,8 @@ void Setup()
 		
 		auto conaddr = [hints](LPCSTR addi)
 		{
+			LOGSTART2s("Setup::ConAddr", 0);
+
 		    struct addrinfo *res, *p;
 		    if(0!=getaddrinfo(addi, port.c_str(), &hints, &res))
 			   {
@@ -282,7 +284,7 @@ void Setup()
 		    	if (listen(nSockFd, SO_MAXCONN))
 		    		goto error_listen;
 		    	
-			USRDBG( "created socket, fd: " << nSockFd);// << ", for bindaddr: "<<bindaddr);
+		    	USRDBG( "created socket, fd: " << nSockFd);// << ", for bindaddr: "<<bindaddr);
 		    	g_vecSocks.emplace_back(nSockFd);
 		    	
 		    	continue;

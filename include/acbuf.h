@@ -52,14 +52,14 @@ class acbuf
          * \param maxlen Maximum amount of data to write
          * \return Number of written bytes, negative on failures, see write(2)
          */
-        int syswrite(int fd, unsigned int maxlen=UINT_MAX);
+        int syswrite(int fd, unsigned int maxlen=MAX_VAL(uint));
 
         /*
          * Reads from a file descriptor and append to buffered data, update position indexes.
          * \param fd File descriptor
          * \return Number of read bytes, negative on failures, see read(2)
          */
-        int sysread(int fd, unsigned int maxlen=MAX_VAL(unsigned int));
+        int sysread(int fd, unsigned int maxlen=MAX_VAL(uint));
 
 
     protected:
@@ -82,7 +82,7 @@ class tSS : public acbuf
 public:
 // map char array to buffer pointer and size
 	inline tSS & operator<<(const char *val) { return add(val); }
-	inline tSS & operator<<(const mstring& val) { return add(val); };
+	inline tSS & operator<<(cmstring& val) { return add(val); };
 	inline tSS & operator<<(const acbuf& val) { return add(val.rptr(), val.size()); };
 
 #define __tss_nbrfmt(x, h, y) { add(fmtbuf, sprintf(fmtbuf, m_fmtmode == hex ? h : x, y)); return *this; }
@@ -118,10 +118,10 @@ protected:
     char fmtbuf[22];
 	fmtflags m_fmtmode;
 	inline void reserve(size_t minCapa) { minCapa+=(r+1); if(m_nCapacity>=minCapa) return;
-	char *p=(char*)realloc(m_buf, std::max(m_nCapacity, minCapa*2));
+	char *p=(char*)realloc((void*) m_buf, (unsigned long) std::max(m_nCapacity, minCapa*2));
 	if(!p) throw std::bad_alloc(); m_nCapacity=minCapa*2; m_buf=p; }
 
-	inline tSS & add(const mstring& val) { return add(val.data(), val.size());}
+	inline tSS & add(cmstring& val) { return add((const char*) val.data(), (size_t) val.size());}
 	inline tSS & appDosNL() { return add("\r\n", 2);}
 	inline tSS & add(const char *data, size_t len)
 	{ reserve(size()+len); memcpy(wptr(), data, len); got(len); return *this;}

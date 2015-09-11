@@ -171,7 +171,7 @@ public:
 	tDlDescRemote(cmstring &p, uint n) : tDlDesc(p,n), bIsFirst(true)
 	{
 		// expire the caches every time, should not cost much anyway
-		tcpconnect::BackgroundCleanup();
+		g_tcp_con_factory.BackgroundCleanup();
 		CAddrInfo::BackgroundCleanup();
 	};
 
