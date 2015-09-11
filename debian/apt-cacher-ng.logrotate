@@ -18,12 +18,11 @@
 
 /var/log/apt-cacher-ng/apt-cache*.err {
         su apt-cacher-ng apt-cacher-ng
-        size 10M
+        daily
         missingok
         rotate 7
         compress
         delaycompress
-        notifempty
         create
         postrotate
                 if [ -e /run/systemd/system ] ; then

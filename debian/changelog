@@ -1,3 +1,14 @@
+apt-cacher-ng (0.8.6-1) unstable; urgency=low
+
+  * New upstream version
+    + replaces the expiration call mechanism and script with native
+      implementation (closes: 794328)
+  * Changed error log rotation schedule to daily execution (to expire some
+    cruft from ancient bugs sooner or later)
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 11 Sep 2015 18:10:51 +0200
+
+
 apt-cacher-ng (0.8.5-2) unstable; urgency=low
 
   * Check for systemd presence before looking for running instance of the

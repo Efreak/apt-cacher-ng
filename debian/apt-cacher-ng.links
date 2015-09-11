@@ -1,3 +1,4 @@
 /var/lib/apt-cacher-ng/backends_debian.default /etc/apt-cacher-ng/backends_debian.default
 /var/lib/apt-cacher-ng/backends_ubuntu.default /etc/apt-cacher-ng/backends_ubuntu.default
 /usr/lib/apt-cacher-ng/backends_gentoo.default /etc/apt-cacher-ng/backends_gentoo.default
+/usr/lib/apt-cacher-ng/acngtool /usr/lib/apt-cacher-ng/expire-caller.pl
