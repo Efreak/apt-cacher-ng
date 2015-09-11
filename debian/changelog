@@ -5,6 +5,8 @@ apt-cacher-ng (0.8.6-1) unstable; urgency=low
       implementation (closes: 794328)
   * Changed error log rotation schedule to daily execution (to expire some
     cruft from ancient bugs sooner or later)
+  * removed urlencode-fixer.pl (should be obsolete now), expire-caller.pl
+    (symlink to acngtool which emulates it)
 
  -- Eduard Bloch <blade@debian.org>  Fri, 11 Sep 2015 18:10:51 +0200
 
