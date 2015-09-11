@@ -1,12 +1,13 @@
 apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
 
   * Removed timestamps from generated gzip files
-  * FIX: more "smart" switching between InRelease and Release file versions in
+  * FIX: smarter switching between InRelease and Release file versions in
     expiration runs, triggered by a 404
   * NEW: moved the expiration caller script functionality to acngtool and made
     it more defensive
+  * Database update
 
- -- Eduard Bloch <blade@debian.org>  Fri, 11 Sep 2015 18:01:07 +0200
+ -- Eduard Bloch <blade@debian.org>  Fri, 11 Sep 2015 18:30:45 +0200
 
 apt-cacher-ng (0.8.5) WHERE-NO-VERSION-HAS-GONE-BEFORE; urgency=low
 
