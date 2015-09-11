@@ -1,4 +1,8 @@
 #!/usr/bin/perl
+#
+
+print STDERR "WARNING: this script is considered deprecated. It may still work but could print incorrect results!\n"
+
 use strict;
 use Socket;
 
