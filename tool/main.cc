@@ -643,6 +643,7 @@ int main(int argc, const char **argv)
 	if(argc<2)
 		usage(1);
 	string cmd(argv[1]);
+	string exe(argv[0]);
 #if 0
 #warning line reader test enabled
 	if (cmd == "wcl")
@@ -772,7 +773,7 @@ int main(int argc, const char **argv)
 			usage(3);
 		return(patch_file(argv[2], argv[3], argv[4]));
 	}
-	if(cmd == "maint")
+	if(cmd == "maint" || endsWithSzAr(exe, "expire-caller.pl"))
 	{
 		if(argc<2)
 			usage(4);
