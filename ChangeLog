@@ -1,13 +1,16 @@
 apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
 
   * Removed timestamps from generated gzip files
+  * FIX: enabled SNI feature (TLS Server Name Indication)
   * FIX: smarter switching between InRelease and Release file versions in
     expiration runs, triggered by a 404
   * NEW: moved the expiration caller script functionality to acngtool and made
-    it more defensive
+    it less verbose for better use in cron jobs
+  * More automatic index file replacements (Sources/Packages gz to xz,
+    InRelease to Release and vice versa)
   * Database update
 
- -- Eduard Bloch <blade@debian.org>  Fri, 11 Sep 2015 18:30:45 +0200
+ -- Eduard Bloch <blade@debian.org>  Sat, 12 Sep 2015 12:32:14 +0200
 
 apt-cacher-ng (0.8.5) WHERE-NO-VERSION-HAS-GONE-BEFORE; urgency=low
 

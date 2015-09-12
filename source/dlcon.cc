@@ -29,7 +29,7 @@ static cmstring sGenericError("567 Unknown download error occured");
 
 std::atomic_uint g_nDlCons(0);
 
-dlcon::dlcon(bool bManualExecution, string *xff, dl_con_factory *pConFactory) :
+dlcon::dlcon(bool bManualExecution, string *xff, IDlConFactory *pConFactory) :
 		m_pConFactory(pConFactory), m_bStopASAP(false), m_bManualMode(bManualExecution),
 		m_nTempPipelineDisable(0),
 		m_bProxyTot(false)

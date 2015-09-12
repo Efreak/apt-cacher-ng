@@ -258,7 +258,7 @@ SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
 ADD_EXECUTABLE(apt-cacher-ng ${SRCS})
 list(REMOVE_DUPLICATES AcngLdList)
-TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList}  ${CompLibs} ${NetworkLibs} ${lsd_LDFLAGS} ${EXTRA_LIBS_ACNG})
+TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList} ${CompLibs} ${NetworkLibs} ${lsd_LDFLAGS} ${EXTRA_LIBS_ACNG})
 # I'd like this method more but apparently LINK_FLAGS is always prepended, no way to append it
 #SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES LINK_FLAGS "${lsd_LDFLAGS}")
 SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} ${lsd_CFLAGS}")
@@ -269,7 +269,7 @@ TARGET_LINK_LIBRARIES(in.acng ${NetworkLibs} ${EXTRA_LIBS_INETD})
 
 ADD_EXECUTABLE(acngtool ${TOOLSRCS})
 SET_TARGET_PROPERTIES(acngtool PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON}")
-TARGET_LINK_LIBRARIES(acngtool ${SSL_LIB_LIST} ${CompLibs} ${EXTRA_LIBS_INETD})
+TARGET_LINK_LIBRARIES(acngtool ${AcngLdList} ${CompLibs}  ${NetworkLibs} ${EXTRA_LIBS_ACNGTOOL})
 
 # -DEXTRA_LIBS_INETD=-lsupc++
 # funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used

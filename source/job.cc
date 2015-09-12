@@ -497,7 +497,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		if (startsWithSz(sReqPath, "/HTTPS///"))
 			sReqPath.replace(0, 6, PROT_PFX_HTTPS);
 		// special case: proxy-mode AND special prefix are there
-		if (startsWithSz(sReqPath, "http://HTTPS///"))
+		if(0==strncasecmp(sReqPath.c_str(), WITHLEN("http://https///")))
 			sReqPath.replace(0, 13, PROT_PFX_HTTPS);
 
 		if(!theUrl.SetHttpUrl(sReqPath, false))

@@ -466,15 +466,23 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		{
 			// another special case, slightly ugly :-(
 			// this is explicit hardcoded repair code
-			// for the removal of .bz2 compressed versions
-			// of various files
-			if (endsWithSzAr(sFilePathRel, "/Packages.bz2")
-					|| endsWithSzAr(sFilePathRel, "/Sources.bz2")
-					|| (StrHas(sFilePathRel, "i18n/Translation-") &&
-							endsWithSzAr(sFilePathRel, ".bz2")))
-
+			static struct {
+				string fromEnd, toEnd, extraCheck;
+			} fixmap[] =
 			{
-				SendChunkSZ("Attempting to download the .xz version... ");
+					{ "/Packages.bz2", "/Packages.xz", "" },
+					{ "/Sources.bz2", "/Sources.xz", "" },
+					{ "/Release", "/InRelease", "" },
+					{ "/InRelease", "/Release", "" },
+					{ ".bz2", ".xz", "i18n/Translation-" },
+					{ "/Packages.gz", "/Packages.xz", "" },
+					{ "/Sources.gz", "/Sources.xz", "" }
+			};
+			for(const auto& fix : fixmap)
+			{
+				if(!endsWith(sFilePathRel, fix.fromEnd) || !StrHas(sFilePathRel, fix.extraCheck))
+					continue;
+				SendChunkSZ("Attempting to download the alternative version... ");
 				// if we have it already, use it as-is
 				if (!pResolvedDirectUrl)
 				{
@@ -482,64 +490,23 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 					if (p && parserHead.SetHttpUrl(p))
 						pResolvedDirectUrl = &parserHead;
 				}
-				if (pResolvedDirectUrl)
+				auto newurl(*pResolvedDirectUrl);
+				if(!endsWith(newurl.sPath, fix.fromEnd) || !StrHas(newurl.sPath, fix.extraCheck))
+					continue;
+				newurl.sPath.replace(newurl.sPath.size()-fix.fromEnd.size(), fix.fromEnd.size(),
+						fix.toEnd);
+				if(Download(sFilePathRel.substr(0, sFilePathRel.size() - fix.fromEnd.size())
+						+ fix.toEnd, bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl,
+				hints&~DL_HINT_GUESS_REPLACEMENT ))
 				{
-					// XXX: maybe pointless copy, work around with a flag?
-					auto newurl(*pResolvedDirectUrl);
-					if (endsWithSzAr(newurl.sPath, ".bz2"))
-					{
-						newurl.sPath.erase(newurl.sPath.size() - 4);
-						newurl.sPath.append(".xz");
-						if(Download(sFilePathRel.substr(0, sFilePathRel.size() - 4) + ".xz",
-								bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl))
-						{
-							MarkObsolete(sFilePathRel);
-							return true;
-						}
-						return false;
-					}
+					MarkObsolete(sFilePathRel);
+					return true;
 				}
-			}
-			else if(endsWithSzAr(sFilePathRel, "/InRelease")
-			|| endsWithSzAr(sFilePathRel, "/Release"))
-			{
-				SendChunkSZ("Attempting to download alternative release file... ");
-				// if we have it already, use it as-is
-				if (!pResolvedDirectUrl)
-				{
-					auto p = pFi->GetHeaderUnlocked().h[header::XORIG];
-					if (p && parserHead.SetHttpUrl(p))
-						pResolvedDirectUrl = &parserHead;
-				}
-				if (pResolvedDirectUrl)
-				{
-					// XXX: maybe pointless copy, work around with a flag?
-					// just toggle it
-					auto newurl(*pResolvedDirectUrl);
-					auto tgt(sFilePathRel);
-					if(endsWithSzAr(newurl.sPath, "/Release"))
-					{
-						newurl.sPath.erase(newurl.sPath.size()-7);
-						tgt.erase(newurl.sPath.size()-7);
-						newurl.sPath.append("InRelease");
-						tgt.append("InRelease");
-					}
-					else if(endsWithSzAr(newurl.sPath, "/InRelease"))
-					{
-						newurl.sPath.erase(newurl.sPath.size()-9);
-						tgt.erase(newurl.sPath.size()-9);
-						newurl.sPath.append("Release");
-						tgt.append("Release");
-					}
-					else // heh, invalid resolution?
-						return false;
-					if (Download(tgt, bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl))
-					{
-						MarkObsolete(sFilePathRel);
-						return true;
-					}
-					return false;
-				}
+				// XXX: this sucks a little bit since we don't want to show the checkbox
+				// when the fallback download succeeded... but on failures, the previous one
+				// already added a newline before
+				AddDelCbox(sFilePathRel, true);
+				return false;
 			}
 		}
 
@@ -2160,13 +2127,22 @@ void tCacheOperation::ProcessSeenMetaFiles(ifileprocessor &pkgHandler)
 	}
 }
 
-void tCacheOperation::AddDelCbox(cmstring &sFileRel)
+void tCacheOperation::AddDelCbox(cmstring &sFileRel, bool bExtra)
 {
 	auto ref_isnew = m_delCboxFilter.insert(sFileRel);
 	if(! ref_isnew.second)
 		return;
 
-	SendFmtRemote <<  "<label><input type=\"checkbox\" name=\"kf" << (nKillLfd++)
+	if(bExtra)
+	{
+		string bn(GetBaseName(sFileRel));
+		if(startsWithSz(bn, "/"))
+			bn.erase(0, 1);
+		SendFmtRemote <<  "<label><input type=\"checkbox\" name=\"kf" << (nKillLfd++)
+					<< "\" value=\"" << sFileRel << "\">(also tag " << bn << ")</label><br>";
+	}
+	else
+		SendFmtRemote <<  "<label><input type=\"checkbox\" name=\"kf" << (nKillLfd++)
 			<< "\" value=\"" << sFileRel << "\">Tag</label>"
 			"\n<!--\n" maark << int(ControLineType::Error) << "Problem with "
 			<< sFileRel << "\n-->\n";
