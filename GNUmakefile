@@ -1,12 +1,17 @@
 
-ifneq ($(DEBUG),)
-	 CXXFLAGS += -g -O0 -DDEBUG
-	 CMAKEOPTS += -DADDDEBUGSRC=on -DUSE_LTO=off --debug-trycompile --debug-output
-	 XMAKEFLAGS = DEBUG=1 VERBOSE=1
-endif
-
 export CXXFLAGS
 export LDFLAGS
+
+ifneq ($(DEBUG),)
+	 CXXFLAGS+= -DDEBUG
+	 CMAKEOPTS += -DCMAKE_BUILD_TYPE=Debug -DADDDEBUGSRC=on -DUSE_LTO=off --debug-trycompile --debug-output
+	 XMAKEFLAGS = DEBUG=1 VERBOSE=1
+else
+	# use release type flags unless user has custom settings already
+ifeq ($(CXXFLAGS),)
+	 CMAKEOPTS +=  -DCMAKE_BUILD_TYPE=Release
+endif
+endif
 
 # pass down to cmake's Makefile, but all targets depend on config
 default: all

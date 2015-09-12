@@ -43,14 +43,27 @@ ENDIF()
 # minimum prerequisites
 list(APPEND AcngLdList pthread)
 
-# common required flags to be used later for CMAKE_REQUIRED_FLAGS and the build,
-# CXXFLAGS (via initial CMAKE_CXX_FLAGS) extends and overrides them
-SET(ACNG_CXXFLAGS_COMMON " -pthread -g -O2 -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ${CMAKE_CXX_FLAGS}")
+# the ugly part :-(
+# CXXFLAGS sets CMAKE_CXX_FLAGS but CMAKE_CXX_FLAGS is set before the flags
+# from CMAKE_BUILD_TYPE (Debug vs. Release) in the compiler call turning
+# CXXFLAGS ineffective :-((
+# let's assume that the caller sets EITHER CXXFLAGS or -DCMAKE_BUILD_TYPE=...
+SET(ACNG_CXXFLAGS_COMMON " -pthread -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ")
 # same for linker flags, imported from LDFLAGS environment var
 SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
 
 message("Initial CXX flags: ${ACNG_CXXFLAGS_COMMON}")
 message("Initial linker flags: ${LDFLAGS_MIN}")
+
+foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1)
+	CHECK_CXX_COMPILER_FLAG("${linkarg}" "LINKER_ARG_${linkarg}")
+	if("LINKER_ARG_${linkarg}")
+		message(" -- ${linkarg}")
+		SET(LDFLAGS_MIN "${LDFLAGS_MIN} ${linkarg}")
+	else()
+		message(" -- ${linkarg} not supported")
+	endif()
+endforeach(linkarg)
 
 IF(CMAKE_SYSTEM MATCHES "Darwin")
    SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON} -D_DARWIN_C_SOURCE ")
@@ -98,13 +111,6 @@ endif(USE_LTO)
 endif()
 
 SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
-SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}  -Wl,--as-needed ")
-CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_WLASNEEDED)
-
-CHECK_CXX_COMPILER_FLAG("-Wl,--as-needed" USE_WLASNEEDED)
-if(USE_WLASNEEDED)
-   SET(LDFLAGS_MIN "${LDFLAGS_MIN} -Wl,--as-needed")
-endif()
 
 #INCLUDE(FindZLIB) # broken, hangs for 10 seconds
 # header check should be enough, gzip should be everywhere nowadays
@@ -246,8 +252,10 @@ CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_DLOPEN)
 ##################################
 # All checks done, start building
 
-message("Common CXX flags: ${ACNG_CXXFLAGS_COMMON}")
-message("Common linker flags: ${LDFLAGS_MIN}")
+message("Shared compiler flags: ${ACNG_CXXFLAGS_COMMON}")
+message("Shared linker flags: ${LDFLAGS_MIN}")
+
+SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
 
 SET(CMAKE_REQUIRED_LIBRARIES "")
 SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
