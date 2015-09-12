@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 2.6.2)
 set(CMAKE_LEGACY_CYGWIN_WIN32 0)
 
+# we want the old policy, setting linker flags explicitly
+cmake_policy(SET CMP0056 OLD)
+
 PROJECT(ACNG CXX C)
 
 INCLUDE(CheckIncludeFiles) 
