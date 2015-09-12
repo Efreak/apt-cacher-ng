@@ -89,8 +89,7 @@ checktest:
 	test -e build/testok || (echo Should run the test suite before release... ; exit 1)
 
 test:
-	bash -x test/cmdline/apt-cacher-ng.sh
-#	cd test/misc && bash soaptest.sh
+	bash -x test/apptest.sh
 	touch build/testok
 
 # execute them always and consider done afterwards
