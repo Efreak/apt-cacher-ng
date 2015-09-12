@@ -69,7 +69,7 @@ protected:
 	inline void SendChunk(const char *x) { SendChunk(x, x?strlen(x):0); }
 	inline void SendChunk(const tSS &x){ SendChunk(x.data(), x.length()); }
 	// for customization in base classes
-	virtual void AfterSendChunk(const char* /*data*/, size_t /*size*/) {};
+	virtual void SendChunkLocalOnly(const char* /*data*/, size_t /*size*/) {};
 
 	bool SendRawData(const char *data, size_t len, int flags);
 

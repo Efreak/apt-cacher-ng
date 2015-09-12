@@ -147,7 +147,7 @@ protected:
 	mstring m_processedIfile;
 
 	void ProgTell();
-	void AddDelCbox(cmstring &sFileRel);
+	void AddDelCbox(cmstring &sFileRel, bool bExtraFile = false);
 
 	typedef std::pair<tFingerprint,mstring> tContId;
 	struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};

@@ -197,14 +197,21 @@ void tSpecOpDetachable::Run()
 
 			SendFmt << "Maintenance task <b>" << GetTaskName()
 					<< "</b>, apt-cacher-ng version: " ACVERSION;
+			string link = "http://" + GetHostname() + ":" + acfg::port + "/" + m_parms.cmd;
 			SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
 					<< "\">Cancel</a>)"
-					<< "\n<!--\n" << maark << int(ControLineType::BeforeError)
+					<< "\n<!--\n"
+					<< maark << int(ControLineType::BeforeError)
 					<< "Maintenance Task: " << GetTaskName() << "\n"
 					<< maark << int(ControLineType::BeforeError)
-					<< "See file " << logPath << " for more details.\n-->\n"
+					<< "See file " << logPath << " for more details.\n"
+					<< maark << int(ControLineType::BeforeError)
+					<< "Server url: " << link
+					<< "\n-->\n"
 //					<< "<!--\n" << maark << int(ControLineType::Error) << "test\n-->\n"
 					;
+			string xlink = "<br>\nServer link: <a href=\"" + link + "\">" + link + "</a><br>\n";
+			SendChunkLocalOnly(xlink.data(), xlink.size());
 			SendFmt << "<br>\n";
 			SendChunkRemoteOnly(WITHLEN("<form id=\"mainForm\" action=\"#top\">\n"));
 
@@ -264,7 +271,7 @@ void tSpecOpDetachable::DumpLog(time_t id)
 		SendChunkRemoteOnly(reader.GetBuffer(), reader.GetSize());
 }
 
-void tSpecOpDetachable::AfterSendChunk(const char *data, size_t len)
+void tSpecOpDetachable::SendChunkLocalOnly(const char *data, size_t len)
 {
 	if(m_reportStream.is_open())
 	{

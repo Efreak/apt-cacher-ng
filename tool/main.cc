@@ -52,6 +52,7 @@ using namespace std;
 #include "csmapping.h"
 #include "cleaner.h"
 
+bool g_bVerbose = false;
 
 // dummies to satisfy references to cleaner callbacks
 cleaner::cleaner() : m_thr(pthread_t()) {}
@@ -106,6 +107,34 @@ struct CPrintItemFactory : public IFitemFactory
 	}
 };
 
+struct verbprint
+{
+	int cnt = 0;
+	void dot()
+	{
+		if (!g_bVerbose)
+			return;
+		cnt++;
+		cerr << '.';
+	}
+	void msg(cmstring& msg)
+	{
+		if (!g_bVerbose)
+			return;
+		fin();
+		cerr << msg << endl;
+
+	}
+	void fin()
+	{
+		if (!g_bVerbose)
+			return;
+		if (cnt)
+			cerr << endl;
+		cnt = 0;
+	}
+} vprint;
+
 struct CReportItemFactory : public IFitemFactory
 {
 	virtual SHARED_PTR<fileitem> Create()
@@ -143,6 +172,7 @@ struct CReportItemFactory : public IFitemFactory
 				if(!size)
 				{
 					m_status = FIST_COMPLETE;
+					vprint.fin();
 				}
 				auto consumed = std::min(size, lineBuf.freecapa());
 				memcpy(lineBuf.wptr(), data, consumed);
@@ -155,6 +185,7 @@ struct CReportItemFactory : public IFitemFactory
 						break;
 					string s(p, end-p);
 					lineBuf.drop(s.length()+1);
+					vprint.dot();
 					if(startsWith(s, m_key))
 					{
 						// that's for us... "<key><type> content\n"
@@ -167,13 +198,19 @@ struct CReportItemFactory : public IFitemFactory
 						{
 						case ControLineType::BeforeError:
 							m_errMsg.emplace_back(endchar, s.size() - (endchar - p));
+							vprint.msg(m_errMsg.back());
 							break;
 						case ControLineType::Error:
-							for(auto l : m_errMsg)
-								cerr << l << endl;
+						{
+							if(!g_bVerbose) // printed before
+								for(auto l : m_errMsg)
+									cerr << l << endl;
 							m_errMsg.clear();
-							cerr << string(endchar, s.size() - (endchar - p)) << endl;
+							string msg(endchar, s.size() - (endchar - p));
+							vprint.fin();
+							cerr << msg << endl;
 							break;
+						}
 						default:
 							continue;
 						}
@@ -198,9 +235,10 @@ static void usage(int retCode = 0)
 {
 	(retCode ? cout : cerr) <<
 		"Usage: acngtool command parameter... [options]\n\n"
-			"command := { printvar, cfgdump, retest, patch, curl, encb64 }\n"
+			"command := { printvar, cfgdump, retest, patch, curl, encb64, maint }\n"
 			"parameter := (specific to command)\n"
 			"options := (see apt-cacher-ng options)\n"
+			"extra options := -h, --verbose\n"
 #if SUPPWHASH
 #warning FIXME
 			"-H: read a password from STDIN and print its hash\n"
@@ -588,6 +626,8 @@ void parse_options(int argc, const char **argv, bool bExtractNonOpts=false)
 			else
 				usage(2);
 		}
+		else if(!strcmp(*p, "--verbose"))
+			g_bVerbose=true;
 		else if(**p) // not empty
 			cmdvars.emplace_back(*p);
 
@@ -640,10 +680,13 @@ void ssl_init()
 
 int main(int argc, const char **argv)
 {
-	if(argc<2)
-		usage(1);
-	string cmd(argv[1]);
 	string exe(argv[0]);
+	bool emuexp = endsWithSzAr(exe, "expire-caller.pl");
+	if(!emuexp && argc<2)
+		usage(1);
+	string cmd;
+	if(argc>1)
+		cmd = argv[1];
 #if 0
 #warning line reader test enabled
 	if (cmd == "wcl")
@@ -773,15 +816,11 @@ int main(int argc, const char **argv)
 			usage(3);
 		return(patch_file(argv[2], argv[3], argv[4]));
 	}
-	if(cmd == "maint" || endsWithSzAr(exe, "expire-caller.pl"))
+	if(cmd == "maint" || emuexp)
 	{
-		if(argc<2)
-			usage(4);
-
 		acfg::g_bQuiet = true;
 		acfg::g_bNoComplex = true; // no DB for just single variables
-		parse_options(argc-2, argv+2);
-
+		parse_options(argc - 2 + emuexp, argv + 2 - emuexp);
 		return(maint_job());
 	}
 

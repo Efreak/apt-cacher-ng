@@ -6,6 +6,8 @@ apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
     expiration runs, triggered by a 404
   * NEW: moved the expiration caller script functionality to acngtool and made
     it less verbose for better use in cron jobs
+  * More automatic index file replacements (Sources/Packages gz to xz,
+    InRelease to Release and vice versa)
   * Database update
 
  -- Eduard Bloch <blade@debian.org>  Sat, 12 Sep 2015 12:32:14 +0200

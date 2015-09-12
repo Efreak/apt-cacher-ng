@@ -83,7 +83,7 @@ void tSpecialRequest::SendChunkRemoteOnly(const char *data, size_t len)
 void tSpecialRequest::SendChunk(const char *data, size_t len)
 {
 	SendChunkRemoteOnly(data, len);
-	AfterSendChunk(data, len);
+	SendChunkLocalOnly(data, len);
 }
 
 void tSpecialRequest::SendChunkedPageHeader(const char *httpstatus, const char *mimetype)
