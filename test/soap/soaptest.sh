@@ -50,5 +50,11 @@ HEAD
 ) | sed -e 's,$,\r,g'
 cat body.txt
 ) | socket localhost 3142 > response.txt
-grep 200.*OK response.txt || (echo Err, not 200 ; exit 1)
+
+echo Checking redirection response
+grep HTTP.*302 response.txt || (echo Err, not redirection; exit 1)
+grep "Location: https://bugs.debian.org:443/cgi-bin/soap.cgi" response.txt
+./tryssl.sh
+#grep 200.*OK response.txt || (echo Err, not 200 ; exit 1)
+grep soap.Envelope response.txt
 rm -f response.txt samplepkgs body.txt
