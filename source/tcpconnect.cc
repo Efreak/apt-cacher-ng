@@ -484,12 +484,13 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 		SSL_CTX_load_verify_locations(m_ctx,
 				acfg::cafile.empty() ? nullptr : acfg::cafile.c_str(),
 			acfg::capath.empty() ? nullptr : acfg::capath.c_str());
-
 	}
 
 	ssl = SSL_new(m_ctx);
 	if(!ssl)
 		goto ssl_init_fail;
+
+	SSL_set_tlsext_host_name(ssl, sHostname.c_str());
 
 	// mark it connected and prepare for non-blocking mode
  	SSL_set_connect_state(ssl);
