@@ -844,7 +844,7 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	auto fi=fac->Create();
 	dl.AddJob(fi, &url, nullptr, nullptr, 0);
 	dl.WorkLoop();
-	if(fi->GetStatus() != fileitem::FIST_COMPLETE)
+	if(fi->GetStatus() == fileitem::FIST_COMPLETE)
 	{
 		auto st=fi->GetHeaderUnlocked().getStatus();
 		if(st == 200)
