@@ -71,12 +71,12 @@ protected:
 	friend class dl_con_factory;
 };
 
-class dl_con_factory
+class IDlConFactory
 {
 public:
 	/// Moves the connection handle to the reserve pool (resets the specified sptr).
 	/// Should only be supplied with IDLE connection handles in a sane state.
-	virtual void RecycleIdleConnection(tDlStreamHandle & handle);
+	virtual void RecycleIdleConnection(tDlStreamHandle & handle) =0;
 	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
 				mstring &sErrOut,
 				bool *pbSecondHand,
@@ -84,8 +84,25 @@ public:
 				,bool ssl
 				,int timeout
 				,bool mustbevirgin
-		);
-	virtual ~dl_con_factory() =default;
+		) =0;
+	virtual ~IDlConFactory() {};
+};
+
+class dl_con_factory : public IDlConFactory
+{
+public:
+	/// Moves the connection handle to the reserve pool (resets the specified sptr).
+	/// Should only be supplied with IDLE connection handles in a sane state.
+	virtual void RecycleIdleConnection(tDlStreamHandle & handle) override;
+	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
+				mstring &sErrOut,
+				bool *pbSecondHand,
+				acfg::tRepoData::IHookHandler *pStateTracker
+				,bool ssl
+				,int timeout
+				,bool mustbevirgin
+		) override;
+	virtual ~dl_con_factory() {};
 	void dump_status();
 	time_t BackgroundCleanup();
 protected:

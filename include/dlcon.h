@@ -23,7 +23,8 @@ typedef std::list<tDlJobPtr> tDljQueue;
 class dlcon : public lockable
 { 
     public:
-        dlcon(bool bManualExecution, mstring *xff=nullptr, dl_con_factory *pConFactory = &g_tcp_con_factory);
+        dlcon(bool bManualExecution, mstring *xff=nullptr,
+        		IDlConFactory *pConFactory = &g_tcp_con_factory);
         ~dlcon();
 
         void WorkLoop();
@@ -45,7 +46,7 @@ class dlcon : public lockable
     	friend struct tDlJob;
     	
     	tDljQueue m_qNewjobs;
-    	dl_con_factory* m_pConFactory;
+    	IDlConFactory* m_pConFactory;
 
 #ifdef HAVE_LINUX_EVENTFD
     	int m_wakeventfd = -1;

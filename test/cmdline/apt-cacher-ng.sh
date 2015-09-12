@@ -36,7 +36,7 @@ grep -i usage $TMP/y.txt
 grep -i help $TMP/y.txt
 grep -i See $TMP/y.txt
 
-$tool curl http://www.example.org > $TMP/dump
+valgrind $tool curl http://www.example.org > $TMP/dump
 grep illustrative $TMP/dump
 #! REFSUM=/dev/nada12341254324534125ljksaldfkj2345 GETSUM=sans-serif $exe
 #export REFSUM=$(sha1sum $TMP/dump | cut -c1-40)

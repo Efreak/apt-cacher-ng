@@ -227,7 +227,7 @@ struct CReportItemFactory : public IFitemFactory
 	}
 };
 
-int wcat(LPCSTR url, LPCSTR proxy, IFitemFactory*, dl_con_factory *pdlconfa = &g_tcp_con_factory);
+int wcat(LPCSTR url, LPCSTR proxy, IFitemFactory*, IDlConFactory *pdlconfa = &g_tcp_con_factory);
 
 LPCSTR ReTest(LPCSTR);
 
@@ -405,15 +405,15 @@ int maint_job()
 
 	if(s>=0) // use hot unix socket
 	{
-		struct udsFac: public dl_con_factory
+		struct udsFac: public IDlConFactory
 		{
 			int m_sockfd = -1;
 			udsFac(int n) : m_sockfd(n) {}
 
-			void RecycleIdleConnection(tDlStreamHandle & handle)
+			void RecycleIdleConnection(tDlStreamHandle & handle) override
 			{}
 			virtual tDlStreamHandle CreateConnected(cmstring &, cmstring &, mstring &, bool *,
-					acfg::tRepoData::IHookHandler *, bool, int, bool)
+					acfg::tRepoData::IHookHandler *, bool, int, bool) override
 			{
 				struct udsconnection : public tcpconnect
 				{
@@ -431,8 +431,6 @@ int maint_job()
 				};
 				return make_shared<udsconnection>(m_sockfd);
 			}
-			void dump_status() {}
-
 		} udsfac(s);
 		wcat(urlPath.c_str(), nullptr, &fac, &udsfac);
 	}
@@ -828,7 +826,7 @@ int main(int argc, const char **argv)
 	return -1;
 }
 
-int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, dl_con_factory *pDlconFac)
+int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac)
 {
 	acfg::dnscachetime=0;
 	acfg::persistoutgoing=0;
