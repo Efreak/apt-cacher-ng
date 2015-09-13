@@ -61,11 +61,8 @@ SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
 
 foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1)
 	CHECK_CXX_COMPILER_FLAG("${linkarg}" "LINKER_ARG_${linkarg}")
-	if("LINKER_ARG_${linkarg}")
-		#		message(" -- ${linkarg}")
+	if(LINKER_ARG_${linkarg})
 		SET(LDFLAGS_MIN "${LDFLAGS_MIN} ${linkarg}")
-		#else()
-		#message(" -- ${linkarg} not supported")
 	endif()
 endforeach(linkarg)
 
