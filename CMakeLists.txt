@@ -1,10 +1,11 @@
+set(CMAKE_LEGACY_CYGWIN_WIN32 0) # don't care for now... just expecting POSIX
 cmake_minimum_required(VERSION 2.6.2)
-set(CMAKE_LEGACY_CYGWIN_WIN32 0)
-
-# we want the old policy, setting linker flags explicitly
-cmake_policy(SET CMP0056 OLD)
-
 PROJECT(ACNG CXX C)
+
+if(POLICY CMP0056) # added in CMake 3.2
+	# we want the old policy, setting linker flags explicitly
+	cmake_policy(SET CMP0056 OLD)
+endif()
 
 INCLUDE(CheckIncludeFiles) 
 INCLUDE(CheckCXXSourceCompiles)
