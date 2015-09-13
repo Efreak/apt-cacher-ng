@@ -55,16 +55,16 @@ SET(ACNG_CXXFLAGS_COMMON " -pthread -Wall -Wextra -Wno-unused-parameter -D_FILE_
 # same for linker flags, imported from LDFLAGS environment var
 SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
 
-message("Initial CXX flags: ${ACNG_CXXFLAGS_COMMON}")
-message("Initial linker flags: ${LDFLAGS_MIN}")
+#message("Initial CXX flags: ${ACNG_CXXFLAGS_COMMON}")
+#message("Initial linker flags: ${LDFLAGS_MIN}")
 
 foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1)
 	CHECK_CXX_COMPILER_FLAG("${linkarg}" "LINKER_ARG_${linkarg}")
 	if("LINKER_ARG_${linkarg}")
-		message(" -- ${linkarg}")
+		#		message(" -- ${linkarg}")
 		SET(LDFLAGS_MIN "${LDFLAGS_MIN} ${linkarg}")
-	else()
-		message(" -- ${linkarg} not supported")
+		#else()
+		#message(" -- ${linkarg} not supported")
 	endif()
 endforeach(linkarg)
 
@@ -73,12 +73,16 @@ IF(CMAKE_SYSTEM MATCHES "Darwin")
 ENDIF(CMAKE_SYSTEM MATCHES "Darwin")
 
 IF(CMAKE_SYSTEM MATCHES "CYGWIN")
-   SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__ -DNOMINMAX ")
-
-option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" off)
+	SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__ -DNOMINMAX ")
+	option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" off)
 ELSE()
-option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" on)
+	option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" on)
 ENDIF()
+
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+	set(USE_LTO off)
+	set(ACNG_CXXFLAGS_COMMON "-DDEBUG ${ACNG_CXXFLAGS_COMMON}")
+endif()
 
 FILE(READ test/build/testcxx11.cc CXX11_TESTSRC)
 
@@ -305,22 +309,24 @@ SET(CMAKE_REQUIRED_FLAGS " ${ACNG_CXXFLAGS_COMMON} ${acngfs_cflags}")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_FUSE_25)
 
 if(fuse_FOUND AND HAVE_FUSE_25)
-   if(ADDDEBUGSRC)
-      ADD_EXECUTABLE(acngfs fs/httpfs.cc source/lockable.cc source/header.cc source/caddrinfo.cc source/acbuf.cc source/acfg.cc source/acfg_defaults.cc source/tcpconnect.cc source/dlcon.cc source/fileitem.cc source/aclogger.cc source/meta.cc)
-   else(ADDDEBUGSRC)
-      ADD_EXECUTABLE(acngfs fs/httpfs.cc source/lockable.cc source/header.cc source/caddrinfo.cc source/acbuf.cc source/acfg.cc source/acfg_defaults.cc source/tcpconnect.cc source/dlcon.cc source/fileitem.cc source/meta.cc)
-   endif(ADDDEBUGSRC)
+	list(APPEND fsSRCS fs/httpfs.cc source/lockable.cc source/header.cc source/caddrinfo.cc source/acbuf.cc source/acfg.cc source/acfg_defaults.cc source/tcpconnect.cc source/dlcon.cc source/fileitem.cc source/meta.cc)
 
-   #message("uhm: ${fuse_CFLAGS} -- ${acngfs_cflags} -- ${fuse_LDFLAGS} -- ${HAVE_DLOPEN}")
-   SET_TARGET_PROPERTIES(acngfs PROPERTIES COMPILE_FLAGS "${acngfs_cflags}" )
-   if(HAVE_DLOPEN)
-      TARGET_LINK_LIBRARIES(acngfs dl pthread  ${NetworkLibs} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
-   else(HAVE_DLOPEN)
-      TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS}  ${NetworkLibs} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
-   endif(HAVE_DLOPEN)
+	if(CMAKE_BUILD_TYPE MATCHES Debug)
+		list(APPEND fsSRCS source/aclogger.cc)
+	endif()
+
+	ADD_EXECUTABLE(acngfs ${fsSRCS})
+
+	#message("uhm: ${fuse_CFLAGS} -- ${acngfs_cflags} -- ${fuse_LDFLAGS} -- ${HAVE_DLOPEN}")
+	SET_TARGET_PROPERTIES(acngfs PROPERTIES COMPILE_FLAGS "${acngfs_cflags}" )
+	if(HAVE_DLOPEN)
+		TARGET_LINK_LIBRARIES(acngfs dl pthread  ${NetworkLibs} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
+	else(HAVE_DLOPEN)
+		TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS}  ${NetworkLibs} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
+	endif(HAVE_DLOPEN)
 
 else(fuse_FOUND AND HAVE_FUSE_25)
-   message("- FUSE not found or not compatible, not building acngfs")
+	message("- FUSE not found or not compatible, not building acngfs")
 endif(fuse_FOUND AND HAVE_FUSE_25)
 
 
