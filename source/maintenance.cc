@@ -114,7 +114,7 @@ public:
         "Not Authorized. Please contact Apt-Cacher NG administrator for further questions.<br>"
         "<br>"
         "For Admin: Check the AdminAuth option in one of the *.conf files in Apt-Cacher NG "
-        "configuration directory, probably /etc/apt-cacher-ng/." ;
+        "configuration directory, probably " CFGDIR  ;
 		SendRawData(authmsg, sizeof(authmsg)-1, 0);
 	}
 };

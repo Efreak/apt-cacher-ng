@@ -25,6 +25,10 @@
 #cmakedefine HAVE_SSL
 #cmakedefine HAVE_SD_NOTIFY
 #cmakedefine HAVE_LINUX_EVENTFD
+#cmakedefine USE_SSL_CS
 #cmakedefine ACVERSION "@ACVERSION@"
 #cmakedefine CFGDIR "@CFGDIR@"
-#cmakedefine USE_SSL_CS
+#cmakedefine LIBDIR "@LIBDIR@"
+#cmakedefine DOCDIR "@DOCDIR@"
+#cmakedefine BINDIR "@BINDIR@"
+

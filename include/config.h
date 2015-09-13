@@ -4,8 +4,15 @@
 
 #include "acsyscap.h"
 
+// safe fallbacks, should be defined by build system
 #ifndef ACVERSION
 #define ACVERSION "0.custom"
+#endif
+#ifndef CFGDIR
+#define CFGDIR "/usr/local/etc/apt-cacher-ng"
+#endif
+#ifndef LIBDIR
+#define LIBDIR "/usr/local/lib/apt-cacher-ng"
 #endif
 
 #define __STDC_FORMAT_MACROS

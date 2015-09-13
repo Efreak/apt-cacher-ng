@@ -32,7 +32,7 @@ distclean:
 	rm -rf build $(DBTMP) acsyscap.h *.o Makefile
 
 doc: README
-README: build/.dir-stamp doc/src/README.but doc/src/manpage.but doc/src/acngfs.but doc/src/textparm.but GNUmakefile
+README: doc/src/README.but doc/src/manpage.but doc/src/acngfs.but doc/src/textparm.but
 	@mkdir -p doc/html doc/man
 	halibut --text=doc/README doc/src/textparm.but doc/src/README.but
 	halibut --pdf=doc/apt-cacher-ng.pdf doc/src/README.but

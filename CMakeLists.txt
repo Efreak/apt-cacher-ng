@@ -2,10 +2,16 @@ set(CMAKE_LEGACY_CYGWIN_WIN32 0) # don't care for now... just expecting POSIX
 cmake_minimum_required(VERSION 2.6.2)
 PROJECT(ACNG CXX C)
 
+set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
+set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
+
 if(POLICY CMP0056) # added in CMake 3.2
 	# we want the old policy, setting linker flags explicitly
 	cmake_policy(SET CMP0056 OLD)
 endif()
+IF (POLICY CMP0053)
+	CMAKE_POLICY (SET CMP0053 OLD) # keep old-style @VAR@ expansion
+ENDIF (POLICY CMP0053)
 
 INCLUDE(CheckIncludeFiles) 
 INCLUDE(CheckCXXSourceCompiles)
@@ -14,11 +20,31 @@ INCLUDE(CheckTypeSize)
 INCLUDE(TestBigEndian)
 INCLUDE(CheckLibraryExists)
 
-IF(NOT DEFINED(PREFIX))
-set(PREFIX "/usr/local" CACHE STRING "Target installation space")
+set(TOOLNAME "apt-cacher-ng")
+IF(NOT DEFINED(CMAKE_INSTALL_PREFIX))
+set(CMAKE_INSTALL_PREFIX "/usr/local" CACHE STRING "Target file space")
+ENDIF()
+IF(NOT DEFINED(DATADIR))
+	set(DATADIR "${CMAKE_INSTALL_PREFIX}/share" CACHE STRING "Shared data files directory")
+ENDIF()
+IF(NOT DEFINED(LIBDIR))
+	set(LIBDIR "${CMAKE_INSTALL_PREFIX}/lib/${TOOLNAME}" CACHE STRING "Location of ${TOOLNAME} extra files")
+ENDIF()
+IF(NOT DEFINED(DOCDIR))
+	set(DOCDIR "${DATADIR}/doc/${TOOLNAME}" CACHE STRING "Location of documentation files")
 ENDIF()
 IF(NOT DEFINED(CFGDIR))
-	set(CFGDIR "/etc/apt-cacher-ng" CACHE STRING "Location of system-wide configuration files")
+	set(CFGDIR "${CMAKE_INSTALL_PREFIX}/etc/${TOOLNAME}" CACHE STRING "Location of system-wide configuration files")
+ENDIF()
+
+set(BINDIR "${CMAKE_INSTALL_PREFIX}/sbin")
+
+INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
+
+IF(NOT DEFINED(ACVERSION))
+FILE(READ "${CMAKE_SOURCE_DIR}/VERSION" ACVERSION)
+string(REPLACE "\n" "" ACVERSION ${ACVERSION})
+MESSAGE(STATUS "Version: ${ACVERSION}")
 ENDIF()
 
 # Various feature checks
@@ -27,25 +53,6 @@ CHECK_INCLUDE_FILES ("sys/vfs.h" HAVE_SYS_VFS_H)
 CHECK_TYPE_SIZE(int SIZE_INT)
 CHECK_TYPE_SIZE(long SIZE_LONG)
 TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
-
-INCLUDE_DIRECTORIES(. ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
-
-FILE(GLOB SRCS "${CMAKE_SOURCE_DIR}/source/*.cc")
-
-LIST(APPEND TOOLSRCS tool/main.cc source/acfg.cc source/meta.cc source/dlcon.cc
-	source/tcpconnect.cc source/acfg_defaults.cc source/acbuf.cc
-	source/filereader.cc source/fileitem.cc source/acbuf.cc source/aclogger.cc
-	source/fileio.cc source/filelocks.cc source/header.cc source/caddrinfo.cc)
-
-
-IF(NOT DEFINED(ACVERSION))
-FILE(READ "${CMAKE_SOURCE_DIR}/VERSION" ACVERSION)
-string(REPLACE "\n" "" ACVERSION ${ACVERSION})
-MESSAGE(STATUS "Version: ${ACVERSION}")
-ENDIF()
-
-# minimum prerequisites
-list(APPEND AcngLdList pthread)
 
 # the ugly part :-(
 # CXXFLAGS sets CMAKE_CXX_FLAGS but CMAKE_CXX_FLAGS is set before the flags
@@ -56,12 +63,10 @@ SET(ACNG_CXXFLAGS_COMMON " -pthread -Wall -Wextra -Wno-unused-parameter -D_FILE_
 # same for linker flags, imported from LDFLAGS environment var
 SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
 
-#message("Initial CXX flags: ${ACNG_CXXFLAGS_COMMON}")
-#message("Initial linker flags: ${LDFLAGS_MIN}")
-
 foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1)
-	CHECK_CXX_COMPILER_FLAG("${linkarg}" "LINKER_ARG_${linkarg}")
-	if(LINKER_ARG_${linkarg})
+	STRING(REGEX REPLACE "=|-|," "" optname "${linkarg}")
+	CHECK_CXX_COMPILER_FLAG("${linkarg}" "LD_${optname}")
+	if(LD_${optname})
 		SET(LDFLAGS_MIN "${LDFLAGS_MIN} ${linkarg}")
 	endif()
 endforeach(linkarg)
@@ -83,23 +88,22 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 endif()
 
 FILE(READ test/build/testcxx11.cc CXX11_TESTSRC)
-
 # prefer that style if possible since since Cygwin seems to have an old bug with missing definitions, http://cygwin.com/ml/cygwin/2012-04/msg00140.html
 CHECK_CXX_COMPILER_FLAG(-std=gnu++11 COMPILER_SUPPORTS_GNU11)
-CHECK_CXX_COMPILER_FLAG(-std=c++11 COMPILER_SUPPORTS_CXX11)
-CHECK_CXX_COMPILER_FLAG(-std=c++0x COMPILER_SUPPORTS_CXX0X)
 if(COMPILER_SUPPORTS_GNU11)
-   set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=gnu++11")
-elseif(COMPILER_SUPPORTS_CXX11)
-   set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=c++11")
-elseif(COMPILER_SUPPORTS_CXX0X)
-   set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=c++0x")
+	set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=gnu++11")
 else()
-   SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
-   CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" COMPILER_SUPPORTS_CXX11_DEFAULT)
-   if(NOT COMPILER_SUPPORTS_CXX11_DEFAULT)
-      message(FATAL_ERROR "!! Error: failed to configure compiler for C++11 support. For GCC, version 4.7 or newer is required.")
-   endif()
+	CHECK_CXX_COMPILER_FLAG(-std=c++11 COMPILER_SUPPORTS_CXX11)
+	if(COMPILER_SUPPORTS_CXX11)
+		set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=c++11")
+	else()
+		CHECK_CXX_COMPILER_FLAG(-std=c++0x COMPILER_SUPPORTS_CXX0X)
+		if(COMPILER_SUPPORTS_CXX0X)
+			set(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -std=c++0x")
+		else()
+			message(FATAL_ERROR "!! Error: failed to configure compiler for C++11 support. For GCC, version 4.7 or newer is required.")
+		endif()
+	endif()
 endif()
 
 if(USE_LTO)
@@ -115,63 +119,29 @@ else(USE_LTO)
 endif(USE_LTO)
 endif()
 
-SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
+#message("Initial CXX flags: ${ACNG_CXXFLAGS_COMMON}")
+#message("Initial linker flags: ${LDFLAGS_MIN}")
 
-#INCLUDE(FindZLIB) # broken, hangs for 10 seconds
-# header check should be enough, gzip should be everywhere nowadays
-#CHECK_INCLUDE_FILES("gzip.h" HAVE_ZLIB)
-FIND_PATH(HAVE_ZLIB zlib.h )
-if(HAVE_ZLIB)
-	list(APPEND CompLibs z)
-	INCLUDE_DIRECTORIES(${HAVE_ZLIB})
-else(HAVE_ZLIB)
-   message(FATAL_ERROR "!! apt-cacher-ng requires gzip library and development files ${HAVE_ZLIB}")
-endif(HAVE_ZLIB)
+LIST(APPEND NONOSSLSRCS "${CMAKE_SOURCE_DIR}/source/sha1.cc" "${CMAKE_SOURCE_DIR}/source/md5.cc" "${CMAKE_SOURCE_DIR}/source/sha2.cc")
 
-INCLUDE(FindBZip2)
-if (BZIP2_FOUND)
-   SET(HAVE_LIBBZ2 1)
-   MARK_AS_ADVANCED(HAVE_LIBBZ2)
-	INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIR})
-	list(APPEND CompLibs bz2)
-else (BZIP2_FOUND)
-   message("!! apt-cacher-ng requires bzip2 library and development files for bz2 format support")
-endif (BZIP2_FOUND)
+# sources to strip from the globed list, to be added as needed
+LIST(APPEND OPTSOURCES  "${CMAKE_SOURCE_DIR}/source/sha1.cc" "${CMAKE_SOURCE_DIR}/source/md5.cc" "${CMAKE_SOURCE_DIR}/source/sha2.cc")
+# keep "${CMAKE_SOURCE_DIR}/source/rfc2553emu.cc" because auto-disables its implementation where unneeded
 
-SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
-SET(CMAKE_REQUIRED_LIBRARIES lzma)
-FILE(READ test/build/HAVE_LZMA.cc TESTSRC)
-CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LZMA)
-IF(HAVE_LZMA)
-	list(APPEND CompLibs lzma)
-ELSE(HAVE_LZMA)
-   MESSAGE("!! XZ (liblzma) not found or not working, disabling support")
-   SET(HAVE_LZMA )
-ENDIF(HAVE_LZMA)
-SET(CMAKE_REQUIRED_LIBRARIES "")
+FIND_LIBRARY(HAVE_SOCKETLIB socket) # separate socket lib looks like Solaris-like environment
+if(HAVE_SOCKETLIB)
+   LIST(APPEND BaseNetworkLibs socket nsl)
+endif(HAVE_SOCKETLIB)
 
-SET(SSL_LIB_LIST ssl crypto)
-SET(CMAKE_REQUIRED_LIBRARIES "${SSL_LIB_LIST}")
-FILE(READ test/build/HAVE_SSL.cc TESTSRC)
-CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_SSL)
-IF(HAVE_SSL)
-   list(APPEND AcngLdList "${SSL_LIB_LIST}")
-   SET(USE_SSL_CS on)
-   LIST(REMOVE_ITEM SRCS "${CMAKE_SOURCE_DIR}/source/sha1.cc")
-   LIST(REMOVE_ITEM SRCS "${CMAKE_SOURCE_DIR}/source/md5.cc")
-   LIST(REMOVE_ITEM SRCS "${CMAKE_SOURCE_DIR}/source/sha2.cc")
-ELSE(HAVE_SSL)
-   MESSAGE("!! OpenSSL not found or not working, disabling support")
-   LIST(APPEND TOOLSRCS "${CMAKE_SOURCE_DIR}/source/sha1.cc" "${CMAKE_SOURCE_DIR}/source/sha2.cc" "${CMAKE_SOURCE_DIR}/source/md5.cc")
-   SET(SSL_LIB_LIST )
-ENDIF(HAVE_SSL)
-SET(CMAKE_REQUIRED_LIBRARIES "")
+# explicit linking needed for global locks in dlcon
+# XXX: test it?
+list(APPEND BaseNetworkLibs pthread)
 
-SET(CMAKE_REQUIRED_LIBRARIES wrap)
+SET(CMAKE_REQUIRED_LIBRARIES wrap ${BaseNetworkLibs})
 FILE(READ test/build/HAVE_LIBWRAP.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LIBWRAP)
 IF(HAVE_LIBWRAP)
-	list(APPEND AcngLdList wrap)
+	set(ServerLibs ${CMAKE_REQUIRED_LIBRARIES})
 ELSE(HAVE_LIBWRAP)
    MESSAGE("!! libwrap development files not usable, disabling support")
    SET(HAVE_LIBWRAP)
@@ -216,11 +186,6 @@ CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_PREAD)
 FILE(READ test/build/HAVE_DAEMON.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_DAEMON)
 
-FIND_LIBRARY(HAVE_SOCKETLIB socket) # separate socket lib looks like Solaris-like environment
-if(HAVE_SOCKETLIB)
-   LIST(APPEND NetworkLibs socket nsl)
-endif(HAVE_SOCKETLIB)
-
 INCLUDE(FindPkgConfig)
 
 pkg_check_modules(lsd "libsystemd>=209")
@@ -233,29 +198,81 @@ set(HAVE_SD_NOTIFY ${lsd_FOUND})
 
 FILE(READ test/build/HAVE_MEMORY_SPTR.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_MEMORY_SPTR)
-
-FILE(READ test/build/HAVE_TR1_MEMORY.cc TESTSRC)
-CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_TR1_MEMORY)
-
-SET(CMAKE_REQUIRED_INCLUDES . ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR})
-FILE(READ test/build/HAVE_BOOST_SMARTPTR.cc TESTSRC)
-CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_BOOST_SMARTPTR)
-set(CMAKE_REQUIRED_INCLUDES "")
-
-if(NOT HAVE_BOOST_SMARTPTR)
-   if(NOT HAVE_TR1_MEMORY)
-      if(NOT HAVE_MEMORY_SPTR)
-         message(FATAL_ERROR "Could not find a working smart pointer implementation. Please read documentation and include boost headers.")
-      endif(NOT HAVE_MEMORY_SPTR)
-   endif(NOT HAVE_TR1_MEMORY)
-endif(NOT HAVE_BOOST_SMARTPTR)
+if(NOT HAVE_MEMORY_SPTR)
+	FILE(READ test/build/HAVE_TR1_MEMORY.cc TESTSRC)
+	CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_TR1_MEMORY)
+	if(NOT HAVE_TR1_MEMORY)
+		SET(CMAKE_REQUIRED_INCLUDES . ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR})
+		FILE(READ test/build/HAVE_BOOST_SMARTPTR.cc TESTSRC)
+		CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_BOOST_SMARTPTR)
+		set(CMAKE_REQUIRED_INCLUDES "")
+		if(NOT HAVE_BOOST_SMARTPTR)
+			message(FATAL_ERROR "Could not find a working smart pointer implementation.")
+		endif()
+	endif()
+endif()
 
 SET(CMAKE_REQUIRED_LIBRARIES dl)
 FILE(READ test/build/HAVE_DLOPEN.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_DLOPEN)
 
-##################################
-# All checks done, start building
+SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
+#INCLUDE(FindZLIB) # broken, hangs for 10 seconds
+# header check should be enough, gzip should be everywhere nowadays
+#CHECK_INCLUDE_FILES("gzip.h" HAVE_ZLIB)
+FIND_PATH(HAVE_ZLIB zlib.h )
+if(HAVE_ZLIB)
+	list(APPEND CompLibs z)
+	INCLUDE_DIRECTORIES(${HAVE_ZLIB})
+else(HAVE_ZLIB)
+   message(FATAL_ERROR "!! apt-cacher-ng requires gzip library and development files ${HAVE_ZLIB}")
+endif(HAVE_ZLIB)
+
+INCLUDE(FindBZip2)
+if (BZIP2_FOUND)
+   SET(HAVE_LIBBZ2 1)
+   MARK_AS_ADVANCED(HAVE_LIBBZ2)
+	INCLUDE_DIRECTORIES(${BZIP2_INCLUDE_DIR})
+	list(APPEND CompLibs bz2)
+else (BZIP2_FOUND)
+   message("!! apt-cacher-ng requires bzip2 library and development files for bz2 format support")
+endif (BZIP2_FOUND)
+
+SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
+SET(CMAKE_REQUIRED_LIBRARIES lzma)
+FILE(READ test/build/HAVE_LZMA.cc TESTSRC)
+CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_LZMA)
+IF(HAVE_LZMA)
+	list(APPEND CompLibs lzma)
+ELSE(HAVE_LZMA)
+   MESSAGE("!! XZ (liblzma) not found or not working, disabling support")
+   SET(HAVE_LZMA )
+ENDIF(HAVE_LZMA)
+SET(CMAKE_REQUIRED_LIBRARIES "")
+
+
+SET(SSL_LIB_LIST ssl crypto)
+SET(CMAKE_REQUIRED_LIBRARIES "${SSL_LIB_LIST}")
+FILE(READ test/build/HAVE_SSL.cc TESTSRC)
+CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_SSL)
+IF(HAVE_SSL)
+   SET(USE_SSL_CS on)
+   SET(NONOSSLSRCS )
+ELSE(HAVE_SSL)
+   MESSAGE("!! OpenSSL not found or not working, disabling support")
+   SET(SSL_LIB_LIST )
+   message(WARNING "fixme, NONOSSLSRCS verwenden überall")
+ENDIF(HAVE_SSL)
+SET(CMAKE_REQUIRED_LIBRARIES "")
+
+# -DEXTRA_LIBS_INETD=-lsupc++
+# funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used
+# there). However, it needs to be investigated - the alternative linking makes
+# the binary ~40kb larger, might include higher relocation costs and bigger
+# chunks of unique memory while libstdc++ needs to be loaded anyway for the
+# server process.
+# Needs HAVE_WL_AS_NEEDED!
+
 
 message("Shared compiler flags: ${ACNG_CXXFLAGS_COMMON}")
 message("Shared linker flags: ${LDFLAGS_MIN}")
@@ -269,67 +286,36 @@ SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
 SET(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
-ADD_EXECUTABLE(apt-cacher-ng ${SRCS})
-list(REMOVE_DUPLICATES AcngLdList)
-TARGET_LINK_LIBRARIES(apt-cacher-ng ${AcngLdList} ${CompLibs} ${NetworkLibs} ${lsd_LDFLAGS} ${EXTRA_LIBS_ACNG})
-# I'd like this method more but apparently LINK_FLAGS is always prepended, no way to append it
-#SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES LINK_FLAGS "${lsd_LDFLAGS}")
-SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} ${lsd_CFLAGS}")
-
-ADD_EXECUTABLE(in.acng client/client.cc)
-SET_TARGET_PROPERTIES(in.acng PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} -DMINIBUILD")
-TARGET_LINK_LIBRARIES(in.acng ${NetworkLibs} ${EXTRA_LIBS_INETD})
-
-ADD_EXECUTABLE(acngtool ${TOOLSRCS})
-SET_TARGET_PROPERTIES(acngtool PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON}")
-TARGET_LINK_LIBRARIES(acngtool ${AcngLdList} ${CompLibs}  ${NetworkLibs} ${EXTRA_LIBS_ACNGTOOL})
-
-# -DEXTRA_LIBS_INETD=-lsupc++
-# funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used
-# there). However, it needs to be investigated - the alternative linking makes
-# the binary ~40kb larger, might include higher relocation costs and bigger
-# chunks of unique memory while libstdc++ needs to be loaded anyway for the
-# server process.
-# Needs HAVE_WL_AS_NEEDED!
-
-
-############################################
-## Attempt to build acngfs where possible ##
-############################################
-
-pkg_check_modules(fuse fuse)
-
-string(REPLACE ";" " " acngfs_cflags "${ACNG_CXXFLAGS_COMMON};-DMINIBUILD;${fuse_CFLAGS}")
-
-# double-check and make sure it compiles
-FILE(READ test/build/HAVE_FUSE_25.cc TESTSRC)
-SET(CMAKE_REQUIRED_FLAGS " ${ACNG_CXXFLAGS_COMMON} ${acngfs_cflags}")
-CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_FUSE_25)
-
-if(fuse_FOUND AND HAVE_FUSE_25)
-	list(APPEND fsSRCS fs/httpfs.cc source/lockable.cc source/header.cc source/caddrinfo.cc source/acbuf.cc source/acfg.cc source/acfg_defaults.cc source/tcpconnect.cc source/dlcon.cc source/fileitem.cc source/meta.cc)
-
-	if(CMAKE_BUILD_TYPE MATCHES Debug)
-		list(APPEND fsSRCS source/aclogger.cc)
-	endif()
-
-	ADD_EXECUTABLE(acngfs ${fsSRCS})
-
-	#message("uhm: ${fuse_CFLAGS} -- ${acngfs_cflags} -- ${fuse_LDFLAGS} -- ${HAVE_DLOPEN}")
-	SET_TARGET_PROPERTIES(acngfs PROPERTIES COMPILE_FLAGS "${acngfs_cflags}" )
-	if(HAVE_DLOPEN)
-		TARGET_LINK_LIBRARIES(acngfs dl pthread  ${NetworkLibs} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
-	else(HAVE_DLOPEN)
-		TARGET_LINK_LIBRARIES(acngfs ${fuse_LDFLAGS}  ${NetworkLibs} ${SSL_LIB_LIST} ${EXTRA_LIBS_ACNGFS})
-	endif(HAVE_DLOPEN)
-
-else(fuse_FOUND AND HAVE_FUSE_25)
-	message("- FUSE not found or not compatible, not building acngfs")
-endif(fuse_FOUND AND HAVE_FUSE_25)
-
-
 #######################################
 # all checks done, save configuration #
 #######################################
 
 CONFIGURE_FILE("${CMAKE_SOURCE_DIR}/include/acsyscap.h.in" "${CMAKE_BINARY_DIR}/acsyscap.h")
+
+add_subdirectory(client)
+add_subdirectory(fs)
+add_subdirectory(tool)
+add_subdirectory(source)
+
+###
+### Extra install rules for static files
+###
+
+install(DIRECTORY conf/ DESTINATION ${CFGDIR}
+   FILES_MATCHING PATTERN "*.conf")
+install(DIRECTORY conf/ DESTINATION ${LIBDIR}
+   FILES_MATCHING REGEX "mirrors$|mirrors.gz$|html$|css$|default$")
+
+if(NOT DEFINED(HTMLDIR))
+		set(HTMLDIR ${DOCDIR}/html)
+endif()
+install(FILES doc/README doc/apt-cacher-ng.pdf DESTINATION ${DOCDIR})
+install(DIRECTORY doc/html/ DESTINATION ${HTMLDIR}
+   FILES_MATCHING PATTERN "*.*")
+install(DIRECTORY doc/man/ DESTINATION ${DATADIR}/man/man8
+   FILES_MATCHING PATTERN "*.8")
+if(NOT DEFINED(AVAHIDIR))
+   set(AVAHIDIR ${CMAKE_INSTALL_PREFIX}/etc/avahi/services)
+endif()
+install(FILES contrib/apt-cacher-ng.service DESTINATION ${AVAHIDIR})
+
