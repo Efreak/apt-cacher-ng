@@ -31,4 +31,5 @@
 #cmakedefine LIBDIR "@LIBDIR@"
 #cmakedefine DOCDIR "@DOCDIR@"
 #cmakedefine BINDIR "@BINDIR@"
+#cmakedefine SBINDIR "@SBINDIR@"
 

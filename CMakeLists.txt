@@ -33,11 +33,20 @@ ENDIF()
 IF(NOT DEFINED(DOCDIR))
 	set(DOCDIR "${DATADIR}/doc/${TOOLNAME}" CACHE STRING "Location of documentation files")
 ENDIF()
-IF(NOT DEFINED(CFGDIR))
-	set(CFGDIR "${CMAKE_INSTALL_PREFIX}/etc/${TOOLNAME}" CACHE STRING "Location of system-wide configuration files")
+
+IF(NOT DEFINED(SYSCONFDIR))
+   if("${CMAKE_INSTALL_PREFIX}" STREQUAL "/usr")
+      set(SYSCONFDIR /etc)
+   else()
+      set(SYSCONFDIR ${CMAKE_INSTALL_PREFIX}/etc)
+   endif()
 ENDIF()
 
-set(BINDIR "${CMAKE_INSTALL_PREFIX}/sbin")
+# mine
+set(CFGDIR "${SYSCONFDIR}/${TOOLNAME}")
+if(NOT DEFINED(SBINDIR))
+set(SBINDIR "${CMAKE_INSTALL_PREFIX}/sbin")
+endif()
 
 INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
@@ -309,13 +318,16 @@ install(DIRECTORY conf/ DESTINATION ${LIBDIR}
 if(NOT DEFINED(HTMLDIR))
 		set(HTMLDIR ${DOCDIR}/html)
 endif()
+if(NOT DEFINED(MANDIR))
+   set(HTMLDIR ${DATADIR}/man)
+endif()
 install(FILES doc/README doc/apt-cacher-ng.pdf DESTINATION ${DOCDIR})
 install(DIRECTORY doc/html/ DESTINATION ${HTMLDIR}
    FILES_MATCHING PATTERN "*.*")
-install(DIRECTORY doc/man/ DESTINATION ${DATADIR}/man/man8
+install(DIRECTORY doc/man/ DESTINATION ${MANDIR}/man8
    FILES_MATCHING PATTERN "*.8")
 if(NOT DEFINED(AVAHIDIR))
-   set(AVAHIDIR ${CMAKE_INSTALL_PREFIX}/etc/avahi/services)
+   set(AVAHIDIR "${SYSCONFDIR}/avahi/services")
 endif()
 install(FILES contrib/apt-cacher-ng.service DESTINATION ${AVAHIDIR})
 
