@@ -103,6 +103,7 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 		return;
 	if (acfg::proxy_info.sHost.empty())
 	{
+		direct_connect:
 		m_spOutCon = g_tcp_con_factory.CreateConnected(url.sHost, url.GetPort(), sErr, 0, 0,
 		false, acfg::nettimeout, true);
 	}
@@ -110,7 +111,9 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 	{
 		// switch to HTTPS tunnel in order to get a direct connection through the proxy
 		m_spOutCon = g_tcp_con_factory.CreateConnected(acfg::proxy_info.sHost, acfg::proxy_info.GetPort(),
-				sErr, 0, 0, false, acfg::nettimeout, true);
+				sErr, 0, 0, false, acfg::optproxytimeout > 0 ?
+						acfg::optproxytimeout : acfg::nettimeout,
+						true);
 
 		if (m_spOutCon)
 		{
@@ -120,6 +123,8 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 				m_spOutCon.reset();
 			}
 		}
+		else if(acfg::optproxytimeout > 0) // ok... try without
+			goto direct_connect;
 	}
 
 	if (m_spOutCon)

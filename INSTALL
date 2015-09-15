@@ -1,7 +1,7 @@
 Requirements:
 
  - Linux or mostly POSIX.1-2001 compliant environment
- - GNU make, CMake 2.6.2 or newer
+ - CMake 2.6.2 or newer, probably also GNU make
  - gcc 4.7 or newer or clang 3.0 or newer and latest libstdc++ or Boost headers
  - on Linux systems, kernel 2.6.22 or newer and glibc 2.8 or newer
 
@@ -12,12 +12,24 @@ Optional development packages for optional features:
 
 Build and installation instructions:
 
- - run "make"
- - if an error occurs during configuration: read the message, solve the
-   problem, run "make distclean" and retry with "make"
- - if a GCC internal compiler error appears, try:
-   make distclean ; make CMAKEOPTS=-DUSE_LTO=off
- - when done, copy build/apt-cacher-ng and build/in.acng to /usr/local/sbin
+CMake is used internally for build control. It can be run in the source
+directory and provides the usual configuration options. However, the
+recommended way are out-of-source builds in a subdirectory like build/ that can
+be removed to restart from scratch.  There are two convenience scripts that
+automate this, build.sh and distclean.sh.
+Workflow example:
+ - run ./build.sh to configure and build (extra options are passed as cmake
+   arguments, build results go to the build/ directory)
+ - chdir to build and run "make install" (maybe with DESTDIR=/somewhere/else)
+
+Troubleshooting and integrator notes:
+ - on configuration problems or to change most settings afterwards, remove the
+   build directory or build/CMakeCache.txt
+ - Link Time Optimization may be broken with some compilers. if a GCC "internal
+   compiler error" appears, first try -DUSE_LTO=off
+ - -DDOCDIR=... and -DLIBDIR=... specify target directories for docs resp.
+   supplmentary files
+ - Install halibut tool to rebuild the documentation, if needed
 
 Configure to run on system startup:
 
@@ -45,15 +57,14 @@ Configuration:
  - for apt clients, there is a config snipped in contrib/10-apt-cacher-ng.conf
    which might be installed into /etc/apt/apt.conf.d/.
 
-Special flags:
+Developer notes:
 
-Certain variables can be passed to the make command via call arguments or
-environment variables to customize the build.
-
- - DEBUG=1 : creates binaries with additional debugging code included. Warning:
-   extremelly increased log size.
- - CXX : overrides the default compiler (for example, CXX=clang++-3.6)
- - CXXFLAGS : parameters passed to the compiler after the default ones
- - LDFLAGS : parameters passed to the linker call (compiler call for linking)
- - NOLTO : disables use of Link Time Optimization which is/was faulty in some
-   GCC version even if the basic function check succeeds
+There are some macros and shortcuts:
+ - scripts/Makefile.dev has some test and release rules
+ - DEBUG argument of build.sh adds more verbosity and implicitly sets compiler
+   defaults to produce debuggable binaries
+ - -DDEBUG (set by above) to enable verbose debug logging. BE WARNED: this
+   spams a lot and makes logs explode.
+ - Certain environment variables influence cmake, like CXX (compiler to use),
+   CXXFLAGS (compiler options, buid.sh won't set cmake defaults if this is
+   set), LDFLAGS (compiler flags for linking)
