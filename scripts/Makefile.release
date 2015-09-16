@@ -13,14 +13,13 @@ ifeq ($(CXXFLAGS),)
 endif
 endif
 
-doc: README
-README: doc/src/README.but doc/src/manpage.but doc/src/acngfs.but doc/src/textparm.but
+doc: doc/README
+doc/README: doc/src/README.but doc/src/manpage.but doc/src/acngfs.but doc/src/textparm.but
 	@mkdir -p doc/html doc/man
 	halibut --text=doc/README doc/src/textparm.but doc/src/README.but
 	halibut --pdf=doc/apt-cacher-ng.pdf doc/src/README.but
 	cd doc/html && halibut --html ../src/README.but
 	cd doc/man && halibut --man ../src/manpage.but && halibut --man ../src/acngfs.but
-	cp doc/README README
 
 PKGNAME=apt-cacher-ng
 VERSION=$(shell cat VERSION)
