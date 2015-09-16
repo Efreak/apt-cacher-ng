@@ -1,13 +1,12 @@
 apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
 
-TODO: add cmakelists to doc, conf, install rules everywhere
-
   * Build system overhaul, splitted CMakeLists.txt per target, added install
     rules, updated build documentation
   * FIX: enabled SNI feature (TLS Server Name Indication)
   * FIX: smarter switching between InRelease and Release file versions in
     expiration runs, triggered by a 404
   * FIX: added auto-skipping of failing proxy to tunnel construction
+  * FIX: disabled LTO again, unreliable with GCC5
   * NEW: moved the expiration caller script functionality to acngtool and made
     it less verbose for better use in cron jobs
   * More automatic index file replacements (Sources/Packages gz to xz,

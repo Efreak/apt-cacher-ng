@@ -5,12 +5,13 @@ PROJECT(ACNG CXX C)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 
+# we want the old policy to support cmake 2.x
 if(POLICY CMP0056) # added in CMake 3.2
-	# we want the old policy, setting linker flags explicitly
+   # setting linker flags explicitly
 	cmake_policy(SET CMP0056 OLD)
 endif()
-IF (POLICY CMP0053)
-	CMAKE_POLICY (SET CMP0053 OLD) # keep old-style @VAR@ expansion
+IF (POLICY CMP0053) # added in CMake 3.1
+	cmake_policy (SET CMP0053 OLD) # use old-style @VAR@ expansion
 ENDIF (POLICY CMP0053)
 
 INCLUDE(CheckIncludeFiles) 
@@ -19,6 +20,7 @@ INCLUDE(CheckCXXCompilerFlag)
 INCLUDE(CheckTypeSize)
 INCLUDE(TestBigEndian)
 INCLUDE(CheckLibraryExists)
+INCLUDE(FindPkgConfig)
 
 set(TOOLNAME "apt-cacher-ng")
 IF(NOT DEFINED(CMAKE_INSTALL_PREFIX))
@@ -42,8 +44,10 @@ IF(NOT DEFINED(SYSCONFDIR))
    endif()
 ENDIF()
 
-# mine
+if(NOT DEFINED(CFGDIR))
 set(CFGDIR "${SYSCONFDIR}/${TOOLNAME}")
+endif()
+
 if(NOT DEFINED(SBINDIR))
 set(SBINDIR "${CMAKE_INSTALL_PREFIX}/sbin")
 endif()
@@ -63,23 +67,19 @@ CHECK_TYPE_SIZE(int SIZE_INT)
 CHECK_TYPE_SIZE(long SIZE_LONG)
 TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
 
-# the ugly part :-(
-# CXXFLAGS sets CMAKE_CXX_FLAGS but CMAKE_CXX_FLAGS is set before the flags
-# from CMAKE_BUILD_TYPE (Debug vs. Release) in the compiler call turning
-# CXXFLAGS ineffective :-((
-# let's assume that the caller sets EITHER CXXFLAGS or -DCMAKE_BUILD_TYPE=...
+# those are appended later via COMPILER_FLAGS. $CXXFLAGS and CMAKE_CXX_FLAGS
+# also influence it, need to be adjusted carefully by user.
 SET(ACNG_CXXFLAGS_COMMON " -pthread -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ")
-# same for linker flags, imported from LDFLAGS environment var
-SET(LDFLAGS_MIN "${CMAKE_EXE_LINKER_FLAGS}")
 
 foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1)
 	STRING(REGEX REPLACE "=|-|," "" optname "${linkarg}")
 	CHECK_CXX_COMPILER_FLAG("${linkarg}" "LD_${optname}")
 	if(LD_${optname})
-		SET(LDFLAGS_MIN "${LDFLAGS_MIN} ${linkarg}")
+     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${linkarg}")
 	endif()
 endforeach(linkarg)
 
+option(USE_SSL "Use OpenSSL library for TLS and other crypto functionality" on)
 # option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" on)
 
 IF(CMAKE_SYSTEM MATCHES "Darwin")
@@ -118,21 +118,18 @@ else()
 endif()
 
 if(USE_LTO)
-SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} -flto -flto-partition=none")
-SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN} -flto -flto-partition=none")
-CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" USE_LTO)
-if(USE_LTO)
-   SET(ACNG_CXXFLAGS_COMMON ${CMAKE_REQUIRED_FLAGS})
-   SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
-else(USE_LTO)
-   SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON}")
-   SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
-   message(WARNING "Link Time Optimization support broken, disabling it.")
-endif(USE_LTO)
+   SET(LDFLAGS_NOLTO "${CMAKE_EXE_LINKER_FLAGS}")
+   SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} -flto -flto-partition=none")
+   SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto -flto-partition=none")
+   CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" HAS_LTO)
+   if(HAS_LTO)
+      SET(ACNG_CXXFLAGS_COMMON ${CMAKE_REQUIRED_FLAGS})
+   else()
+      SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON}")
+      SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_NOLTO}")
+      message(WARNING "Link Time Optimization support broken, disabling it.")
+   endif()
 endif()
-
-#message("Initial CXX flags: ${ACNG_CXXFLAGS_COMMON}")
-#message("Initial linker flags: ${LDFLAGS_MIN}")
 
 LIST(APPEND NONOSSLSRCS "${CMAKE_SOURCE_DIR}/source/sha1.cc" "${CMAKE_SOURCE_DIR}/source/md5.cc" "${CMAKE_SOURCE_DIR}/source/sha2.cc")
 
@@ -197,8 +194,6 @@ CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_PREAD)
 FILE(READ test/build/HAVE_DAEMON.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_DAEMON)
 
-INCLUDE(FindPkgConfig)
-
 pkg_check_modules(lsd "libsystemd>=209")
 if(NOT lsd_FOUND)
 pkg_check_modules(lsd libsystemd-daemon)
@@ -252,20 +247,20 @@ ELSE(HAVE_LZMA)
 ENDIF(HAVE_LZMA)
 SET(CMAKE_REQUIRED_LIBRARIES "")
 
-
-SET(SSL_LIB_LIST ssl crypto)
-SET(CMAKE_REQUIRED_LIBRARIES "${SSL_LIB_LIST}")
-FILE(READ test/build/HAVE_SSL.cc TESTSRC)
-CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_SSL)
-IF(HAVE_SSL)
-   SET(USE_SSL_CS on)
-   SET(NONOSSLSRCS )
-ELSE(HAVE_SSL)
-   MESSAGE("!! OpenSSL not found or not working, disabling support")
-   SET(SSL_LIB_LIST )
-   message(WARNING "fixme, NONOSSLSRCS verwenden überall")
-ENDIF(HAVE_SSL)
-SET(CMAKE_REQUIRED_LIBRARIES "")
+if(USE_SSL)
+   SET(SSL_LIB_LIST ssl crypto)
+   SET(CMAKE_REQUIRED_LIBRARIES "${SSL_LIB_LIST}")
+   FILE(READ test/build/HAVE_SSL.cc TESTSRC)
+   CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_SSL)
+   IF(HAVE_SSL)
+      SET(NONOSSLSRCS )
+      # and keep SSL_LIB_LIST
+   ELSE(HAVE_SSL)
+      MESSAGE("!! OpenSSL not found or not working, disabling support")
+      SET(SSL_LIB_LIST )
+      message(WARNING "fixme, NONOSSLSRCS verwenden überall")
+   ENDIF(HAVE_SSL)
+endif()
 
 # -DEXTRA_LIBS_INETD=-lsupc++
 # funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used
@@ -277,9 +272,7 @@ SET(CMAKE_REQUIRED_LIBRARIES "")
 
 
 message("Shared compiler flags: ${ACNG_CXXFLAGS_COMMON}")
-message("Shared linker flags: ${LDFLAGS_MIN}")
-
-SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
+message("Shared linker flags: ${CMAKE_EXE_LINKER_FLAGS}")
 
 SET(CMAKE_REQUIRED_LIBRARIES "")
 SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
