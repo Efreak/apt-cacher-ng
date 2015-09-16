@@ -1,18 +1,19 @@
-set(CMAKE_LEGACY_CYGWIN_WIN32 0) # don't care for now... just expecting POSIX
 cmake_minimum_required(VERSION 2.6.2)
+
+set(CMAKE_LEGACY_CYGWIN_WIN32 0) # don't care for now... just expecting POSIX
+
+# we want the old policy to support cmake 2.x
+IF(POLICY CMP0056) # added in CMake 3.2
+   cmake_policy (SET CMP0056 OLD)
+ENDIF()
+IF (POLICY CMP0053) # added in CMake 3.1
+	cmake_policy (SET CMP0053 OLD) # use old-style @VAR@ expansion
+ENDIF (POLICY CMP0053)
+
 PROJECT(ACNG CXX C)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
-
-# we want the old policy to support cmake 2.x
-if(POLICY CMP0056) # added in CMake 3.2
-   # setting linker flags explicitly
-	cmake_policy(SET CMP0056 OLD)
-endif()
-IF (POLICY CMP0053) # added in CMake 3.1
-	cmake_policy (SET CMP0053 OLD) # use old-style @VAR@ expansion
-ENDIF (POLICY CMP0053)
 
 INCLUDE(CheckIncludeFiles) 
 INCLUDE(CheckCXXSourceCompiles)
