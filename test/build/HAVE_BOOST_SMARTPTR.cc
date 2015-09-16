@@ -1,3 +1,4 @@
 #include <boost/smart_ptr.hpp>
-int main() { return NULL != boost::shared_ptr<int>(new int(1)); }
+int main() { boost::shared_ptr<int> x(new int(1)); return *x; }
+
 

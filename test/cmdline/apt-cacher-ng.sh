@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 set -x
-exe=build/apt-cacher-ng
-tool=build/acngtool
+exe=builddir/apt-cacher-ng
+tool=builddir/acngtool
 test -x $exe
 TMP=$(mktemp -d)
 PORT=$(( 11222 + $RANDOM / 2 ))

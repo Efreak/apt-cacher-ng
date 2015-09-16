@@ -80,15 +80,17 @@ foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl
 	endif()
 endforeach(linkarg)
 
+# option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" on)
+
 IF(CMAKE_SYSTEM MATCHES "Darwin")
    SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON} -D_DARWIN_C_SOURCE ")
 ENDIF(CMAKE_SYSTEM MATCHES "Darwin")
 
 IF(CMAKE_SYSTEM MATCHES "CYGWIN")
+	set(USE_LTO off)
 	SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__ -DNOMINMAX ")
-	option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" off)
 ELSE()
-	option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" on)
+
 ENDIF()
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
@@ -123,6 +125,7 @@ if(USE_LTO)
    SET(ACNG_CXXFLAGS_COMMON ${CMAKE_REQUIRED_FLAGS})
    SET(LDFLAGS_MIN ${CMAKE_EXE_LINKER_FLAGS})
 else(USE_LTO)
+   SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON}")
    SET(CMAKE_EXE_LINKER_FLAGS "${LDFLAGS_MIN}")
    message(WARNING "Link Time Optimization support broken, disabling it.")
 endif(USE_LTO)
@@ -143,7 +146,6 @@ if(HAVE_SOCKETLIB)
 endif(HAVE_SOCKETLIB)
 
 # explicit linking needed for global locks in dlcon
-# XXX: test it?
 list(APPEND BaseNetworkLibs pthread)
 
 SET(CMAKE_REQUIRED_LIBRARIES wrap ${BaseNetworkLibs})
@@ -205,6 +207,7 @@ string(REPLACE ";" " " lsd_LDFLAGS "${lsd_LDFLAGS}")
 string(REPLACE ";" " " lsd_CFLAGS "${lsd_CFLAGS}")
 set(HAVE_SD_NOTIFY ${lsd_FOUND})
 
+SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
 FILE(READ test/build/HAVE_MEMORY_SPTR.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_MEMORY_SPTR)
 if(NOT HAVE_MEMORY_SPTR)
