@@ -19,12 +19,12 @@ be removed to restart from scratch.  There are two convenience scripts that
 automate this, build.sh and distclean.sh.
 Workflow example:
  - run ./build.sh to configure and build (extra options are passed as cmake
-   arguments, build results go to the build/ directory)
+   arguments, build results go to the builddir/ directory)
  - chdir to build and run "make install" (maybe with DESTDIR=/somewhere/else)
 
 Troubleshooting and integrator notes:
  - on configuration problems or to change most settings afterwards, remove the
-   build directory or build/CMakeCache.txt
+   build directory or only builddir/CMakeCache.txt in easy cases
  - Link Time Optimization may be broken with some compilers. if a GCC "internal
    compiler error" appears, first try -DUSE_LTO=off
  - -DDOCDIR=... and -DLIBDIR=... specify target directories for docs resp.
@@ -33,14 +33,14 @@ Troubleshooting and integrator notes:
 
 Configure to run on system startup:
 
-This heavily depends on the used init system.
+This part heavily depends on the used init system.
  - For systemd configuration files example, visit systemd directory and install
    that config files as needed (check the services and tmpfiles directories of
-   your systemd setup).
+   your systemd setup). If the systemd (or systemd-notify) library has been
+   detected during the build then it's also possible to change the service type
+   from "simple" to "notify".
  - For sysvinit, see latest Debian package for examples (unpack with ar/tar or
    just mc).
- - For use with Avahi, install contrib/apt-cacher-ng.service configuration
-   file.
 
 Configuration:
 

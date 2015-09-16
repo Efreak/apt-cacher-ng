@@ -1,5 +1,5 @@
 #!/bin/sh
-mkdir -p build
+mkdir -p builddir
 src=$PWD
 # honor user environments if set, otherwise use Release defaults
 test -n "$CXXFLAGS" || CMAKEFLAGS=-DCMAKE_BUILD_TYPE=Release
@@ -13,7 +13,7 @@ then
 	export MAKEFLAGS
 fi
 
-cd build
+cd builddir
 if ! cmake $src $CMAKEFLAGS "$@"
 then
 	echo Configuration failed, please fix the reported issues and run ./distclean.sh

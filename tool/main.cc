@@ -420,9 +420,10 @@ int maint_job()
 					udsconnection(int s) : tcpconnect(nullptr)
 					{
 						m_conFd = s;
+#ifdef HAVE_SSL
 						m_ssl = nullptr;
 						m_bio = nullptr;
-
+#endif
 						// must match the URL parameters
 						m_sHostName = "localhost";
 						m_sPort = acfg::port;

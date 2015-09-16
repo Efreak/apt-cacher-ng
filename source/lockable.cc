@@ -41,7 +41,7 @@ bool condition::wait_until(time_t nUTCsecs, long msec)
 	if (r==ETIMEDOUT && nUTCsecs == END_OF_TIME)
 	{
 		timeout.tv_sec = MAX_VAL(int);
-		r=pthread_cond_timedwait(&m_obj_cond, &m_obj_mutex, &timeout)
+		r=pthread_cond_timedwait(&m_obj_cond, &m_obj_mutex, &timeout);
 	}
 #endif
 

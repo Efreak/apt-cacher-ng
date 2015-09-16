@@ -13,32 +13,13 @@ ifeq ($(CXXFLAGS),)
 endif
 endif
 
-# pass down to cmake's Makefile, but all targets depend on config
-default: all
-apt-cacher-ng in.acng acngfs acngtool clean all: config
-	@$(MAKE) -C build $@
-
-config: build/.config-stamp
-
-build/.config-stamp: build/.dir-stamp CMakeLists.txt
-	cd build && cmake $(CMAKEOPTS) $(CURDIR)
-	@>$@
-
-build/.dir-stamp:
-	@test -d build || mkdir build
-	@>$@
-
-distclean:
-	rm -rf build $(DBTMP) acsyscap.h *.o Makefile
-
-doc: README
-README: doc/src/README.but doc/src/manpage.but doc/src/acngfs.but doc/src/textparm.but
+doc: doc/README
+doc/README: doc/src/README.but doc/src/manpage.but doc/src/acngfs.but doc/src/textparm.but
 	@mkdir -p doc/html doc/man
 	halibut --text=doc/README doc/src/textparm.but doc/src/README.but
 	halibut --pdf=doc/apt-cacher-ng.pdf doc/src/README.but
 	cd doc/html && halibut --html ../src/README.but
 	cd doc/man && halibut --man ../src/manpage.but && halibut --man ../src/acngfs.but
-	cp doc/README README
 
 PKGNAME=apt-cacher-ng
 VERSION=$(shell cat VERSION)
@@ -86,11 +67,11 @@ doxy:
 	see doc/dev/html/index.html
 
 checktest:
-	test -e build/testok || (echo Should run the test suite before release... ; exit 1)
+	test -e builddir/testok || (echo Should run the test suite before release... ; exit 1)
 
 test:
-	bash -x test/apptest.sh
-	touch build/testok
+	bash -x test/apptests.sh
+	touch builddir/testok
 
 # execute them always and consider done afterwards
 .PHONY: gendbs clean distclean config conf/gentoo_mirrors.gz test

@@ -18,26 +18,13 @@
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <climits>
-
-#ifdef HAVE_MEMORY_SPTR
 #include <memory>
-#define SMARTPTR_SPACE std
-#elif defined HAVE_TR1_MEMORY
-#include <tr1/memory>
-#define SMARTPTR_SPACE std::tr1
-#elif defined HAVE_BOOST_SMARTPTR
-#include <boost/smart_ptr.hpp>
-#define SMARTPTR_SPACE boost
-#else
-#error Unable to find smart pointer implementation, install Boost or recent compiler with STL containing TR1 components. Set BOOSTDIR in Makefile if needed.
-#endif
 
-// make off_t be a 64 bit type
 // added in Makefile... #define _FILE_OFFSET_BITS 64
 
-#define SHARED_PTR SMARTPTR_SPACE::shared_ptr
-#define INTRUSIVE_PTR SMARTPTR_SPACE::intrusive_ptr
-#define WEAK_PTR SMARTPTR_SPACE::weak_ptr
+#define SHARED_PTR std::shared_ptr
+#define INTRUSIVE_PTR std::intrusive_ptr
+#define WEAK_PTR std::weak_ptr
 #define SCOPED_PTR std::auto_ptr
 
 #ifdef NO_EXCEPTIONS

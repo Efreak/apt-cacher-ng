@@ -60,8 +60,8 @@ private:
 		tProgressTracker() : nEndSize(-1), id(0) {};
 		void SetEnd(off_t);
 	};
-	typedef SMARTPTR_SPACE::shared_ptr<tProgressTracker> tProgTrackPtr;
-	static SMARTPTR_SPACE::weak_ptr<tProgressTracker> g_pTracker;
+	typedef SHARED_PTR<tProgressTracker> tProgTrackPtr;
+	static WEAK_PTR<tProgressTracker> g_pTracker;
 	tProgTrackPtr m_pTracker;
 	protected:
 	tStrSet m_delCboxFilter;

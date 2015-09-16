@@ -3,9 +3,6 @@
 #cmakedefine HAVE_ZLIB
 #cmakedefine HAVE_LIBBZ2
 #cmakedefine HAVE_LZMA
-#cmakedefine HAVE_MEMORY_SPTR
-#cmakedefine HAVE_TR1_MEMORY
-#cmakedefine HAVE_BOOST_SMARTPTR
 #define SIZEOF_LONG @SIZE_LONG@
 #define SIZEOF_INT @SIZE_INT@
 #cmakedefine HAVE_WORDEXP
@@ -31,4 +28,5 @@
 #cmakedefine LIBDIR "@LIBDIR@"
 #cmakedefine DOCDIR "@DOCDIR@"
 #cmakedefine BINDIR "@BINDIR@"
+#cmakedefine SBINDIR "@SBINDIR@"
 

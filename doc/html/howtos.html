@@ -155,9 +155,16 @@ The "backend configuration method": if the clients access the remote sites throu
 The "laissez-faire method": in acng.conf (or related) configure the <code>PassThroughPattern</code> option to contain a regex like <code>.*</code> and configure the clients to use apt-cacher-ng as HTTP proxy and let the clients connect to https URLs "as usual". Some limited access control can be achieved through adjustment of the regular expression (.* permits access to any host and any port, including 443 for https). Data is not cached on the server.
 </li>
 <li>
-The "tell-me-what-you-need method": on the client side, modify the access URLs and change https to http and put the string "HTTPS///" between http:// and the host name. With this trick, the user client will access the proxy like going for a usual HTTP download and the proxy will continue with the remote URL using the https scheme. Caching (and file merging to repositories) will work, flexibility for the user remains. The disadvantages of this method are basically the same as with the access URLs rewriting (see <a href="config-servquick.html#config-client">Section 3.2</a>) but the method is still the preferred one by the apt-cacher-ng author.
+The "tell-me-what-you-need method": on the client side, modify the access URLs and change https to http and put the string "HTTPS///" between http:// and the host name. With this trick, the user client will access the proxy like going for a usual HTTP download and the proxy will access the remote URL with the https protocol. Caching (and file merging to repositories) will work and there is still enough flexibility for the users. The disadvantages of this method are basically the same as with the access URLs rewriting (see <a href="config-servquick.html#config-client">Section 3.2</a>) but the method is still the preferred one by the apt-cacher-ng author. For apt's sources.list, the modification may look like the following example.
 </li>
 </ul>
+<pre><code>deb http://HTTPS///get.docker.com/ubuntu docker main
+# If apt-cacher-ng is configured as proxy in APT, this makes it
+# switch internally to https://get.docker.com/ubuntu
+deb http://acnghost:3142/HTTPS///get.docker.com/ubuntu docker main
+# Basically the same just with access to apt-cacher-ng through
+# URL rewritting instead of setting http proxy.
+</code></pre>
 <h2><a name="jigdo"></a>8.4 JIGDO usage</h2>
 <p>
 It's possible to use apt-cacher-ng source with the jigdo-lite utility. There are some limitations, though:

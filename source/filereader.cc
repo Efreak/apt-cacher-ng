@@ -616,7 +616,7 @@ bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
 
 #ifndef MINIBUILD
 
-#ifdef USE_SSL_CS
+#ifdef HAVE_SSL
 class csumSHA1 : public csumBase, public SHA_CTX
 {
 public:
