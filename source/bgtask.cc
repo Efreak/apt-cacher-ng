@@ -17,7 +17,6 @@
 #include <errno.h>
 
 using namespace std;
-using namespace SMARTPTR_SPACE;
 
 #define LOG_DECO_START "<html><head><style type=\"text/css\">" \
 ".WARNING { color: orange; }\n.ERROR { color: red; }\n" \
@@ -40,7 +39,7 @@ tSpecOpDetachable::~tSpecOpDetachable()
 }
 
 // the obligatory definition of static members :-(
-SMARTPTR_SPACE::weak_ptr<tSpecOpDetachable::tProgressTracker> tSpecOpDetachable::g_pTracker;
+WEAK_PTR<tSpecOpDetachable::tProgressTracker> tSpecOpDetachable::g_pTracker;
 
 cmstring& GetFooter()
 {
