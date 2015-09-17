@@ -8,9 +8,7 @@ test -n "$CXXFLAGS" || CMAKEFLAGS=-DCMAKE_BUILD_TYPE=Release
 if test "$1" = DEBUG
 then
 	shift
-	CMAKEFLAGS="-DCMAKE_BUILD_TYPE=Debug --debug-trycompile --debug-output"
-	MAKEFLAGS=VERBOSE=1
-	export MAKEFLAGS
+	CMAKEFLAGS="-DCMAKE_BUILD_TYPE=Debug -DCMAKE_VERBOSE_MAKEFILE=ON --debug-trycompile --debug-output"
 fi
 
 cd builddir
