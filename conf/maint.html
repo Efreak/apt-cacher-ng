@@ -19,6 +19,23 @@ function checkOrUncheck(checkIt)
          formular[i].checked = checkIt;
    }
 }
+
+function show_rest() {
+   var nodes=document.getElementsByName('shorttable');
+   for(var i=0; i<nodes.length; ++i)
+   		nodes[i].className = "xhidden";
+   nodes = document.getElementsByName('bigtable');
+   for(var i=0; i<nodes.length; ++i)
+      nodes[i].className = "xshow";
+}
+
+function copycheck(src, name)
+{
+var nodes=document.getElementsByName(name);
+   for(var i=0; i<nodes.length; ++i)
+   	nodes[i].checked = src.checked;
+}
+
       </script>
 
       <!--script type="text/javascript">
