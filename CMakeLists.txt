@@ -258,9 +258,8 @@ if(USE_SSL)
       SET(NONOSSLSRCS )
       # and keep SSL_LIB_LIST
    ELSE(HAVE_SSL)
-      MESSAGE("!! OpenSSL not found or not working, disabling support")
+      MESSAGE("!! OpenSSL not found or not working, some functionality will be disabled")
       SET(SSL_LIB_LIST )
-      message(WARNING "fixme, NONOSSLSRCS verwenden überall")
    ENDIF(HAVE_SSL)
 endif()
 
