@@ -14,6 +14,7 @@ PROJECT(ACNG CXX C)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
+set(CMAKE_SKIP_BUILD_RPATH on) # not needed, not wanted
 
 INCLUDE(CheckIncludeFiles) 
 INCLUDE(CheckCXXSourceCompiles)
