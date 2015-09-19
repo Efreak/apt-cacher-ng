@@ -61,6 +61,10 @@ cleaner::~cleaner() {}
 void cleaner::ScheduleFor(time_t, cleaner::eType) {}
 cleaner g_victor;
 
+LPCSTR g_mode = nullptr;
+int g_exitCode(0);
+unsigned g_xargCount = 0;
+
 struct IFitemFactory
 {
 	virtual SHARED_PTR<fileitem> Create() =0;
@@ -538,73 +542,6 @@ int patch_file(string sBase, string sPatch, string sResult)
 }
 
 
-#if 0
-
-void do_stuff_before_config()
-{
-	LPCSTR envvar(nullptr);
-
-	cerr << "Pandora: " << sizeof(regex_t) << endl;
-	/*
-	// PLAYGROUND
-	if (argc < 2)
-		return -1;
-
-	acfg::tHostInfo hi;
-	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1]) << endl;
-	cout << "Host: " << hi.sHost << ", Port: " << hi.sPort << ", Path: "
-			<< hi.sPath << endl;
-	return 0;
-
-	bool Bz2compressFile(const char *, const char*);
-	return !Bz2compressFile(argv[1], argv[2]);
-
-	char tbuf[40];
-	FormatCurrentTime(tbuf);
-	std::cerr << tbuf << std::endl;
-	exit(1);
-	*/
-	envvar = getenv("PARSEIDX");
-	if (envvar)
-	{
-		int parseidx_demo(LPCSTR);
-		exit(parseidx_demo(envvar));
-	}
-
-	envvar = getenv("GETSUM");
-	if (envvar)
-	{
-		uint8_t csum[20];
-		string s(envvar);
-		off_t resSize;
-		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
-		if(!ok)
-		{
-			perror("");
-			exit(1);
-		}
-		for (uint i = 0; i < sizeof(csum); i++)
-			printf("%02x", csum[i]);
-		printf("\n");
-		envvar = getenv("REFSUM");
-		if (ok && envvar)
-		{
-			if(CsEqual(envvar, csum, sizeof(csum)))
-			{
-				printf("IsOK\n");
-				exit(0);
-			}
-			else
-			{
-				printf("Diff\n");
-				exit(1);
-			}
-		}
-		exit(0);
-	}
-}
-
-#endif
 
 void parse_options(int argc, const char **argv, function<void (LPCSTR)> f = [](LPCSTR){})
 {
@@ -673,15 +610,237 @@ void ssl_init()
 }
 #endif
 
+
+struct parm {
+	unsigned minArg, maxArg;
+	std::function<void(LPCSTR)> f;
+};
+parm* g_parm = nullptr;
+
+std::unordered_map<string, parm> parms = {
+	{
+		"encb64",
+		{ 1, 1, [](LPCSTR p)
+			{
+#ifdef DEBUG
+			cerr << "encoding " << p <<endl;
+#endif
+				std::cout << EncodeBase64Auth(p);
+			}
+		}
+	}
+	,
+		{
+			"cfgdump",
+			{ 0, 0, [](LPCSTR p) {
+						     acfg::dump_config();
+					     }
+			}
+		}
+	,
+		{
+			"curl",
+			{ 1, UINT_MAX, [](LPCSTR p)
+				{
+					CPrintItemFactory fac;
+					auto ret=wcat(p, getenv("http_proxy"), &fac);
+					if(!g_exitCode)
+						g_exitCode = ret;
+
+				}
+			}
+		},
+		{
+			"retest",
+			{
+				1, 1, [](LPCSTR p)
+				{
+					std::cout << ReTest(p) << std::endl;
+				}
+			}
+		}
+	,
+		{
+			"printvar",
+			{
+				1, 1, [](LPCSTR p)
+				{
+					auto ps(acfg::GetStringPtr(p));
+					if(ps) { cout << *ps << endl; return; }
+					auto pi(acfg::GetIntPtr(p));
+					if(pi) {
+						cout << *pi << endl;
+						return;
+					}
+					g_exitCode=23;
+				}
+			}
+		},
+		{ 
+			"patch",
+			{
+				3, 3, [](LPCSTR p)
+				{
+					static tStrVec iop;
+					iop.emplace_back(p);
+					if(iop.size() == 3)
+						g_exitCode+=patch_file(iop[0], iop[1], iop[2]);
+				}
+			}
+		}
+
+	,
+		{
+			"maint",
+			{
+				0, 0, [](LPCSTR p)
+				{
+					g_exitCode+=maint_job();
+				}
+			}
+		}
+};
+
 int main(int argc, const char **argv)
 {
 	string exe(argv[0]);
-	bool emuexp = endsWithSzAr(exe, "expire-caller.pl");
-	if(!emuexp && argc<2)
-		usage(1);
-	string cmd;
-	if(argc>1)
-		cmd = argv[1];
+	unsigned aOffset=1;
+	if(endsWithSzAr(exe, "expire-caller.pl"))
+	{
+		aOffset=0;
+		argv[0] = "maint";
+	}
+	acfg::g_bQuiet = true;
+	acfg::g_bNoComplex = true; // no DB for just single variables
+
+	parse_options(argc-aOffset, argv+aOffset, [](LPCSTR p)
+			{
+		bool bFirst = false;
+		if(!g_mode)
+			bFirst = (0 != (g_mode = p));
+		else
+			g_xargCount++;
+		if(!g_parm)
+			{
+			auto it = parms.find(g_mode);
+			if(it == parms.end())
+				usage(1);
+			g_parm = & it->second;
+			}
+		if(g_xargCount > g_parm->maxArg)
+			usage(2);
+		if(!bFirst)
+			g_parm->f(p);
+			});
+	if(!g_mode || !g_parm)
+		usage(3);
+	if(!g_xargCount) // should run the code at least once?
+	{
+		if(g_parm->minArg) // uh... needs argument(s)
+			usage(4);
+		g_parm->f(nullptr);
+	}
+	return g_exitCode;
+}
+
+int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac)
+{
+	acfg::dnscachetime=0;
+	acfg::persistoutgoing=0;
+	acfg::badredmime.clear();
+	acfg::redirmax=10;
+
+	if(proxy)
+		if(acfg::proxy_info.SetHttpUrl(proxy))
+			return -1;
+	tHttpUrl url;
+	if(!surl || !url.SetHttpUrl(surl))
+		return -2;
+	dlcon dl(true, nullptr, pDlconFac);
+
+	auto fi=fac->Create();
+	dl.AddJob(fi, &url, nullptr, nullptr, 0);
+	dl.WorkLoop();
+	if(fi->GetStatus() == fileitem::FIST_COMPLETE)
+	{
+		auto st=fi->GetHeaderUnlocked().getStatus();
+		if(st == 200)
+			return EXIT_SUCCESS;
+		if (st>=500)
+			return EIO;
+		if (st>=400)
+			return EACCES;
+	}
+	return EXIT_FAILURE;
+}
+
+#if 0
+
+void do_stuff_before_config()
+{
+	LPCSTR envvar(nullptr);
+
+	cerr << "Pandora: " << sizeof(regex_t) << endl;
+	/*
+	// PLAYGROUND
+	if (argc < 2)
+		return -1;
+
+	acfg::tHostInfo hi;
+	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1]) << endl;
+	cout << "Host: " << hi.sHost << ", Port: " << hi.sPort << ", Path: "
+			<< hi.sPath << endl;
+	return 0;
+
+	bool Bz2compressFile(const char *, const char*);
+	return !Bz2compressFile(argv[1], argv[2]);
+
+	char tbuf[40];
+	FormatCurrentTime(tbuf);
+	std::cerr << tbuf << std::endl;
+	exit(1);
+	*/
+	envvar = getenv("PARSEIDX");
+	if (envvar)
+	{
+		int parseidx_demo(LPCSTR);
+		exit(parseidx_demo(envvar));
+	}
+
+	envvar = getenv("GETSUM");
+	if (envvar)
+	{
+		uint8_t csum[20];
+		string s(envvar);
+		off_t resSize;
+		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
+		if(!ok)
+		{
+			perror("");
+			exit(1);
+		}
+		for (uint i = 0; i < sizeof(csum); i++)
+			printf("%02x", csum[i]);
+		printf("\n");
+		envvar = getenv("REFSUM");
+		if (ok && envvar)
+		{
+			if(CsEqual(envvar, csum, sizeof(csum)))
+			{
+				printf("IsOK\n");
+				exit(0);
+			}
+			else
+			{
+				printf("Diff\n");
+				exit(1);
+			}
+		}
+		exit(0);
+	}
+}
+
+#endif
 #if 0
 #warning line reader test enabled
 	if (cmd == "wcl")
@@ -757,107 +916,11 @@ int main(int argc, const char **argv)
 		exit(res);
 	}
 #endif
-	if(cmd == "encb64")
+	/*
+	std::unordered_map<std::string, std::function<void(LPCSTR)> > parmcalls =
 	{
-		if(argc<3)
-			usage(2);
-		std::cout << EncodeBase64Auth(argv[2]);
-		exit(EXIT_SUCCESS);
-	}
-	if(cmd == "curl")
-	{
-		if(argc<3)
-			usage(2);
-		else
-		{
-			CPrintItemFactory fac;
-			exit(wcat(argv[2], getenv("http_proxy"), &fac));
-		}
-	}
-	if(cmd == "printvar" || cmd == "retest" || cmd == "cfgdump")
-	{
-		acfg::g_bQuiet = true;
-		acfg::g_bNoComplex = (cmd[0] != 'p'); // no DB for just single variables
-		switch(cmd[0])
-		{
-		case 'c':
-			parse_options(argc-2, argv+2);
-			acfg::dump_config();
-			exit(EXIT_SUCCESS);
-		break;
-		case 'r':
-			if(argc<3)
-				usage(2);
-			parse_options(argc-2, argv+2, [](LPCSTR p)
-					{ std::cout << ReTest(p) << std::endl; });
-			exit(EXIT_SUCCESS);
-		case 'p':
-			if(argc<3)
-				usage(2);
-			parse_options(argc-2, argv+2, [](LPCSTR p)
-				{
-			auto ps(acfg::GetStringPtr(p));
-			if(ps)
-			{
-				cout << *ps << endl;
-				exit(EXIT_SUCCESS);
+			{ "encb64", [](LPCSTR p) {
+
 			}
-			auto pi(acfg::GetIntPtr(p));
-			if(pi)
-				{
-				cout << *pi << endl;
-			exit(EXIT_SUCCESS);
-				}
-				});
-			exit(EXIT_FAILURE);
-		}
-	}
-	if(cmd == "patch")
-	{
-		if(argc!=5)
-			usage(3);
-		return(patch_file(argv[2], argv[3], argv[4]));
-	}
-	if(cmd == "maint" || emuexp)
-	{
-		acfg::g_bQuiet = true;
-		acfg::g_bNoComplex = true; // no DB for just single variables
-		parse_options(argc - 2 + emuexp, argv + 2 - emuexp);
-		return(maint_job());
-	}
-
-	usage(4);
-	return -1;
-}
-
-int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac)
-{
-	acfg::dnscachetime=0;
-	acfg::persistoutgoing=0;
-	acfg::badredmime.clear();
-	acfg::redirmax=10;
-
-	if(proxy)
-		if(acfg::proxy_info.SetHttpUrl(proxy))
-			return -1;
-	tHttpUrl url;
-	if(!surl || !url.SetHttpUrl(surl))
-		return -2;
-	dlcon dl(true, nullptr, pDlconFac);
-
-	auto fi=fac->Create();
-	dl.AddJob(fi, &url, nullptr, nullptr, 0);
-	dl.WorkLoop();
-	if(fi->GetStatus() == fileitem::FIST_COMPLETE)
-	{
-		auto st=fi->GetHeaderUnlocked().getStatus();
-		if(st == 200)
-			return EXIT_SUCCESS;
-		if (st>=500)
-			return EIO;
-		if (st>=400)
-			return EACCES;
-	}
-	return EXIT_FAILURE;
-}
-
+	};
+	*/
