@@ -25,6 +25,7 @@
 #include <ctime>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 
 #include <iostream>
 #include <fstream>
@@ -605,13 +606,10 @@ void do_stuff_before_config()
 
 #endif
 
-
-tStrVec non_opt_args;
-
-void parse_options(int argc, const char **argv, bool bExtractNonOpts=false)
+void parse_options(int argc, const char **argv, function<void (LPCSTR)> f = [](LPCSTR){})
 {
 	LPCSTR szCfgDir=CFGDIR;
-	std::vector<LPCSTR> cmdvars;
+	std::vector<LPCSTR> a, b;
 
 	for (auto p=argv; p<argv+argc; p++)
 	{
@@ -628,7 +626,7 @@ void parse_options(int argc, const char **argv, bool bExtractNonOpts=false)
 		else if(!strcmp(*p, "--verbose"))
 			g_bVerbose=true;
 		else if(**p) // not empty
-			cmdvars.emplace_back(*p);
+			a.emplace_back(*p);
 
 #if SUPPWHASH
 #warning FIXME
@@ -648,18 +646,16 @@ void parse_options(int argc, const char **argv, bool bExtractNonOpts=false)
 		acfg::ReadConfigDirectory(szCfgDir, false);
 	}
 
-	for(auto& keyval : cmdvars)
-		if(!acfg::SetOption(keyval, 0))
-			non_opt_args.emplace_back(keyval);
+	tStrVec non_opt_args;
 
-	if(!bExtractNonOpts && !non_opt_args.empty())
-	{
-		for(auto& x: non_opt_args)
-			cerr << "Bad option: " << x << endl;
-		usage(EXIT_FAILURE);
-	}
+	for(auto& keyval : a)
+		if(!acfg::SetOption(keyval, 0))
+			b.emplace_back(keyval);
 
 	acfg::PostProcConfig();
+
+	for(const auto& x: b)
+		f(x);
 }
 
 
@@ -782,31 +778,38 @@ int main(int argc, const char **argv)
 	{
 		acfg::g_bQuiet = true;
 		acfg::g_bNoComplex = (cmd[0] != 'p'); // no DB for just single variables
-		parse_options(argc-3, argv+3);
 		switch(cmd[0])
 		{
 		case 'c':
+			parse_options(argc-2, argv+2);
 			acfg::dump_config();
 			exit(EXIT_SUCCESS);
 		break;
 		case 'r':
 			if(argc<3)
 				usage(2);
-			std::cout << ReTest(argv[2]) << std::endl;
+			parse_options(argc-2, argv+2, [](LPCSTR p)
+					{ std::cout << ReTest(p) << std::endl; });
 			exit(EXIT_SUCCESS);
 		case 'p':
 			if(argc<3)
 				usage(2);
-			auto ps(acfg::GetStringPtr(argv[2]));
+			parse_options(argc-2, argv+2, [](LPCSTR p)
+				{
+			auto ps(acfg::GetStringPtr(p));
 			if(ps)
 			{
 				cout << *ps << endl;
 				exit(EXIT_SUCCESS);
 			}
-			auto pi(acfg::GetIntPtr(argv[2]));
+			auto pi(acfg::GetIntPtr(p));
 			if(pi)
+				{
 				cout << *pi << endl;
-			exit(pi ? EXIT_SUCCESS : EXIT_FAILURE);
+			exit(EXIT_SUCCESS);
+				}
+				});
+			exit(EXIT_FAILURE);
 		}
 	}
 	if(cmd == "patch")
