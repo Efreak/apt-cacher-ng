@@ -600,13 +600,13 @@ mstring EncodeBase64Auth(cmstring& sPwdString)
 	return EncodeBase64(sNative.data(), sNative.size());
 }
 
-#if 0 // XXX: something is broken... def HAVE_TOMCRYPT
+#ifdef HAVE_TOMCRYPT
 string EncodeBase64(LPCSTR data, uint len)
 {
+	unsigned long reslen=len*2;
 	unsigned char buf[len*2];
-	unsigned long reslen=0;
-	base64_encode((const unsigned char*) data, (unsigned long) len, buf, &reslen);
-	return string(LPCSTR(buf), reslen);
+	base64_encode((const unsigned char*) data, (unsigned long) len, &buf[0], &reslen);
+	return string((LPCSTR)&buf[0], reslen);
 }
 #else
 string EncodeBase64(LPCSTR data, uint len)
