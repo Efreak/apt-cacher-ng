@@ -1,8 +1,13 @@
 PROJECT(ACNG CXX C)
 
+# sources to strip from the globed list, to be added as needed
+LIST(APPEND OPTSOURCES  
+	#"${CMAKE_SOURCE_DIR}/source/sha1.cc" "${CMAKE_SOURCE_DIR}/source/md5.cc" "${CMAKE_SOURCE_DIR}/source/sha2.cc" 
+	"${CMAKE_SOURCE_DIR}/source/apt-cacher.cc")
+# keep "${CMAKE_SOURCE_DIR}/source/rfc2553emu.cc" because auto-disables its implementation where unneeded
+
 FILE(GLOB SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 list(REMOVE_ITEM SRCS ${OPTSOURCES})
-list(REMOVE_ITEM SRCS ${CMAKE_CURRENT_SOURCE_DIR}/apt-cacher.cc)
 
 ADD_LIBRARY(acngstuff STATIC ${SRCS} ${NONOSSLSRCS})
 SET_TARGET_PROPERTIES(acngstuff PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} ${lsd_CFLAGS}")

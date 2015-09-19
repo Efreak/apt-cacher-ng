@@ -20,9 +20,9 @@
 #cmakedefine HAVE_SYS_MOUNT_H
 #cmakedefine HAVE_SYS_VFS_H
 #cmakedefine HAVE_SSL
+#cmakedefine HAVE_TOMCRYPT
 #cmakedefine HAVE_SD_NOTIFY
 #cmakedefine HAVE_LINUX_EVENTFD
-#cmakedefine USE_SSL_CS
 #cmakedefine ACVERSION "@ACVERSION@"
 #cmakedefine CFGDIR "@CFGDIR@"
 #cmakedefine LIBDIR "@LIBDIR@"

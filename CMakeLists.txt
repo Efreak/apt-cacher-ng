@@ -14,7 +14,7 @@ PROJECT(ACNG CXX C)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
-set(CMAKE_SKIP_BUILD_RPATH on) # not needed, not wanted
+set(CMAKE_SKIP_BUILD_RPATH on) # no -rdynamic needed ever
 
 INCLUDE(CheckIncludeFiles) 
 INCLUDE(CheckCXXSourceCompiles)
@@ -24,7 +24,7 @@ INCLUDE(TestBigEndian)
 INCLUDE(CheckLibraryExists)
 INCLUDE(FindPkgConfig)
 
-set(TOOLNAME "apt-cacher-ng")
+set(PACKAGE "apt-cacher-ng")
 IF(NOT DEFINED(CMAKE_INSTALL_PREFIX))
 set(CMAKE_INSTALL_PREFIX "/usr/local" CACHE STRING "Target file space")
 ENDIF()
@@ -32,10 +32,10 @@ IF(NOT DEFINED(DATADIR))
 	set(DATADIR "${CMAKE_INSTALL_PREFIX}/share" CACHE STRING "Shared data files directory")
 ENDIF()
 IF(NOT DEFINED(LIBDIR))
-	set(LIBDIR "${CMAKE_INSTALL_PREFIX}/lib/${TOOLNAME}" CACHE STRING "Location of ${TOOLNAME} extra files")
+	set(LIBDIR "${CMAKE_INSTALL_PREFIX}/lib/${PACKAGE}" CACHE STRING "Location of ${PACKAGE} extra files")
 ENDIF()
 IF(NOT DEFINED(DOCDIR))
-	set(DOCDIR "${DATADIR}/doc/${TOOLNAME}" CACHE STRING "Location of documentation files")
+	set(DOCDIR "${DATADIR}/doc/${PACKAGE}" CACHE STRING "Location of documentation files")
 ENDIF()
 
 IF(NOT DEFINED(SYSCONFDIR))
@@ -47,7 +47,7 @@ IF(NOT DEFINED(SYSCONFDIR))
 ENDIF()
 
 if(NOT DEFINED(CFGDIR))
-set(CFGDIR "${SYSCONFDIR}/${TOOLNAME}")
+set(CFGDIR "${SYSCONFDIR}/${PACKAGE}")
 endif()
 
 if(NOT DEFINED(SBINDIR))
@@ -59,7 +59,7 @@ INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 IF(NOT DEFINED(ACVERSION))
 FILE(READ "${CMAKE_SOURCE_DIR}/VERSION" ACVERSION)
 string(REPLACE "\n" "" ACVERSION ${ACVERSION})
-MESSAGE(STATUS "Version: ${ACVERSION}")
+#MESSAGE(STATUS "Version: ${ACVERSION}")
 ENDIF()
 
 # Various feature checks
@@ -77,7 +77,7 @@ foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl
 	STRING(REGEX REPLACE "=|-|," "" optname "${linkarg}")
 	CHECK_CXX_COMPILER_FLAG("${linkarg}" "LD_${optname}")
 	if(LD_${optname})
-     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${linkarg}")
+		SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${linkarg}")
 	endif()
 endforeach(linkarg)
 
@@ -133,12 +133,6 @@ if(USE_LTO)
    endif()
 endif()
 
-LIST(APPEND NONOSSLSRCS "${CMAKE_SOURCE_DIR}/source/sha1.cc" "${CMAKE_SOURCE_DIR}/source/md5.cc" "${CMAKE_SOURCE_DIR}/source/sha2.cc")
-
-# sources to strip from the globed list, to be added as needed
-LIST(APPEND OPTSOURCES  "${CMAKE_SOURCE_DIR}/source/sha1.cc" "${CMAKE_SOURCE_DIR}/source/md5.cc" "${CMAKE_SOURCE_DIR}/source/sha2.cc")
-# keep "${CMAKE_SOURCE_DIR}/source/rfc2553emu.cc" because auto-disables its implementation where unneeded
-
 FIND_LIBRARY(HAVE_SOCKETLIB socket) # separate socket lib looks like Solaris-like environment
 if(HAVE_SOCKETLIB)
    LIST(APPEND BaseNetworkLibs socket nsl)
@@ -165,6 +159,9 @@ else()
 FILE(READ test/build/HAVE_WORDEXP.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_WORDEXP)
 endif()
+
+# test some methods explicitly where we want to be sure about the signatures
+# and linkability
 
 FILE(READ test/build/HAVE_GLOB.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_GLOB)
@@ -215,6 +212,8 @@ SET(CMAKE_REQUIRED_LIBRARIES dl)
 FILE(READ test/build/HAVE_DLOPEN.cc TESTSRC)
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_DLOPEN)
 
+# XXX: convert the compressor stuff to pkgconfig usage and print an overview of enabled/found values in one final message and collect and process cflags too
+
 SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})
 #INCLUDE(FindZLIB) # broken, hangs for 10 seconds
 # header check should be enough, gzip should be everywhere nowadays
@@ -250,22 +249,31 @@ ENDIF(HAVE_LZMA)
 SET(CMAKE_REQUIRED_LIBRARIES "")
 
 if(USE_SSL)
-   SET(SSL_LIB_LIST ssl crypto)
-   SET(CMAKE_REQUIRED_LIBRARIES "${SSL_LIB_LIST}")
-   FILE(READ test/build/HAVE_SSL.cc TESTSRC)
-   CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_SSL)
-   IF(HAVE_SSL)
-      SET(NONOSSLSRCS )
-      # and keep SSL_LIB_LIST
-   ELSE(HAVE_SSL)
-      MESSAGE("!! OpenSSL not found or not working, some functionality will be disabled")
-      SET(SSL_LIB_LIST )
-   ENDIF(HAVE_SSL)
+	pkg_check_modules(openssl openssl)
+	set(HAVE_SSL openssl_FOUND)
+	if(openssl_FOUND)
+		string(REPLACE ";" " " ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} ${openssl_CFLAGS}")
+		string(REPLACE ";" " " SSL_LIB_LIST "${openssl_LDFLAGS}")
+	else()
+		message(WARNING "OpenSSL not found, disabling TLS connection support")
+	endif()
+endif()
+
+if(NOT HAVE_SSL)
+	pkg_check_modules(tomcrypt "libtomcrypt")
+	set(HAVE_TOMCRYPT tomcrypt_FOUND)
+	if(tomcrypt_FOUND)
+		# with workaround, http://clang.debian.net/logs/2015-03-25/libtomcrypt_1.17-6_unstable_clang.log
+		string(REPLACE ";" " " ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} ${tomcrypt_CFLAGS} -DLTC_NO_ROLC")
+		string(REPLACE ";" " " SSL_LIB_LIST "${tomcrypt_LDFLAGS}")
+	else()
+		message(WARNING "Could not find LibTomCrypt or use OpenSSL, content verification functionality will be disabled!")
+	endif()
 endif()
 
 # -DEXTRA_LIBS_INETD=-lsupc++
-# funny hack, link with gcc and avoid libstdc++/libm (since no STL parts used
-# there). However, it needs to be investigated - the alternative linking makes
+# funny hack, link with gcc and avoid libstdc++/libm (since STL is not used
+# there). However, it needs to be tested - the alternative linking makes
 # the binary ~40kb larger, might include higher relocation costs and bigger
 # chunks of unique memory while libstdc++ needs to be loaded anyway for the
 # server process.
@@ -318,3 +326,14 @@ if(NOT DEFINED(AVAHIDIR))
 endif()
 install(FILES contrib/apt-cacher-ng.service DESTINATION ${AVAHIDIR})
 
+message("Installation settings:
+PACKAGE: ${PACKAGE}
+VERSION: ${ACVERSION}
+CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}
+DATADIR: ${DATADIR}
+LIBDIR: ${LIBDIR}
+DOCDIR: ${DOCDIR}
+SYSCONFDIR: ${SYSCONFDIR}
+CFGDIR: ${CFGDIR}
+SBINDIR: ${SBINDIR}
+")
