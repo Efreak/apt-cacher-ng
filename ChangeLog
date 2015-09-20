@@ -3,20 +3,23 @@ apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
   * Build system overhaul, splitted CMakeLists.txt per target, added install
     rules, updated build documentation
   * FIX: enabled SNI feature (TLS Server Name Indication)
+  * If OpenSSL is not available, use LibTomCrypt for hash algorithms. Dropped
+    included sha1/sha2/md5 implementations.
   * FIX: smarter switching between InRelease and Release file versions in
     expiration runs, triggered by a 404
-  * FIX: added auto-skipping of failing proxy to tunnel construction
-  * FIX: disabled LTO again, unreliable with GCC5
+  * FIX: added auto-skipping of failing proxy to also for tunnel construction
+    (https proxying, bugs.debian.org SOAP, etc.)
+  * FIX: disabled LTO again, sometimes runtime errors with GCC5
   * NEW: moved the expiration caller script functionality to acngtool and made
     it less verbose for better use in cron jobs
-  * FIX: code mistake in Darwin specific parts, the new LD flags checks should
-    also cover the wrong --as-needed check (Alioth task #315130)
+  * FIX: code mistake in Darwin specific parts. Plus, the new LD flags checks
+    should also cover the wrong --as-needed check (Alioth task #315130)
   * More automatic index file replacements (Sources/Packages gz to xz,
     InRelease to Release and vice versa)
   * Removed timestamps from generated gzip files
   * Database update
 
- -- Eduard Bloch <blade@debian.org>  Wed, 16 Sep 2015 21:53:36 +0200
+ -- Eduard Bloch <blade@debian.org>  Sun, 20 Sep 2015 11:51:40 +0200
 
 apt-cacher-ng (0.8.5) WHERE-NO-VERSION-HAS-GONE-BEFORE; urgency=low
 
