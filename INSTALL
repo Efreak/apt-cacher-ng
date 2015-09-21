@@ -22,7 +22,7 @@ automate this, build.sh and distclean.sh.
 Workflow example:
  - run ./build.sh to configure and build (extra options are passed as cmake
    arguments, build results go to the builddir/ directory)
- - chdir to build and run "make install" (maybe with DESTDIR=/somewhere/else)
+ - run "make -C builddir install" (maybe with DESTDIR=/tmp/somewhere/else)
 
 Troubleshooting and integrator notes:
  - on configuration problems or to change most settings afterwards, remove the

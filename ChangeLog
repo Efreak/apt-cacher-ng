@@ -22,7 +22,7 @@ apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
   * Added Ubuntu's mirror.txt to whitelist (no point in removing it)
   * Database update
 
- -- Eduard Bloch <blade@debian.org>  Sun, 20 Sep 2015 11:51:40 +0200
+ -- Eduard Bloch <blade@debian.org>  Mon, 21 Sep 2015 21:32:11 +0200
 
 apt-cacher-ng (0.8.5) WHERE-NO-VERSION-HAS-GONE-BEFORE; urgency=low
 
