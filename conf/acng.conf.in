@@ -22,7 +22,7 @@ LogDir: /var/log/apt-cacher-ng
 # A place to look for additional configuration and resource files if they are not
 # found in the configuration directory
 #
-# SupportDir: /usr/lib/apt-cacher-ng
+SupportDir: @LIBDIR@
 
 # TCP server port for incoming http (or HTTP proxy) connections.
 # Can be set to 9999 to emulate apt-proxy.
@@ -301,7 +301,7 @@ ExTreshold: 4
 # between them or explicitly create them.
 #
 # LocalDirs: woo /data/debarchive/woody ; hamm /data/debarchive/hamm
-LocalDirs: acng-doc /usr/share/doc/apt-cacher-ng
+LocalDirs: acng-doc @DOCDIR@
 
 # Precache a set of files referenced by specified index files. This can be used
 # to create a partial mirror usable for offline work. There are certain limits

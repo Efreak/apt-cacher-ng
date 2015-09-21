@@ -300,21 +300,16 @@ add_subdirectory(client)
 add_subdirectory(fs)
 add_subdirectory(tool)
 add_subdirectory(source)
+add_subdirectory(conf)
 
 ###
 ### Extra install rules for static files
 ###
-
-install(DIRECTORY conf/ DESTINATION ${CFGDIR}
-   FILES_MATCHING PATTERN "*.conf")
-install(DIRECTORY conf/ DESTINATION ${LIBDIR}
-   FILES_MATCHING REGEX "mirrors$|mirrors.gz$|html$|css$|default$")
-
 if(NOT DEFINED(HTMLDIR))
 		set(HTMLDIR ${DOCDIR}/html)
 endif()
 if(NOT DEFINED(MANDIR))
-   set(HTMLDIR ${DATADIR}/man)
+   set(MANDIR ${DATADIR}/man)
 endif()
 install(FILES doc/README doc/apt-cacher-ng.pdf DESTINATION ${DOCDIR})
 install(DIRECTORY doc/html/ DESTINATION ${HTMLDIR}
