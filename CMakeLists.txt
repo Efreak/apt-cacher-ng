@@ -280,8 +280,8 @@ endif()
 # Needs HAVE_WL_AS_NEEDED!
 
 
-message("Shared compiler flags: ${ACNG_CXXFLAGS_COMMON}")
-message("Shared linker flags: ${CMAKE_EXE_LINKER_FLAGS}")
+message("Compiler flags: ${CMAKE_CXX_FLAGS} ${ACNG_CXXFLAGS_COMMON}")
+message("Linker flags: ${CMAKE_EXE_LINKER_FLAGS}")
 
 SET(CMAKE_REQUIRED_LIBRARIES "")
 SET(CMAKE_REQUIRED_FLAGS ${ACNG_CXXFLAGS_COMMON})

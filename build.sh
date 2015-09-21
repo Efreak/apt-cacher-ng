@@ -4,12 +4,22 @@ src=$PWD
 # honor user environments if set, otherwise use Release defaults
 test -n "$CXXFLAGS" || CMAKEFLAGS=-DCMAKE_BUILD_TYPE=Release
 
-# dev shortcut
-if test "$1" = DEBUG
-then
-	shift
-	CMAKEFLAGS="-DCMAKE_BUILD_TYPE=Debug -DCMAKE_VERBOSE_MAKEFILE=ON --debug-trycompile --debug-output"
-fi
+# dev shortcuts
+while : ; do
+   case "$1" in
+      DEBUG)
+         shift
+         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_BUILD_TYPE=Debug -DCMAKE_VERBOSE_MAKEFILE=ON --debug-trycompile --debug-output"
+         ;;
+      VERBOSE)
+         shift
+         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_VERBOSE_MAKEFILE=ON"
+         ;;
+      *)
+         break 2;
+         ;;
+   esac
+done
 
 cd builddir
 if ! cmake $src $CMAKEFLAGS "$@"

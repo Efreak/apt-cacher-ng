@@ -61,10 +61,6 @@ cleaner::~cleaner() {}
 void cleaner::ScheduleFor(time_t, cleaner::eType) {}
 cleaner g_victor;
 
-LPCSTR g_mode = nullptr;
-int g_exitCode(0);
-unsigned g_xargCount = 0;
-
 struct IFitemFactory
 {
 	virtual SHARED_PTR<fileitem> Create() =0;
@@ -542,8 +538,20 @@ int patch_file(string sBase, string sPatch, string sResult)
 }
 
 
+struct parm {
+	unsigned minArg, maxArg;
+	std::function<void(LPCSTR)> f;
+};
 
-void parse_options(int argc, const char **argv, function<void (LPCSTR)> f = [](LPCSTR){})
+// uhm, could put all that into a struct and even pass it around... but what for?
+parm* g_parm = nullptr;
+LPCSTR g_mode = nullptr;
+int g_exitCode(0);
+unsigned g_xargCount = 0;
+LPCSTR g_missingCfgDir = nullptr;
+
+
+void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 {
 	LPCSTR szCfgDir=CFGDIR;
 	std::vector<LPCSTR> a, b;
@@ -576,11 +584,9 @@ void parse_options(int argc, const char **argv, function<void (LPCSTR)> f = [](L
 	{
 		Cstat info(szCfgDir);
 		if(!info || !S_ISDIR(info.st_mode))
-		{
-			cerr << "Failed to open config directory: " << szCfgDir;
-			exit(EXIT_FAILURE);
-		}
-		acfg::ReadConfigDirectory(szCfgDir, false);
+			g_missingCfgDir = szCfgDir;
+		else
+			acfg::ReadConfigDirectory(szCfgDir, false);
 	}
 
 	tStrVec non_opt_args;
@@ -610,12 +616,21 @@ void ssl_init()
 }
 #endif
 
+/*
+void assert_cfgdir()
+{
+	if(!g_missingCfgDir)
+		return;
+	cerr << "Failed to open config directory: " << g_missingCfgDir <<endl;
+	exit(EXIT_FAILURE);
+}
+*/
 
-struct parm {
-	unsigned minArg, maxArg;
-	std::function<void(LPCSTR)> f;
-};
-parm* g_parm = nullptr;
+void warn_cfgdir()
+{
+	if (g_missingCfgDir)
+		cerr << "Warning: failed to open config directory: " << g_missingCfgDir <<endl;
+}
 
 std::unordered_map<string, parm> parms = {
 	{
@@ -633,6 +648,7 @@ std::unordered_map<string, parm> parms = {
 		{
 			"cfgdump",
 			{ 0, 0, [](LPCSTR p) {
+				warn_cfgdir();
 						     acfg::dump_config();
 					     }
 			}
@@ -655,6 +671,7 @@ std::unordered_map<string, parm> parms = {
 			{
 				1, 1, [](LPCSTR p)
 				{
+					warn_cfgdir();
 					std::cout << ReTest(p) << std::endl;
 				}
 			}
@@ -665,6 +682,7 @@ std::unordered_map<string, parm> parms = {
 			{
 				1, 1, [](LPCSTR p)
 				{
+					warn_cfgdir();
 					auto ps(acfg::GetStringPtr(p));
 					if(ps) { cout << *ps << endl; return; }
 					auto pi(acfg::GetIntPtr(p));
@@ -695,6 +713,7 @@ std::unordered_map<string, parm> parms = {
 			{
 				0, 0, [](LPCSTR p)
 				{
+					warn_cfgdir();
 					g_exitCode+=maint_job();
 				}
 			}
@@ -916,11 +935,3 @@ void do_stuff_before_config()
 		exit(res);
 	}
 #endif
-	/*
-	std::unordered_map<std::string, std::function<void(LPCSTR)> > parmcalls =
-	{
-			{ "encb64", [](LPCSTR p) {
-
-			}
-	};
-	*/
