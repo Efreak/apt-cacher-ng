@@ -1,13 +1,12 @@
 http://anorien.csc.warwick.ac.uk/mirrors/epel/
 http://archive.linux.duke.edu/pub/epel/
 http://epel.blizoo.mk/epel/
-http://epel.mirror.net.in/epel/
 http://epel.mirrors.ovh.net/epel/
 http://fedora.cu.be/epel/
-http://fedora.ip-connect.vn.ua/fedora-epel/
 http://fedora.is.co.za/epel/
 http://fedora.mirror.serversaustralia.com.au/epel/
 http://fedora.mirrors.pair.com/epel/
+http://fedora.mirrors.telekom.ro/pub/epel/
 http://fedora.skyggnir.is/epel/
 http://fedora.uberglobalmirror.com/epel/
 http://fedora.uib.no/epel/
@@ -17,6 +16,7 @@ http://free.nchc.org.tw/fedora-epel/
 http://ftp-stud.hs-esslingen.de/pub/epel/
 http://ftp.acc.umu.se/mirror/fedora/epel/
 http://ftp.cica.es/epel/
+http://ftp.colocall.net/pub/epel/
 http://ftp.crc.dk/fedora-epel/
 http://ftp.cse.buffalo.edu/pub/epel/
 http://ftp.cuhk.edu.hk/pub/linux/fedora-epel/
@@ -67,7 +67,6 @@ http://mirror.hosting90.cz/epel/
 http://mirror.i3d.net/pub/fedora-epel/
 http://mirror.ibcp.fr/pub/epel/
 http://mirror.imt-systems.com/epel/
-http://mirror.its.dal.ca/pub/epel/
 http://mirror.karneval.cz/pub/linux/fedora/epel/
 http://mirror.kinamo.be/epel/
 http://mirror.lagoon.nc/pub/epel/
@@ -97,7 +96,6 @@ http://mirror.symnds.com/distributions/fedora-epel/
 http://mirror.umd.edu/fedora/epel/
 http://mirror.unl.edu/epel/
 http://mirror.us.leaseweb.net/epel/
-http://mirror.uta.edu.ec/fedora-epel/
 http://mirror.utexas.edu/epel/
 http://mirror.uv.es/mirror/fedora-epel/
 http://mirror.vutbr.cz/epel/
@@ -118,9 +116,9 @@ http://mirrors.mit.edu/epel/
 http://mirrors.n-ix.net/fedora-epel/
 http://mirrors.nayatel.com/epel/
 http://mirrors.neterra.net/epel/
+http://mirrors.netix.net/epel/
 http://mirrors.opencas.cn/epel/
 http://mirrors.sohu.com/fedora-epel/
-http://mirrors.syringanetworks.net/fedora-epel/
 http://mirrors.telianet.dk/epel/
 http://mirrors.thzhost.com/epel/
 http://mirrors.tummy.com/pub/fedora.redhat.com/epel/
