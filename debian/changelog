@@ -8,8 +8,7 @@ apt-cacher-ng (0.8.6-1) unstable; urgency=low
   * removed urlencode-fixer.pl (should be obsolete now), expire-caller.pl
     (symlink to acngtool which emulates it)
 
- -- Eduard Bloch <blade@debian.org>  Fri, 11 Sep 2015 18:10:51 +0200
-
+ -- Eduard Bloch <blade@debian.org>  Mon, 21 Sep 2015 21:35:41 +0200
 
 apt-cacher-ng (0.8.5-2) unstable; urgency=low
 
