@@ -2169,31 +2169,61 @@ void tCacheOperation::PrintStats(cmstring &title)
 {
 	multimap<off_t, cmstring*> sorted;
 	off_t total=0;
-	const uint nMax = m_bVerbose ? (UINT_MAX-1) : MAX_TOP_COUNT;
-	uint hidden=0;
 	for(auto &f: m_metaFilesRel)
 	{
 		total += f.second.space;
 		if(f.second.space)
 			EMPLACE_PAIR(sorted,f.second.space, &f.first);
-		if(sorted.size()>nMax)
-		{
-			sorted.erase(sorted.begin());
-			hidden++;
-		}
 	}
 	if(!total)
 		return;
-	m_fmtHelper << "<br>\n<table><tr><td colspan=2><u>" << title;
-	if(!m_bVerbose && hidden>0)
-		m_fmtHelper << " (Top " << sorted.size() << ", " << hidden <<  " more not displayed)";
-	m_fmtHelper << "</u></td></tr>\n";
+	int nMax = std::min(int(sorted.size()), int(MAX_TOP_COUNT));
+	if(m_bVerbose)
+		nMax = MAX_VAL(int);
+
+	if(!m_bVerbose)
+	{
+	m_fmtHelper << "<br>\n<table name=\"shorttable\"><thead>"
+			"<th colspan=2>" << title;
+	if(!m_bVerbose && sorted.size()>MAX_TOP_COUNT)
+		m_fmtHelper << " (Top " << nMax << "<span name=\"noshowmore\">,"
+				" <a href=\"javascript:show_rest();\">show more / cleanup</a></span>)";
+	m_fmtHelper << "</th></tr></thead>\n<tbody>";
 	for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
 	{
-		m_fmtHelper << "<tr><td><b>" << offttosH(it->first) << "</b></td><td>"
+		m_fmtHelper << "<tr><td><b>"
+				<< offttosH(it->first) << "</b></td><td>"
 				<< *(it->second) << "</td></tr>\n";
+		if(nMax--<=0)
+			break;
 	}
-	SendFmt << "</table>";
+	SendFmt << "</tbody></table>"
+
+	// the other is hidden for now
+	<< "<div name=\"bigtable\" class=\"xhidden\">";
+	}
+
+	m_fmtHelper << "<br>\n<table><thead>"
+				"<th colspan=1><input type=\"checkbox\"onclick=\"copycheck(this, 'xf');\"></input></th>"
+				"<th colspan=2>" << title << "</th></tr></thead>\n<tbody>";
+		for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
+		{
+			m_fmtHelper << "<tr><td><input type=\"checkbox\" name=\"kf" << nKillLfd++
+					<< "\" value=\"" << *(it->second) << "\"></td>"
+						"<td><b>" << offttosH(it->first) << "</b></td><td>"
+					<< *(it->second) << "</td></tr>\n";
+
+
+		}
+		SendFmt << "</tbody></table>";
+
+		if(m_delCboxFilter.empty())
+			SendFmtRemote << "<br><b>Action(s):</b><br>"
+							"<input type=\"submit\" name=\"doDelete\""
+							" value=\"Delete selected files\">";
+
+		if(!m_bVerbose)
+			SendFmt << "</div>";
 }
 
 #ifdef DEBUG

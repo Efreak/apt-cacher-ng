@@ -225,7 +225,6 @@ static void usage(int retCode) {
 		"-c: configuration directory\n"
 		"-e: on startup, run expiration once\n"
 		"-p: print configuration and exit\n"
-		"--retest string: regular expression tester"
 #if SUPPWHASH
 		"-H: read a password from STDIN and print its hash\n"
 #endif

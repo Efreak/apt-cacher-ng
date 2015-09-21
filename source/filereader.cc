@@ -9,9 +9,6 @@
 #include <limits>
 #include <signal.h>
 
-#include "md5.h"
-#include "sha1.h"
-#include "sha2.h"
 #include "csmapping.h"
 #include "aclogger.h"
 #include "filelocks.h"
@@ -23,6 +20,8 @@
 #ifdef HAVE_SSL
 #include <openssl/sha.h>
 #include <openssl/md5.h>
+#elif defined(HAVE_TOMCRYPT)
+#include <tomcrypt.h>
 #endif
 
 #ifdef DEBUG
@@ -38,16 +37,6 @@
 #undef HAVE_LIBBZ2
 #undef HAVE_ZLIB
 #undef HAVE_LZMA
-#else
-
-#ifndef HAVE_ZLIB
-#warning Zlib or its development files are not available. Install them (e.g. zlib1g-dev) and run "make distclean". Gzip format support disabled.
-#endif
-
-#ifndef HAVE_LIBBZ2
-#warning LibBz2 or its development files are not available. Install them (e.g. libbz2-dev) and run "make distclean". Bzip2 format support disabled.
-#endif
-
 #endif
 
 using namespace std;
@@ -645,34 +634,38 @@ public:
 	void add(const char *data, size_t size) override { MD5_Update(this, (const void*) data, size); }
 	void finish(uint8_t* ret) override { MD5_Final(ret, this); }
 };
-#else
-class csumSHA1 : public csumBase, public SHA_INFO
+#elif defined(HAVE_TOMCRYPT)
+class csumSHA1 : public csumBase
 {
+	hash_state st;
 public:
-	csumSHA1() { sha_init(this); }
-	void add(const char *data, size_t size) override { sha_update(this, (SHA_BYTE*) data, size); }
-	void finish(uint8_t* ret) override { sha_final(ret, this); }
+	csumSHA1() { sha1_init(&st); }
+	void add(const char *data, size_t size) override { sha1_process(&st, (const unsigned char*) data, (unsigned long) size); }
+	void finish(uint8_t* ret) override { sha1_done(&st, ret); }
 };
-class csumSHA256 : public csumBase, public sha256_ctx
+class csumSHA256 : public csumBase
 {
+	hash_state st;
 public:
-	csumSHA256() { sha256_init(this); }
-	void add(const char *data, size_t size) override { sha256_update(this, (uint8_t*) data, size); }
-	void finish(uint8_t* ret) override { sha256_final(this, ret); }
+	csumSHA256() { sha256_init(&st); }
+	void add(const char *data, size_t size) override { sha256_process(&st, (const unsigned char*) data, (unsigned long) size); }
+	void finish(uint8_t* ret) override { sha256_done(&st, ret); }
 };
-class csumSHA512 : public csumBase, public sha512_ctx
+class csumSHA512 : public csumBase
 {
+	hash_state st;
 public:
-	csumSHA512() { sha512_init(this); }
-	void add(const char *data, size_t size) override { sha512_update(this, (SHA_BYTE*) data, size); }
-	void finish(uint8_t* ret) override { sha512_final(this, ret); }
+	csumSHA512() { sha512_init(&st); }
+	void add(const char *data, size_t size) override { sha512_process(&st, (const unsigned char*) data, (unsigned long) size); }
+	void finish(uint8_t* ret) override { sha512_done(&st, ret); }
 };
-class csumMD5 : public csumBase, public md5_state_s
+class csumMD5 : public csumBase
 {
+	hash_state st;
 public:
-	csumMD5() { md5_init(this); }
-	void add(const char *data, size_t size) override { md5_append(this, (md5_byte_t*) data, size); }
-	void finish(uint8_t* ret) override { md5_finish(this, ret); }
+	csumMD5() { md5_init(&st); }
+	void add(const char *data, size_t size) override { md5_process(&st, (const unsigned char*) data, (unsigned long) size); }
+	void finish(uint8_t* ret) override { md5_done(&st, ret); }
 };
 #endif
 

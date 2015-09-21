@@ -97,10 +97,12 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			Cstat realState(SABSPATH(sPathRel));
 			if(!realState)
 			{
-				SendFmt << WCLASS "File not accessible, ignoring " << sPathRel << CLASSEND;
-				return false;
+				SendFmt << WCLASS "File not accessible, will remove metadata of " << sPathRel << CLASSEND;
+				m_forceKeepInTrash[sPathRel]=true;
+				return true;
 			}
-			off_t lenFromStat = realState.st_size;
+			auto lenFromStat = realState.st_size;
+
 			//SendFmt << "DBG-disk-size: " << lenFromStat;
 
 			// those file were not updated by index handling, and are most likely not
@@ -410,7 +412,7 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 
 			if (ContHas(m_forceKeepInTrash, sPathRel))
 			{
-				LOG("forcetrash flag set, whitelist does not apply, not to be removed");
+				LOG("forcetrash flag set, whitelist does not apply, shall be removed");
 			}
 			else if (Match(fileGroup.first, FILE_WHITELIST) || Match(sPathRel, FILE_WHITELIST))
 			{

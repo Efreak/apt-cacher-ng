@@ -15,7 +15,9 @@
 #elif defined(HAVE_GLOB)
 #include <glob.h>
 #endif
-
+#ifdef HAVE_TOMCRYPT
+#include <tomcrypt.h>
+#endif
 using namespace std;
 
 cmstring sPathSep(SZPATHSEP);
@@ -597,6 +599,16 @@ mstring EncodeBase64Auth(cmstring& sPwdString)
 	auto sNative=UrlUnescape(sPwdString);
 	return EncodeBase64(sNative.data(), sNative.size());
 }
+
+#ifdef HAVE_TOMCRYPT
+string EncodeBase64(LPCSTR data, uint len)
+{
+	unsigned long reslen=len*2;
+	unsigned char buf[len*2];
+	base64_encode((const unsigned char*) data, (unsigned long) len, &buf[0], &reslen);
+	return string((LPCSTR)&buf[0], reslen);
+}
+#else
 string EncodeBase64(LPCSTR data, uint len)
 {
 	uint32_t bits=0;
@@ -647,3 +659,5 @@ string EncodeBase64(LPCSTR data, uint len)
 	}
 	return out;
 }
+
+#endif

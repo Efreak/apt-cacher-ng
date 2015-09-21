@@ -64,6 +64,7 @@ string wfilepat(INFOLDER
 		"|setup\\.bz2(.sig)?" // Cygwin
 		"|" ALXPATTERN // Arch Linux
 		"|[a-z]+32.exe"
+		"|mirrors.ubuntu.com/mirrors.txt"
 		")$");
 
 string pfilepatEx, spfilepatEx, vfilepatEx, svfilepatEx, wfilepatEx; // for customization by user

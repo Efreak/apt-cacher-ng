@@ -25,6 +25,7 @@
 #include <ctime>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 
 #include <iostream>
 #include <fstream>
@@ -537,6 +538,261 @@ int patch_file(string sBase, string sPatch, string sResult)
 }
 
 
+struct parm {
+	unsigned minArg, maxArg;
+	std::function<void(LPCSTR)> f;
+};
+
+// uhm, could put all that into a struct and even pass it around... but what for?
+parm* g_parm = nullptr;
+LPCSTR g_mode = nullptr;
+int g_exitCode(0);
+unsigned g_xargCount = 0;
+LPCSTR g_missingCfgDir = nullptr;
+
+
+void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
+{
+	LPCSTR szCfgDir=CFGDIR;
+	std::vector<LPCSTR> a, b;
+
+	for (auto p=argv; p<argv+argc; p++)
+	{
+		if (!strncmp(*p, "-h", 2))
+			usage();
+		else if (!strcmp(*p, "-c"))
+		{
+			++p;
+			if (p < argv + argc)
+				szCfgDir = *p;
+			else
+				usage(2);
+		}
+		else if(!strcmp(*p, "--verbose"))
+			g_bVerbose=true;
+		else if(**p) // not empty
+			a.emplace_back(*p);
+
+#if SUPPWHASH
+#warning FIXME
+		else if (!strncmp(*p, "-H", 2))
+			exit(hashpwd());
+#endif
+	}
+
+	if(szCfgDir)
+	{
+		Cstat info(szCfgDir);
+		if(!info || !S_ISDIR(info.st_mode))
+			g_missingCfgDir = szCfgDir;
+		else
+			acfg::ReadConfigDirectory(szCfgDir, false);
+	}
+
+	tStrVec non_opt_args;
+
+	for(auto& keyval : a)
+		if(!acfg::SetOption(keyval, 0))
+			b.emplace_back(keyval);
+
+	acfg::PostProcConfig();
+
+	for(const auto& x: b)
+		f(x);
+}
+
+
+#if SUPPWHASH
+void ssl_init()
+{
+#ifdef HAVE_SSL
+	SSL_load_error_strings();
+	ERR_load_BIO_strings();
+	ERR_load_crypto_strings();
+	ERR_load_SSL_strings();
+	OpenSSL_add_all_algorithms();
+	SSL_library_init();
+#endif
+}
+#endif
+
+/*
+void assert_cfgdir()
+{
+	if(!g_missingCfgDir)
+		return;
+	cerr << "Failed to open config directory: " << g_missingCfgDir <<endl;
+	exit(EXIT_FAILURE);
+}
+*/
+
+void warn_cfgdir()
+{
+	if (g_missingCfgDir)
+		cerr << "Warning: failed to open config directory: " << g_missingCfgDir <<endl;
+}
+
+std::unordered_map<string, parm> parms = {
+	{
+		"encb64",
+		{ 1, 1, [](LPCSTR p)
+			{
+#ifdef DEBUG
+			cerr << "encoding " << p <<endl;
+#endif
+				std::cout << EncodeBase64Auth(p);
+			}
+		}
+	}
+	,
+		{
+			"cfgdump",
+			{ 0, 0, [](LPCSTR p) {
+				warn_cfgdir();
+						     acfg::dump_config();
+					     }
+			}
+		}
+	,
+		{
+			"curl",
+			{ 1, UINT_MAX, [](LPCSTR p)
+				{
+					CPrintItemFactory fac;
+					auto ret=wcat(p, getenv("http_proxy"), &fac);
+					if(!g_exitCode)
+						g_exitCode = ret;
+
+				}
+			}
+		},
+		{
+			"retest",
+			{
+				1, 1, [](LPCSTR p)
+				{
+					warn_cfgdir();
+					std::cout << ReTest(p) << std::endl;
+				}
+			}
+		}
+	,
+		{
+			"printvar",
+			{
+				1, 1, [](LPCSTR p)
+				{
+					warn_cfgdir();
+					auto ps(acfg::GetStringPtr(p));
+					if(ps) { cout << *ps << endl; return; }
+					auto pi(acfg::GetIntPtr(p));
+					if(pi) {
+						cout << *pi << endl;
+						return;
+					}
+					g_exitCode=23;
+				}
+			}
+		},
+		{ 
+			"patch",
+			{
+				3, 3, [](LPCSTR p)
+				{
+					static tStrVec iop;
+					iop.emplace_back(p);
+					if(iop.size() == 3)
+						g_exitCode+=patch_file(iop[0], iop[1], iop[2]);
+				}
+			}
+		}
+
+	,
+		{
+			"maint",
+			{
+				0, 0, [](LPCSTR p)
+				{
+					warn_cfgdir();
+					g_exitCode+=maint_job();
+				}
+			}
+		}
+};
+
+int main(int argc, const char **argv)
+{
+	string exe(argv[0]);
+	unsigned aOffset=1;
+	if(endsWithSzAr(exe, "expire-caller.pl"))
+	{
+		aOffset=0;
+		argv[0] = "maint";
+	}
+	acfg::g_bQuiet = true;
+	acfg::g_bNoComplex = true; // no DB for just single variables
+
+	parse_options(argc-aOffset, argv+aOffset, [](LPCSTR p)
+			{
+		bool bFirst = false;
+		if(!g_mode)
+			bFirst = (0 != (g_mode = p));
+		else
+			g_xargCount++;
+		if(!g_parm)
+			{
+			auto it = parms.find(g_mode);
+			if(it == parms.end())
+				usage(1);
+			g_parm = & it->second;
+			}
+		if(g_xargCount > g_parm->maxArg)
+			usage(2);
+		if(!bFirst)
+			g_parm->f(p);
+			});
+	if(!g_mode || !g_parm)
+		usage(3);
+	if(!g_xargCount) // should run the code at least once?
+	{
+		if(g_parm->minArg) // uh... needs argument(s)
+			usage(4);
+		g_parm->f(nullptr);
+	}
+	return g_exitCode;
+}
+
+int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac)
+{
+	acfg::dnscachetime=0;
+	acfg::persistoutgoing=0;
+	acfg::badredmime.clear();
+	acfg::redirmax=10;
+
+	if(proxy)
+		if(acfg::proxy_info.SetHttpUrl(proxy))
+			return -1;
+	tHttpUrl url;
+	if(!surl || !url.SetHttpUrl(surl))
+		return -2;
+	dlcon dl(true, nullptr, pDlconFac);
+
+	auto fi=fac->Create();
+	dl.AddJob(fi, &url, nullptr, nullptr, 0);
+	dl.WorkLoop();
+	if(fi->GetStatus() == fileitem::FIST_COMPLETE)
+	{
+		auto st=fi->GetHeaderUnlocked().getStatus();
+		if(st == 200)
+			return EXIT_SUCCESS;
+		if (st>=500)
+			return EIO;
+		if (st>=400)
+			return EACCES;
+	}
+	return EXIT_FAILURE;
+}
+
 #if 0
 
 void do_stuff_before_config()
@@ -604,88 +860,6 @@ void do_stuff_before_config()
 }
 
 #endif
-
-
-tStrVec non_opt_args;
-
-void parse_options(int argc, const char **argv, bool bExtractNonOpts=false)
-{
-	LPCSTR szCfgDir=CFGDIR;
-	std::vector<LPCSTR> cmdvars;
-
-	for (auto p=argv; p<argv+argc; p++)
-	{
-		if (!strncmp(*p, "-h", 2))
-			usage();
-		else if (!strcmp(*p, "-c"))
-		{
-			++p;
-			if (p < argv + argc)
-				szCfgDir = *p;
-			else
-				usage(2);
-		}
-		else if(!strcmp(*p, "--verbose"))
-			g_bVerbose=true;
-		else if(**p) // not empty
-			cmdvars.emplace_back(*p);
-
-#if SUPPWHASH
-#warning FIXME
-		else if (!strncmp(*p, "-H", 2))
-			exit(hashpwd());
-#endif
-	}
-
-	if(szCfgDir)
-	{
-		Cstat info(szCfgDir);
-		if(!info || !S_ISDIR(info.st_mode))
-		{
-			cerr << "Failed to open config directory: " << szCfgDir;
-			exit(EXIT_FAILURE);
-		}
-		acfg::ReadConfigDirectory(szCfgDir, false);
-	}
-
-	for(auto& keyval : cmdvars)
-		if(!acfg::SetOption(keyval, 0))
-			non_opt_args.emplace_back(keyval);
-
-	if(!bExtractNonOpts && !non_opt_args.empty())
-	{
-		for(auto& x: non_opt_args)
-			cerr << "Bad option: " << x << endl;
-		usage(EXIT_FAILURE);
-	}
-
-	acfg::PostProcConfig();
-}
-
-
-#if SUPPWHASH
-void ssl_init()
-{
-#ifdef HAVE_SSL
-	SSL_load_error_strings();
-	ERR_load_BIO_strings();
-	ERR_load_crypto_strings();
-	ERR_load_SSL_strings();
-	OpenSSL_add_all_algorithms();
-	SSL_library_init();
-#endif
-}
-#endif
-
-int main(int argc, const char **argv)
-{
-	string exe(argv[0]);
-	bool emuexp = endsWithSzAr(exe, "expire-caller.pl");
-	if(!emuexp && argc<2)
-		usage(1);
-	string cmd;
-	if(argc>1)
-		cmd = argv[1];
 #if 0
 #warning line reader test enabled
 	if (cmd == "wcl")
@@ -761,100 +935,3 @@ int main(int argc, const char **argv)
 		exit(res);
 	}
 #endif
-	if(cmd == "encb64")
-	{
-		if(argc<3)
-			usage(2);
-		std::cout << EncodeBase64Auth(argv[2]);
-		exit(EXIT_SUCCESS);
-	}
-	if(cmd == "curl")
-	{
-		if(argc<3)
-			usage(2);
-		else
-		{
-			CPrintItemFactory fac;
-			exit(wcat(argv[2], getenv("http_proxy"), &fac));
-		}
-	}
-	if(cmd == "printvar" || cmd == "retest" || cmd == "cfgdump")
-	{
-		acfg::g_bQuiet = true;
-		acfg::g_bNoComplex = (cmd[0] != 'p'); // no DB for just single variables
-		parse_options(argc-3, argv+3);
-		switch(cmd[0])
-		{
-		case 'c':
-			acfg::dump_config();
-			exit(EXIT_SUCCESS);
-		break;
-		case 'r':
-			if(argc<3)
-				usage(2);
-			std::cout << ReTest(argv[2]) << std::endl;
-			exit(EXIT_SUCCESS);
-		case 'p':
-			if(argc<3)
-				usage(2);
-			auto ps(acfg::GetStringPtr(argv[2]));
-			if(ps)
-			{
-				cout << *ps << endl;
-				exit(EXIT_SUCCESS);
-			}
-			auto pi(acfg::GetIntPtr(argv[2]));
-			if(pi)
-				cout << *pi << endl;
-			exit(pi ? EXIT_SUCCESS : EXIT_FAILURE);
-		}
-	}
-	if(cmd == "patch")
-	{
-		if(argc!=5)
-			usage(3);
-		return(patch_file(argv[2], argv[3], argv[4]));
-	}
-	if(cmd == "maint" || emuexp)
-	{
-		acfg::g_bQuiet = true;
-		acfg::g_bNoComplex = true; // no DB for just single variables
-		parse_options(argc - 2 + emuexp, argv + 2 - emuexp);
-		return(maint_job());
-	}
-
-	usage(4);
-	return -1;
-}
-
-int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac)
-{
-	acfg::dnscachetime=0;
-	acfg::persistoutgoing=0;
-	acfg::badredmime.clear();
-	acfg::redirmax=10;
-
-	if(proxy)
-		if(acfg::proxy_info.SetHttpUrl(proxy))
-			return -1;
-	tHttpUrl url;
-	if(!surl || !url.SetHttpUrl(surl))
-		return -2;
-	dlcon dl(true, nullptr, pDlconFac);
-
-	auto fi=fac->Create();
-	dl.AddJob(fi, &url, nullptr, nullptr, 0);
-	dl.WorkLoop();
-	if(fi->GetStatus() == fileitem::FIST_COMPLETE)
-	{
-		auto st=fi->GetHeaderUnlocked().getStatus();
-		if(st == 200)
-			return EXIT_SUCCESS;
-		if (st>=500)
-			return EIO;
-		if (st>=400)
-			return EACCES;
-	}
-	return EXIT_FAILURE;
-}
-
