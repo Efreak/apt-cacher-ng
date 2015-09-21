@@ -14,6 +14,8 @@ apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
     it less verbose for better use in cron jobs
   * FIX: code mistake in Darwin specific parts. Plus, the new LD flags checks
     should also cover the wrong --as-needed check (Alioth task #315130)
+  * FIX: in expiration, force blacklisting of .head files without related
+    content, even for index files like deprecated Packages.bz2/Sources.bz2
   * More automatic index file replacements (Sources/Packages gz to xz,
     InRelease to Release and vice versa)
   * Removed timestamps from generated gzip files

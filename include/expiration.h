@@ -10,7 +10,7 @@ struct tDiskFileInfo
 {
 	time_t nLostAt =0;
 	bool bNoHeaderCheck=false;
-	// this adds a couple of procent overhead so it's neglible considering
+	// this adds a couple of procent overhead so it's negligible considering
 	// hashing or traversing overhead of a detached solution
 	tFingerprint fpr;
 };
