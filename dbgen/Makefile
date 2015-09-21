@@ -7,8 +7,8 @@ export CONFDIR
 # Main rule to be called to update all databases. Does two things, first get
 # and pre-filter raw data, second: check the sources and generate final lists,
 # skipping dead mirrors.
-gendbs: $(CONFDIR) clean_db_tmp get_deb_input get_ubu_input get_fedora_input get_sl_input get_sfnet_input
-	$(MAKE) $(CONFDIR)/deb_mirrors.gz $(CONFDIR)/debvol_mirrors.gz $(CONFDIR)/gentoo_mirrors.gz
+gendbs: $(CONFDIR) clean_db_tmp get_deb_input get_ubu_input get_fedora_input get_sl_input get_sfnet_input build_gentoo_mirrors
+	$(MAKE) $(CONFDIR)/deb_mirrors.gz $(CONFDIR)/debvol_mirrors.gz
 	$(MAKE) $(CONFDIR)/ubuntu_mirrors $(CONFDIR)/cygwin_mirrors $(CONFDIR)/archlx_mirrors $(CONFDIR)/fedora_mirrors $(CONFDIR)/epel_mirrors $(CONFDIR)/sl_mirrors $(CONFDIR)/sfnet_mirrors
 
 clean_db_tmp:
@@ -104,8 +104,8 @@ $(CONFDIR)/debvol_mirrors.gz: sig-debian deburlgen.pl
 	bash ubuntuscan.sh $(CONFDIR)/debvol_mirrors $(DBTMP)/debvol.urls_sorted $(DBTMP) "/dists"
 	gzip -nf9 $(CONFDIR)/debvol_mirrors
 
-$(CONFDIR)/gentoo_mirrors.gz:
-	cd conf && sh ../gentoo_mirrors.sh
+build_gentoo_mirrors:
+	cd $(CONFDIR) && sh $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))/gentoo_mirrors.sh
 
 TGTDIR=dbupdate
 
@@ -114,3 +114,5 @@ package: $(DBTMP)
 
 install:
 	cp conf/*mirrors* /usr/lib/apt-cacher-ng/
+
+.PHONY: $(CONFDIR)/gentoo_mirrors.gz
