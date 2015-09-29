@@ -32,6 +32,9 @@ Troubleshooting and integrator notes:
    path settings; see manpage for details.
  - Link Time Optimization may be broken with some compilers. if a GCC "internal
    compiler error" appears, first try -DUSE_LTO=off
+ - -DCMAKE_INSTALL_PREFIX=... specificies main directory to install (/usr/local is default)
+ - -DCFGDIR=... (config directory, default is "etc" under CMAKE_INSTALL_PREFIX
+   or just /etc if CMAKE_INSTALL_PREFIX is /usr)
  - -DDOCDIR=... and -DLIBDIR=... specify target directories for docs resp.
    supplmentary files
  - Install halibut tool to rebuild the documentation, if needed
