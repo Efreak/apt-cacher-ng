@@ -21,8 +21,6 @@ using namespace std;
 
 #define TERM_VAL (time_t(-1))
 
-cleaner g_victor;
-
 cleaner::cleaner() : m_thr(0)
 {
 	Init();

@@ -298,7 +298,6 @@ CONFIGURE_FILE("${CMAKE_SOURCE_DIR}/include/acsyscap.h.in" "${CMAKE_BINARY_DIR}/
 
 add_subdirectory(client)
 add_subdirectory(fs)
-add_subdirectory(tool)
 add_subdirectory(source)
 add_subdirectory(conf)
 
