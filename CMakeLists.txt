@@ -54,6 +54,10 @@ if(NOT DEFINED(SBINDIR))
 set(SBINDIR "${CMAKE_INSTALL_PREFIX}/sbin")
 endif()
 
+if(NOT DEFINED(RUNDIR))
+	set(RUNDIR "/run")
+endif()
+
 INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
 IF(NOT DEFINED(ACVERSION))
@@ -313,6 +317,7 @@ add_subdirectory(client)
 add_subdirectory(fs)
 add_subdirectory(source)
 add_subdirectory(conf)
+add_subdirectory(systemd)
 
 ###
 ### Extra install rules for static files
