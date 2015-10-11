@@ -45,11 +45,11 @@ Configure to run on system startup:
 This part heavily depends on the used init system.
  - For systemd configuration, the build process creates a service file and
    tmpfiles conf file in builddir/systemd directory. Their contents match the
-   detected configuration. They need to be installed manually in the
-   relevant folders (see systemd.unit(5) and tmpfiles.d(5) manpages). Then, a
-   local system user called "apt-cacher-ng" and the "apt-cacher-ng" group (with
-   the new user therein) needs to be created, and new service is enabled 
-   with "systemctl enable apt-cacher-ng".
+   detected configuration. They need to be installed manually in the relevant
+   folders (see systemd.unit(5), systemd-tmpfiles(8) and tmpfiles.d(5)
+   manpages). Then, a local system user called "apt-cacher-ng" and the
+   "apt-cacher-ng" group (with the new user therein) needs to be created, and
+   new service is enabled with "systemctl enable apt-cacher-ng".
  - For sysvinit, see latest Debian package for examples (unpack with ar/tar or
    just mc).
 
