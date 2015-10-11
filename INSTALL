@@ -36,7 +36,8 @@ Troubleshooting and integrator notes:
  - -DCFGDIR=... (config directory, default is "etc" under CMAKE_INSTALL_PREFIX
    or just /etc if CMAKE_INSTALL_PREFIX is /usr)
  - -DDOCDIR=... and -DLIBDIR=... specify target directories for docs resp.
-   supplmentary files
+   supplementary files
+ - see CMakeLists.txt for more paths that can be customized
  - Install halibut tool to rebuild the documentation, if needed
 
 Configure to run on system startup:
