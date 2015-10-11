@@ -901,10 +901,11 @@ inline uint dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQu
                 nTakesPerSec=1;
              m_nSpeedLimitMaxPerTake = nSpeedNowKib*1024/nTakesPerSec;
              auto nIntervalUS=1000000 / nTakesPerSec;
+             auto nIntervalUS_copy = nIntervalUS;
              // creating a bitmask
              for(m_nSpeedLimiterRoundUp=1,nIntervalUS/=2;nIntervalUS;nIntervalUS>>=1)
                 m_nSpeedLimiterRoundUp = (m_nSpeedLimiterRoundUp<<1)|1;
-
+             m_nSpeedLimitMaxPerTake = uint(double(m_nSpeedLimitMaxPerTake) * double(m_nSpeedLimiterRoundUp) / double(nIntervalUS_copy));
           }
           // waiting for the next time slice to get data from buffer
           timeval tv;
