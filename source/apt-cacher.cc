@@ -60,6 +60,8 @@ void check_algos();
 
 typedef struct sigaction tSigAct;
 
+cleaner g_victor;
+
 #ifdef HAVE_DAEMON
 inline bool fork_away()
 {

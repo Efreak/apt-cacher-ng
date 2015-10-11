@@ -104,7 +104,7 @@ void termsocket(int fd)
 	};
 }
 
-static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t addrlen, time_t timeout)
+static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t addrlen, time_t timeout, bool bAssumeNonBlock)
 {
 	long stflags;
 	struct timeval tv;
@@ -114,13 +114,15 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 	tv.tv_sec = timeout;
 	tv.tv_usec = 0;
 
-	if ((stflags = fcntl(sockfd, F_GETFL, nullptr)) < 0)
-		return -1;
+	if(!bAssumeNonBlock)
+	{
+		if ((stflags = fcntl(sockfd, F_GETFL, nullptr)) < 0)
+			return -1;
 
-	// Set to non-blocking mode.
-	if (fcntl(sockfd, F_SETFL, stflags|O_NONBLOCK) < 0)
-		return -1;
-
+		// Set to non-blocking mode.
+		if (fcntl(sockfd, F_SETFL, stflags | O_NONBLOCK) < 0)
+			return -1;
+	}
 	res = connect(sockfd, addr, addrlen);
 	if (res < 0) {
 		if (EINPROGRESS == errno)
@@ -162,8 +164,7 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 		}
 	}
 
-	// Set back to original mode, which may or may not have been blocking.
-	if (fcntl(sockfd, F_SETFL, stflags) < 0)
+	if(!bAssumeNonBlock && fcntl(sockfd, F_SETFL, stflags) < 0) // Set back to original mode
 		return -1;
 
 	return 0;
@@ -209,18 +210,21 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 				::setsockopt(m_conFd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
 			}
 #endif
-
-			if (::connect_timeout(m_conFd, pInfo->ai_addr, pInfo->ai_addrlen, timeout) < 0)
+			set_nb(m_conFd);
+			if (::connect_timeout(m_conFd, pInfo->ai_addr, pInfo->ai_addrlen, timeout, true) < 0)
 			{
 				if(errno==ETIMEDOUT)
 					sErrorMsg="Connection timeout";
+#ifndef MINIBUILD
+				USRDBG(tErrnoFmter("Outgoing connection for ") << m_sHostName << ", Port: " << m_sPort );
+#endif
 				continue;
 			}
 #ifdef DEBUG
 			nConCount.fetch_add(1);
 #endif
 			ldbg("connect() ok");
-			set_nb(m_conFd);
+
 			return true;
 		}
 	}
