@@ -52,6 +52,7 @@ string vfilepat(INFOLDER
 		"|/dists/.*/installer-[^/]+/[^0-9][^/]+/images/.*" // d-i stuff but not containing a date (year number) in the revision directory (like "current", "beta", ...)
 		"|/pks/lookup.op.get" // some Ubuntu PPA management activity
 		"|centos/.*/images/.*img" // [#314924] Allow access to CentOS images
+    "|ubuntu/dists/.*\\.html" // http://archive.ubuntu.com/ubuntu/dists/vivid-updates/main/dist-upgrader-all/current/ReleaseAnnouncement.html
 );
 
 //string wfilepat( VPATPREFIX  "(Release|Release\\.gpg|release|meta-release|Translation[^/]*\\.bz2)$");
