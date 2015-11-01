@@ -1,0 +1,2 @@
+Z @RUNDIR@/apt-cacher-ng 0755 apt-cacher-ng apt-cacher-ng - -
+D @RUNDIR@/apt-cacher-ng 0755 apt-cacher-ng apt-cacher-ng - -

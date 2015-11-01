@@ -1,4 +1,4 @@
-apt-cacher-ng (0.8.7) UNEARTH-THE-CHAPPA-AI; urgency=low
+apt-cacher-ng (0.8.7) A-BIG-CUP-OF-PROTOMATTER-PLEASE; urgency=low
 
   * Added more user hints about config files in acng.conf
   * DB generator improvements (parallelization or mirror probing using GNU
@@ -6,6 +6,9 @@ apt-cacher-ng (0.8.7) UNEARTH-THE-CHAPPA-AI; urgency=low
   * added Ubuntu distupgrader release notes to volatile files pattern until
     better information is available
   * Database update
+  * More useful reporting of outgoing connection mode on debug verbosity level
+  * On GNU toolchain, reduce the size of acngtool and acngfs binaries with
+    *sections* option set
 
  -- 
 
@@ -1123,7 +1126,7 @@ apt-cacher-ng (0.3.6) BETA; urgency=low
 apt-cacher-ng (0.3.5) BETA; urgency=low
 
   * Changed update code for index files to be more tollerant to cache errors
-  * Index updates reports more usefull DNS resolution errors
+  * Index updates reports more useful DNS resolution errors
   * Index file updating code overhaul, now supports updates via Diff files.
     Currently deliberately restricted to .diff/Index files covered by
     signatures in "Release" files.

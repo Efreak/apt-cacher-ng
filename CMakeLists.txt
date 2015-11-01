@@ -54,6 +54,10 @@ if(NOT DEFINED(SBINDIR))
 set(SBINDIR "${CMAKE_INSTALL_PREFIX}/sbin")
 endif()
 
+if(NOT DEFINED(RUNDIR))
+	set(RUNDIR "/run")
+endif()
+
 INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR} "include")
 
 IF(NOT DEFINED(ACVERSION))
@@ -71,7 +75,15 @@ TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
 
 # those are appended later via COMPILER_FLAGS. $CXXFLAGS and CMAKE_CXX_FLAGS
 # also influence it, need to be adjusted carefully by user.
-SET(ACNG_CXXFLAGS_COMMON " -pthread -Wall -Wextra -Wno-unused-parameter -D_FILE_OFFSET_BITS=64 ")
+SET(ACNG_CXXFLAGS_COMMON "-D_FILE_OFFSET_BITS=64")
+
+foreach(cxxarg  -pthread -Wall -Wextra -Wno-unused-parameter -fvisibility-inlines-hidden)
+	STRING(REGEX REPLACE "=|-|," "" optname "${cxxarg}")
+  CHECK_CXX_COMPILER_FLAG("${cxxarg}" "CXX_${optname}")
+  if(CXX_${optname})
+     SET(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} ${cxxarg}")
+	endif()
+endforeach()
 
 foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1)
 	STRING(REGEX REPLACE "=|-|," "" optname "${linkarg}")
@@ -98,6 +110,12 @@ ENDIF()
 if(CMAKE_BUILD_TYPE MATCHES Debug)
 	set(USE_LTO off)
 	set(ACNG_CXXFLAGS_COMMON "-DDEBUG ${ACNG_CXXFLAGS_COMMON}")
+else()
+  CHECK_CXX_COMPILER_FLAG("-Os -fdata-sections -ffunction-sections -Wl,--gc-sections" GC_SECTIONS)
+  if(GC_SECTIONS)
+     SET(ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} -fdata-sections -ffunction-sections")
+     SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections")
+  endif()
 endif()
 
 FILE(READ test/build/testcxx11.cc CXX11_TESTSRC)
@@ -279,7 +297,6 @@ endif()
 # server process.
 # Needs HAVE_WL_AS_NEEDED!
 
-
 message("Compiler flags: ${CMAKE_CXX_FLAGS} ${ACNG_CXXFLAGS_COMMON}")
 message("Linker flags: ${CMAKE_EXE_LINKER_FLAGS}")
 
@@ -298,9 +315,9 @@ CONFIGURE_FILE("${CMAKE_SOURCE_DIR}/include/acsyscap.h.in" "${CMAKE_BINARY_DIR}/
 
 add_subdirectory(client)
 add_subdirectory(fs)
-add_subdirectory(tool)
 add_subdirectory(source)
 add_subdirectory(conf)
+add_subdirectory(systemd)
 
 ###
 ### Extra install rules for static files

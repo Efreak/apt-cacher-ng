@@ -9,8 +9,6 @@ might be triggered by SIGUSR2.
 
 Fix URL parser to cope with more combinations of encoded chars (specially in user:pass part)
 
-Use Base64 pre-encoded userpass strings in host descriptors and proxy information
-
 Make better secure mechanism to trigger maint jobs. The current one requires faked website authentication, etc.
 Should use local methods instead, maybe passing a config file with commands via
 filesystem which is only readable/writtable to apt-cacher-ng and push it via
