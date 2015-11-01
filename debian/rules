@@ -12,18 +12,19 @@ CFLAGS += $(CPPFLAGS)
 CXXFLAGS += $(CPPFLAGS)
 
 %:
-	dh $@ --parallel --with systemd --builddirectory=builddir
+	dh $@ --parallel --with systemd
 
-#override_dh_auto_build:
-#	dh_auto_build -- VERBOSE=1
+override_dh_auto_configure:
+	dh_auto_configure -- -DSDINSTALL=on
 
 # needs extra build deps and internet -> ignore
 override_dh_auto_test:
 	true
 
 override_dh_install:
-	grep -q "define.*HAVE_SD_NOTIFY" builddir/acsyscap.h && sed -e s,^Type=simple,Type=notify, systemd/apt-cacher-ng.service > debian/apt-cacher-ng.service || cp systemd/apt-cacher-ng.service debian/apt-cacher-ng.service
-	cp systemd/apt-cacher-ng.conf debian/apt-cacher-ng.tmpfile
+	# let dh_systemd deal with them
+	mv $(TGT)/usr/lib/tmpfiles.d/apt-cacher-ng.conf debian/apt-cacher-ng.tmpfile
+	mv $(TGT)/lib/systemd/system/*.service debian/
 	$(MAKE) -C dbgen package DBGENERATOR=dbgenerator
 	test -r debian/apt-cacher-ng/etc/apt-cacher-ng/backends_debian.default || mv debian/apt-cacher-ng/usr/lib/apt-cacher-ng/backends_debian.default debian/apt-cacher-ng/etc/apt-cacher-ng/
 	test -r debian/apt-cacher-ng/etc/apt-cacher-ng/backends_ubuntu.default || mv debian/apt-cacher-ng/usr/lib/apt-cacher-ng/backends_ubuntu.default debian/apt-cacher-ng/etc/apt-cacher-ng/
