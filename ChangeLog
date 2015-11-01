@@ -1,3 +1,14 @@
+apt-cacher-ng (0.8.7) UNEARTH-THE-CHAPPA-AI; urgency=low
+
+  * Added more user hints about config files in acng.conf
+  * DB generator improvements (parallelization or mirror probing using GNU
+    xargs) 
+  * added Ubuntu distupgrader release notes to volatile files pattern until
+    better information is available
+  * Database update
+
+ -- 
+
 apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
 
   * Build system overhaul, splitted CMakeLists.txt per target, added install

@@ -1,10 +1,16 @@
+# 
+# IMPORTANT NOTE:
+#
+# THIS FILE IS MAYBE JUST ONE OF MANY CONFIGURATION FILES IN THIS DIRECTORY.
+# SETTINGS MADE IN OTHER FILES CAN OVERRIDE VALUES THAT YOU CHANGE HERE. GO
+# LOOK FOR OTHER CONFIGURATION FILES! CHECK THE MANUAL AND INSTALLATION NOTES
+# (like README.Debian) FOR MORE DETAILS!
+#
+
 # This is a configuration file for apt-cacher-ng, a smart caching proxy for
 # software package downloads. It's supposed to be in a directory specified by
 # the -c option of apt-cacher-ng, see apt-cacher-ng(8) for details.
-#
-# NOTE: command line switches and other configuration files matching the same
-# file naming scheme (*.conf) can override values from this file.
-
+# RULES:
 # Letter case in variable names does not matter, names and values should be
 # separated with colons. For boolean variables, zero number is considered false,
 # non-zero considered true. If a default value is not explicitly mentioned in
