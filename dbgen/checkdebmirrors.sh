@@ -1,5 +1,7 @@
 #!/bin/bash -x
 
+# DEPRECATED script, see checkubuntu* stuff
+
 listfile=goodmirrors.txt
 badfile=badmirrors.txt
 wd=$(mktemp -d)

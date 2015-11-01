@@ -71,7 +71,9 @@ Configuration:
 Developer notes:
 
 There are some macros and shortcuts:
- - scripts/Makefile.dev has some test and release rules
+ - scripts/Makefile.release has some test and release rules, one could also run
+   "make -f scripts/Makefile.release gendbs" to update built-in mirror
+   configuration files
  - DEBUG argument of build.sh adds more verbosity and implicitly sets compiler
    defaults to produce debuggable binaries
  - -DDEBUG (set by above) to enable verbose debug logging. BE WARNED: this

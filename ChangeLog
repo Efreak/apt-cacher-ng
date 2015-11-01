@@ -2,7 +2,13 @@ apt-cacher-ng (0.8.7) ONE-PINT-OF-PROTOMATTER-PLEASE; urgency=low
 
   * More useful reporting of outgoing connection mode on debug verbosity level
   * On GNU toolchain, reduce the size of acngtool and acngfs binaries with
-    *sections* option set
+    *sections* options set
+  * Added more user hints about config files in acng.conf
+  * DB generator improvements (parallelization or mirror probing using GNU
+    xargs) 
+  * added Ubuntu distupgrader release notes to volatile files pattern until
+    better information is available
+  * Database update
 
  -- 
 
