@@ -403,7 +403,7 @@ Chapter 4: Advanced Server Configuration
            .debdelta files. The path hierarchy below this URL should
            correspond to the source URLs and file paths in the cache. Only
            one URL can be specified at the moment. It is used for explicit
-           mirroring operations, see section 8.14 for details.
+           mirroring operations, see section 8.15 for details.
 
         -  `proxy=proxyspec' Configures an alternative proxy URL which
            overrides the global proxy setting in the context of this
@@ -1214,7 +1214,40 @@ Chapter 8: HOWTOs and FAQ
        acngfs parameters, and then it gets files directly from the cache if
        they are completely downloaded and don't have volatile contents.
 
-  8.14 Partial Mirroring
+  8.14 Optional semi-automatic use of proxy
+
+       Apt-Cacher NG daemon has some optional operations modes regading the
+       use of external proxy (configured with "Proxy" setting). The default
+       mode means use of that proxy for all remote connections.
+
+       However, in some environments like when running on a portable
+       system, the "upstream" proxy server may not reachable when running
+       outside of home LAN area. For this situation, there are automated
+       ways to detect it and to switch to direct internet access without
+       additional configuration work.
+
+       One way is to use a (short) timeout value (OptProxyTimeout setting)
+       which simply makes a failed connection attempt after the timeout
+       being interpret as broken proxy. Then the proxy is not used
+       in context of this connection until a new connection is to be
+       established. If OptProxyCheckInterval is set (see below) then this
+       change is effective for the configured time span.
+
+       Another way is through a custom (shell) command - when it returns
+       successfully, the proxy is used, otherwise not and the command
+       will be rerun only after a specified period. The command may
+       check IP routes or a specific router address in the MAC pool
+       or similar traces of the current environment. This setting
+       (OptProxyCheckCommand) is also affected by another option
+       (OptProxyCheckInterval) that specifies how often this check command
+       shall be rerun. In the meantime, the configured proxy is considered
+       faulty.
+
+       Hint: this special modes can be combined with non-caching behavior
+       (see above) and another ACNG proxy in the home LAN to get smart
+       caching for laptop users.
+
+  8.15 Partial Mirroring
 
        It is possible to create a partial local mirror of a remote package
        repository. The method to do this is usually known as pre-caching. A

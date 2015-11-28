@@ -770,7 +770,7 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	acfg::redirmax=10;
 
 	if(proxy)
-		if(acfg::proxy_info.SetHttpUrl(proxy))
+		if(acfg::SetOption(string("proxy:")+proxy, nullptr))
 			return -1;
 	tHttpUrl url;
 	if(!surl || !url.SetHttpUrl(surl))

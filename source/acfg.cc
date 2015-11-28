@@ -47,13 +47,15 @@ bool g_bQuiet=false, g_bNoComplex=false;
 
 // internal stuff:
 string sPopularPath("/debian/");
-
-string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt;
+string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt, optProxyCheckCmd;
+int optProxyCheckInt = 99;
 
 tStrMap localdirs;
 static class : public lockable, public NoCaseStringMap {} mimemap;
 
 std::bitset<TCP_PORT_MAX> *pUserPorts = nullptr;
+
+tHttpUrl proxy_info;
 
 struct MapNameToString
 {
@@ -66,23 +68,17 @@ struct MapNameToInt
 	const char *warn; uint8_t base;
 };
 
-/*
-bool ProtoSetKeyVal(cmstring& key, cmstring&value);
+/* XXX: might use a map to manage callbacks later
 struct MapNameToFunc
 {
 	const char *name;
 	const char *warn;
-	//decltype(ProtoSetKeyVal) func;
 	std::function<bool(cmstring&,cmstring&)> func;
 };
-bool testcall(cmstring& key, cmstring&value){return true;}
-auto foo=testcall;
-//decltype(ProtoSetKeyVal) hm=testcall;
 MapNameToFunc n2fTbl[] = {
 		{ "LocalDirsBla", 0, [](const std::string&a,const std::string&b)->bool{return true;}},
 		{ "LocalDirsFoo", 0, foo}
 };
-// XXX: too cumbersome too use, cannot skip skeleton, is there a better way?
 */
 
 #ifndef MINIBUILD
@@ -117,6 +113,7 @@ MapNameToString n2sTbl[] = {
 		,{  "CApath",                  &capath}
 		,{  "CAfile",                  &cafile}
 		,{  "BadRedirDetectMime",      &badredmime}
+		,{	"OptProxyCheckCommand",	   &optProxyCheckCmd}
 
 		,{ "BusAction",                &sigbuscmd} // "Special debugging helper, see manual!"
 };
@@ -161,6 +158,7 @@ MapNameToInt n2iTbl[] = {
 		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
 		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10}
 		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10}
+		,{ "OptProxyCheckInterval", &optProxyCheckInt, nullptr, 10}
 };
 
 uint ReadBackendsFile(const string & sFile, const string &sRepName);
@@ -1295,9 +1293,39 @@ int CheckAdminAuth(LPCSTR auth)
 #endif
 }
 
-
-
 #endif // MINIBUILD
+
+static bool proxy_failstate = false;
+lockable proxy_fail_lock;
+const tHttpUrl* GetProxyInfo()
+{
+	if(proxy_info.sHost.empty())
+		return nullptr;
+
+	static time_t last_check=0;
+
+	lockguard g(proxy_fail_lock);
+	time_t now = time(nullptr);
+	time_t sinceCheck = now - last_check;
+	if(sinceCheck > optProxyCheckInt)
+	{
+		last_check = now;
+		if(optProxyCheckCmd.empty())
+			proxy_failstate = false;
+		else
+			proxy_failstate = system(optProxyCheckCmd.c_str());
+	}
+
+	return proxy_failstate ? nullptr : &proxy_info;
+}
+
+void MarkProxyFailure()
+{
+	lockguard g(proxy_fail_lock);
+	if(optProxyCheckInt <= 0) // urgs, would never recover
+		return;
+	proxy_failstate = true;
+}
 
 } // namespace acfg
 

@@ -1104,10 +1104,7 @@ void dlcon::WorkLoop()
 		{
 			return cjob->m_pRepoDesc->m_pProxy;
 		}
-		if(!acfg::proxy_info.sHost.empty())
-			return &acfg::proxy_info;
-
-		return nullptr;
+		return acfg::GetProxyInfo();
 	};
 
 	while(true) // outer loop: jobs, connection handling
@@ -1176,7 +1173,7 @@ void dlcon::WorkLoop()
 			}	;
 
 				auto& cjob = m_qNewjobs.front();
-				auto proxy = m_bProxyTot ? nullptr : prefProxy(cjob);
+				auto proxy = prefProxy(cjob);
 				auto& peerHost = cjob->GetPeerHost();
 
 #ifdef HAVE_SSL
@@ -1212,6 +1209,7 @@ void dlcon::WorkLoop()
         			ldbg("optional proxy broken, disable");
         			m_bProxyTot = true;
         			proxy = nullptr;
+				acfg::MarkProxyFailure();
         			con = doconnect(peerHost, acfg::nettimeout, false);
         		}
 

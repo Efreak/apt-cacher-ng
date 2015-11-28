@@ -101,7 +101,8 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 	tHttpUrl url;
 	if (!url.SetHttpUrl(uri))
 		return;
-	if (acfg::proxy_info.sHost.empty())
+	auto proxy = acfg::GetProxyInfo();
+	if (!proxy)
 	{
 		direct_connect:
 		m_spOutCon = g_tcp_con_factory.CreateConnected(url.sHost, url.GetPort(), sErr, 0, 0,
@@ -110,7 +111,7 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 	else
 	{
 		// switch to HTTPS tunnel in order to get a direct connection through the proxy
-		m_spOutCon = g_tcp_con_factory.CreateConnected(acfg::proxy_info.sHost, acfg::proxy_info.GetPort(),
+		m_spOutCon = g_tcp_con_factory.CreateConnected(proxy->sHost, proxy->GetPort(),
 				sErr, 0, 0, false, acfg::optproxytimeout > 0 ?
 						acfg::optproxytimeout : acfg::nettimeout,
 						true);
@@ -118,13 +119,16 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 		if (m_spOutCon)
 		{
 			if (!m_spOutCon->StartTunnel(tHttpUrl(url.sHost, url.GetPort(),
-			true), sErr, &acfg::proxy_info.sUserPass, false))
+			true), sErr, & proxy->sUserPass, false))
 			{
 				m_spOutCon.reset();
 			}
 		}
 		else if(acfg::optproxytimeout > 0) // ok... try without
+		{
+			acfg::MarkProxyFailure();
 			goto direct_connect;
+		}
 	}
 
 	if (m_spOutCon)
