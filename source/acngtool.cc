@@ -543,13 +543,9 @@ struct parm {
 	std::function<void(LPCSTR)> f;
 };
 
-// uhm, could put all that into a struct and even pass it around... but what for?
-parm* g_parm = nullptr;
-LPCSTR g_mode = nullptr;
+// some globals shared across the functions
 int g_exitCode(0);
-unsigned g_xargCount = 0;
 LPCSTR g_missingCfgDir = nullptr;
-
 
 void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 {
@@ -633,6 +629,17 @@ void warn_cfgdir()
 }
 
 std::unordered_map<string, parm> parms = {
+#if 0
+   {
+		"urltest",
+		{ 1, 1, [](LPCSTR p)
+			{
+				std::cout << EncodeBase64Auth(p);
+			}
+		}
+	}
+	,
+#endif
 	{
 		"encb64",
 		{ 1, 1, [](LPCSTR p)
@@ -732,32 +739,36 @@ int main(int argc, const char **argv)
 	acfg::g_bQuiet = true;
 	acfg::g_bNoComplex = true; // no DB for just single variables
 
-	parse_options(argc-aOffset, argv+aOffset, [](LPCSTR p)
+  parm* parm = nullptr;
+  LPCSTR mode = nullptr;
+  unsigned xargCount = 0;
+
+	parse_options(argc-aOffset, argv+aOffset, [&](LPCSTR p)
 			{
 		bool bFirst = false;
-		if(!g_mode)
-			bFirst = (0 != (g_mode = p));
+		if(!mode)
+			bFirst = (0 != (mode = p));
 		else
-			g_xargCount++;
-		if(!g_parm)
+			xargCount++;
+		if(!parm)
 			{
-			auto it = parms.find(g_mode);
+			auto it = parms.find(mode);
 			if(it == parms.end())
 				usage(1);
-			g_parm = & it->second;
+			parm = & it->second;
 			}
-		if(g_xargCount > g_parm->maxArg)
+		if(xargCount > parm->maxArg)
 			usage(2);
 		if(!bFirst)
-			g_parm->f(p);
+			parm->f(p);
 			});
-	if(!g_mode || !g_parm)
+	if(!mode || !parm)
 		usage(3);
-	if(!g_xargCount) // should run the code at least once?
+	if(!xargCount) // should run the code at least once?
 	{
-		if(g_parm->minArg) // uh... needs argument(s)
+		if(parm->minArg) // uh... needs argument(s)
 			usage(4);
-		g_parm->f(nullptr);
+		parm->f(nullptr);
 	}
 	return g_exitCode;
 }
