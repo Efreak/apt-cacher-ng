@@ -38,6 +38,23 @@ The command-line options supported by \c{apt-cacher-ng} are:
 
 \dd The options from the configuration can be passed on the command line as key=value pairs.
 
+\H{cfg} CONFIGURATION
+
+Apt-Cacher NG is configured by a multi-config directory, i.e. the configuration
+is split into many configuration files having names with suffix \e{.conf} and
+stored in a single directory. Variables can override previously configured
+settings from other files, sometimes that settings are merged (depending on the
+variable).
+
+The configuration directory is typically \e{/etc/apt-cacher-ng} but it can be
+adjusted with the -C option (see systemd service file for details or wherever
+the init system starts the daemon).
+
+On Debian systems, there are at least three files installed by default:
+acng.conf (containing documented examples), security.conf (containing sensible
+data and only readable for special users) and zz_debconf.conf (containing
+popular settings which are set by the Debian Configuration mechanism).
+
 \H{manpage-signals} SIGNALS
 
 Only few signals are handled in non-default ways.
@@ -53,4 +70,4 @@ either in the doc/pdf directory of the software source package or installed in
 the documentation directory of apt-cacher-ng by your distribution.
 
 
-\versionid Eduard Bloch, Wed, 14 Nov 2007 00:21:52 +0100
+\versionid Eduard Bloch, Thu, 03 Dec 2015 20:57:59 +0100
