@@ -1,4 +1,4 @@
-# 
+#
 # IMPORTANT NOTE:
 #
 # THIS FILE IS MAYBE JUST ONE OF MANY CONFIGURATION FILES IN THIS DIRECTORY.
@@ -151,7 +151,7 @@ ExTreshold: 4
 # responses to/from bugs.debian.org.
 # Default: guessed value, true unless ForceManaged is enabled
 #
-# ForwardBtsSoap: 1 
+# ForwardBtsSoap: 1
 
 # There is a small in-memory cache for DNS resolution data, expired by
 # this timeout (in seconds). Internal caching is disabled if set to a value
@@ -239,7 +239,7 @@ ExTreshold: 4
 # change their behaviour accordingly but ACNG might not support the expected
 # features.
 #
-# Default: 
+# Default:
 #
 # UserAgent: Yet Another HTTP Client/1.2.3p4
 
@@ -319,7 +319,7 @@ LocalDirs: acng-doc @DOCDIR@
 # PrecacheFor: debrep/dists/unstable/*/source/Sources* debrep/dists/unstable/*/binary-amd64/Packages*
 
 # Arbitrary set of data to append to request headers sent over the wire. Should
-# be a well formated HTTP headers part including newlines (DOS style) which 
+# be a well formated HTTP headers part including newlines (DOS style) which
 # can be entered as escape sequences (\r\n).
 #
 # RequestAppendix: X-Tracking-Choice: do-not-track\r\n
@@ -396,8 +396,8 @@ LocalDirs: acng-doc @DOCDIR@
 # using a CONNECT request. This is particularly useful to allow access to SSL
 # sites (https proxying). The string is a regular expression which should cover
 # the server name with port and must be correctly formated and terminated.
-# Examples: 
-# PassThroughPattern: private-ppa\.launchpad\.net:443$ 
+# Examples:
+# PassThroughPattern: private-ppa\.launchpad\.net:443$
 # PassThroughPattern: .* # this would allow CONNECT to everything
 #
 # Default:
@@ -415,7 +415,7 @@ LocalDirs: acng-doc @DOCDIR@
 #
 # ResponseFreezeDetectTime: 500
 
-# Keep outgoing connections alive and reuse them for later downloads from 
+# Keep outgoing connections alive and reuse them for later downloads from
 # the same server as long as possible.
 #
 # ReuseConnections: 1
@@ -438,17 +438,32 @@ LocalDirs: acng-doc @DOCDIR@
 # Path to a single trusted trusted CA certificate used for outgoing
 # connections, see OpenSSL documentation for details.
 #
-# CAfile: 
+# CAfile:
 
-
-# If this value is set to a (positive) number of seconds then the proxy host
-# specified by Proxy setting will be ignored if a connection to this host
-# could not be established within this time span. The connection will then
-# be made without HTTP proxy for the life time of the particular download
-# stream and it may also affect other users on multiuser systems.
+# There are different ways to detect that an upstream proxy is broken and turn
+# off its use and connect directly. The first is through a custom command -
+# when it returns successfully, the proxy is used, otherwise not and the
+# command will be rerun only after a specified period.
+# Another way is to try to connect to the proxy first and detect a connection
+# timeout. The connection will then be made without HTTP proxy for the life
+# time of the particular download stream and it may also affect other other
+# parallel downloads.
+# NOTE: this operation modes are still experimental and are subject to change!
+# Unwanted side effects may occur with multiple simultaneous user connections
+# or with specific per-repository proxy settings.
 #
-# NOTE: this feature is highly experimental and is subject to change! It can
-# interfere badly with the per-repository proxy setting.
+# Shell command, default: not set. Executed with the default shell and
+# permissions of the apt-cacher-ng's process user. Examples:
+# /bin/ip route | grep -q 192.168.117
+# /usr/sbin/arp | grep -q 00:22:1f:51:8e:c1
+#
+# OptProxyCheckCommand: ...
+#
+# Check intervall, in seconds.
+#
+# OptProxyCheckInterval: 99
+#
+# Conection timeout in seconds, default: negative, means disabled.
 #
 # OptProxyTimeout: -1
 

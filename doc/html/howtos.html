@@ -28,7 +28,8 @@
 <li><a href="#howto-interfaces">8.11 Listen to only specific interfaces or IP protocols</a></li>
 <li><a href="#howto-outproto">8.12 How to avoid use of IPv4 (or IPv6) where possible?</a></li>
 <li><a href="#howto-acngfs">8.13 Use the proxy without storing all data twice</a></li>
-<li><a href="#mirroring">8.14 Partial Mirroring</a></li>
+<li><a href="#optproxy">8.14 Optional semi-automatic use of proxy</a></li>
+<li><a href="#mirroring">8.15 Partial Mirroring</a></li>
 </ul></li>
 </ul>
 <h1><a name="howtos"></a>Chapter 8: HOWTOs and FAQ</h1>
@@ -274,7 +275,23 @@ As real alternative, apt-cacher-ng comes with an own implementation of a http fi
 <p>
 And finally, angfs usage can be optimized for local access. This works best if the proxy daemons runs on the same machine as acngfs and there are hundreds of packages to update while filesystem access costs are negligible. Here the cache directory can be specified in acngfs parameters, and then it gets files directly from the cache if they are completely downloaded and don't have volatile contents.
 </p>
-<h2><a name="mirroring"></a>8.14 Partial Mirroring</h2>
+<h2><a name="optproxy"></a>8.14 Optional semi-automatic use of proxy</h2>
+<p>
+Apt-Cacher NG daemon has some optional operations modes regading the use of external proxy (configured with "Proxy" setting). The default mode means use of that proxy for all remote connections.
+</p>
+<p>
+However, in some environments like when running on a portable system, the "upstream" proxy server may not reachable when running outside of home LAN area. For this situation, there are automated ways to detect it and to switch to direct internet access without additional configuration work.
+</p>
+<p>
+One way is to use a (short) timeout value (OptProxyTimeout setting) which simply makes a failed connection attempt after the timeout being interpret as broken proxy. Then the proxy is not used in context of this connection until a new connection is to be established. If OptProxyCheckInterval is set (see below) then this change is effective for the configured time span.
+</p>
+<p>
+Another way is through a custom (shell) command - when it returns successfully, the proxy is used, otherwise not and the command will be rerun only after a specified period. The command may check IP routes or a specific router address in the MAC pool or similar traces of the current environment. This setting (OptProxyCheckCommand) is also affected by another option (OptProxyCheckInterval) that specifies how often this check command shall be rerun. In the meantime, the configured proxy is considered faulty.
+</p>
+<p>
+Hint: this special modes can be combined with non-caching behavior (see above) and another ACNG proxy in the home LAN to get smart caching for laptop users.
+</p>
+<h2><a name="mirroring"></a>8.15 Partial Mirroring</h2>
 <p>
 It is possible to create a partial local mirror of a remote package repository. The method to do this is usually known as pre-caching. A such mirror would contain all files available to apt through <code>apt-cacher-ng</code>, making the cache server suitable for pure off-line use.
 </p>

@@ -669,6 +669,7 @@ public:
 };
 #endif
 
+#ifdef HAVE_CHECKSUM
 std::unique_ptr<csumBase> csumBase::GetChecker(CSTYPES type)
 {
 	switch(type)
@@ -685,17 +686,23 @@ std::unique_ptr<csumBase> csumBase::GetChecker(CSTYPES type)
 		return std::unique_ptr<csumBase>();
 	}
 }
+#endif
 
 bool filereader::GetChecksum(const mstring & sFileName, int csType, uint8_t out[],
 		bool bTryUnpack, off_t &scannedSize, FILE *fDump)
 {
+#ifdef HAVE_CHECKSUM
 	filereader f;
 	return (f.OpenFile(sFileName, !bTryUnpack)
 			&& f.GetChecksum(csType, out, scannedSize, fDump));
+#else
+	return false;
+#endif
 }
 
 bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *fDump)
 {
+#ifdef HAVE_CHECKSUM
 	unique_ptr<csumBase> summer(csumBase::GetChecker(CSTYPES(csType)));
 	scannedSize=0;
 	
@@ -737,11 +744,15 @@ bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE
 	summer->finish(out);
 	
 	return CheckGoodState(false);
+#else
+	return false;
+#endif
 }
 
 // test checksum wrapper classes and their algorithms, also test conversion methods
 void check_algos()
 {
+#ifdef HAVE_CHECKSUM
 	const char testvec[]="abc";
 	uint8_t out[20];
 	unique_ptr<csumBase> ap(csumBase::GetChecker(CSTYPE_SHA1));
@@ -761,6 +772,7 @@ void check_algos()
 		cerr << "Incorrect MD5 implementation detected, check compilation settings!\n";
 		exit(EXIT_FAILURE);
 	}
+#endif
 }
 
 

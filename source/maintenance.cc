@@ -238,9 +238,15 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 	// all of the following need authorization if configured, enforce it
 	switch(acfg::CheckAdminAuth(auth))
 	{
-	case 0: break; // auth is ok or no passwort is set
-	case 1: return workAUTHREQUEST;
-	default: return workAUTHREJECT;
+     case 0:
+#ifdef HAVE_CHECKSUM
+        break; // auth is ok or no passwort is set
+#else
+        // most data modifying tasks cannot be run safely without checksumming support 
+        return workAUTHREJECT;
+#endif
+     case 1: return workAUTHREQUEST;
+     default: return workAUTHREJECT;
 	}
 
 	struct { LPCSTR trigger; tSpecialRequest::eMaintWorkType type; } matches [] =

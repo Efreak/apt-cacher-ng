@@ -40,7 +40,8 @@ maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsu
 optproxytimeout, patrace, maxdlspeed, maxredlsize, nsafriendly;
 
 // processed config settings
-extern tHttpUrl proxy_info;
+extern const tHttpUrl* GetProxyInfo();
+extern void MarkProxyFailure();
 extern mstring agentheader;
 
 extern int conprotos[2];

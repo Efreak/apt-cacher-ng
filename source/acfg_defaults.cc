@@ -81,6 +81,9 @@ optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false);
 
 int maxdlspeed(RESERVED_DEFVAL);
 
+string optproxycmd;
+int optproxycheckint=-1;
+
 #ifdef DEBUG
 int dnscachetime(30);
 #else
@@ -101,8 +104,6 @@ int debug(3), foreground(true);
 #else
 int debug(0), foreground(false);
 #endif
-
-tHttpUrl proxy_info;
 
 string cacheDirSlash; // guaranteed to have a trailing path separator
 
