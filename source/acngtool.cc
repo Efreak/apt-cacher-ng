@@ -784,7 +784,10 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 		if(acfg::SetOption(string("proxy:")+proxy, nullptr))
 			return -1;
 	tHttpUrl url;
-	if(!surl || !url.SetHttpUrl(surl))
+	if(!surl)
+		return 2;
+	string xurl(surl);
+	if(!url.SetHttpUrl(xurl))
 		return -2;
 	dlcon dl(true, nullptr, pDlconFac);
 
@@ -793,14 +796,21 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	dl.WorkLoop();
 	if(fi->GetStatus() == fileitem::FIST_COMPLETE)
 	{
-		auto st=fi->GetHeaderUnlocked().getStatus();
+		auto hh=fi->GetHeaderUnlocked();
+		auto st=hh.getStatus();
 		if(st == 200)
 			return EXIT_SUCCESS;
+		// don't reveal passwords
+		auto xpos=xurl.find('@');
+		if(xpos!=stmiss)
+			xurl.erase(0, xpos+1);
+		cerr << "Error: cannot fetch " << xurl <<", "  << hh.frontLine << endl;
 		if (st>=500)
 			return EIO;
 		if (st>=400)
 			return EACCES;
 	}
+
 	return EXIT_FAILURE;
 }
 

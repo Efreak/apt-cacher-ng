@@ -14,6 +14,9 @@ apt-cacher-ng (0.8.7) GIANT-LEAP-FOR-THE-FROGKIND; urgency=low
     build on OS-X) and to build faster (just share code between build targets)
   * Option to build without LibTomCrypt (with reduced functionality) or with
     statically linked LibTomCrypt without having to install it first
+  * More usefull error messages from acngtool's HTTP downloader
+  [ Christoph Biedl <debian.axhn@manchmal.in-ulm.de> ]
+  * Fix computation of download limit
 
  -- Eduard Bloch <blade@debian.org>  Thu, 03 Dec 2015 20:22:52 +0100
 
