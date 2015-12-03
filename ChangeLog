@@ -1,8 +1,7 @@
 apt-cacher-ng (0.8.7) GIANT-LEAP-FOR-THE-FROGKIND; urgency=low
 
   * Added more user hints about config files in acng.conf
-  * DB generator improvements (parallelization or mirror probing using GNU
-    xargs) 
+  * DB generator improvements (parallelization or mirror probing using xargs)
   * added Ubuntu distupgrader release notes to volatile files pattern until
     better information is available
   * Database update
@@ -11,8 +10,12 @@ apt-cacher-ng (0.8.7) GIANT-LEAP-FOR-THE-FROGKIND; urgency=low
     *sections* options set
   * Option to detect (and turn off) an unreachable upstream proxy through a
     custom shell command
+  * Build system changes to really check linker flags in linker calls (fixing
+    build on OS-X) and to build faster (just share code between build targets)
+  * Option to build without LibTomCrypt (with reduced functionality) or with
+    statically linked LibTomCrypt without having to install it first
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Thu, 03 Dec 2015 20:22:52 +0100
 
 apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
 

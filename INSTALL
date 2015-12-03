@@ -6,11 +6,11 @@ Requirements:
  - on Linux systems, kernel 2.6.22 or newer and glibc 2.8 or newer
 
 Extra requirements for optional features:
- - zlib, libbz2, liblzma (from XZ), OpenSSL and their development components.
+ - zlib, libbz2, liblzma (from XZ), OpenSSL and their development components
  - LibTomCrypt might work as replacement for some parts of functionality if
-   OpenSSL is not available.
+   OpenSSL is not available. See LibTomCrypt notes below!
  - recent FUSE library and its development files for the "virtual mirror"
-   filesystem.
+   filesystem
 
 Build and installation instructions:
 
@@ -81,3 +81,12 @@ There are some macros and shortcuts:
  - Certain environment variables influence cmake, like CXX (compiler to use),
    CXXFLAGS (compiler options, buid.sh won't set cmake defaults if this is
    set), LDFLAGS (compiler flags for linking)
+
+LibTomCrypt notes:
+
+ - LibTomCrypt does not have to be installed system-wide. It's sufficient to
+   compile it as static library and set the environment variable TOMCRYPT_HOME
+   pointing to LibTomCrypt's source directory
+ - with the clang compiler, recent versions of LibTomCrypt might fail to build
+   because of internal optimizations not understood by clang. The workaround
+   for this is exporting the compiler definition -DLTC_NO_ROLC via CFLAGS

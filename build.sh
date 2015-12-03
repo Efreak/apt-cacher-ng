@@ -27,5 +27,5 @@ then
 	echo Configuration failed, please fix the reported issues and run ./distclean.sh
 	exit 1
 fi
-PAR=-j$(nproc) || PAR=-j3
+PAR=-j$(nproc 2>/dev/null) || PAR=-j3
 make $PAR
