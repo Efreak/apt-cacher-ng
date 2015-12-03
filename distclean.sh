@@ -1,2 +1,2 @@
 #!/bin/sh
-rm -rf builddir
+rm -rf builddir dbgen/goodmir*txt dbgen/badmir*txt
