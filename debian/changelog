@@ -1,13 +1,15 @@
-apt-cacher-ng (0.8.7-1) UNRELEASED; urgency=low
+apt-cacher-ng (0.8.7-1) unstable; urgency=low
 
   * New upstream version
     + build system improvements (closes: #806963)
     + remove logrotated error logs (closes: #802672)
     + manpage includes more explanation of configuration mechanism and
       ALLCAPS header mentioning it in acng.conf for users refusing to RTFM
-      (closes: 802670)
+      (closes: #802670)
+    + better error reporting and documentation of reportpage requirement even
+      with acngtool (closes: #806651)
 
- -- Eduard Bloch <blade@debian.org>  Sun, 11 Oct 2015 22:01:30 +0200
+ -- Eduard Bloch <blade@debian.org>  Thu, 03 Dec 2015 21:51:26 +0100
 
 apt-cacher-ng (0.8.6-1) unstable; urgency=low
 
