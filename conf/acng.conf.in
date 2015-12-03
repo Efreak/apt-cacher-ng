@@ -76,6 +76,9 @@ Remap-gentoo: file:gentoo_mirrors.gz /gentoo ; file:backends_gentoo # Gentoo Arc
 
 # Virtual page accessible in a web browser to see statistics and status
 # information, i.e. under http://localhost:3142/acng-report.html
+# NOTE: This option must be configured to run maintenance jobs (even when used
+# via acngtool in cron scripts). The AdminAuth option can be used to restrict
+# access to sensitive areas on that page.
 #
 # Default: not set, should be set by the system administrator
 #
