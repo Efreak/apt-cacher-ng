@@ -299,8 +299,7 @@ inline void job::HandleLocalDownload(const string &visPath,
 			: tGeneratedFitemBase(visPath, "301 Moved Permanently")
 				{
 					m_head.set(header::LOCATION, visPath+"/");
-					m_data << "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">"
-					"<html><head><title>301 Moved Permanently</title></head><body><h1>Moved Permanently</h1>"
+					m_data << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>301 Moved Permanently</title></head><body><h1>Moved Permanently</h1>"
 					"<p>The document has moved <a href=\""+visPath+"/\">here</a>.</p></body></html>";
 
 					seal();
@@ -323,8 +322,7 @@ inline void job::HandleLocalDownload(const string &visPath,
 		m_pItem.RegisterFileitemLocalOnly(p); // assign to smart pointer ASAP, operations might throw
 		tSS & page = p->m_data;
 
-		page << "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 Final//EN\">"
-		"<html><head><title>Index of " << visPath << "</title></head>"
+		page << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>Index of " << visPath << "</title></head>"
 		"<body><h1>Index of " << visPath << "</h1>"
 		"<table><tr><th>&nbsp;</th><th>Name</th><th>Last modified</th><th>Size</th></tr>"
 		"<tr><th colspan=\"4\"><hr></th></tr>";
@@ -1133,8 +1131,7 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation, const
 			if(BODYFREECODE(m_head.getStatus()))
 				return;
 			// otherwise do something meaningful
-			m_data << "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n"
-				"<html><head><title>" << (bodytext ? bodytext : szError)
+			m_data <<"<!DOCTYPE html>\n<html lang=\"en\"><head><title>" << (bodytext ? bodytext : szError)
 				<< "</title>\n</head>\n<body><h1>"
 				<< (bodytext ? bodytext : szError) << "</h1></body></html>";
 			m_head.set(header::CONTENT_TYPE, "text/html");

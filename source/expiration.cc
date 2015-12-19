@@ -588,7 +588,7 @@ void expiration::Action()
 
 	PrintStats("Allocated disk space");
 
-	SendChunk("<br>Done.</br>");
+	SendChunk("<br>Done.");
 
 	save_fail_count:
 
