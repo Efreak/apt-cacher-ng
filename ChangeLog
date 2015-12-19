@@ -1,6 +1,7 @@
 apt-cacher-ng (0.8.8) CTHULHU-IS-CALLING; urgency=low
 
-  * 
+  * Added support for AppStream metadata in Debian
+  * Added filename regexps for FreeBSD files (no expiration code yet)
 
  -- 
 

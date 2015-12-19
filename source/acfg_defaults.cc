@@ -30,6 +30,7 @@ string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|[a-f0-9]+-(susedata|updateinfo|primary|deltainfo).xml.gz" //opensuse, index data, hash in filename
 		"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
 		"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
+    "|/[[:alpha:]]{1,2}/[a-f0-9]{64}(-[a-f0-9]{64})?(\\.gz)?" // FreeBSD, after https://alioth.debian.org/tracker/?func=detail&atid=413111&aid=315254&group_id=100566
 ")$");
 
 string svfilepat("/development/rawhide/.*");
@@ -50,6 +51,7 @@ string vfilepat(INFOLDER
 		"|\\.o" // https://bugs.launchpad.net/ubuntu/+source/apt-cacher-ng/+bug/1078224
 		"|Components-.*yml" COMPOPT // DEP-11 aka AppStream"
 		"|icons-[x0-9]+\\.tar" COMPOPT
+    "|(latest|pub)\\.ssl" // FreeBSD
 
 						")$" // end of filename-only patterns
 
@@ -71,6 +73,7 @@ string wfilepat(INFOLDER
 		"|" ALXPATTERN // Arch Linux
 		"|[a-z]+32.exe"
 		"|mirrors.ubuntu.com/mirrors.txt"
+    "|/[[:alpha:]]{1,2}/[a-f0-9]{64}(-[a-f0-9]{64})?(\\.gz)?" // FIXME: add expiration code
 		")$");
 
 string pfilepatEx, spfilepatEx, vfilepatEx, svfilepatEx, wfilepatEx; // for customization by user
