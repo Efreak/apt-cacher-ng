@@ -9,9 +9,9 @@
         create
         postrotate
                 if [ -e /run/systemd/system ] ; then
-                        systemctl -q is-active apt-cacher-ng && systemctl kill --signal=USR1 apt-cacher-ng
+                        systemctl -q is-active apt-cacher-ng && systemctl kill --signal=USR1 apt-cacher-ng ||:
                 elif [ -s /var/run/apt-cacher-ng/pid ] ; then
-                        kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)"
+                        kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)" 2>/dev/null ||:
                 fi
         endscript
 }
@@ -26,9 +26,9 @@
         create
         postrotate
                 if [ -e /run/systemd/system ] ; then
-                        systemctl -q is-active apt-cacher-ng && systemctl kill --signal=USR1 apt-cacher-ng
+                        systemctl -q is-active apt-cacher-ng && systemctl kill --signal=USR1 apt-cacher-ng ||:
                 elif [ -s /var/run/apt-cacher-ng/pid ] ; then
-                        kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)"
+                        kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)" 2>/dev/null ||:
                 fi
         endscript
 }
