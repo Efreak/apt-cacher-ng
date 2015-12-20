@@ -1,6 +1,5 @@
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" 
-"http://www.w3.org/TR/html4/loose.dtd">
-<html>
+<!DOCTYPE html>
+<html lang="en">
    <head>
       <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
       <meta http-equiv="X-UA-Compatible" content="IE=8" />
@@ -23,17 +22,17 @@ function checkOrUncheck(checkIt)
 function show_rest() {
    var nodes=document.getElementsByName('shorttable');
    for(var i=0; i<nodes.length; ++i)
-   		nodes[i].className = "xhidden";
+      nodes[i].className = "xhidden";
    nodes = document.getElementsByName('bigtable');
    for(var i=0; i<nodes.length; ++i)
       nodes[i].className = "xshow";
 }
 
-function copycheck(src, name)
+function copycheck(src, clname)
 {
-var nodes=document.getElementsByName(name);
+   var nodes=document.getElementsByClassName(clname);
    for(var i=0; i<nodes.length; ++i)
-   	nodes[i].checked = src.checked;
+      nodes[i].checked = src.checked;
 }
 
       </script>

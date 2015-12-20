@@ -1,3 +1,14 @@
+apt-cacher-ng (0.8.8) CTHULHU-IS-CALLING; urgency=medium
+
+  * Added support for AppStream metadata in Debian
+  * Added filename regexps for FreeBSD files (no expiration code yet)
+  * Updated documentation to refer to acngtool instead of expire-caller.pl
+  * FIX: check-all checkbox in cleanup assistant functionality, and minor HTML
+    format fixes
+  * Refactored setting of complex option, added their printing with acngtool
+
+ -- Eduard Bloch <blade@debian.org>  Sun, 20 Dec 2015 14:21:58 +0100
+
 apt-cacher-ng (0.8.7) GIANT-LEAP-FOR-THE-FROGKIND; urgency=low
 
   * Added more user hints about config files in acng.conf

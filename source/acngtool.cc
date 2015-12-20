@@ -656,7 +656,7 @@ std::unordered_map<string, parm> parms = {
 			"cfgdump",
 			{ 0, 0, [](LPCSTR p) {
 				warn_cfgdir();
-						     acfg::dump_config();
+						     acfg::dump_config(false);
 					     }
 			}
 		}

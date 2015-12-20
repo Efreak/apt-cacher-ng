@@ -702,12 +702,13 @@ files from that list immediately. To be used carefully!
 
 \S{auto-cleanup} Automated cache cleanup
 
-A script called \c{expire-caller.pl}
-is shipped with the package. This script effectively implements a HTTP client
-which operates like a human would do when running the expiration manually (see
-above). It can also extract the operator password and unix socket file path
-from the local configuration file. On Debian installations it is called by the file 
-\c{/etc/cron.daily/apt-cacher-ng} so it should run automatically as daily
+A program called \c{acngtool}
+is shipped with the package. Among other functionality, this tool effectively
+implements a HTTP client
+which operates like a human who runs the expiration manually (see
+above). If needed, it would read the admin credentials and unix socket file path
+from the local configuration files. On Debian installations it is called by the file 
+\c{/etc/cron.daily/apt-cacher-ng} so it should run automatically as a daily
 \c{cron}
 task. The results are usually not reported unless an error occurs, in which
 case some hints are written to the standard error output (i.e. sent in cron
@@ -717,12 +718,6 @@ The operator script can take some options from the environment, see below.  The
 default operation mode is calling the expiration operation with default
 parameters and with credentials from local system's apt-cacher-ng installation.
 However, this can be changed with \c{ACNGREQ} variable.
-
-\dt \c{DEBUG=1}
-
-\dd
-If set to non-empty and not 0, the temporary HTML output is reported to the
-console. For debugging purposes only.
 
 \dt \c{ACNGIP=10.0.1.3}
 
@@ -743,8 +738,8 @@ the administrator's machine.
 \dt \c{ACNGREQ=cgiparameters}
 
 \dd
-Override the auto-detected command parameters with a custom set. This is the
-part of a command URL from the management interface after the ? sign.
+Override the auto-detected command parameters with a custom query string. This
+is the part of a command URL from the management interface after the ? sign.
 
 \S{extrakeep} Keeping latest versions of expired package files
 

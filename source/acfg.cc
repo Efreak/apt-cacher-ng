@@ -68,20 +68,28 @@ struct MapNameToInt
 	const char *warn; uint8_t base;
 };
 
-/* XXX: might use a map to manage callbacks later
-struct MapNameToFunc
+struct tProperty
 {
 	const char *name;
-	const char *warn;
-	std::function<bool(cmstring&,cmstring&)> func;
+	std::function<bool(cmstring& key, cmstring& value)> set;
+	std::function<mstring(bool superUser)> get; // returns a string value. A string starting with # tells to skip the output
 };
-MapNameToFunc n2fTbl[] = {
-		{ "LocalDirsBla", 0, [](const std::string&a,const std::string&b)->bool{return true;}},
-		{ "LocalDirsFoo", 0, foo}
-};
-*/
 
 #ifndef MINIBUILD
+
+// predeclare some
+void _ParseLocalDirs(cmstring &value);
+void AddRemapInfo(bool bAsBackend, const string & token, const string &repname);
+void AddRemapFlag(const string & token, const string &repname);
+void _AddHooksFile(cmstring& vname);
+
+uint ReadBackendsFile(const string & sFile, const string &sRepName);
+uint ReadRewriteFile(const string & sFile, cmstring& sRepName);
+
+map<cmstring, tRepoData> repoparms;
+typedef decltype(repoparms)::iterator tPairRepoNameData;
+// maps hostname:port -> { <pathprefix,repopointer>, ... }
+std::unordered_map<string, list<pair<cmstring,tPairRepoNameData>>> mapUrl2pVname;
 
 MapNameToString n2sTbl[] = {
 		{   "Port",                    &port}
@@ -114,8 +122,7 @@ MapNameToString n2sTbl[] = {
 		,{  "CAfile",                  &cafile}
 		,{  "BadRedirDetectMime",      &badredmime}
 		,{	"OptProxyCheckCommand",	   &optProxyCheckCmd}
-
-		,{ "BusAction",                &sigbuscmd} // "Special debugging helper, see manual!"
+		,{  "BusAction",                &sigbuscmd} // "Special debugging helper, see manual!"
 };
 
 MapNameToInt n2iTbl[] = {
@@ -161,14 +168,158 @@ MapNameToInt n2iTbl[] = {
 		,{ "OptProxyCheckInterval", &optProxyCheckInt, nullptr, 10}
 };
 
-uint ReadBackendsFile(const string & sFile, const string &sRepName);
-uint ReadRewriteFile(const string & sFile, cmstring& sRepName);
 
-map<cmstring, tRepoData> repoparms;
-typedef decltype(repoparms)::iterator tPairRepoNameData;
-// maps hostname:port -> { <pathprefix,repopointer>, ... }
-std::unordered_map<string, list<pair<cmstring,tPairRepoNameData>>> mapUrl2pVname;
+tProperty n2pTbl[] =
+{
+{ "Proxy", [](cmstring& key, cmstring& value)
+{
+	if(value.empty()) proxy_info=tHttpUrl();
+	else
+	{
+		if (!proxy_info.SetHttpUrl(value) || proxy_info.sHost.empty())
+		BARF("Invalid proxy specification, aborting...");
+	}
+	return true;
+}, [](bool superUser)
+{
+	if(!superUser && !proxy_info.sUserPass.empty())
+		return string("#");
+	return proxy_info.sHost.empty() ? sEmptyString : proxy_info.ToURI(false);
+} },
+{ "LocalDirs", [](cmstring& key, cmstring& value)
+{
+	if(g_bNoComplex)
+	return true;
+	_ParseLocalDirs(value);
+	return !localdirs.empty();
+}, [](bool)
+{
+	string ret;
+	for(auto kv : localdirs)
+	ret += kv.first + " " + kv.second + "; ";
+	return ret;
+} },
+{ "Remap-", [](cmstring& key, cmstring& value)
+{
+	if(g_bNoComplex)
+	return true;
 
+	string vname=key.substr(6, key.npos);
+	if(vname.empty())
+	{
+		if(!g_bQuiet)
+		cerr << "Bad repository name in " << key << endl;
+		return false;
+	}
+	int type(-1); // nothing =-1; prefixes =0 ; backends =1; flags =2
+		for(tSplitWalk split(&value); split.Next();)
+		{
+			cmstring s(split);
+			if(s.empty())
+			continue;
+			if(s.at(0)=='#')
+			break;
+			if(type<0)
+			type=0;
+			if(s.at(0)==';')
+			++type;
+			else if(0 == type)
+			AddRemapInfo(false, s, vname);
+			else if(1 == type)
+			AddRemapInfo(true, s, vname);
+			else if(2 == type)
+			AddRemapFlag(s, vname);
+		}
+		if(type<0)
+		{
+			if(!g_bQuiet)
+			cerr << "Invalid entry, no configuration: " << key << ": " << value <<endl;
+			return false;
+		}
+		_AddHooksFile(vname);
+		return true;
+	}, [](bool)
+	{
+		return "# mixed options";
+	} },
+{ "AllowUserPorts", [](cmstring& key, cmstring& value)
+{
+	if(!pUserPorts)
+	pUserPorts=new bitset<TCP_PORT_MAX>;
+	for(tSplitWalk split(&value); split.Next();)
+	{
+		cmstring s(split);
+		const char *start(s.c_str());
+		char *p(0);
+		unsigned long n=strtoul(start, &p, 10);
+		if(n>=TCP_PORT_MAX || !p || '\0' != *p || p == start)
+		BARF("Bad port in AllowUserPorts: " << start);
+		if(n == 0)
+		{
+			pUserPorts->set();
+			break;
+		}
+		pUserPorts->set(n, true);
+	}
+	return true;
+}, [](bool)
+{
+	tSS ret;
+	if(pUserPorts)
+		{
+	for(auto i=0; i<TCP_PORT_MAX; ++i)
+	ret << (ret.empty() ? "" : ", ") << i;
+		}
+	return (string) ret;
+} },
+{ "ConnectProto", [](cmstring& key, cmstring& value)
+{
+	int *p = conprotos;
+	for (tSplitWalk split(&value); split.Next(); ++p)
+	{
+		cmstring val(split);
+		if (val.empty())
+		break;
+
+		if (p >= conprotos + _countof(conprotos))
+		BARF("Too many protocols specified: " << val);
+
+		if (val == "v6")
+		*p = PF_INET6;
+		else if (val == "v4")
+		*p = PF_INET;
+		else
+		BARF("IP protocol not supported: " << val);
+	}
+	return true;
+}, [](bool)
+{
+	string ret(conprotos[0] == PF_INET6 ? "v6" : "v4");
+	if(conprotos[0] != conprotos[1])
+		ret += string(" ") + (conprotos[1] == PF_INET6 ? "v6" : "v4");
+	return ret;
+} },
+{ "AdminAuth", [](cmstring& key, cmstring& value)
+{
+	adminauth=value;
+	adminauthB64=EncodeBase64Auth(value);
+	return true;
+}, [](bool)
+{
+	return "#"; // TOP SECRET";
+} }
+
+ #if SUPPWHASH
+ bIsHashedPwd=false;
+ }
+
+ else if(CHECKOPTKEY("AdminAuthHash"))
+ {
+ adminauth=value;
+ bIsHashedPwd=true;
+ #endif
+
+};
 
 string * GetStringPtr(LPCSTR key) {
 	for(auto &ent : n2sTbl)
@@ -187,6 +338,20 @@ int * GetIntPtr(LPCSTR key, int &base) {
 			base = ent.base;
 			return ent.ptr;
 		}
+	}
+	return nullptr;
+}
+
+tProperty* GetPropPtr(LPCSTR key)
+{
+	auto sep = strrchr(key, '-');
+	for (auto &ent : n2pTbl)
+	{
+		if (0 == strcasecmp(key, ent.name))
+			return &ent;
+		// identified as prefix?
+		if(sep && 0 == ent.name[sep-key+1] && 0==strncasecmp(key, ent.name, sep-key+1))
+			return &ent;
 	}
 	return nullptr;
 }
@@ -446,7 +611,7 @@ struct tHookHandler: public tRepoData::IHookHandler, public lockable
 	}
 };
 
-void _AddHooksFile(cmstring& vname)
+inline void _AddHooksFile(cmstring& vname)
 {
 	tCfgIter itor(acfg::confdir+"/"+vname+".hooks");
 	if(!itor)
@@ -570,6 +735,7 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 
 	string * psTarget;
 	int * pnTarget;
+	tProperty * ppTarget;
 	int nNumBase(10);
 
 	if ( nullptr != (psTarget = GetStringPtr(key.c_str())))
@@ -629,116 +795,9 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 			return false;
 		}
 	}
-#define CHECKOPTKEY(x)	0==strcasecmp(key.c_str(),x)
-	else if(CHECKOPTKEY("Proxy"))
+	else if ( nullptr != (ppTarget = GetPropPtr(key.c_str())))
 	{
-		if(value.empty())
-			proxy_info=tHttpUrl();
-		else
-		{
-			if (!proxy_info.SetHttpUrl(value) || proxy_info.sHost.empty())
-				BARF("Invalid proxy specification, aborting...");
-		}
-	}
-	else if(CHECKOPTKEY("LocalDirs"))
-	{
-		if(g_bNoComplex)
-			return true;
-		_ParseLocalDirs(value);
-		return !localdirs.empty();
-	}
-	else if(0==strncasecmp(key.c_str(), "Remap-", 6))
-	{
-		if(g_bNoComplex)
-			return true;
-
-		string vname=key.substr(6, key.npos);
-		if(vname.empty())
-		{
-			if(!g_bQuiet)
-				cerr << "Bad repository name in " << key << endl;
-			return false;
-		}
-		int type(-1); // nothing =-1; prefixes =0 ; backends =1; flags =2
-		for(tSplitWalk split(&value); split.Next();)
-		{
-			cmstring s(split);
-			if(s.empty())
-				continue;
-			if(s.at(0)=='#')
-				break;
-			if(type<0)
-				type=0;
-			if(s.at(0)==';')
-				++type;
-			else if(0 == type)
-				AddRemapInfo(false, s, vname);
-			else if(1 == type)
-				AddRemapInfo(true, s, vname);
-			else if(2 == type)
-				AddRemapFlag(s, vname);
-		}
-		if(type<0)
-		{
-			if(!g_bQuiet)
-				cerr << "Invalid entry, no configuration: " << key << ": " << value <<endl;
-			return false;
-		}
-		_AddHooksFile(vname);
-	}
-	else if(CHECKOPTKEY("AllowUserPorts"))
-	{
-		if(!pUserPorts)
-			pUserPorts=new bitset<TCP_PORT_MAX>;
-		for(tSplitWalk split(&value); split.Next();)
-		{
-			cmstring s(split);
-			const char *start(s.c_str());
-			char *p(0);
-			unsigned long n=strtoul(start, &p, 10);
-			if(n>=TCP_PORT_MAX || !p || '\0' != *p || p == start)
-				BARF("Bad port in AllowUserPorts: " << start);
-			if(n == 0)
-			{
-				pUserPorts->set();
-				break;
-			}
-			pUserPorts->set(n, true);
-		}
-	}
-	else if(CHECKOPTKEY("ConnectProto"))
-	{
-		int *p = conprotos;
-		for (tSplitWalk split(&value); split.Next(); ++p)
-		{
-			cmstring val(split);
-			if (val.empty())
-				break;
-
-			if (p >= conprotos + _countof(conprotos))
-				BARF("Too many protocols specified: " << val);
-
-			if (val == "v6")
-				*p = PF_INET6;
-			else if (val == "v4")
-				*p = PF_INET;
-			else
-				BARF("IP protocol not supported: " << val);
-		}
-	}
-	else if(CHECKOPTKEY("AdminAuth"))
-	{
-	   adminauth=value;
-	   adminauthB64=EncodeBase64Auth(value);
-#if SUPPWHASH
-	   bIsHashedPwd=false;
-	}
-
-	else if(CHECKOPTKEY("AdminAuthHash"))
-	{
-	   adminauth=value;
-	   bIsHashedPwd=true;
-#endif
+		return ppTarget->set(key, value);
 	}
 	else
 	{
@@ -1113,7 +1172,7 @@ void PostProcConfig()
 
 } // PostProcConfig
 
-void dump_config()
+void dump_config(bool includeDelicate)
 {
 	ostream &cmine(cout);
 
@@ -1144,6 +1203,13 @@ void dump_config()
 	for (const auto& n2i : n2iTbl)
 		if (n2i.ptr)
 			cmine << n2i.name << " = " << *n2i.ptr << endl;
+
+	for (const auto& x : n2pTbl)
+	{
+		auto val(x.get(includeDelicate));
+		if(startsWithSz(val, "#")) continue;
+		cmine << x.name << " = " << val << endl;
+	}
 
 #ifndef DEBUG
 	if (acfg::debug >= LOG_DEBUG)

@@ -2184,7 +2184,7 @@ void tCacheOperation::PrintStats(cmstring &title)
 	if(!m_bVerbose)
 	{
 	m_fmtHelper << "<br>\n<table name=\"shorttable\"><thead>"
-			"<th colspan=2>" << title;
+			"<tr><th colspan=2>" << title;
 	if(!m_bVerbose && sorted.size()>MAX_TOP_COUNT)
 		m_fmtHelper << " (Top " << nMax << "<span name=\"noshowmore\">,"
 				" <a href=\"javascript:show_rest();\">show more / cleanup</a></span>)";
@@ -2204,11 +2204,11 @@ void tCacheOperation::PrintStats(cmstring &title)
 	}
 
 	m_fmtHelper << "<br>\n<table><thead>"
-				"<th colspan=1><input type=\"checkbox\"onclick=\"copycheck(this, 'xf');\"></input></th>"
+				"<tr><th colspan=1><input type=\"checkbox\" onclick=\"copycheck(this, 'xfile');\"></th>"
 				"<th colspan=2>" << title << "</th></tr></thead>\n<tbody>";
 		for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
 		{
-			m_fmtHelper << "<tr><td><input type=\"checkbox\" name=\"kf" << nKillLfd++
+			m_fmtHelper << "<tr><td><input type=\"checkbox\" class=\"xfile\" name=\"kf" << nKillLfd++
 					<< "\" value=\"" << *(it->second) << "\"></td>"
 						"<td><b>" << offttosH(it->first) << "</b></td><td>"
 					<< *(it->second) << "</td></tr>\n";
