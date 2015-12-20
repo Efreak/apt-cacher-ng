@@ -49,11 +49,11 @@ extern int conprotos[2];
 extern std::atomic_bool degraded;
 
 bool SetOption(const mstring &line, NoCaseStringMap *pDupeChecker);
+void dump_config(bool includingDelicateValues=false);
 void ReadConfigDirectory(const char*, bool bReadErrorIsFatal=true);
 
 //! Prepare various things resulting from variable combinations, etc.
 void PostProcConfig();
-void dump_config();
 
 struct tRepoData
 {
@@ -139,8 +139,6 @@ bool CompileExpressions();
 #define SABSPATH(x) (CACHE_BASE+(x))
 
 bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
-
-void dump_config();
 
 // XXX: find a better place for this, shared between server and acngtool
 enum ControLineType
