@@ -23,6 +23,7 @@ LIST(APPEND SHAREDSRCS
 
 # remaining srcs, only for apt-cacher-ng
 FILE(GLOB SRCS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+list(SORT SRCS)
 list(REMOVE_ITEM SRCS ${MAINSRCS})
 list(REMOVE_ITEM SRCS ${SHAREDSRCS})
 

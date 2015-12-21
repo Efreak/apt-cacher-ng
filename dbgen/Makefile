@@ -109,8 +109,22 @@ build_gentoo_mirrors:
 
 TGTDIR=dbupdate
 
+# some helpers to have reproducible builds where possible
+TARARGS =--owner=root --group=root --mode=644 --no-xattrs
+ifeq ($(SOURCE_DATE_EPOCH),)
+TARARGS += --mtime=@1
+else
+TARARGS += --mtime=@$(SOURCE_DATE_EPOCH)
+endif
+ifneq ($(shell tar --help | grep clamp-mtime),)
+TARARGS += --clamp-mtime
+endif
+ifneq ($(shell tar --help | grep "sort.*name"),)
+TARARGS += --sort=name
+endif
+
 package: $(DBTMP)
-	rm -rf $(TGTDIR) && mkdir $(TGTDIR) && cp -l Makefile deburlgen.pl gentoo_mirrors.sh ubuntuscan.sh sig-* $(TGTDIR) && tar --xz -c -f $(DBGENERATOR).tar.xz $(TGTDIR)
+	rm -rf $(TGTDIR) && mkdir $(TGTDIR) && cp -l Makefile deburlgen.pl gentoo_mirrors.sh ubuntuscan.sh sig-* $(TGTDIR) && tar -f- -c $(TARARGS) $(TGTDIR) | xz -9 > $(DBGENERATOR).tar.xz
 
 install:
 	cp conf/*mirrors* /usr/lib/apt-cacher-ng/
