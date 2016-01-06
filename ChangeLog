@@ -2,6 +2,10 @@ apt-cacher-ng (0.8.9) VOID-WHICH-BINDS; urgency=low
 
   * Minor tweaks for reproducible builds (file order, permissions in tarball)
 
+  [ Eric Vander Weele ]
+  * Fix for Alioth issue #315276 (explicit return type declaration in a
+    lambda, for a build failure with clang 3.5)
+
  -- 
 
 apt-cacher-ng (0.8.8) CTHULHU-IS-CALLING; urgency=medium
