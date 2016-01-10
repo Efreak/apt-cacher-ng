@@ -10,9 +10,8 @@ Package: apt-cacher-ng
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
 Pre-Depends: dpkg (>= 1.15.6)
-Recommends: ed
 Conflicts: logrotate (<< 3.8.0)
-Suggests: doc-base, libfuse2 (>= 2.5), curl | wget, avahi-daemon
+Suggests: doc-base, libfuse2 (>= 2.5), avahi-daemon
 Description: caching proxy server for software repositories
  Apt-Cacher NG is a caching proxy for downloading packages from Debian-style
  software repositories (or possibly from other types).

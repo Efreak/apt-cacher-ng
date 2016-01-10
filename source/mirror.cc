@@ -276,7 +276,7 @@ inline bool pkgmirror::ConfigDelta(cmstring &sPathRel)
 {
 	// ok... having a source for deltas?
 
-	m_pDeltaSrc = NULL;
+	m_pDeltaSrc = nullptr;
 	m_repCutLen = 0;
 
 	if (!m_bUseDelta)
@@ -370,7 +370,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 						if(!isalnum(uint(*p)) && !strchr(".-+:~",uint(*p)))
 							break;
 					if( !*p && CompDebVerLessThan(s, parts[1]))
-						sorted.push_back(s);
+						sorted.emplace_back(s);
 				}
 			}
 
@@ -407,7 +407,7 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 				::unlink(sDeltaPathAbs.c_str());
 				::unlink((sDeltaPathAbs+".head").c_str());
 
-				if(Download(TEMPDELTA, false, eMsgHideAll, NULL, &uri))
+				if(Download(TEMPDELTA, false, eMsgHideAll, nullptr, &uri))
 				{
 					::setenv("delta", SZABSPATH(TEMPDELTA), true);
 					::setenv("from", srcAbs.c_str(), true);

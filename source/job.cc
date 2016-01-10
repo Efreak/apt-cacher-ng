@@ -60,7 +60,7 @@ protected:
 
 public:
 	tPassThroughFitem(std::string s) :
-	m_pData(NULL), m_nConsumable(0), m_nConsumed(0)
+	m_pData(nullptr), m_nConsumable(0), m_nConsumed(0)
 	{
 		m_sPathRel = s;
 		m_bAllowStoreData=false;
@@ -73,7 +73,7 @@ public:
 	}
 	virtual int GetFileFd() override
 			{ return SPECIAL_FD; }; // something, don't care for now
-	virtual bool DownloadStartedStoreHeader(const header & h, const char *,
+	virtual bool DownloadStartedStoreHeader(const header & h, size_t, const char *,
 			bool, bool&) override
 	{
 		setLockGuard;
@@ -116,7 +116,7 @@ public:
 
 			dbgline;
 			m_nConsumable=0;
-			m_pData=NULL;
+			m_pData=nullptr;
 			return m_nConsumed;
 		}
 		return true;
@@ -190,56 +190,12 @@ public:
 		m_head.set(header::CONTENT_LENGTH, m_nSizeChecked);
 	}
 	// never used to store data
-	bool DownloadStartedStoreHeader(const header &, const char *, bool, bool&)
+	bool DownloadStartedStoreHeader(const header &, size_t, const char *, bool, bool&)
 	override
 	{return false;};
 	bool StoreFileData(const char *, unsigned int) override {return false;};
 	header & HeadRef() { return m_head; }
 };
-
-ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count)
-{
-	char buf[8192];
-	ssize_t totalcnt=0;
-	
-	if(!offset)
-	{
-		errno=EFAULT;
-		return -1;
-	}
-	if(lseek(in_fd, *offset, SEEK_SET)== (off_t)-1)
-		return -1;
-	while(count>0)
-	{
-		auto readcount=read(in_fd, buf, min(count, sizeof(buf)));
-		if(readcount<=0)
-		{
-			if(errno==EINTR || errno==EAGAIN)
-				continue;
-			else
-				return readcount;
-		}
-		
-		*offset+=readcount;
-		totalcnt+=readcount;
-		count-=readcount;
-		
-		for(decltype(readcount) nPos(0);nPos<readcount;)
-		{
-			auto r=write(out_fd, buf+nPos, readcount-nPos);
-			if(r==0) continue; // not nice but needs to deliver it
-			if(r<0)
-			{
-				if(errno==EAGAIN || errno==EINTR)
-					continue;
-				return r;
-			}
-			nPos+=r;
-		}
-	}
-	return totalcnt;
-}
-
 
 job::job(header *h, con *pParent) :
 	m_filefd(-1),
@@ -343,8 +299,7 @@ inline void job::HandleLocalDownload(const string &visPath,
 			: tGeneratedFitemBase(visPath, "301 Moved Permanently")
 				{
 					m_head.set(header::LOCATION, visPath+"/");
-					m_data << "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">"
-					"<html><head><title>301 Moved Permanently</title></head><body><h1>Moved Permanently</h1>"
+					m_data << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>301 Moved Permanently</title></head><body><h1>Moved Permanently</h1>"
 					"<p>The document has moved <a href=\""+visPath+"/\">here</a>.</p></body></html>";
 
 					seal();
@@ -367,8 +322,7 @@ inline void job::HandleLocalDownload(const string &visPath,
 		m_pItem.RegisterFileitemLocalOnly(p); // assign to smart pointer ASAP, operations might throw
 		tSS & page = p->m_data;
 
-		page << "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 Final//EN\">"
-		"<html><head><title>Index of " << visPath << "</title></head>"
+		page << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>Index of " << visPath << "</title></head>"
 		"<body><h1>Index of " << visPath << "</h1>"
 		"<table><tr><th>&nbsp;</th><th>Name</th><th>Last modified</th><th>Size</th></tr>"
 		"<tr><th colspan=\"4\"><hr></th></tr>";
@@ -493,7 +447,7 @@ inline bool job::ParseRange()
 	return false;
 }
 
-void job::PrepareDownload() {
+void job::PrepareDownload(LPCSTR headBuf) {
 
     LOGSTART("job::PrepareDownload");
     
@@ -541,7 +495,7 @@ void job::PrepareDownload() {
 		if (startsWithSz(sReqPath, "/HTTPS///"))
 			sReqPath.replace(0, 6, PROT_PFX_HTTPS);
 		// special case: proxy-mode AND special prefix are there
-		if (startsWithSz(sReqPath, "http://HTTPS///"))
+		if(0==strncasecmp(sReqPath.c_str(), WITHLEN("http://https///")))
 			sReqPath.replace(0, 13, PROT_PFX_HTTPS);
 
 		if(!theUrl.SetHttpUrl(sReqPath, false))
@@ -707,7 +661,8 @@ MYTRY
 
 					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.get(),
 							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
-							bHaveRedirects ? &repoMapping.sRestPath : nullptr))
+							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
+									(LPCSTR) ( bPtMode ? headBuf : nullptr)))
 				{
 					ldbg("Download job enqueued for " << m_sFileLoc);
 				}
@@ -732,7 +687,7 @@ report_overload:
 
 report_notallowed:
 	SetErrorResponse((tSS() << "403 Forbidden file type or location: " << sReqPath).c_str(),
-			NULL, "403 Forbidden file type or location");
+			nullptr, "403 Forbidden file type or location");
 //    USRDBG( sRawUriPath + " -- ACCESS FORBIDDEN");
     return ;
 
@@ -848,9 +803,6 @@ job::eJobResult job::SendData(int confd)
 					const char *szErr = BuildAndEnqueHeader(fistate, nGoodDataSize, respHead);
 					if(szErr) THROW_ERROR(szErr);
 					USRDBG("Response header to be sent in the next cycle: \n" << m_sendbuf );
-#ifdef DEBUG
-#warning TODO: review the life cycle, might avoid one select call in the function above (prio:low)
-#endif
 					return R_AGAIN;
 				}
 				case(STATE_HEADER_SENT):
@@ -972,8 +924,10 @@ job::eJobResult job::SendData(int confd)
 				
 				case(STATE_ALLDONE):
 					LOG("State: STATE_ALLDONE?");
+				// no break
 				case (STATE_ERRORCONT):
 					LOG("or STATE_ERRORCONT?");
+				// no break
 				case(STATE_FINISHJOB):
 					LOG("or STATE_FINISHJOB");
 					{
@@ -984,6 +938,7 @@ job::eJobResult job::SendData(int confd)
 					}
 					break;
 				case(STATE_TODISCON):
+						// no break
 				default:
 					return R_DISCON;
 			}
@@ -1176,8 +1131,7 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation, const
 			if(BODYFREECODE(m_head.getStatus()))
 				return;
 			// otherwise do something meaningful
-			m_data << "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n"
-				"<html><head><title>" << (bodytext ? bodytext : szError)
+			m_data <<"<!DOCTYPE html>\n<html lang=\"en\"><head><title>" << (bodytext ? bodytext : szError)
 				<< "</title>\n</head>\n<body><h1>"
 				<< (bodytext ? bodytext : szError) << "</h1></body></html>";
 			m_head.set(header::CONTENT_TYPE, "text/html");

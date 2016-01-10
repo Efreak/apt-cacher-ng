@@ -7,8 +7,8 @@ export CONFDIR
 # Main rule to be called to update all databases. Does two things, first get
 # and pre-filter raw data, second: check the sources and generate final lists,
 # skipping dead mirrors.
-gendbs: $(CONFDIR) clean_db_tmp get_deb_input get_ubu_input get_fedora_input get_sl_input get_sfnet_input
-	$(MAKE) $(CONFDIR)/deb_mirrors.gz $(CONFDIR)/debvol_mirrors.gz $(CONFDIR)/gentoo_mirrors.gz
+gendbs: $(CONFDIR) clean_db_tmp get_deb_input get_ubu_input get_fedora_input get_sl_input get_sfnet_input build_gentoo_mirrors
+	$(MAKE) $(CONFDIR)/deb_mirrors.gz $(CONFDIR)/debvol_mirrors.gz
 	$(MAKE) $(CONFDIR)/ubuntu_mirrors $(CONFDIR)/cygwin_mirrors $(CONFDIR)/archlx_mirrors $(CONFDIR)/fedora_mirrors $(CONFDIR)/epel_mirrors $(CONFDIR)/sl_mirrors $(CONFDIR)/sfnet_mirrors
 
 clean_db_tmp:
@@ -39,7 +39,7 @@ get_ubu_input:
 	cmp sig-ubuntu $(DBTMP)/sig-ubuntu 2>/dev/null || cp $(DBTMP)/sig-ubuntu sig-ubuntu 
 
 get_fedora_input:
-	wget -q -O $(DBTMP)/fsnap_raw https://mirrors.fedoraproject.org/publiclist/
+	wget -q -O $(DBTMP)/fsnap_raw https://admin.fedoraproject.org/mirrormanager/mirrors/EPEL/7/x86_64
 	tr '"' '\n' < $(DBTMP)/fsnap_raw | grep -iE '^http.*(linux|epel)/?$$' > $(DBTMP)/fsnap_
 	bash fedorasrcs.sh >> $(DBTMP)/fsnap_
 	cat $(DBTMP)/fsnap_ extra/fedora_mirrors $(CONFDIR)/fedora_mirrors | sort -u > $(DBTMP)/fsnap
@@ -81,7 +81,7 @@ $(CONFDIR)/sfnet_mirrors: sig-sfsnap
 $(CONFDIR)/ubuntu_mirrors: sig-ubuntu ubuntuscan.sh
 	bash ubuntuscan.sh $@ $(DBTMP)/usnap $(DBTMP) "/pool/" "main"
 
-$(CONFDIR)/cygwin_mirrors: sig-cygwin
+$(CONFDIR)/cygwin_mirrors:
 	wget -q -O $(DBTMP)/cyg_raw http://cygwin.com/mirrors.lst
 	grep ^http: $(DBTMP)/cyg_raw | cut -f1 -d\; | sort -u > $(CONFDIR)/cygwin_mirrors
 
@@ -95,17 +95,17 @@ $(CONFDIR)/deb_mirrors.gz: sig-debian deburlgen.pl
 	-zcat $@ >> $(DBTMP)/dsnap.urls
 	sort -u < $(DBTMP)/dsnap.urls > $(DBTMP)/dsnap.urls_sorted
 	bash ubuntuscan.sh $(CONFDIR)/deb_mirrors $(DBTMP)/dsnap.urls_sorted $(DBTMP) "/dists"
-	gzip -f -9 $(CONFDIR)/deb_mirrors
+	gzip -nf9 $(CONFDIR)/deb_mirrors
 
 $(CONFDIR)/debvol_mirrors.gz: sig-debian deburlgen.pl
 	perl deburlgen.pl Volatile-http < $(DBTMP)/dsnap > $(DBTMP)/debvol.urls
 	-zcat $@ >> $(DBTMP)/debvol.urls
 	sort -u < $(DBTMP)/debvol.urls > $(DBTMP)/debvol.urls_sorted
 	bash ubuntuscan.sh $(CONFDIR)/debvol_mirrors $(DBTMP)/debvol.urls_sorted $(DBTMP) "/dists"
-	gzip -f -9 $(CONFDIR)/debvol_mirrors
+	gzip -nf9 $(CONFDIR)/debvol_mirrors
 
-$(CONFDIR)/gentoo_mirrors.gz:
-	cd conf && sh ../gentoo_mirrors.sh
+build_gentoo_mirrors:
+	cd $(CONFDIR) && sh $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))/gentoo_mirrors.sh
 
 TGTDIR=dbupdate
 
@@ -114,3 +114,5 @@ package: $(DBTMP)
 
 install:
 	cp conf/*mirrors* /usr/lib/apt-cacher-ng/
+
+.PHONY: $(CONFDIR)/gentoo_mirrors.gz

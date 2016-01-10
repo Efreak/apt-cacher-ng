@@ -37,7 +37,7 @@ const static tStrPos stmiss(cmstring::npos);
 typedef unsigned short USHORT;
 typedef unsigned char UCHAR;
 typedef const char * LPCSTR;
-
+typedef std::pair<LPCSTR, size_t> tPtrLen;
 #define citer const_iterator
 
 #define CPATHSEPUNX '/'
@@ -76,9 +76,6 @@ extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS;
 #include <sys/socket.h>
 #ifndef SO_MAXCONN
 #define SO_MAXCONN 250
-#endif
-#if defined(__linux__)
-#include <sys/socketvar.h>
 #endif
 
 //#define PATHSEP "/"
@@ -143,7 +140,7 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
       for(LPCSTR pWhat=needles; *pWhat ; pWhat++)
          if(*pWhat==*pWhere)
             return pWhere;
-   return NULL;
+   return nullptr;
 }
 
 typedef std::vector<mstring> tStrVec;
@@ -155,6 +152,7 @@ tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool b
 /*inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
 {out.clear(); if(tokens.empty()) return; for(const auto& tok: tokens)out+=(sep + tok);}
 */
+void StrSubst(mstring &contents, const mstring &from, const mstring &to, tStrPos start=0);
 
 // TODO: __attribute__((externally_visible))
 bool ParseKeyValLine(const mstring & sIn, mstring & sOutKey, mstring & sOutVal);
@@ -173,61 +171,50 @@ public:
 	mstring ToURI(bool bEscaped) const;
 	mstring sHost, sPath, sUserPass;
 
-#ifdef HAVE_SSL
 	bool bSSL=false;
 	inline cmstring & GetProtoPrefix() const
 	{
 		return bSSL ? PROT_PFX_HTTPS : PROT_PFX_HTTP;
 	}
-#else
-	inline cmstring & GetProtoPrefix() const
-	{
-		return PROT_PFX_HTTP;
-	}
-#endif
 
-	tHttpUrl & operator=(const tHttpUrl &a) 
+	tHttpUrl & operator=(const tHttpUrl &a)
 	{
-		sHost=a.sHost; sPort=a.sPort; sPath=a.sPath; sUserPass=a.sUserPass;
-#ifdef HAVE_SSL
-		bSSL=a.bSSL;
-#endif
+		sHost = a.sHost;
+		sPort = a.sPort;
+		sPath = a.sPath;
+		sUserPass = a.sUserPass;
+		bSSL = a.bSSL;
 		return *this;
-	};
+	}
 	bool operator==(const tHttpUrl &a) const
 	{
-		return a.sHost==sHost && a.sPort == sPort
-				&& a.sPath == sPath && a.sUserPass == sUserPass
-#ifdef HAVE_SSL
-				&& a.bSSL == bSSL
-#endif
-				;
-	};
-	bool operator!=(const tHttpUrl &a) const
+		return a.sHost == sHost && a.sPort == sPort && a.sPath == sPath
+				&& a.sUserPass == sUserPass && a.bSSL == bSSL;
+	}
+	;bool operator!=(const tHttpUrl &a) const
 	{
-		return ! (a==*this);
+		return !(a == *this);
 	}
-	inline void clear() { sHost.clear(); sPort.clear(); sPath.clear();
-	sUserPass.clear();
-#ifdef HAVE_SSL
-	bSSL=false;
-#endif
+	inline void clear()
+	{
+		sHost.clear();
+		sPort.clear();
+		sPath.clear();
+		sUserPass.clear();
+		bSSL = false;
 	}
-
-
-	inline cmstring& GetDefaultPortForProto() const { return
-#ifdef HAVE_SSL
-			bSSL ? sDefPortHTTPS : sDefPortHTTP;
-#else
-	sDefPortHTTP;
-#endif
+	inline cmstring& GetDefaultPortForProto() const {
+		return bSSL ? sDefPortHTTPS : sDefPortHTTP;
 	}
 	inline cmstring& GetPort() const { return !sPort.empty() ? sPort : GetDefaultPortForProto(); }
 
-
-	inline tHttpUrl(cmstring &host, cmstring& port, bool ssl)
-	: sPort(port), sHost(host), bSSL(ssl) {};
+	inline tHttpUrl(cmstring &host, cmstring& port, bool ssl) :
+			sPort(port), sHost(host), bSSL(ssl)
+	{
+	}
 	inline tHttpUrl() =default;
+	// evil method that should only be called for specific purposes in certain locations
+	tHttpUrl* NormalizePath() { StrSubst(sPath, "//", "/"); return this; }
 };
 
 #define POKE(x) for(;;) { ssize_t n=write(x, "", 1); if(n>0 || (EAGAIN!=errno && EINTR!=errno)) break;  }
@@ -242,7 +229,6 @@ bool CsAsciiToBin(LPCSTR a, uint8_t b[], unsigned short binLength);
 
 typedef const unsigned char CUCHAR;
 bool CsEqual(LPCSTR a, uint8_t b[], unsigned short binLength);
-void StrSubst(mstring &contents, const mstring &from, const mstring &to);
 
 #if SIZEOF_LONG == 8
 // _FILE_OFFSET_BITS mostly irrelevant. But if it's set, watch out for user's "experiments".
@@ -397,7 +383,7 @@ public:
 	}
 	inline mstring str(){ return s.substr(start, len); }
 	inline operator mstring() { return str(); }
-//	inline LPCSTR rest() { return s.c_str() + start; }
+	inline LPCSTR remainder() { return s.c_str() + start; }
 };
 
 //bool CreateDetachedThread(void *(*threadfunc)(void *));
@@ -476,7 +462,7 @@ struct tCurrentTime
 {
 	char buf[30];
 	uint len;
-	inline tCurrentTime() { len=FormatTime(buf, time(NULL)); }
+	inline tCurrentTime() { len=FormatTime(buf, time(nullptr)); }
 	inline operator mstring() { return mstring(buf, len); }
 };
 
@@ -494,11 +480,20 @@ void DelTree(cmstring &what);
 
 struct tErrnoFmter: public mstring
 {
-	tErrnoFmter(LPCSTR prefix = NULL);
+	tErrnoFmter(LPCSTR prefix = nullptr);
 };
 
 mstring EncodeBase64Auth(cmstring &sPwdString);
 mstring EncodeBase64(LPCSTR data, uint len);
+
+#if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
+#define COMPATGCC47
+#define EMPLACE_PAIR(M,K,V) if(M.find(K) == M.end()) M.insert(std::make_pair(K,V))
+#else
+#define EMPLACE_PAIR(M,K,V) M.emplace(K,V)
+#endif
+
+typedef std::vector<std::pair<std::string, std::string>> tLPS;
 
 #endif // _META_H
 

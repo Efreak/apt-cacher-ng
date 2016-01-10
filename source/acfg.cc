@@ -47,13 +47,15 @@ bool g_bQuiet=false, g_bNoComplex=false;
 
 // internal stuff:
 string sPopularPath("/debian/");
-
-string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt;
+string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt, optProxyCheckCmd;
+int optProxyCheckInt = 99;
 
 tStrMap localdirs;
 static class : public lockable, public NoCaseStringMap {} mimemap;
 
-std::bitset<TCP_PORT_MAX> *pUserPorts = NULL;
+std::bitset<TCP_PORT_MAX> *pUserPorts = nullptr;
+
+tHttpUrl proxy_info;
 
 struct MapNameToString
 {
@@ -66,26 +68,28 @@ struct MapNameToInt
 	const char *warn; uint8_t base;
 };
 
-/*
-bool ProtoSetKeyVal(cmstring& key, cmstring&value);
-struct MapNameToFunc
+struct tProperty
 {
 	const char *name;
-	const char *warn;
-	//decltype(ProtoSetKeyVal) func;
-	std::function<bool(cmstring&,cmstring&)> func;
+	std::function<bool(cmstring& key, cmstring& value)> set;
+	std::function<mstring(bool superUser)> get; // returns a string value. A string starting with # tells to skip the output
 };
-bool testcall(cmstring& key, cmstring&value){return true;}
-auto foo=testcall;
-//decltype(ProtoSetKeyVal) hm=testcall;
-MapNameToFunc n2fTbl[] = {
-		{ "LocalDirsBla", 0, [](const std::string&a,const std::string&b)->bool{return true;}},
-		{ "LocalDirsFoo", 0, foo}
-};
-// XXX: too cumbersome too use, cannot skip skeleton, is there a better way?
-*/
 
 #ifndef MINIBUILD
+
+// predeclare some
+void _ParseLocalDirs(cmstring &value);
+void AddRemapInfo(bool bAsBackend, const string & token, const string &repname);
+void AddRemapFlag(const string & token, const string &repname);
+void _AddHooksFile(cmstring& vname);
+
+uint ReadBackendsFile(const string & sFile, const string &sRepName);
+uint ReadRewriteFile(const string & sFile, cmstring& sRepName);
+
+map<cmstring, tRepoData> repoparms;
+typedef decltype(repoparms)::iterator tPairRepoNameData;
+// maps hostname:port -> { <pathprefix,repopointer>, ... }
+std::unordered_map<string, list<pair<cmstring,tPairRepoNameData>>> mapUrl2pVname;
 
 MapNameToString n2sTbl[] = {
 		{   "Port",                    &port}
@@ -117,8 +121,8 @@ MapNameToString n2sTbl[] = {
 		,{  "CApath",                  &capath}
 		,{  "CAfile",                  &cafile}
 		,{  "BadRedirDetectMime",      &badredmime}
-
-		,{ "BusAction",                &sigbuscmd} // "Special debugging helper, see manual!"
+		,{	"OptProxyCheckCommand",	   &optProxyCheckCmd}
+		,{  "BusAction",                &sigbuscmd} // "Special debugging helper, see manual!"
 };
 
 MapNameToInt n2iTbl[] = {
@@ -161,16 +165,161 @@ MapNameToInt n2iTbl[] = {
 		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
 		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10}
 		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10}
+		,{ "OptProxyCheckInterval", &optProxyCheckInt, nullptr, 10}
 };
 
-void ReadRewriteFile(const string & sFile, const string & sRepName);
-void ReadBackendsFile(const string & sFile, const string &sRepName);
 
-map<cmstring, tRepoData> repoparms;
-typedef decltype(repoparms)::iterator tPairRepoNameData;
-// maps hostname:port -> { <pathprefix,repopointer>, ... }
-std::unordered_map<string, list<pair<cmstring,tPairRepoNameData>>> mapUrl2pVname;
+tProperty n2pTbl[] =
+{
+{ "Proxy", [](cmstring& key, cmstring& value)
+{
+	if(value.empty()) proxy_info=tHttpUrl();
+	else
+	{
+		if (!proxy_info.SetHttpUrl(value) || proxy_info.sHost.empty())
+		BARF("Invalid proxy specification, aborting...");
+	}
+	return true;
+}, [](bool superUser)
+{
+	if(!superUser && !proxy_info.sUserPass.empty())
+		return string("#");
+	return proxy_info.sHost.empty() ? sEmptyString : proxy_info.ToURI(false);
+} },
+{ "LocalDirs", [](cmstring& key, cmstring& value)
+{
+	if(g_bNoComplex)
+	return true;
+	_ParseLocalDirs(value);
+	return !localdirs.empty();
+}, [](bool)
+{
+	string ret;
+	for(auto kv : localdirs)
+	ret += kv.first + " " + kv.second + "; ";
+	return ret;
+} },
+{ "Remap-", [](cmstring& key, cmstring& value)
+{
+	if(g_bNoComplex)
+	return true;
 
+	string vname=key.substr(6, key.npos);
+	if(vname.empty())
+	{
+		if(!g_bQuiet)
+		cerr << "Bad repository name in " << key << endl;
+		return false;
+	}
+	int type(-1); // nothing =-1; prefixes =0 ; backends =1; flags =2
+		for(tSplitWalk split(&value); split.Next();)
+		{
+			cmstring s(split);
+			if(s.empty())
+			continue;
+			if(s.at(0)=='#')
+			break;
+			if(type<0)
+			type=0;
+			if(s.at(0)==';')
+			++type;
+			else if(0 == type)
+			AddRemapInfo(false, s, vname);
+			else if(1 == type)
+			AddRemapInfo(true, s, vname);
+			else if(2 == type)
+			AddRemapFlag(s, vname);
+		}
+		if(type<0)
+		{
+			if(!g_bQuiet)
+			cerr << "Invalid entry, no configuration: " << key << ": " << value <<endl;
+			return false;
+		}
+		_AddHooksFile(vname);
+		return true;
+	}, [](bool)
+	{
+		return "# mixed options";
+	} },
+{ "AllowUserPorts", [](cmstring& key, cmstring& value)
+{
+	if(!pUserPorts)
+	pUserPorts=new bitset<TCP_PORT_MAX>;
+	for(tSplitWalk split(&value); split.Next();)
+	{
+		cmstring s(split);
+		const char *start(s.c_str());
+		char *p(0);
+		unsigned long n=strtoul(start, &p, 10);
+		if(n>=TCP_PORT_MAX || !p || '\0' != *p || p == start)
+		BARF("Bad port in AllowUserPorts: " << start);
+		if(n == 0)
+		{
+			pUserPorts->set();
+			break;
+		}
+		pUserPorts->set(n, true);
+	}
+	return true;
+}, [](bool)
+{
+	tSS ret;
+	if(pUserPorts)
+		{
+	for(auto i=0; i<TCP_PORT_MAX; ++i)
+	ret << (ret.empty() ? "" : ", ") << i;
+		}
+	return (string) ret;
+} },
+{ "ConnectProto", [](cmstring& key, cmstring& value)
+{
+	int *p = conprotos;
+	for (tSplitWalk split(&value); split.Next(); ++p)
+	{
+		cmstring val(split);
+		if (val.empty())
+		break;
+
+		if (p >= conprotos + _countof(conprotos))
+		BARF("Too many protocols specified: " << val);
+
+		if (val == "v6")
+		*p = PF_INET6;
+		else if (val == "v4")
+		*p = PF_INET;
+		else
+		BARF("IP protocol not supported: " << val);
+	}
+	return true;
+}, [](bool)
+{
+	string ret(conprotos[0] == PF_INET6 ? "v6" : "v4");
+	if(conprotos[0] != conprotos[1])
+		ret += string(" ") + (conprotos[1] == PF_INET6 ? "v6" : "v4");
+	return ret;
+} },
+{ "AdminAuth", [](cmstring& key, cmstring& value)
+{
+	adminauth=value;
+	adminauthB64=EncodeBase64Auth(value);
+	return true;
+}, [](bool)
+{
+	return "#"; // TOP SECRET";
+} }
+
+ #if SUPPWHASH
+ bIsHashedPwd=false;
+ }
+
+ else if(CHECKOPTKEY("AdminAuthHash"))
+ {
+ adminauth=value;
+ bIsHashedPwd=true;
+ #endif
+
+};
 
 string * GetStringPtr(LPCSTR key) {
 	for(auto &ent : n2sTbl)
@@ -189,6 +338,20 @@ int * GetIntPtr(LPCSTR key, int &base) {
 			base = ent.base;
 			return ent.ptr;
 		}
+	}
+	return nullptr;
+}
+
+tProperty* GetPropPtr(LPCSTR key)
+{
+	auto sep = strrchr(key, '-');
+	for (auto &ent : n2pTbl)
+	{
+		if (0 == strcasecmp(key, ent.name))
+			return &ent;
+		// identified as prefix?
+		if(sep && 0 == ent.name[sep-key+1] && 0==strncasecmp(key, ent.name, sep-key+1))
+			return &ent;
 	}
 	return nullptr;
 }
@@ -243,10 +406,10 @@ inline void _FixPostPreSlashes(string &val)
 		val.insert(0, "/", 1);
 }
 
-bool ReadOneConfFile(const string & szFilename)
+bool ReadOneConfFile(const string & szFilename, bool bReadErrorIsFatal=true)
 {
 	tCfgIter itor(szFilename);
-	itor.reader.CheckGoodState(true, &szFilename);
+	itor.reader.CheckGoodState(bReadErrorIsFatal, &szFilename);
 
 	NoCaseStringMap dupeCheck;
 
@@ -320,7 +483,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 		if (acfg::debug&LOG_FLUSH)
 			cerr << "Fatal keyfile for " <<repname<<": "<<value <<endl;
 
-		where.m_keyfiles.push_back(value);
+		where.m_keyfiles.emplace_back(value);
 	}
 	else if(key=="deltasrc")
 	{
@@ -339,7 +502,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 		tHttpUrl cand;
 		if(value.empty() || cand.SetHttpUrl(value))
 		{
-			alt_proxies.push_back(cand);
+			alt_proxies.emplace_back(cand);
 			where.m_pProxy = & alt_proxies.back();
 		}
 		else
@@ -350,9 +513,8 @@ inline void AddRemapFlag(const string & token, const string &repname)
 	}
 }
 
-tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
+tStrDeq ExpandFileTokens(cmstring &token)
 {
-	tStrDeq srcs;
 	string sPath = token.substr(5);
 	if (sPath.empty())
 		BARF("Bad file spec for repname, file:?");
@@ -361,64 +523,26 @@ tStrDeq ExpandFileTokens(cmstring &token, bool bUseDefaultFallback)
 	{
 		if (!bAbs)
 			sPath = confdir + sPathSep + sPath;
-		srcs = ExpandFilePattern(sPath, true);
+		return ExpandFilePattern(sPath, true);
 	}
-	else
-	{
-		tStrMap bname2path;
-#ifdef DEBUG
-		bool bp=(token == "file:backends_gentoo");
-#endif
-		auto lookup = [&sPath, &srcs, &bname2path](bool bAddDefault)
-		{
-			for (const auto& dir : { &confdir, &suppdir })
-			{
-				// chop slashes. That should not be required but better be sure.
-				while(endsWithSzAr(*dir, sPathSep) && dir->size()>1)
-				dir->resize(dir->size()-1);
-
-				auto pat=(cmstring) *dir + sPathSep + sPath;
-				if(bAddDefault)
-					pat+=".default";
-				//cerr << "heh, token: " << token << " in dir: " << *dir << " to: " << pat;
-				srcs = ExpandFilePattern(pat, true);
-				if (srcs.size() == 1 && !Cstat(srcs.front()))
-					continue;// file not existing, wildcard returned
-
-				// hits in confdir will overwrite those from suppdir
-				for (auto& s: srcs)
-				{
-					auto nam(GetBaseName(s));
-					if(bAddDefault)
-					nam.erase(nam.size()-8);
-#if __GNUC__ >= 4 && __GNUC_MINOR__ < 8
-					if(bname2path.find(nam) == bname2path.end())
-						bname2path[nam]=s;
-#else
-					bname2path.emplace(nam, s);
-#endif
-				}
-
-			}
-		};
-		lookup(false);
-		if(bUseDefaultFallback && bname2path.empty())
-		{
-			if(debug>4)
-				cerr << "Looking for fallback version: " << sPath << ".default" <<endl;
-			lookup(true);
-		}
-
-		if (bname2path.empty())
-		{
-			cerr << "WARNING: No URL list file matching " << token
-					<< " found in config or support directories." << endl;
-		}
-		srcs.clear();
-		for (auto& b2p : bname2path)
-			srcs.push_back(b2p.second);
-	}
-	return srcs;
+	auto pat = confdir + sPathSep + sPath;
+	StrSubst(pat, "//", "/");
+	auto res = ExpandFilePattern(pat, true);
+	if (res.size() == 1 && !Cstat(res.front()))
+		res.clear(); // not existing, wildcard returned
+	pat = suppdir + sPathSep + sPath;
+	StrSubst(pat, "//", "/");
+	auto suppres = ExpandFilePattern(pat, true);
+	if (suppres.size() == 1 && !Cstat(suppres.front()))
+		return res; // errrr... done here
+	// merge them
+	tStrSet dupeFil;
+	for(const auto& s: res)
+		dupeFil.emplace(GetBaseName(s));
+	for(const auto& s: suppres)
+		if(!ContHas(dupeFil, GetBaseName(s)))
+			res.emplace_back(s);
+	return res;
 }
 
 inline void AddRemapInfo(bool bAsBackend, const string & token,
@@ -432,20 +556,22 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 		_FixPostPreSlashes(url.sPath);
 
 		if (bAsBackend)
-			repoparms[repname].m_backends.push_back(url);
+			repoparms[repname].m_backends.emplace_back(url);
 		else
-			mapUrl2pVname[url.sHost+":"+url.GetPort()].push_back(
-					make_pair(url.sPath, GetRepoEntryRef(repname)));
+			mapUrl2pVname[url.sHost+":"+url.GetPort()].emplace_back(
+					url.sPath, GetRepoEntryRef(repname));
 	}
 	else
 	{
-		for(auto& src : ExpandFileTokens(token, true))
-		{
-			if (bAsBackend)
-				ReadBackendsFile(src, repname);
-			else
-				ReadRewriteFile(src, repname);
-		}
+		auto func = bAsBackend ? ReadBackendsFile : ReadRewriteFile;
+		uint count = 0;
+		for(auto& src : ExpandFileTokens(token))
+			count += func(src, repname);
+		if(!count)
+			for(auto& src : ExpandFileTokens(token + ".default"))
+				count = func(src, repname);
+		if(!count && !g_bQuiet)
+			cerr << "WARNING: No configuration was read from " << token << endl;
 	}
 }
 
@@ -485,7 +611,7 @@ struct tHookHandler: public tRepoData::IHookHandler, public lockable
 	}
 };
 
-void _AddHooksFile(cmstring& vname)
+inline void _AddHooksFile(cmstring& vname)
 {
 	tCfgIter itor(acfg::confdir+"/"+vname+".hooks");
 	if(!itor)
@@ -510,7 +636,7 @@ void _AddHooksFile(cmstring& vname)
 		else if (strcasecmp("DownTimeout", p) == 0)
 		{
 			errno = 0;
-			uint n = strtoul(val.c_str(), NULL, 10);
+			uint n = strtoul(val.c_str(), nullptr, 10);
 			if (!errno)
 				hs.downDuration = n;
 		}
@@ -609,6 +735,7 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 
 	string * psTarget;
 	int * pnTarget;
+	tProperty * ppTarget;
 	int nNumBase(10);
 
 	if ( nullptr != (psTarget = GetStringPtr(key.c_str())))
@@ -668,110 +795,9 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 			return false;
 		}
 	}
-#define CHECKOPTKEY(x)	0==strcasecmp(key.c_str(),x)
-	else if(CHECKOPTKEY("Proxy"))
+	else if ( nullptr != (ppTarget = GetPropPtr(key.c_str())))
 	{
-		if(value.empty())
-			proxy_info=tHttpUrl();
-		else
-		{
-			if (!proxy_info.SetHttpUrl(value) || proxy_info.sHost.empty())
-				BARF("Invalid proxy specification, aborting...");
-		}
-	}
-	else if(CHECKOPTKEY("LocalDirs") && !g_bNoComplex)
-	{
-		_ParseLocalDirs(value);
-		return !localdirs.empty();
-	}
-	else if(0==strncasecmp(key.c_str(), "Remap-", 6) && !g_bNoComplex)
-	{
-		string vname=key.substr(6, key.npos);
-		if(vname.empty())
-		{
-			if(!g_bQuiet)
-				cerr << "Bad repository name in " << key << endl;
-			return false;
-		}
-		int type(-1); // nothing =-1; prefixes =0 ; backends =1; flags =2
-		for(tSplitWalk split(&value); split.Next();)
-		{
-			cmstring s(split);
-			if(s.empty())
-				continue;
-			if(s.at(0)=='#')
-				break;
-			if(type<0)
-				type=0;
-			if(s.at(0)==';')
-				++type;
-			else if(0 == type)
-				AddRemapInfo(false, s, vname);
-			else if(1 == type)
-				AddRemapInfo(true, s, vname);
-			else if(2 == type)
-				AddRemapFlag(s, vname);
-		}
-		if(type<0)
-		{
-			if(!g_bQuiet)
-				cerr << "Invalid entry, no configuration: " << key << ": " << value <<endl;
-			return false;
-		}
-		_AddHooksFile(vname);
-	}
-	else if(CHECKOPTKEY("AllowUserPorts"))
-	{
-		if(!pUserPorts)
-			pUserPorts=new bitset<TCP_PORT_MAX>;
-		for(tSplitWalk split(&value); split.Next();)
-		{
-			cmstring s(split);
-			const char *start(s.c_str());
-			char *p(0);
-			unsigned long n=strtoul(start, &p, 10);
-			if(n>=TCP_PORT_MAX || !p || '\0' != *p || p == start)
-				BARF("Bad port in AllowUserPorts: " << start);
-			if(n == 0)
-			{
-				pUserPorts->set();
-				break;
-			}
-			pUserPorts->set(n, true);
-		}
-	}
-	else if(CHECKOPTKEY("ConnectProto"))
-	{
-		int *p = conprotos;
-		for (tSplitWalk split(&value); split.Next(); ++p)
-		{
-			cmstring val(split);
-			if (val.empty())
-				break;
-
-			if (p >= conprotos + _countof(conprotos))
-				BARF("Too many protocols specified: " << val);
-
-			if (val == "v6")
-				*p = PF_INET6;
-			else if (val == "v4")
-				*p = PF_INET;
-			else
-				BARF("IP protocol not supported: " << val);
-		}
-	}
-	else if(CHECKOPTKEY("AdminAuth"))
-	{
-	   adminauth=EncodeBase64Auth(value);
-#if SUPPWHASH
-	   bIsHashedPwd=false;
-	}
-
-	else if(CHECKOPTKEY("AdminAuthHash"))
-	{
-	   adminauth=value;
-	   bIsHashedPwd=true;
-#endif
+		return ppTarget->set(key, value);
 	}
 	else
 	{
@@ -822,10 +848,9 @@ const tRepoData * GetRepoData(cmstring &vname)
 	return & it->second;
 }
 
-void ReadBackendsFile(const string & sFile, const string &sRepName)
+uint ReadBackendsFile(const string & sFile, const string &sRepName)
 {
-
-	int nAddCount=0;
+	uint nAddCount=0;
 	string key, val;
 	tHttpUrl entry;
 
@@ -837,7 +862,7 @@ void ReadBackendsFile(const string & sFile, const string &sRepName)
 	{
 		if(debug&6)
 			cerr << "No backend data found, file ignored."<<endl;
-		return;
+		return 0;
 	}
 	
 	while(itor.Next())
@@ -854,7 +879,7 @@ void ReadBackendsFile(const string & sFile, const string &sRepName)
 #ifdef DEBUG
 			cerr << "Backend: " << sRepName << " <-- " << entry.ToURI(false) <<endl;
 #endif		
-			repoparms[sRepName].m_backends.push_back(entry);
+			repoparms[sRepName].m_backends.emplace_back(entry);
 			nAddCount++;
 			entry.clear();
 		}
@@ -871,6 +896,7 @@ void ReadBackendsFile(const string & sFile, const string &sRepName)
 					<< itor.reader.GetCurrentLine());
 		}
 	}
+	return nAddCount;
 }
 
 void ShutDown()
@@ -882,8 +908,9 @@ void ShutDown()
 /* This parses also legacy files, i.e. raw RFC-822 formated mirror catalogue from the
  * Debian archive maintenance repository.
  */
-void ReadRewriteFile(const string & sFile, cmstring& sRepName)
+uint ReadRewriteFile(const string & sFile, cmstring& sRepName)
 {
+	uint nAddCount=0;
 	filereader reader;
 	if(debug>4)
 		cerr << "Reading rewrite file: " << sFile <<endl;
@@ -893,24 +920,25 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 	tStrVec hosts, paths;
 	string sLine, key, val;
 	tHttpUrl url;
-	
-	while(reader.GetOneLine(sLine))
+
+	while (reader.GetOneLine(sLine))
 	{
 		trimFront(sLine);
 
-		if (0==sLine.compare(0, 1, "#"))
+		if (0 == sLine.compare(0, 1, "#"))
 			continue;
 
 		if (url.SetHttpUrl(sLine))
 		{
 			_FixPostPreSlashes(url.sPath);
 
-			mapUrl2pVname[url.sHost+":"+url.GetPort()].push_back(
-					make_pair(url.sPath, GetRepoEntryRef(sRepName)));
+			mapUrl2pVname[url.sHost + ":" + url.GetPort()].emplace_back(url.sPath,
+					GetRepoEntryRef(sRepName));
 #ifdef DEBUG
-						cerr << "Mapping: "<< url.ToURI(false)
-						<< " -> "<< sRepName <<endl;
+			cerr << "Mapping: " << url.ToURI(false) << " -> " << sRepName << endl;
 #endif
+
+			++nAddCount;
 			continue;
 		}
 
@@ -938,13 +966,15 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 					tHttpUrl url;
 					url.sHost=host;
 					url.sPath=path;
-					mapUrl2pVname[url.sHost+":"+url.GetPort()].push_back(
-						make_pair(url.sPath, GetRepoEntryRef(sRepName)));
+					mapUrl2pVname[url.sHost+":"+url.GetPort()].emplace_back(url.sPath,
+							GetRepoEntryRef(sRepName));
 
 #ifdef DEBUG
 						cerr << "Mapping: "<< host << path
 						<< " -> "<< sRepName <<endl;
 #endif
+
+						++nAddCount;
 				}
 			}
 			hosts.clear();
@@ -966,15 +996,17 @@ void ReadRewriteFile(const string & sFile, cmstring& sRepName)
 		{
 			// help STL saving some memory
 			if(sPopularPath==val)
-				paths.push_back(sPopularPath);
+				paths.emplace_back(sPopularPath);
 			else
 			{
 				_FixPostPreSlashes(val);
-				paths.push_back(val);
+				paths.emplace_back(val);
 			}
 			continue;
 		}
 	}
+
+	return nAddCount;
 }
 
 
@@ -983,7 +1015,7 @@ tRepoData::~tRepoData()
 	delete m_pHooks;
 }
 
-void ReadConfigDirectory(const char *szPath)
+void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 {
 	dump_proc_status();
 	char buf[PATH_MAX];
@@ -994,9 +1026,9 @@ void ReadConfigDirectory(const char *szPath)
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
-		ReadOneConfFile(src);
+		ReadOneConfFile(src, bReadErrorIsFatal);
 #else
-	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bQuiet, bNoComplex);
+	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bReadErrorIsFatal);
 #endif
 	dump_proc_status();
 	if(debug & LOG_DEBUG)
@@ -1012,6 +1044,7 @@ void ReadConfigDirectory(const char *szPath)
 
 void PostProcConfig()
 {
+	mapUrl2pVname.rehash(mapUrl2pVname.size());
 	
 	if(port.empty()) // heh?
 		port=ACNG_DEF_PORT;
@@ -1084,7 +1117,7 @@ void PostProcConfig()
 	   mkbasedir(acfg::pidfile);
 
    if(nettimeout < 5) {
-	   cerr << "Warning, NetworkTimeout too small, assuming 5." << endl;
+	   cerr << "Warning, NetworkTimeout value too small, using: 5." << endl;
 	   nettimeout = 5;
    }
 
@@ -1139,7 +1172,7 @@ void PostProcConfig()
 
 } // PostProcConfig
 
-void dump_config()
+void dump_config(bool includeDelicate)
 {
 	ostream &cmine(cout);
 
@@ -1170,6 +1203,13 @@ void dump_config()
 	for (const auto& n2i : n2iTbl)
 		if (n2i.ptr)
 			cmine << n2i.name << " = " << *n2i.ptr << endl;
+
+	for (const auto& x : n2pTbl)
+	{
+		auto val(x.get(includeDelicate));
+		if(startsWithSz(val, "#")) continue;
+		cmine << x.name << " = " << val << endl;
+	}
 
 #ifndef DEBUG
 	if (acfg::debug >= LOG_DEBUG)
@@ -1267,7 +1307,7 @@ lockable authLock;
 
 int CheckAdminAuth(LPCSTR auth)
 {
-	if(acfg::adminauth.empty())
+	if(acfg::adminauthB64.empty())
 		return 0;
 	if(!auth || !*auth)
 		return 1; // request it from user
@@ -1277,7 +1317,7 @@ int CheckAdminAuth(LPCSTR auth)
 	while(*p && isspace((uint) *p)) ++p;
 
 #ifndef SUPPWHASH
-	return adminauth.compare(p) == 0 ? 0 : 1;
+	return adminauthB64.compare(p) == 0 ? 0 : 1;
 
 #else
 
@@ -1319,9 +1359,39 @@ int CheckAdminAuth(LPCSTR auth)
 #endif
 }
 
-
-
 #endif // MINIBUILD
+
+static bool proxy_failstate = false;
+lockable proxy_fail_lock;
+const tHttpUrl* GetProxyInfo()
+{
+	if(proxy_info.sHost.empty())
+		return nullptr;
+
+	static time_t last_check=0;
+
+	lockguard g(proxy_fail_lock);
+	time_t now = time(nullptr);
+	time_t sinceCheck = now - last_check;
+	if(sinceCheck > optProxyCheckInt)
+	{
+		last_check = now;
+		if(optProxyCheckCmd.empty())
+			proxy_failstate = false;
+		else
+			proxy_failstate = system(optProxyCheckCmd.c_str());
+	}
+
+	return proxy_failstate ? nullptr : &proxy_info;
+}
+
+void MarkProxyFailure()
+{
+	lockguard g(proxy_fail_lock);
+	if(optProxyCheckInt <= 0) // urgs, would never recover
+		return;
+	proxy_failstate = true;
+}
 
 } // namespace acfg
 
@@ -1368,9 +1438,9 @@ bool CompileExpressions()
 
 inline bool MatchType(cmstring &in, eMatchType type)
 {
-	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, NULL, 0))
+	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, nullptr, 0))
 		return true;
-	if(rex[type].extra && !regexec(rex[type].extra, in.c_str(), 0, NULL, 0))
+	if(rex[type].extra && !regexec(rex[type].extra, in.c_str(), 0, nullptr, 0))
 		return true;
 	return false;
 }
@@ -1411,7 +1481,7 @@ inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool 
 	}
 	else if(!bRecursiveCall) // don't go further than one level
 	{
-		tStrDeq srcs = acfg::ExpandFileTokens(token, true);
+		tStrDeq srcs = acfg::ExpandFileTokens(token);
 		for(const auto& src: srcs)
 		{
 			acfg::tCfgIter itor(src);
@@ -1446,7 +1516,7 @@ bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat)
 bool MatchUncacheable(const string & in, NOCACHE_PATTYPE type)
 {
 	for(const auto& patre: (type == NOCACHE_REQ) ? vecReqPatters : vecTgtPatterns)
-		if(!regexec(&patre, in.c_str(), 0, NULL, 0))
+		if(!regexec(&patre, in.c_str(), 0, nullptr, 0))
 			return true;
 	return false;
 }

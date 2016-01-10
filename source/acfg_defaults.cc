@@ -12,7 +12,7 @@ namespace acfg
 {
 
 string cachedir("/var/tmp"), logdir("/var/tmp"), fifopath, pidfile, reportpage,
-confdir, adminauth, bindaddr, mirrorsrcs, suppdir("/usr/lib/apt-cacher-ng"),
+confdir, adminauth, adminauthB64, bindaddr, mirrorsrcs, suppdir(LIBDIR),
 capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 
 #define INFOLDER "(^|.*/)"
@@ -22,14 +22,15 @@ capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 //#define COMPONENT_OPTIONAL "(-[a-z0-9-])"
 //#define PARANOIASOURCE "(\\.orig|\\.debian)"
 
-string spfilepat(INFOLDER ".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")\\.gpg$");
+string spfilepat(INFOLDER ".*(\\.(d|u)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")\\.gpg$");
 
-string pfilepat(".*(\\.d?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
+string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
-		"|\\.udeb|\\.debdelta|\\.diff/.*\\.gz|(Devel)?ReleaseAnnouncement(\\?.*)?"
+		"|\\.debdelta|\\.diff/.*\\.gz|(Devel)?ReleaseAnnouncement(\\?.*)?"
 		"|[a-f0-9]+-(susedata|updateinfo|primary|deltainfo).xml.gz" //opensuse, index data, hash in filename
 		"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
 		"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
+    "|/[[:alpha:]]{1,2}/[a-f0-9]{64}(-[a-f0-9]{64})?(\\.gz)?" // FreeBSD, after https://alioth.debian.org/tracker/?func=detail&atid=413111&aid=315254&group_id=100566
 ")$");
 
 string svfilepat("/development/rawhide/.*");
@@ -48,9 +49,17 @@ string vfilepat(INFOLDER
 		"|metalink\\?repo|.*prestodelta\\.xml\\.gz|repodata/.*\\.(xml|sqlite)" COMPOPT // CentOS
 		"|\\.treeinfo|vmlinuz|(initrd|product|squashfs|updates)\\.img" // Fedora
 		"|\\.o" // https://bugs.launchpad.net/ubuntu/+source/apt-cacher-ng/+bug/1078224
-		")$" // end of only-filename paterns
+		"|Components-.*yml" COMPOPT // DEP-11 aka AppStream"
+		"|icons-[x0-9]+\\.tar" COMPOPT
+    "|(latest|pub)\\.ssl" // FreeBSD
+
+						")$" // end of filename-only patterns
+
 		"|/dists/.*/installer-[^/]+/[^0-9][^/]+/images/.*" // d-i stuff but not containing a date (year number) in the revision directory (like "current", "beta", ...)
 		"|/pks/lookup.op.get" // some Ubuntu PPA management activity
+		"|centos/.*/images/.*img" // [#314924] Allow access to CentOS images
+
+		"|ubuntu/dists/.*\\.html" // http://archive.ubuntu.com/ubuntu/dists/vivid-updates/main/dist-upgrader-all/current/ReleaseAnnouncement.html
 );
 
 //string wfilepat( VPATPREFIX  "(Release|Release\\.gpg|release|meta-release|Translation[^/]*\\.bz2)$");
@@ -60,8 +69,11 @@ string wfilepat(INFOLDER
 		"|(Packages|Sources)" COMPRLIST "?" // hm... private repos without Release file :-(
 		"|Translation[^/]*" COMPRLIST "?" // to be checked, but they should never really go anywhere
 		"|.*\\.xml" // SUSE
+		"|setup\\.bz2(.sig)?" // Cygwin
 		"|" ALXPATTERN // Arch Linux
 		"|[a-z]+32.exe"
+		"|mirrors.ubuntu.com/mirrors.txt"
+    "|/[[:alpha:]]{1,2}/[a-f0-9]{64}(-[a-f0-9]{64})?(\\.gz)?" // FIXME: add expiration code
 		")$");
 
 string pfilepatEx, spfilepatEx, vfilepatEx, svfilepatEx, wfilepatEx; // for customization by user
@@ -72,10 +84,13 @@ keepnver(0), maxtempdelay(27), vrangeops(1);
 int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
 logxff(false), oldupdate(false), recompbz2(false), nettimeout(60), updinterval(0),
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
-stucksecs(500), persistoutgoing(1), pipelinelen(255), exsupcount(RESERVED_DEFVAL),
+stucksecs(500), persistoutgoing(1), pipelinelen(10), exsupcount(RESERVED_DEFVAL),
 optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false);
 
 int maxdlspeed(RESERVED_DEFVAL);
+
+string optproxycmd;
+int optproxycheckint=-1;
 
 #ifdef DEBUG
 int dnscachetime(30);
@@ -97,8 +112,6 @@ int debug(3), foreground(true);
 #else
 int debug(0), foreground(false);
 #endif
-
-tHttpUrl proxy_info;
 
 string cacheDirSlash; // guaranteed to have a trailing path separator
 

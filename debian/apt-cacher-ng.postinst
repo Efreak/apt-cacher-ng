@@ -12,6 +12,7 @@ VDIR=/var/lib/apt-cacher-ng
 udefault=$VDIR/backends_ubuntu.default
 ddefault=$VDIR/backends_debian.default
 BINPATH=/usr/sbin/$NAME
+TOOL=$DDIR/acngtool
 
 gen_mirror_list_from_sources_list() {
 
@@ -97,7 +98,7 @@ guess_ubuntu_mirrors() {
    # mirror suggestions from Ubuntu's service might be a good candidate
    if ! test -s $tmpfile ; then
       mirurl=http://mirrors.ubuntu.com/mirrors.txt
-      wget -q -O- $mirurl >> $tmpfile 2>/dev/null || curl -s $mirurl >> $tmpfile 2>/dev/null || BECURL=$mirurl $BINPATH >> $tmpfile 2>/dev/null || true
+      wget -q -O- $mirurl >> $tmpfile 2>/dev/null || curl -s $mirurl >> $tmpfile 2>/dev/null || $TOOL curl $mirurl $BINPATH >> $tmpfile 2>/dev/null || true
    fi
 
    # still nothing. Sneak more information from Debian backend configuration?
@@ -138,7 +139,7 @@ if [ "$1" = "configure" ]; then
       keep|"")
          # but making sure that it's really set to something sensible in the
          # config, otherwise replace with the default
-         if ! TESTPATH=$(PRINTCFGVAR=CacheDir $BINPATH -c $CFG 2>/dev/null) ; then
+         if ! TESTPATH=$($TOOL printvar CacheDir -c $CFG 2>/dev/null) ; then
             # ok, some IO trouble is bad but in this case just behave like it
             # did in the former times with a static /v/c/a-c-n folder setting
             CDIR=/var/cache/$NAME

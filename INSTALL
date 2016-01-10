@@ -1,34 +1,57 @@
 Requirements:
 
  - Linux or mostly POSIX.1-2001 compliant environment
- - GNU make, CMake 2.6.2 or newer
+ - CMake 2.6.2 or newer, probably also GNU make
  - gcc 4.7 or newer or clang 3.0 or newer and latest libstdc++ or Boost headers
  - on Linux systems, kernel 2.6.22 or newer and glibc 2.8 or newer
 
-Optional development packages for optional features:
- - zlib, libbz2, liblzma (from XZ), openssl and their development components
+Extra requirements for optional features:
+ - zlib, libbz2, liblzma (from XZ), OpenSSL and their development components
+ - LibTomCrypt might work as replacement for some parts of functionality if
+   OpenSSL is not available. See LibTomCrypt notes below!
  - recent FUSE library and its development files for the "virtual mirror"
    filesystem
 
 Build and installation instructions:
 
- - run "make"
- - if an error occurs during configuration: read the message, solve the
-   problem, run "make distclean" and retry with "make"
- - if a GCC internal compiler error appears, try:
-   make distclean ; make NOLTO=1
- - when done, copy build/apt-cacher-ng and build/in.acng to /usr/local/sbin
+CMake is used internally for build control. It can be run in the source
+directory and provides the usual configuration options. However, the
+recommended way are out-of-source builds in a subdirectory like build/ that can
+be removed to restart from scratch.  There are two convenience scripts that
+automate this, build.sh and distclean.sh.
+Workflow example:
+ - run ./build.sh to configure and build (extra options are passed as cmake
+   arguments, build results go to the builddir/ directory)
+ - run "make -C builddir install" (maybe with DESTDIR=/tmp/somewhere/else)
+
+Troubleshooting and integrator notes:
+ - on configuration problems or to change most settings afterwards, remove the
+   builddir directory or only builddir/CMakeCache.txt in easy cases
+ - the build system makes use of pkg-config to locate required software
+   components. For locally built packages, you might need to adjust its
+   path settings; see manpage for details.
+ - Link Time Optimization may be broken with some compilers. if a GCC "internal
+   compiler error" appears, first try -DUSE_LTO=off
+ - -DCMAKE_INSTALL_PREFIX=... specificies main directory to install (/usr/local is default)
+ - -DCFGDIR=... (config directory, default is "etc" under CMAKE_INSTALL_PREFIX
+   or just /etc if CMAKE_INSTALL_PREFIX is /usr)
+ - -DDOCDIR=... and -DLIBDIR=... specify target directories for docs resp.
+   supplementary files
+ - see CMakeLists.txt for more paths that can be customized
+ - Install halibut tool to rebuild the documentation, if needed
 
 Configure to run on system startup:
 
-This heavily depends on the used init system.
- - For systemd configuration files example, visit systemd directory and install
-   that config files as needed (check the services and tmpfiles directories of
-   your systemd setup).
+This part heavily depends on the used init system.
+ - For systemd configuration, the build process creates a service file and
+   tmpfiles conf file in builddir/systemd directory. Their contents match the
+   detected configuration. They need to be installed manually in the relevant
+   folders (see systemd.unit(5), systemd-tmpfiles(8) and tmpfiles.d(5)
+   manpages). Then, a local system user called "apt-cacher-ng" and the
+   "apt-cacher-ng" group (with the new user therein) needs to be created, and
+   new service is enabled with "systemctl enable apt-cacher-ng".
  - For sysvinit, see latest Debian package for examples (unpack with ar/tar or
    just mc).
- - For use with Avahi, install contrib/apt-cacher-ng.service configuration
-   file.
 
 Configuration:
 
@@ -45,15 +68,25 @@ Configuration:
  - for apt clients, there is a config snipped in contrib/10-apt-cacher-ng.conf
    which might be installed into /etc/apt/apt.conf.d/.
 
-Special flags:
+Developer notes:
 
-Certain variables can be passed to the make command via call arguments or
-environment variables to customize the build.
+There are some macros and shortcuts:
+ - scripts/Makefile.release has some test and release rules, one could also run
+   "make -f scripts/Makefile.release gendbs" to update built-in mirror
+   configuration files
+ - DEBUG argument of build.sh adds more verbosity and implicitly sets compiler
+   defaults to produce debuggable binaries
+ - -DDEBUG (set by above) to enable verbose debug logging. BE WARNED: this
+   spams a lot and makes logs explode.
+ - Certain environment variables influence cmake, like CXX (compiler to use),
+   CXXFLAGS (compiler options, buid.sh won't set cmake defaults if this is
+   set), LDFLAGS (compiler flags for linking)
 
- - DEBUG=1 : creates binaries with additional debugging code included. Warning:
-   extremelly increased log size.
- - CXX : overrides the default compiler (for example, CXX=clang++-3.6)
- - CXXFLAGS : parameters passed to the compiler after the default ones
- - LDFLAGS : parameters passed to the linker call (compiler call for linking)
- - NOLTO : disables use of Link Time Optimization which is/was faulty in some
-   GCC version even if the basic function check succeeds
+LibTomCrypt notes:
+
+ - LibTomCrypt does not have to be installed system-wide. It's sufficient to
+   compile it as static library and set the environment variable TOMCRYPT_HOME
+   pointing to LibTomCrypt's source directory
+ - with the clang compiler, recent versions of LibTomCrypt might fail to build
+   because of internal optimizations not understood by clang. The workaround
+   for this is exporting the compiler definition -DLTC_NO_ROLC via CFLAGS

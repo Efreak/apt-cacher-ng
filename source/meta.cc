@@ -15,7 +15,9 @@
 #elif defined(HAVE_GLOB)
 #include <glob.h>
 #endif
-
+#ifdef HAVE_TOMCRYPT
+#include <tomcrypt.h>
+#endif
 using namespace std;
 
 cmstring sPathSep(SZPATHSEP);
@@ -135,17 +137,16 @@ tStrVec::size_type Tokenize(const string & in, const char *sep,
 		pos2=in.find_first_of(sep, pos);
 		if (pos2==stmiss) // no more terminators, EOL
 			pos2=oob;
-		out.push_back(in.substr(pos, pos2-pos));
+		out.emplace_back(in.substr(pos, pos2-pos));
 		pos=pos2+1;
 	}
 
 	return (out.size()-nBefore);
 }
 
-void StrSubst(string &contents, const string &from, const string &to)
+void StrSubst(string &contents, const string &from, const string &to, tStrPos pos)
 {
-	tStrPos pos;
-	while (stmiss!=(pos=contents.find(from)))
+	while (stmiss!=(pos=contents.find(from, pos)))
 	{
 		contents.replace(pos, from.length(), to);
 		pos+=to.length();
@@ -322,7 +323,7 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
 	if(0==wordexp(pattern.c_str(), &p, 0))
 	{
 		for(char **s=p.we_wordv; s<p.we_wordv+p.we_wordc;s++)
-			srcs.push_back(*s);
+			srcs.emplace_back(*s);
 		wordfree(&p);
 	}
 	else if(!bQuiet)
@@ -331,17 +332,17 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
 #elif defined(HAVE_GLOB)
 	auto p=glob_t();
 	if(0==glob(pattern.c_str(), GLOB_DOOFFS | (bSorted ? 0 : GLOB_NOSORT),
-				NULL, &p))
+			nullptr, &p))
 	{
 		for(char **s=p.gl_pathv; s<p.gl_pathv+p.gl_pathc;s++)
-			srcs.push_back(*s);
+			srcs.emplace_back(*s);
 		globfree(&p);
 	}
 	else if(!bQuiet)
 		cerr << "Warning: failed to find files for " << pattern <<endl;
 #else
 #warning Needs a file name expansion function, wordexp or glob
-	srcs.push_back(pattern);
+	srcs.emplace_back(pattern);
 #endif
 
 	return srcs;
@@ -598,6 +599,16 @@ mstring EncodeBase64Auth(cmstring& sPwdString)
 	auto sNative=UrlUnescape(sPwdString);
 	return EncodeBase64(sNative.data(), sNative.size());
 }
+
+#ifdef HAVE_TOMCRYPT
+string EncodeBase64(LPCSTR data, uint len)
+{
+	unsigned long reslen=len*2;
+	unsigned char buf[len*2];
+	base64_encode((const unsigned char*) data, (unsigned long) len, &buf[0], &reslen);
+	return string((LPCSTR)&buf[0], reslen);
+}
+#else
 string EncodeBase64(LPCSTR data, uint len)
 {
 	uint32_t bits=0;
@@ -648,3 +659,5 @@ string EncodeBase64(LPCSTR data, uint len)
 	}
 	return out;
 }
+
+#endif

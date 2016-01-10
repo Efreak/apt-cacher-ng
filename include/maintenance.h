@@ -44,7 +44,8 @@ public:
 		workCOUNTSTATS,
 		workSTYLESHEET,
 		workTraceStart,
-		workTraceEnd
+		workTraceEnd,
+		workJStats
 	};
 	struct tRunParms
 	{
@@ -68,12 +69,11 @@ protected:
 	inline void SendChunk(const char *x) { SendChunk(x, x?strlen(x):0); }
 	inline void SendChunk(const tSS &x){ SendChunk(x.data(), x.length()); }
 	// for customization in base classes
-	virtual void AfterSendChunk(const char* /*data*/, size_t /*size*/) {};
+	virtual void SendChunkLocalOnly(const char* /*data*/, size_t /*size*/) {};
 
 	bool SendRawData(const char *data, size_t len, int flags);
 
 	mstring & GetHostname();
-	//void SendDecoration(bool bBegin, const char *szDecoFile=NULL);
 	void SendChunkedPageHeader(const char *httpstatus, const char *mimetype);
 	LPCSTR m_szDecoFile = nullptr;
 	LPCSTR GetTaskName();

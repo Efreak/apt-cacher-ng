@@ -66,13 +66,13 @@ inline void checkForceFclose(FILE* &fh)
 		{
 			forceclose(fd);
 		}
-		fh = NULL;
+		fh = nullptr;
 	}
 }
 
 struct FILE_RAII
 {
-	FILE *p = NULL;
+	FILE *p = nullptr;
 	inline FILE_RAII() {};
 	inline ~FILE_RAII() { close(); }
 	operator FILE* () const { return p; }

@@ -21,8 +21,6 @@ using namespace std;
 
 #define TERM_VAL (time_t(-1))
 
-cleaner g_victor;
-
 cleaner::cleaner() : m_thr(0)
 {
 	Init();
@@ -69,7 +67,7 @@ void cleaner::WorkLoop()
 			break;
 
 		case TYPE_EXCONNS:
-			time_nextcand = tcpconnect::BackgroundCleanup();
+			time_nextcand = g_tcp_con_factory.BackgroundCleanup();
 			USRDBG("tcpconnect::ExpireCache, nextRunTime now: " << time_nextcand);
 			break;
 
@@ -109,7 +107,7 @@ void cleaner::WorkLoop()
 inline void * CleanerThreadAction(void *pVoid)
 {
 	static_cast<cleaner*>(pVoid)->WorkLoop();
-	return NULL;
+	return nullptr;
 }
 
 void cleaner::ScheduleFor(time_t when, eType what)
@@ -119,7 +117,7 @@ void cleaner::ScheduleFor(time_t when, eType what)
 	{
 		Init();
 		stamps[what] = when;
-		pthread_create(&m_thr, NULL, CleanerThreadAction, (void *)this);
+		pthread_create(&m_thr, nullptr, CleanerThreadAction, (void *)this);
 	}
 	else
 	{
@@ -145,7 +143,7 @@ void cleaner::Stop()
 		stamps[cleaner::TYPE_STOPSCHED] = 1;
 		notifyAll();
 	}
-    pthread_join(m_thr, NULL);
+    pthread_join(m_thr, nullptr);
 
     setLockGuard;
     m_thr = 0;
@@ -165,7 +163,7 @@ void cleaner::dump_status()
 void dump_handler(int) {
 	fileItemMgmt::dump_status();
 	g_victor.dump_status();
-	tcpconnect::dump_status();
+	g_tcp_con_factory.dump_status();
 	acfg::dump_trace();
 }
 

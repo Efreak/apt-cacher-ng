@@ -6,6 +6,7 @@ apt-cacher-ng: (C) 2006-2012 Eduard Bloch <blade@debian.org>
 md5 add-on: (C) 1999, 2000, 2002 Aladdin Enterprises.  All rights reserved.
 getaddrinfo emulation: (C) 2001, Jason Gunthorpe <jgg@debian.org>
 sha1 add-on: (C) 2006, The Bitzi Corporation
+sha2 add-on: (C) 2005, 2007 Olivier Gay <olivier.gay@a3.epfl.ch>
 
 License:
 
@@ -47,33 +48,7 @@ LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-II. MD5 implementation
-
-/*
-  Copyright (C) 1999, 2002 Aladdin Enterprises.  All rights reserved.
-
-  This software is provided 'as-is', without any express or implied
-  warranty.  In no event will the authors be held liable for any damages
-  arising from the use of this software.
-
-  Permission is granted to anyone to use this software for any purpose,
-  including commercial applications, and to alter it and redistribute it
-  freely, subject to the following restrictions:
-
-  1. The origin of this software must not be misrepresented; you must not
-     claim that you wrote the original software. If you use this software
-     in a product, an acknowledgment in the product documentation would be
-     appreciated but is not required.
-  2. Altered source versions must be plainly marked as such, and must not be
-     misrepresented as being the original software.
-  3. This notice may not be removed or altered from any source distribution.
-
-  L. Peter Deutsch
-  ghost@aladdin.com
-
- */
-
-III.
+II.
 
 // $Id: rfc2553emu.cc,v 1.8 2001/02/20 07:03:18 jgg Exp $
 /* ######################################################################
@@ -88,59 +63,4 @@ III.
    the Public Domain, do with it what you will.
 
    ##################################################################### */
-
-IV.
-
-/* (PD) 2006 The Bitzi Corporation
- * 
- * 1. Authorship. This work and others bearing the above 
- * label were created by, or on behalf of, the Bitzi 
- * Corporation. Often other public domain material by
- * other authors is incorporated; this should be clear 
- * from notations in the source code. If other non-
- * public-domain code or libraries are included, this is
- * is done under those works' respective licenses.
- * 
- * 2. Release. The Bitzi Corporation places its portion
- * of these labelled works into the public domain, 
- * disclaiming all rights granted us by copyright law. 
- *
- * Bitzi places no restrictions on your freedom to copy, 
- * use, redistribute and modify this work, though you 
- * should be aware of points (3), (4), and (5) below.
- * 
- * 3. Trademark Advisory. The Bitzi Corporation reserves 
- * all rights with regard to any of its trademarks which 
- * may appear herein, such as "Bitzi", "Bitcollider", or
- * "Bitpedia". Please take care that your uses of this 
- * work do not infringe on our trademarks or imply our 
- * endorsement. For example, you should change labels 
- * and identifier strings in your derivative works where 
- * appropriate.
- * 
- * 4. Licensed portions. Some code and libraries may be
- * incorporated in this work in accordance with the 
- * licenses offered by their respective rightsholders. 
- * Further copying, use, redistribution and modification
- * of these third-party portions remains subject to 
- * their original licenses.
- * 
- * 5. Disclaimer. THIS SOFTWARE IS PROVIDED BY THE AUTHOR 
- * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, 
- * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES 
- * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE 
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT 
- * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR 
- * TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN 
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF 
- * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * Please see http://bitzi.com/publicdomain or write
- * info@bitzi.com for more info.
- */
 

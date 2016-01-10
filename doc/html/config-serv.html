@@ -174,7 +174,7 @@ And finally, there is an optional third field in the <code>Remap</code> directiv
 <code>keyfile=...</code> The meaning of this setting is: if any real download error (status code 400 and higher) happens on a file which path ends with the specified string then the target server is blacklisted (considered faulty) immediately and this download (and subsequent ones requested by this client connection) are retried from other servers (see <code>TargetURLs</code> description above). Can be used multiple times to define a list. See below for documented example.
 </li>
 <li>
-<code>deltasrc=URL</code> Configures the base URL used to download .debdelta files. The path hierarchy below this URL should correspond to the source URLs and file paths in the cache. Only one URL can be specified at the moment. It is used for explicit mirroring operations, see <a href="howtos.html#mirroring">section 8.14</a> for details.
+<code>deltasrc=URL</code> Configures the base URL used to download .debdelta files. The path hierarchy below this URL should correspond to the source URLs and file paths in the cache. Only one URL can be specified at the moment. It is used for explicit mirroring operations, see <a href="howtos.html#mirroring">section 8.15</a> for details.
 </li>
 <li>
 <code>proxy=proxyspec</code> Configures an alternative proxy URL which overrides the global proxy setting in the context of this repository. Can be set empty to disable proxy usage.

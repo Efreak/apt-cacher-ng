@@ -38,7 +38,7 @@ class job {
       ~job();
       //  __attribute__((externally_visible))  
       
-      void PrepareDownload();
+      void PrepareDownload(LPCSTR headBuf);
 
       /*
        * Start or continue returning the file.
@@ -76,7 +76,7 @@ class job {
 
       const char * BuildAndEnqueHeader(const fileitem::FiStatus &fistate, const off_t &nGooddataSize, header& respHead);
       fileitem::FiStatus _SwitchToPtItem();
-      void SetErrorResponse(const char * errorLine, const char *szLocation=NULL, const char *bodytext=NULL);
+      void SetErrorResponse(const char * errorLine, const char *szLocation=nullptr, const char *bodytext=nullptr);
       void HandleLocalDownload(const mstring &visPath,
     			const mstring &fsBase, const mstring &fsSubpath);
 

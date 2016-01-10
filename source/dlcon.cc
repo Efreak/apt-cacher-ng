@@ -23,12 +23,15 @@ using namespace std;
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
 
+#define MAX_RETRY 11
+
 static cmstring sGenericError("567 Unknown download error occured");
 
 std::atomic_uint g_nDlCons(0);
 
-dlcon::dlcon(bool bManualExecution, string *xff) :
-		m_bStopASAP(false), m_bManualMode(bManualExecution), m_nTempPipelineDisable(0),
+dlcon::dlcon(bool bManualExecution, string *xff, IDlConFactory *pConFactory) :
+		m_pConFactory(pConFactory), m_bStopASAP(false), m_bManualMode(bManualExecution),
+		m_nTempPipelineDisable(0),
 		m_bProxyTot(false)
 {
 	LOGSTART("dlcon::dlcon");
@@ -93,6 +96,8 @@ struct tDlJob
 		STATE_FINISHJOB
 	} tDlState;
 
+	string m_extraHeaders;
+
 	tHttpUrl m_remoteUri;
 	const tHttpUrl *m_pCurBackend=nullptr;
 
@@ -135,6 +140,31 @@ struct tDlJob
 	{
 		if (m_pStorage)
 			m_pStorage->DecDlRefCount(sErrorMsg.empty() ? sGenericError : sErrorMsg);
+	}
+
+	inline void ExtractCustomHeaders(LPCSTR reqHead)
+	{
+		if(!reqHead)
+			return;
+		header h;
+		tLPS cheaders;
+		h.Load(reqHead, std::numeric_limits<int>::max(), &cheaders);
+		if(cheaders.empty())
+			return;
+		for(const auto& ch: cheaders)
+		{
+			// some headers are reserved (actually all starting with those prefixes
+			if(strncasecmp(ch.first.c_str(), WITHLEN("Host")) &&
+					strncasecmp(ch.first.c_str(), WITHLEN("Proxy-Authorization")) &&
+					strncasecmp(ch.first.c_str(), WITHLEN("Cache-Control")) &&
+					strncasecmp(ch.first.c_str(), WITHLEN("Accept")) &&
+					strncasecmp(ch.first.c_str(), WITHLEN("User-Agent"))
+					)
+			{
+				m_extraHeaders += ch.first;
+				m_extraHeaders += ch.second;
+			}
+		}
 	}
 
 	inline string RemoteUri(bool bUrlEncoded)
@@ -361,7 +391,9 @@ struct tDlJob
 		if (acfg::exporigin && !xff.empty())
 			head << "X-Forwarded-For: " << xff << "\r\n";
 
-		head << acfg::requestapx << "Accept: */*\r\nAccept-Encoding: identity\r\nConnection: "
+		head << acfg::requestapx
+				<< m_extraHeaders
+				<< "Accept: */*\r\nAccept-Encoding: identity\r\nConnection: "
 				<< (acfg::persistoutgoing ? "keep-alive\r\n\r\n" : "close\r\n\r\n");
 
 #ifdef SPAM
@@ -427,10 +459,10 @@ struct tDlJob
 				bool bHotItem = (m_DlState == STATE_REGETHEADER);
 				dbgline;
 
-				int l = h.LoadFromBuf(inBuf.rptr(), inBuf.size());
-				if (0 == l)
+				auto hDataLen = h.LoadFromBuf(inBuf.rptr(), inBuf.size());
+				if (0 == hDataLen)
 					return HINT_MORE;
-				if (l<0)
+				if (hDataLen<0)
 				{
 					dbgline;
 					sErrorMsg = "500 Invalid header";
@@ -438,8 +470,8 @@ struct tDlJob
 					return EFLAG_MIRROR_BROKEN | HINT_DISCON | HINT_KILL_LAST_FILE;
 				}
 
-				ldbg("contents: " << std::string(inBuf.rptr(), l));
-				inBuf.drop(l);
+				ldbg("contents: " << std::string(inBuf.rptr(), hDataLen));
+				inBuf.drop(hDataLen);
 				if (h.type != header::ANSWER)
 				{
 					dbgline;
@@ -542,7 +574,8 @@ struct tDlJob
 					DropDnsCache();
 				}
 
-				if(!m_pStorage->DownloadStartedStoreHeader(h, inBuf.rptr(), bHotItem, bDoRetry))
+				if(!m_pStorage->DownloadStartedStoreHeader(h, hDataLen,
+						inBuf.rptr(), bHotItem, bDoRetry))
 				{
 					if(bDoRetry)
 						return EFLAG_LOST_CON | HINT_DISCON; // recoverable
@@ -569,7 +602,7 @@ struct tDlJob
 			{
 				ldbg("STATE_FINISHJOB");
 				m_DlState = STATE_GETHEADER;
-				m_pStorage->StoreFileData(NULL, 0);
+				m_pStorage->StoreFileData(nullptr, 0);
 				return HINT_DONE | m_eReconnectASAP;
 			}
 			else if (m_DlState == STATE_GETCHUNKHEAD)
@@ -584,7 +617,7 @@ struct tDlJob
 					inBuf.drop(1);
 				}
 				const char *crlf(0), *pStart(inBuf.c_str());
-				if (!inBuf.size() || NULL == (crlf = strstr(pStart, "\r\n")))
+				if (!inBuf.size() || nullptr == (crlf = strstr(pStart, "\r\n")))
 				{
 					inBuf.move();
 					return HINT_MORE;
@@ -653,7 +686,7 @@ void dlcon::wake()
 
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const acfg::tRepoData *pBackends,
-		cmstring *sPatSuffix)
+		cmstring *sPatSuffix, LPCSTR reqHead)
 {
 	if(!pForcedUrl)
 	{
@@ -670,9 +703,12 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 
 	LOGSTART2("dlcon::EnqJob", todo->m_remoteUri.ToURI(false));
 */
-	m_qNewjobs.push_back(
+	m_qNewjobs.emplace_back(
 			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,
 							m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax));
+
+	m_qNewjobs.back()->ExtractCustomHeaders(reqHead);
+
 	wake();
 	return true;
 }
@@ -701,7 +737,7 @@ dlcon::~dlcon()
   g_nDlCons--;
 }
 
-inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &inpipe)
+inline uint dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &inpipe)
 {
 	LOGSTART2("dlcon::ExchangeData",
 			"qsize: " << inpipe.size() << ", sendbuf size: "
@@ -757,7 +793,7 @@ inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 			goto proc_data;
 		}
 
-		r=select(nMaxFd + 1, &rfds, &wfds, NULL, &tv);
+		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, &tv);
 		ldbg("returned: " << r << ", errno: " << errno);
 
 		if (r < 0)
@@ -865,10 +901,11 @@ inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
                 nTakesPerSec=1;
              m_nSpeedLimitMaxPerTake = nSpeedNowKib*1024/nTakesPerSec;
              auto nIntervalUS=1000000 / nTakesPerSec;
+             auto nIntervalUS_copy = nIntervalUS;
              // creating a bitmask
              for(m_nSpeedLimiterRoundUp=1,nIntervalUS/=2;nIntervalUS;nIntervalUS>>=1)
                 m_nSpeedLimiterRoundUp = (m_nSpeedLimiterRoundUp<<1)|1;
-
+             m_nSpeedLimitMaxPerTake = uint(double(m_nSpeedLimitMaxPerTake) * double(m_nSpeedLimiterRoundUp) / double(nIntervalUS_copy));
           }
           // waiting for the next time slice to get data from buffer
           timeval tv;
@@ -896,14 +933,20 @@ inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 
 #ifdef DISCO_FAILURE
 #warning hej
-			static int fakeFail=3;
+			static int fakeFail=-123;
+			if(fakeFail == -123)
+			{
+				srand(getpid());
+				fakeFail = rand()%123;
+			}
 			if( fakeFail-- < 0)
 			{
 //				LOGLVL(LOG_DEBUG, "\n#################\nFAKING A FAILURE\n###########\n");
 				r=0;
-				fakeFail=10;
+				fakeFail=rand()%123;
 				errno = EROFS;
-				r = -errno;
+				//r = -errno;
+				shutdown(con.get()->GetFD(), SHUT_RDWR);
 			}
 #endif
 
@@ -911,7 +954,7 @@ inline uint dlcon::ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueu
 			{
 				ldbg("why EAGAIN/EINTR after getting it from select?");
 //				timespec sleeptime = { 0, 432000000 };
-//				nanosleep(&sleeptime, NULL);
+//				nanosleep(&sleeptime, nullptr);
 				goto loop_again;
 			}
 			else if (r == 0)
@@ -1037,13 +1080,12 @@ void dlcon::WorkLoop()
 	}
 
 	tDljQueue inpipe;
-	tTcpHandlePtr con;
+	tDlStreamHandle con;
 	uint loopRes=0;
 
 	bool bStopRequesting=false; // hint to stop adding request headers until the connection is restarted
 
-	int nLostConTolerance=0;
-#define MAX_RETRY 5
+	int nLostConTolerance=MAX_RETRY;
 
 	auto BlacklistMirror = [&](tDlJobPtr & job)
 	{
@@ -1063,10 +1105,7 @@ void dlcon::WorkLoop()
 		{
 			return cjob->m_pRepoDesc->m_pProxy;
 		}
-		if(!acfg::proxy_info.sHost.empty())
-			return &acfg::proxy_info;
-
-		return nullptr;
+		return acfg::GetProxyInfo();
 	};
 
 	while(true) // outer loop: jobs, connection handling
@@ -1085,7 +1124,7 @@ void dlcon::WorkLoop()
         		if(inpipe.empty())
         		{
         			if(con)
-        				tcpconnect::RecycleIdleConnection(con);
+        				m_pConFactory->RecycleIdleConnection(con);
         			return;
         		}
         	}
@@ -1125,23 +1164,20 @@ void dlcon::WorkLoop()
 
 				auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
 				{
-					return tcpconnect::CreateConnected(tgt.sHost,
+					return m_pConFactory->CreateConnected(tgt.sHost,
 							tgt.GetPort(),
 							sErrorMsg,
 							&bUsed,
 							m_qNewjobs.front()->GetConnStateTracker(),
-#ifdef HAVE_SSL
-						tgt.bSSL,
-#else
-						false
-#endif
-						timeout, fresh);
+							IFSSLORFALSE(tgt.bSSL),
+							timeout, fresh);
 			}	;
 
 				auto& cjob = m_qNewjobs.front();
-				auto proxy = m_bProxyTot ? nullptr : prefProxy(cjob);
+				auto proxy = prefProxy(cjob);
 				auto& peerHost = cjob->GetPeerHost();
 
+#ifdef HAVE_SSL
 				if(peerHost.bSSL)
 				{
 					if(proxy)
@@ -1158,6 +1194,7 @@ void dlcon::WorkLoop()
 						con = doconnect(peerHost, acfg::nettimeout, false);
 				}
 				else
+#endif
 				{
 					if(proxy)
 					{
@@ -1173,6 +1210,7 @@ void dlcon::WorkLoop()
         			ldbg("optional proxy broken, disable");
         			m_bProxyTot = true;
         			proxy = nullptr;
+				acfg::MarkProxyFailure();
         			con = doconnect(peerHost, acfg::nettimeout, false);
         		}
 
@@ -1241,7 +1279,7 @@ void dlcon::WorkLoop()
 
 				cjob->AppendRequest(m_sendBuf, m_sXForwardedFor, proxy);
 				LOG("request added to buffer");
-				inpipe.push_back(cjob);
+				inpipe.emplace_back(cjob);
 				m_qNewjobs.pop_front();
 
 				if (m_nTempPipelineDisable > 0)
@@ -1285,7 +1323,7 @@ void dlcon::WorkLoop()
 			if (con && !(loopRes & all_err))
 			{
 				dbgline;
-				tcpconnect::RecycleIdleConnection(con);
+				m_pConFactory->RecycleIdleConnection(con);
 				continue;
 			}
 		}
@@ -1309,7 +1347,7 @@ void dlcon::WorkLoop()
         	// reinsert them into the new task list and continue
 
         	// if conn was not reset above then it should be in good shape
-        	tcpconnect::RecycleIdleConnection(con);
+        	m_pConFactory->RecycleIdleConnection(con);
         	goto move_jobs_back_to_q;
         }
 
@@ -1322,8 +1360,10 @@ void dlcon::WorkLoop()
 				nLostConTolerance=MAX_RETRY;
 			}
 
+			con.reset();
+
 			timespec sleeptime = { 0, 325000000 };
-			nanosleep(&sleeptime, NULL);
+			nanosleep(&sleeptime, nullptr);
 
 			// trying to resume that job secretly, unless user disabled the use of range (we
 			// cannot resync the sending position ATM, throwing errors to user for now)

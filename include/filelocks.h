@@ -3,19 +3,21 @@
 #define FILELOCKS_H_
 
 #include <memory>
-#include <string>
+#include <set>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
-namespace filelocks
+struct TFileShrinkGuard
 {
-struct flock
-{
-	~flock();
-	flock(const std::string& p) : path(p){};
-	std::string path;
-};
-std::unique_ptr<flock> Acquire(const std::string& path);
-};
+	static std::unique_ptr<TFileShrinkGuard> Acquire(const struct stat&);
+	~TFileShrinkGuard();
 
+private:
+	static std::set<std::pair<dev_t,ino_t > > g_mmapLocks;
+	decltype(g_mmapLocks)::iterator m_it;
+	TFileShrinkGuard() =default;
+};
 
 
 #endif /* FILELOCKS_H_ */

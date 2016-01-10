@@ -7,6 +7,7 @@
 #include "expiration.h"
 #include "pkgimport.h"
 #include "showinfo.h"
+#include "jsonstats.h"
 #include "mirror.h"
 #include "aclogger.h"
 #include "filereader.h"
@@ -82,7 +83,7 @@ void tSpecialRequest::SendChunkRemoteOnly(const char *data, size_t len)
 void tSpecialRequest::SendChunk(const char *data, size_t len)
 {
 	SendChunkRemoteOnly(data, len);
-	AfterSendChunk(data, len);
+	SendChunkLocalOnly(data, len);
 }
 
 void tSpecialRequest::SendChunkedPageHeader(const char *httpstatus, const char *mimetype)
@@ -113,7 +114,7 @@ public:
         "Not Authorized. Please contact Apt-Cacher NG administrator for further questions.<br>"
         "<br>"
         "For Admin: Check the AdminAuth option in one of the *.conf files in Apt-Cacher NG "
-        "configuration directory, probably /etc/apt-cacher-ng/." ;
+        "configuration directory, probably " CFGDIR  ;
 		SendRawData(authmsg, sizeof(authmsg)-1, 0);
 	}
 };
@@ -149,7 +150,7 @@ string & tSpecialRequest::GetHostname()
 		if (0==getsockname(m_parms.fd, (struct sockaddr *)&ss, &slen) && 0
 				==getnameinfo((struct sockaddr*) &ss, sizeof(ss), hbuf,
 						sizeof(hbuf),
-						NULL, 0, NI_NUMERICHOST))
+						nullptr, 0, NI_NUMERICHOST))
 		{
 			const char *p=hbuf;
 			bool bAddBrs(false);
@@ -195,6 +196,7 @@ LPCSTR tSpecialRequest::GetTaskName()
 	case workDELETECONFIRM: return "Manual File Deletion (Confirmed)";
 	case workCOUNTSTATS: return "Status Report With Statistics";
 	case workSTYLESHEET: return "CSS";
+	case workJStats: return "Stats";
 	}
 	return "SpecialOperation";
 }
@@ -236,9 +238,15 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 	// all of the following need authorization if configured, enforce it
 	switch(acfg::CheckAdminAuth(auth))
 	{
-	case 0: break; // auth is ok or no passwort is set
-	case 1: return workAUTHREQUEST;
-	default: return workAUTHREJECT;
+     case 0:
+#ifdef HAVE_CHECKSUM
+        break; // auth is ok or no passwort is set
+#else
+        // most data modifying tasks cannot be run safely without checksumming support 
+        return workAUTHREJECT;
+#endif
+     case 1: return workAUTHREQUEST;
+     default: return workAUTHREJECT;
 	}
 
 	struct { LPCSTR trigger; tSpecialRequest::eMaintWorkType type; } matches [] =
@@ -255,7 +263,8 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 			{"doDeleteYes=", workDELETE},
 			{"doCount=", workCOUNTSTATS},
 			{"doTraceStart=", workTraceStart},
-			{"doTraceEnd=", workTraceEnd}
+			{"doTraceEnd=", workTraceEnd},
+			{"doJStats", workJStats}
 	};
 	for(auto& needle: matches)
 		if(StrHasFrom(cmd, needle.trigger, epos))
@@ -270,7 +279,7 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 	switch (parms.type)
 	{
 	case workNotSpecial:
-		return NULL;
+		return nullptr;
 	case workExExpire:
 	case workExList:
 	case workExPurge:
@@ -298,8 +307,10 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 		return new tDeleter(parms);
 	case workSTYLESHEET:
 		return new tStyleCss(parms);
+	case workJStats:
+		return new jsonstats(parms);
 	}
-	return NULL;
+	return nullptr;
 }
 
 void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd)

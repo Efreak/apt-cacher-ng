@@ -702,12 +702,13 @@ files from that list immediately. To be used carefully!
 
 \S{auto-cleanup} Automated cache cleanup
 
-A script called \c{expire-caller.pl}
-is shipped with the package. This script effectively implements a HTTP client
-which operates like a human would do when running the expiration manually (see
-above). It can also extract the operator password and unix socket file path
-from the local configuration file. On Debian installations it is called by the file 
-\c{/etc/cron.daily/apt-cacher-ng} so it should run automatically as daily
+A program called \c{acngtool}
+is shipped with the package. Among other functionality, this tool effectively
+implements a HTTP client
+which operates like a human who runs the expiration manually (see
+above). If needed, it would read the admin credentials and unix socket file path
+from the local configuration files. On Debian installations it is called by the file 
+\c{/etc/cron.daily/apt-cacher-ng} so it should run automatically as a daily
 \c{cron}
 task. The results are usually not reported unless an error occurs, in which
 case some hints are written to the standard error output (i.e. sent in cron
@@ -717,12 +718,6 @@ The operator script can take some options from the environment, see below.  The
 default operation mode is calling the expiration operation with default
 parameters and with credentials from local system's apt-cacher-ng installation.
 However, this can be changed with \c{ACNGREQ} variable.
-
-\dt \c{DEBUG=1}
-
-\dd
-If set to non-empty and not 0, the temporary HTML output is reported to the
-console. For debugging purposes only.
 
 \dt \c{ACNGIP=10.0.1.3}
 
@@ -743,8 +738,8 @@ the administrator's machine.
 \dt \c{ACNGREQ=cgiparameters}
 
 \dd
-Override the auto-detected command parameters with a custom set. This is the
-part of a command URL from the management interface after the ? sign.
+Override the auto-detected command parameters with a custom query string. This
+is the part of a command URL from the management interface after the ? sign.
 
 \S{extrakeep} Keeping latest versions of expired package files
 
@@ -949,7 +944,14 @@ use apt-cacher-ng as HTTP proxy and let the clients connect to https URLs "as
 usual". Some limited access control can be achieved through adjustment of the regular expression (.* permits access to any host and any port, including 443 for https). Data is not cached on the server.
 
 \b The "tell-me-what-you-need method": on the client side, modify the access
-URLs and change https to http and put the string "HTTPS///" between http:// and the host name. With this trick, the user client will access the proxy like going for a usual HTTP download and the proxy will continue with the remote URL using the https scheme. Caching (and file merging to repositories) will work, flexibility for the user remains. The disadvantages of this method are basically the same as with the access URLs rewriting (see \K{config-client}) but the method is still the preferred one by the apt-cacher-ng author.
+URLs and change https to http and put the string "HTTPS///" between http:// and the host name. With this trick, the user client will access the proxy like going for a usual HTTP download and the proxy will access the remote URL with the https protocol. Caching (and file merging to repositories) will work and there is still enough flexibility for the users. The disadvantages of this method are basically the same as with the access URLs rewriting (see \K{config-client}) but the method is still the preferred one by the apt-cacher-ng author. For apt's sources.list, the modification may look like the following example.
+
+\c deb http://HTTPS///get.docker.com/ubuntu docker main
+\c # If apt-cacher-ng is configured as proxy in APT, this makes it
+\c # switch internally to https://get.docker.com/ubuntu
+\c deb http://acnghost:3142/HTTPS///get.docker.com/ubuntu docker main
+\c # Basically the same just with access to apt-cacher-ng through
+\c # URL rewritting instead of setting http proxy.
 
 \H{jigdo}JIGDO usage
 
@@ -1110,6 +1112,35 @@ packages to update while filesystem access costs are negligible. Here the cache
 directory can be specified in acngfs parameters, and then it gets files
 directly from the cache if they are completely downloaded and don't have
 volatile contents.
+
+\H{optproxy} Optional semi-automatic use of proxy
+
+Apt-Cacher NG daemon has some optional operations modes regading the use of
+external proxy (configured with "Proxy" setting). The default mode means use of
+that proxy for all remote connections.
+
+However, in some environments like when running on a portable system, the
+"upstream" proxy server may not reachable when running outside of home LAN
+area. For this situation, there are automated ways to detect it and to switch
+to direct internet access without additional configuration work.
+
+One way is to use a (short) timeout value (OptProxyTimeout setting) which
+simply makes a failed connection attempt after the timeout being interpret as
+broken proxy. Then the proxy is not used in context of this connection until a
+new connection is to be established. If OptProxyCheckInterval is set (see
+below) then this change is effective for the configured time span. 
+
+Another way is through a custom (shell) command - when it returns successfully,
+the proxy is used, otherwise not and the command will be rerun only after a
+specified period. The command may check IP routes or a specific router address
+in the MAC pool or similar traces of the current environment. This setting
+(OptProxyCheckCommand) is also affected by another option
+(OptProxyCheckInterval) that specifies how often this check command shall be
+rerun. In the meantime, the configured proxy is considered faulty.
+
+Hint: this special modes can be combined with non-caching behavior (see
+above) and another ACNG proxy in the home LAN to get smart caching for laptop
+users.
 
 \H{mirroring} Partial Mirroring
 

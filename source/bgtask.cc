@@ -17,7 +17,6 @@
 #include <errno.h>
 
 using namespace std;
-using namespace SMARTPTR_SPACE;
 
 #define LOG_DECO_START "<html><head><style type=\"text/css\">" \
 ".WARNING { color: orange; }\n.ERROR { color: red; }\n" \
@@ -40,7 +39,7 @@ tSpecOpDetachable::~tSpecOpDetachable()
 }
 
 // the obligatory definition of static members :-(
-SMARTPTR_SPACE::weak_ptr<tSpecOpDetachable::tProgressTracker> tSpecOpDetachable::g_pTracker;
+WEAK_PTR<tSpecOpDetachable::tProgressTracker> tSpecOpDetachable::g_pTracker;
 
 cmstring& GetFooter()
 {
@@ -79,7 +78,7 @@ void tSpecOpDetachable::Run()
 	SendChunkedPageHeader("200 OK", "text/html");
 
 	tSS deco;
-	const char *mark(NULL);
+	const char *mark(nullptr);
 	if(m_szDecoFile &&
 			( deco.initFromFile((acfg::confdir+SZPATHSEP+m_szDecoFile).c_str())
 					|| (!acfg::suppdir.empty() &&
@@ -100,7 +99,7 @@ void tSpecOpDetachable::Run()
 		}
 	}
 
-	tSS msg;
+	tSS logPath;
 
 	tProgTrackPtr pTracked;
 
@@ -110,11 +109,11 @@ void tSpecOpDetachable::Run()
 		if(!pTracked) // ok, not running yet -> become the log source then
 		{
 			m_pTracker = make_shared<tProgressTracker>();
-			msg.clear();
 			time_t nMaintId=time(0);
 
-			msg<<acfg::logdir<<CPATHSEP<< MAINT_PFX << nMaintId << ".log.html";
-			m_reportStream.open(msg.c_str(), ios::out);
+			logPath.clear();
+			logPath<<acfg::logdir<<CPATHSEP<< MAINT_PFX << nMaintId << ".log.html";
+			m_reportStream.open(logPath.c_str(), ios::out);
 			if(m_reportStream.is_open())
 			{
 				m_reportStream << LOG_DECO_START;
@@ -154,9 +153,10 @@ void tSpecOpDetachable::Run()
 
 			if(!fd)
 			{
-				msg<<acfg::logdir<<CPATHSEP<<MAINT_PFX << pTracked->id << ".log.html";
-				fd=open(msg.c_str(), O_RDONLY);
-				msg.clear();
+				logPath.clear();
+				logPath<<acfg::logdir<<CPATHSEP<<MAINT_PFX << pTracked->id << ".log.html";
+				fd=open(logPath.c_str(), O_RDONLY);
+
 				if(fd>=0)
 				{
 					set_nb(fd);
@@ -169,7 +169,7 @@ void tSpecOpDetachable::Run()
 				}
 
 			}
-
+			tSS msg;
 			msg.sysread(fd); // can be more than tracker reported. checks need to consider this
 			SendChunk(msg.data(), msg.length());
 			nSent+=msg.length();
@@ -196,8 +196,21 @@ void tSpecOpDetachable::Run()
 
 			SendFmt << "Maintenance task <b>" << GetTaskName()
 					<< "</b>, apt-cacher-ng version: " ACVERSION;
+			string link = "http://" + GetHostname() + ":" + acfg::port + "/" + m_parms.cmd;
 			SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
-					<< "\">Cancel</a>)";
+					<< "\">Cancel</a>)"
+					<< "\n<!--\n"
+					<< maark << int(ControLineType::BeforeError)
+					<< "Maintenance Task: " << GetTaskName() << "\n"
+					<< maark << int(ControLineType::BeforeError)
+					<< "See file " << logPath << " for more details.\n"
+					<< maark << int(ControLineType::BeforeError)
+					<< "Server url: " << link
+					<< "\n-->\n"
+//					<< "<!--\n" << maark << int(ControLineType::Error) << "test\n-->\n"
+					;
+			string xlink = "<br>\nServer link: <a href=\"" + link + "\">" + link + "</a><br>\n";
+			SendChunkLocalOnly(xlink.data(), xlink.size());
 			SendFmt << "<br>\n";
 			SendChunkRemoteOnly(WITHLEN("<form id=\"mainForm\" action=\"#top\">\n"));
 
@@ -257,7 +270,7 @@ void tSpecOpDetachable::DumpLog(time_t id)
 		SendChunkRemoteOnly(reader.GetBuffer(), reader.GetSize());
 }
 
-void tSpecOpDetachable::AfterSendChunk(const char *data, size_t len)
+void tSpecOpDetachable::SendChunkLocalOnly(const char *data, size_t len)
 {
 	if(m_reportStream.is_open())
 	{
@@ -283,7 +296,7 @@ void tBgTester::Action()
 		char buf[1024];
 		time_t t;
 		struct tm *tmp;
-		t = time(NULL);
+		t = time(nullptr);
 		tmp = localtime(&t);
 		strftime(buf, sizeof(buf), "%c", tmp);
 		SendFmt << buf << "<br>\n";

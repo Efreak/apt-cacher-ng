@@ -9,27 +9,26 @@
         create
         postrotate
                 if [ -e /run/systemd/system ] ; then
-                        systemctl -q is-active apt-cacher-ng && systemctl kill --signal=USR1 apt-cacher-ng
+                        if systemctl -q is-active apt-cacher-ng ; then systemctl kill --signal=USR1 apt-cacher-ng ; fi
                 elif [ -s /var/run/apt-cacher-ng/pid ] ; then
-                        kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)"
+                        kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)" 2>/dev/null ||:
                 fi
         endscript
 }
 
 /var/log/apt-cacher-ng/apt-cache*.err {
         su apt-cacher-ng apt-cacher-ng
-        size 10M
+        daily
         missingok
         rotate 7
         compress
         delaycompress
-        notifempty
         create
         postrotate
                 if [ -e /run/systemd/system ] ; then
-                        systemctl -q is-active apt-cacher-ng && systemctl kill --signal=USR1 apt-cacher-ng
+                        if systemctl -q is-active apt-cacher-ng ; then systemctl kill --signal=USR1 apt-cacher-ng ; fi
                 elif [ -s /var/run/apt-cacher-ng/pid ] ; then
-                        kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)"
+                        kill -s USR1 "$(cat /var/run/apt-cacher-ng/pid)" 2>/dev/null ||:
                 fi
         endscript
 }

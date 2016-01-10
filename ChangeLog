@@ -1,3 +1,107 @@
+apt-cacher-ng (0.8.8) CTHULHU-IS-CALLING; urgency=medium
+
+  * Added support for AppStream metadata in Debian
+  * Added filename regexps for FreeBSD files (no expiration code yet)
+  * Updated documentation to refer to acngtool instead of expire-caller.pl
+  * FIX: check-all checkbox in cleanup assistant functionality, and minor HTML
+    format fixes
+  * Refactored setting of complex option, added their printing with acngtool
+
+ -- Eduard Bloch <blade@debian.org>  Sun, 20 Dec 2015 14:21:58 +0100
+
+apt-cacher-ng (0.8.7) GIANT-LEAP-FOR-THE-FROGKIND; urgency=low
+
+  * Added more user hints about config files in acng.conf
+  * DB generator improvements (parallelization or mirror probing using xargs)
+  * added Ubuntu distupgrader release notes to volatile files pattern until
+    better information is available
+  * Database update
+  * More useful reporting of outgoing connection mode on debug verbosity level
+  * On GNU toolchain, reduce the size of acngtool and acngfs binaries with
+    *sections* options set
+  * Option to detect (and turn off) an unreachable upstream proxy through a
+    custom shell command
+  * Build system changes to really check linker flags in linker calls (fixing
+    build on OS-X) and to build faster (just share code between build targets)
+  * Option to build without LibTomCrypt (with reduced functionality) or with
+    statically linked LibTomCrypt without having to install it first
+  * More usefull error messages from acngtool's HTTP downloader
+  [ Christoph Biedl <debian.axhn@manchmal.in-ulm.de> ]
+  * Fix computation of download limit
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 03 Dec 2015 20:22:52 +0100
+
+apt-cacher-ng (0.8.6) LITTLE-STEP-FOR-A-BIT; urgency=low
+
+  * Build system overhaul, splitted CMakeLists.txt per target, added install
+    rules, updated build documentation
+  * FIX: enabled SNI feature (TLS Server Name Indication)
+  * If OpenSSL is not available, use LibTomCrypt for hash algorithms. Dropped
+    included sha1/sha2/md5 implementations.
+  * FIX: smarter switching between InRelease and Release file versions in
+    expiration runs, triggered by a 404
+  * FIX: added auto-skipping of failing proxy to also for tunnel construction
+    (https proxying, bugs.debian.org SOAP, etc.)
+  * FIX: disabled LTO again, sometimes runtime errors with GCC5
+  * NEW: moved the expiration caller script functionality to acngtool and made
+    it less verbose for better use in cron jobs
+  * FIX: code mistake in Darwin specific parts. Plus, the new LD flags checks
+    should also cover the wrong --as-needed check (Alioth task #315130)
+  * FIX: in expiration, force blacklisting of .head files without related
+    content, even for index files like deprecated Packages.bz2/Sources.bz2
+  * More automatic index file replacements (Sources/Packages gz to xz,
+    InRelease to Release and vice versa)
+  * Removed timestamps from generated gzip files
+  * Added Ubuntu's mirror.txt to whitelist (no point in removing it)
+  * Database update (and fixed update of gentoo_mirrors.gz)
+
+ -- Eduard Bloch <blade@debian.org>  Mon, 21 Sep 2015 21:32:11 +0200
+
+apt-cacher-ng (0.8.5) WHERE-NO-VERSION-HAS-GONE-BEFORE; urgency=low
+
+  * FIX: smart reconnection code (for sudden remote disconnects) was not
+    working as intended since at least version 0.7.4 (however, this was
+    covered by other issues and became visible after recent changes related to
+    connection forwarding)
+  * FIX: Changed default pipeline depth to 10 for better compatibility with
+    stupid middleboxes
+  * NEW: Added SHA2 support and for non OpenSSL usage: implementations from
+    http://www.ouah.org/ogay/sha2/
+  * FIX: expiration code for Cygwin data
+    + file entry parsing with SHA512 variants
+    + correct resolution of base path, fixing path and checksum verification
+    + added setup.bz2 to whitelist
+  * FIX: in maintenance task downloads, strip double slashes from remote URLs
+    which were added on repo-mapped paths (Debian bug #793356)
+  * CHANGE: in configuration parsing (adding contents from linked files), a
+    <something>.default file was not considered if <something> file was found
+    (even if <something> was unreadable or didn't have useful contents)
+  * Database update
+  * Added a helper to remove deprecated bz2 versions of index files ASAP
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 30 Jul 2015 23:28:51 +0200
+
+apt-cacher-ng (0.8.4) REVENGE-OF-THE-KLUDGE; urgency=low
+
+  * Code refactoring, little memory consumption improvements
+  * FIX: creation of the PID file even in non-forking mode (Debian bug #784752)
+  * Moving some functionality not relevant for server operation to a dedicated
+    tool called "acngtool"
+  * VFilePattern extension, [#314924] Allow access to CentOS images
+  * LTO is default option again, removed NOLTO hack (use CMAKEOPTS to disable)
+  * Compilation fixes for the MUSL C library (by Felix Janda
+    <felix.janda@posteo.de>)
+  * Redirection of plain http POSTs to bugs.debian.org is now always
+    redirected to https style URL.
+  * FIX: HTTP header parser supports multilines, also solved potentialy
+    incorrect parsing in some cases (identical prefix of header name)
+  * Added recent Ubuntu release names (vivid, wily) to mirror checker
+  * NEW: when uncached operation is active (DontCache* options), most custom
+    headers are passed to the remote servers (Alioth task 314773)
+  * Mirror database update
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 18 Jun 2015 21:59:04 +0200
+
 apt-cacher-ng (0.8.3) TECHNICAL-DEBT-STRIKES-BACK; urgency=medium
 
   * FIX: semi-smart replacement of .bz2 files with their .xz variants if the
@@ -1041,7 +1145,7 @@ apt-cacher-ng (0.3.6) BETA; urgency=low
 apt-cacher-ng (0.3.5) BETA; urgency=low
 
   * Changed update code for index files to be more tollerant to cache errors
-  * Index updates reports more usefull DNS resolution errors
+  * Index updates reports more useful DNS resolution errors
   * Index file updating code overhaul, now supports updates via Diff files.
     Currently deliberately restricted to .diff/Index files covered by
     signatures in "Release" files.

@@ -37,10 +37,10 @@ using namespace std;
 #define AF_INET6        23              /* IP version 6 */
 #endif
 
-
 namespace conserver
 {
 
+int yes(1);
 
 int g_sockunix(-1);
 vector<int> g_vecSocks;
@@ -87,7 +87,7 @@ void * ThreadAction(void *)
 	g_nAllConThreadCount--;
 	g_nStandbyThreads--;
 
-	return NULL;
+	return nullptr;
 }
 
 bool CreateDetachedThread(void *(*__start_routine)(void *))
@@ -98,7 +98,7 @@ bool CreateDetachedThread(void *(*__start_routine)(void *))
 	if (pthread_attr_init(&attr))
 		return false;
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	bool bOK = (0 == pthread_create(&thr, &attr, __start_routine, NULL));
+	bool bOK = (0 == pthread_create(&thr, &attr, __start_routine, nullptr));
 	pthread_attr_destroy(&attr);
 	return bOK;
 }
@@ -129,7 +129,7 @@ inline bool SpawnThreadsAsNeeded()
 }
 
 
-void SetupConAndGo(int fd, const char *szClientName=NULL)
+void SetupConAndGo(int fd, const char *szClientName=nullptr)
 {
 	LOGSTART2s("SetupConAndGo", fd);
 
@@ -137,7 +137,7 @@ void SetupConAndGo(int fd, const char *szClientName=NULL)
 		szClientName="";
 	
 	USRDBG( "Client name: " << szClientName);
-	con *c(NULL);
+	con *c(nullptr);
 
 	{
 		// thread pool control, and also see Shutdown(), protect from
@@ -162,7 +162,7 @@ void SetupConAndGo(int fd, const char *szClientName=NULL)
 				goto local_con_failure;
 			}
 
-			g_freshConQueue.push_back(c);
+			g_freshConQueue.emplace_back(c);
 			LOG("Connection to backlog, total count: " << g_freshConQueue.size());
 
 
@@ -198,7 +198,6 @@ void CreateUnixSocket() {
 	string & sPath=acfg::fifopath;
 	auto addr_unx = sockaddr_un();
 	
-	int jo=1;
 	size_t size = sPath.length()+1+offsetof(struct sockaddr_un, sun_path);
 	
 	auto die=[]() {
@@ -222,7 +221,7 @@ void CreateUnixSocket() {
 	unlink(sPath.c_str());
 	
 	g_sockunix = socket(PF_UNIX, SOCK_STREAM, 0);
-	setsockopt(g_sockunix, SOL_SOCKET, SO_REUSEADDR, &jo, sizeof(jo));
+	setsockopt(g_sockunix, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 
 	if (g_sockunix<0)
 		die();
@@ -231,12 +230,7 @@ void CreateUnixSocket() {
 		die();
 	
 	if (0==listen(g_sockunix, SO_MAXCONN))
-	{
-		g_vecSocks.push_back(g_sockunix);
-		return;
-	}
-
-
+		g_vecSocks.emplace_back(g_sockunix);
 }
 
 void Setup()
@@ -256,21 +250,17 @@ void Setup()
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE;
 		hints.ai_family = 0;
-		int yes(1);
 		
-		tStrVec sAdds;
-		if(bindaddr.empty())
-			sAdds.push_back(sEmptyString); // one dummy entry to get one NULL later
-		else
-			Tokenize(bindaddr, SPACECHARS, sAdds);
-		for(auto& sad : sAdds)
+		auto conaddr = [hints](LPCSTR addi)
 		{
-			trimString(sad);
+			LOGSTART2s("Setup::ConAddr", 0);
+
 		    struct addrinfo *res, *p;
-		    
-		    if(0!=getaddrinfo(bindaddr.empty() ? NULL : sad.c_str(),
-				   port.c_str(), &hints, &res))
-			   goto error_getaddrinfo;
+		    if(0!=getaddrinfo(addi, port.c_str(), &hints, &res))
+			   {
+			    perror("Error resolving address for binding");
+			    return;
+			   }
 		    
 		    for(p=res; p; p=p->ai_next)
 		    {
@@ -279,24 +269,23 @@ void Setup()
 					goto error_socket;
 
 				// if we have a dual-stack IP implementation (like on Linux) then
-				// explicitely disable the shadow v4 listener. Otherwise it might be
-				// bound, or maybe not, and then maybe because of the dual-behaviour,
-				// or maybe because of real errors; we just cannot know for sure but
-				// we have to.
+				// explicitly disable the shadow v4 listener. Otherwise it might be
+				// bound or maybe not, and then just sometimes because of configurable
+				// dual-behavior, or maybe because of real errors;
+				// we just cannot know for sure but we need to.
 #if defined(IPV6_V6ONLY) && defined(SOL_IPV6)
 				if(p->ai_family==AF_INET6)
 					setsockopt(nSockFd, SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
-#endif		    	
+#endif
 				setsockopt(nSockFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-				
 				
 		    	if (::bind(nSockFd, p->ai_addr, p->ai_addrlen))
 		    		goto error_bind;
 		    	if (listen(nSockFd, SO_MAXCONN))
 		    		goto error_listen;
 		    	
-			USRDBG( "created socket, fd: " << nSockFd);// << ", for bindaddr: "<<bindaddr);
-		    	g_vecSocks.push_back(nSockFd);
+		    	USRDBG( "created socket, fd: " << nSockFd);// << ", for bindaddr: "<<bindaddr);
+		    	g_vecSocks.emplace_back(nSockFd);
 		    	
 		    	continue;
 
@@ -327,11 +316,20 @@ void Setup()
 				forceclose(nSockFd);
 		    }
 		    freeaddrinfo(res);
-		    continue;
-		    
-		    error_getaddrinfo:
-		    perror("Error resolving address for binding");
+		};
+
+		tSplitWalk sp(&bindaddr);
+		if(sp.Next())
+		{
+			do
+			{
+				conaddr(sp.str().c_str());
+			}
+			while(sp.Next());
 		}
+		else
+			conaddr(nullptr);
+
 		if(g_vecSocks.empty())
 		{
 			cerr << "No socket(s) could be created/prepared. "
@@ -368,7 +366,7 @@ int Run()
 		for(auto soc: g_vecSocks) FD_SET(soc, &rfds);
 		
 		//cerr << "Polling..." <<endl;
-		int nReady=select(maxfd, &rfds, &wfds, NULL, NULL);
+		int nReady=select(maxfd, &rfds, &wfds, nullptr, nullptr);
 		if (nReady<0)
 		{
 			if(errno == EINTR)
@@ -385,7 +383,7 @@ int Run()
 
 			if(g_sockunix == soc)
 			{
-				int fd = accept(g_sockunix, NULL, NULL);
+				int fd = accept(g_sockunix, nullptr, nullptr);
 				if (fd>=0)
 				{
 					set_nb(fd);
@@ -412,7 +410,7 @@ int Run()
 					USRDBG( "Detected incoming connection from the TCP socket");
 
 					if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf),
-									NULL, 0, NI_NUMERICHOST))
+									nullptr, 0, NI_NUMERICHOST))
 					{
 						aclog::err("ERROR: could not resolve hostname for incoming TCP host");
 						termsocket_quick(fd);
