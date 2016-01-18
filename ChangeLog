@@ -1,6 +1,7 @@
-apt-cacher-ng (0.8.9) VOID-WHICH-BINDS; urgency=low
+apt-cacher-ng (0.8.9) VOID-WHICH-BINDS; urgency=medium
 
   * Minor tweaks for reproducible builds (file order, permissions in tarball)
+  * FIX: acngtool shall not use proxy in the maint job
 
   [ Eric Vander Weele ]
   * Fix for Alioth issue #315276 (explicit return type declaration in a
