@@ -8,7 +8,7 @@ export CONFDIR
 # and pre-filter raw data, second: check the sources and generate final lists,
 # skipping dead mirrors.
 gendbs: $(CONFDIR) clean_db_tmp get_deb_input get_ubu_input get_fedora_input get_sl_input get_sfnet_input build_gentoo_mirrors
-	$(MAKE) $(CONFDIR)/deb_mirrors.gz $(CONFDIR)/debvol_mirrors.gz
+	$(MAKE) $(CONFDIR)/deb_mirrors.gz
 	$(MAKE) $(CONFDIR)/ubuntu_mirrors $(CONFDIR)/cygwin_mirrors $(CONFDIR)/archlx_mirrors $(CONFDIR)/fedora_mirrors $(CONFDIR)/epel_mirrors $(CONFDIR)/sl_mirrors $(CONFDIR)/sfnet_mirrors
 
 clean_db_tmp:
@@ -97,20 +97,27 @@ $(CONFDIR)/deb_mirrors.gz: sig-debian deburlgen.pl
 	bash ubuntuscan.sh $(CONFDIR)/deb_mirrors $(DBTMP)/dsnap.urls_sorted $(DBTMP) "/dists"
 	gzip -nf9 $(CONFDIR)/deb_mirrors
 
-$(CONFDIR)/debvol_mirrors.gz: sig-debian deburlgen.pl
-	perl deburlgen.pl Volatile-http < $(DBTMP)/dsnap > $(DBTMP)/debvol.urls
-	-zcat $@ >> $(DBTMP)/debvol.urls
-	sort -u < $(DBTMP)/debvol.urls > $(DBTMP)/debvol.urls_sorted
-	bash ubuntuscan.sh $(CONFDIR)/debvol_mirrors $(DBTMP)/debvol.urls_sorted $(DBTMP) "/dists"
-	gzip -nf9 $(CONFDIR)/debvol_mirrors
-
 build_gentoo_mirrors:
 	cd $(CONFDIR) && sh $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))/gentoo_mirrors.sh
 
 TGTDIR=dbupdate
 
+# some helpers to have reproducible builds where possible
+TARARGS =--owner=root --group=root --mode=644 --no-xattrs
+ifeq ($(SOURCE_DATE_EPOCH),)
+TARARGS += --mtime=@1
+else
+TARARGS += --mtime=@$(SOURCE_DATE_EPOCH)
+endif
+ifneq ($(shell tar --help | grep clamp-mtime),)
+TARARGS += --clamp-mtime
+endif
+ifneq ($(shell tar --help | grep "sort.*name"),)
+TARARGS += --sort=name
+endif
+
 package: $(DBTMP)
-	rm -rf $(TGTDIR) && mkdir $(TGTDIR) && cp -l Makefile deburlgen.pl gentoo_mirrors.sh ubuntuscan.sh sig-* $(TGTDIR) && tar --xz -c -f $(DBGENERATOR).tar.xz $(TGTDIR)
+	rm -rf $(TGTDIR) && mkdir $(TGTDIR) && cp -l Makefile deburlgen.pl gentoo_mirrors.sh ubuntuscan.sh sig-* $(TGTDIR) && tar -f- -c $(TARARGS) $(TGTDIR) | xz -9 > $(DBGENERATOR).tar.xz
 
 install:
 	cp conf/*mirrors* /usr/lib/apt-cacher-ng/

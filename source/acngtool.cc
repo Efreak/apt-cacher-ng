@@ -352,6 +352,7 @@ inline bool patchChunk(tPatchSequence& idx, LPCSTR pline, size_t len, tPatchSequ
 
 int maint_job()
 {
+   acfg::SetOption("proxy=", nullptr);
 	LPCSTR envh = getenv("HOSTNAME");
 	if (!envh)
 		envh = "localhost";
@@ -550,7 +551,7 @@ LPCSTR g_missingCfgDir = nullptr;
 void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 {
 	LPCSTR szCfgDir=CFGDIR;
-	std::vector<LPCSTR> a, b;
+	std::vector<LPCSTR> validargs, nonoptions;
 
 	for (auto p=argv; p<argv+argc; p++)
 	{
@@ -567,7 +568,7 @@ void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 		else if(!strcmp(*p, "--verbose"))
 			g_bVerbose=true;
 		else if(**p) // not empty
-			a.emplace_back(*p);
+			validargs.emplace_back(*p);
 
 #if SUPPWHASH
 #warning FIXME
@@ -587,13 +588,13 @@ void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 
 	tStrVec non_opt_args;
 
-	for(auto& keyval : a)
+	for(auto& keyval : validargs)
 		if(!acfg::SetOption(keyval, 0))
-			b.emplace_back(keyval);
+			nonoptions.emplace_back(keyval);
 
 	acfg::PostProcConfig();
 
-	for(const auto& x: b)
+	for(const auto& x: nonoptions)
 		f(x);
 }
 

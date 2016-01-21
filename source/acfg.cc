@@ -180,26 +180,26 @@ tProperty n2pTbl[] =
 		BARF("Invalid proxy specification, aborting...");
 	}
 	return true;
-}, [](bool superUser)
+}, [](bool superUser) -> string
 {
 	if(!superUser && !proxy_info.sUserPass.empty())
 		return string("#");
 	return proxy_info.sHost.empty() ? sEmptyString : proxy_info.ToURI(false);
 } },
-{ "LocalDirs", [](cmstring& key, cmstring& value)
+{ "LocalDirs", [](cmstring& key, cmstring& value) -> bool
 {
 	if(g_bNoComplex)
 	return true;
 	_ParseLocalDirs(value);
 	return !localdirs.empty();
-}, [](bool)
+}, [](bool) -> string
 {
 	string ret;
 	for(auto kv : localdirs)
 	ret += kv.first + " " + kv.second + "; ";
 	return ret;
 } },
-{ "Remap-", [](cmstring& key, cmstring& value)
+{ "Remap-", [](cmstring& key, cmstring& value) -> bool
 {
 	if(g_bNoComplex)
 	return true;
@@ -238,11 +238,11 @@ tProperty n2pTbl[] =
 		}
 		_AddHooksFile(vname);
 		return true;
-	}, [](bool)
+	}, [](bool) -> string
 	{
 		return "# mixed options";
 	} },
-{ "AllowUserPorts", [](cmstring& key, cmstring& value)
+{ "AllowUserPorts", [](cmstring& key, cmstring& value) -> bool
 {
 	if(!pUserPorts)
 	pUserPorts=new bitset<TCP_PORT_MAX>;
@@ -262,7 +262,7 @@ tProperty n2pTbl[] =
 		pUserPorts->set(n, true);
 	}
 	return true;
-}, [](bool)
+}, [](bool) -> string
 {
 	tSS ret;
 	if(pUserPorts)
@@ -272,7 +272,7 @@ tProperty n2pTbl[] =
 		}
 	return (string) ret;
 } },
-{ "ConnectProto", [](cmstring& key, cmstring& value)
+{ "ConnectProto", [](cmstring& key, cmstring& value) -> bool
 {
 	int *p = conprotos;
 	for (tSplitWalk split(&value); split.Next(); ++p)
@@ -292,19 +292,19 @@ tProperty n2pTbl[] =
 		BARF("IP protocol not supported: " << val);
 	}
 	return true;
-}, [](bool)
+}, [](bool) -> string
 {
 	string ret(conprotos[0] == PF_INET6 ? "v6" : "v4");
 	if(conprotos[0] != conprotos[1])
 		ret += string(" ") + (conprotos[1] == PF_INET6 ? "v6" : "v4");
 	return ret;
 } },
-{ "AdminAuth", [](cmstring& key, cmstring& value)
+{ "AdminAuth", [](cmstring& key, cmstring& value) -> bool
 {
 	adminauth=value;
 	adminauthB64=EncodeBase64Auth(value);
 	return true;
-}, [](bool)
+}, [](bool) -> string
 {
 	return "#"; // TOP SECRET";
 } }
