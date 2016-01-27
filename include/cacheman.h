@@ -132,7 +132,7 @@ protected:
 
 	unsigned int m_nProgIdx, m_nProgTell;
 
-	void TellCount(uint nCount, off_t nSize);
+	void TellCount(unsigned nCount, off_t nSize);
 
 	bool ParseAndProcessMetaFile(ifileprocessor &output_receiver,
 			const mstring &sPath, enumMetaType idxType);

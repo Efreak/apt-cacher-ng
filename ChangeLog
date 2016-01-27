@@ -1,3 +1,10 @@
+apt-cacher-ng (0.8.10) MAXIMUM-OVERDRIVE; urgency=low
+
+  * Replaced unofficial "uint" type with unsigned, fix for build problems with
+    FreeBSDs environment
+
+ -- 
+
 apt-cacher-ng (0.8.9) VOID-WHICH-BINDS; urgency=high
 
   * FIX: acngtool shall not use proxy in the maint job

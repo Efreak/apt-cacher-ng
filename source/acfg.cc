@@ -83,8 +83,8 @@ void AddRemapInfo(bool bAsBackend, const string & token, const string &repname);
 void AddRemapFlag(const string & token, const string &repname);
 void _AddHooksFile(cmstring& vname);
 
-uint ReadBackendsFile(const string & sFile, const string &sRepName);
-uint ReadRewriteFile(const string & sFile, cmstring& sRepName);
+unsigned ReadBackendsFile(const string & sFile, const string &sRepName);
+unsigned ReadRewriteFile(const string & sFile, cmstring& sRepName);
 
 map<cmstring, tRepoData> repoparms;
 typedef decltype(repoparms)::iterator tPairRepoNameData;
@@ -564,7 +564,7 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 	else
 	{
 		auto func = bAsBackend ? ReadBackendsFile : ReadRewriteFile;
-		uint count = 0;
+		unsigned count = 0;
 		for(auto& src : ExpandFileTokens(token))
 			count += func(src, repname);
 		if(!count)
@@ -636,7 +636,7 @@ inline void _AddHooksFile(cmstring& vname)
 		else if (strcasecmp("DownTimeout", p) == 0)
 		{
 			errno = 0;
-			uint n = strtoul(val.c_str(), nullptr, 10);
+			unsigned n = strtoul(val.c_str(), nullptr, 10);
 			if (!errno)
 				hs.downDuration = n;
 		}
@@ -716,7 +716,7 @@ cmstring & GetMimeType(cmstring &path)
 	if(f.OpenFile(path, true))
 	{
 		size_t maxLen = std::min(size_t(255), f.GetSize());
-		for(uint i=0; i< maxLen; ++i)
+		for(unsigned i=0; i< maxLen; ++i)
 		{
 			if(!isascii((uint) *(f.GetBuffer()+i)))
 				return os;
@@ -848,9 +848,9 @@ const tRepoData * GetRepoData(cmstring &vname)
 	return & it->second;
 }
 
-uint ReadBackendsFile(const string & sFile, const string &sRepName)
+unsigned ReadBackendsFile(const string & sFile, const string &sRepName)
 {
-	uint nAddCount=0;
+	unsigned nAddCount=0;
 	string key, val;
 	tHttpUrl entry;
 
@@ -908,9 +908,9 @@ void ShutDown()
 /* This parses also legacy files, i.e. raw RFC-822 formated mirror catalogue from the
  * Debian archive maintenance repository.
  */
-uint ReadRewriteFile(const string & sFile, cmstring& sRepName)
+unsigned ReadRewriteFile(const string & sFile, cmstring& sRepName)
 {
-	uint nAddCount=0;
+	unsigned nAddCount=0;
 	filereader reader;
 	if(debug>4)
 		cerr << "Reading rewrite file: " << sFile <<endl;
@@ -1033,7 +1033,7 @@ void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 	dump_proc_status();
 	if(debug & LOG_DEBUG)
 	{
-		uint nUrls=0;
+		unsigned nUrls=0;
 		for(const auto& x: mapUrl2pVname)
 			nUrls+=x.second.size();
 
@@ -1475,7 +1475,7 @@ inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool 
 
 	if (0!=token.compare(0, 5, "file:")) // pure pattern
 	{
-		uint pos = patvec.size();
+		unsigned pos = patvec.size();
 		patvec.resize(pos+1);
 		return 0==regcomp(&patvec[pos], token.c_str(), REG_EXTENDED);
 	}
@@ -1543,7 +1543,7 @@ void mkbasedir(const string & path)
 	if(0==mkdir(GetDirPart(path).c_str(), acfg::dirperms) || EEXIST == errno)
 		return; // should succeed in most cases
 
-	uint pos=0; // but skip the cache dir components, if possible
+	unsigned pos=0; // but skip the cache dir components, if possible
 	if(startsWith(path, acfg::cacheDirSlash))
 	{
 		// pos=acfg::cachedir.size();

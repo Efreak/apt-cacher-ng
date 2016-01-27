@@ -319,7 +319,7 @@ inline mstring ltos(long n)
 inline mstring offttosH(off_t n)
 {
 	LPCSTR  pref[]={"", " KiB", " MiB", " GiB", " TiB", " PiB", " EiB"};
-	for(uint i=0;i<_countof(pref)-1; i++)
+	for(unsigned i=0;i<_countof(pref)-1; i++)
 	{
 		if(n<1024)
 			return ltos(n)+pref[i];
@@ -352,7 +352,7 @@ class tSplitWalk
 	LPCSTR m_seps;
 
 public:
-	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, uint begin=0)
+	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, unsigned begin=0)
 	: s(*line), start(begin), len(stmiss), oob(line->size()), m_seps(separators) {}
 	inline bool Next()
 	{
@@ -448,7 +448,7 @@ static inline time_t GetTime()
 
 static const time_t END_OF_TIME(MAX_VAL(time_t)-2);
 
-static inline uint FormatTime(char *buf, const time_t cur)
+static inline unsigned FormatTime(char *buf, const time_t cur)
 {
 	struct tm tmp;
 	gmtime_r(&cur, &tmp);
@@ -461,7 +461,7 @@ static inline uint FormatTime(char *buf, const time_t cur)
 struct tCurrentTime
 {
 	char buf[30];
-	uint len;
+	unsigned len;
 	inline tCurrentTime() { len=FormatTime(buf, time(nullptr)); }
 	inline operator mstring() { return mstring(buf, len); }
 };
@@ -484,7 +484,7 @@ struct tErrnoFmter: public mstring
 };
 
 mstring EncodeBase64Auth(cmstring &sPwdString);
-mstring EncodeBase64(LPCSTR data, uint len);
+mstring EncodeBase64(LPCSTR data, unsigned len);
 
 #if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
 #define COMPATGCC47

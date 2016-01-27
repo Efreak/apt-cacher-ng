@@ -616,7 +616,7 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 	enum { eCurLine, eHistory, ePatches} eSection;
 	eSection=eCurLine;
 
-	uint peAnz(0);
+	unsigned peAnz(0);
 
 	// This code should be tolerant to minor changes in the format
 
@@ -1801,7 +1801,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 	case EIDX_ARCHLXDB:
 		LOG("assuming Arch Linux package db");
 		{
-			uint nStep = 0;
+			unsigned nStep = 0;
 			enum tExpData
 			{
 				_fname, _csum, _csize, _nthng
@@ -1863,7 +1863,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 			if(CheckStopSignal())
 				return true;
 
-			uint begin(0);
+			unsigned begin(0);
 			if(startsWithSz(sLine, "install: "))
 				begin=9;
 			else if(startsWithSz(sLine, "source: "))
@@ -2147,7 +2147,7 @@ void tCacheOperation::AddDelCbox(cmstring &sFileRel, bool bExtra)
 			"\n<!--\n" maark << int(ControLineType::Error) << "Problem with "
 			<< sFileRel << "\n-->\n";
 }
-void tCacheOperation::TellCount(uint nCount, off_t nSize)
+void tCacheOperation::TellCount(unsigned nCount, off_t nSize)
 {
 	SendFmt << "<br>\n" << nCount <<" package file(s) marked "
 			"for removal in few days. Estimated disk space to be released: "
