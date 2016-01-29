@@ -27,8 +27,8 @@ cmstring sDefPortHTTP("80");
 cmstring sDefPortHTTPS("443");
 #endif
 
-cmstring PROT_PFX_HTTPS("https://"), PROT_PFX_HTTP("http://");
-
+cmstring PROT_PFX_HTTPS(WITHLEN("https://")), PROT_PFX_HTTP(WITHLEN("http://"));
+cmstring FAKEDATEMARK(WITHLEN("Sat, 26 Apr 1986 01:23:39 GMT+3"));
 
 /*
 int getUUID() {

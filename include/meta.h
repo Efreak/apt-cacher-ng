@@ -46,6 +46,8 @@ typedef std::pair<LPCSTR, size_t> tPtrLen;
 #define SZPATHSEPWIN "\\"
 extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS;
 
+extern cmstring FAKEDATEMARK;
+
 #ifdef WINDOWS
 #define WIN32
 #define SZPATHSEP SZPATHSEPWIN

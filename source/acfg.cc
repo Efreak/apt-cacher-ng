@@ -1436,6 +1436,7 @@ bool CompileExpressions()
 			true : compat(rex[PASSTHROUGH].pat, connectPermPattern.c_str())));
 }
 
+// match the specified type by internal pattern PLUS the user-added pattern
 inline bool MatchType(cmstring &in, eMatchType type)
 {
 	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, nullptr, 0))
@@ -1449,7 +1450,7 @@ bool Match(cmstring &in, eMatchType type)
 {
 	if(MatchType(in, type))
 		return true;
-	// XXX: very special behavior...
+	// very special behavior... for convenience
 	return (type == FILE_SOLID && MatchType(in, FILE_SPECIAL_SOLID))
 		|| (type == FILE_VOLATILE && MatchType(in, FILE_SPECIAL_VOLATILE));
 }

@@ -1,9 +1,14 @@
-apt-cacher-ng (0.8.10) MAXIMUM-OVERDRIVE; urgency=low
+apt-cacher-ng (0.9.0) MAXIMUM-OVERDRIVE; urgency=low
 
-  * Replaced unofficial "uint" type with unsigned, fix for build problems with
-    FreeBSDs environment
+  * FIX: Ubuntu Installer's ReleaseNotes fetching was interpreted incorrectly
+    forced redirection of ISP to its auth page. Now keeping the target page
+    in doubt, just making sure it's reloaded next time.
+  * More volatile regexp's to cover requests from Ubuntu Installer, including
+    the link that it uses to examine state of the network connection
+  * FIX: Replaced "unofficial" uint type with unsigned (should resolve build
+    problems under FreeBSDs)
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Fri, 29 Jan 2016 23:15:57 +0100
 
 apt-cacher-ng (0.8.9) VOID-WHICH-BINDS; urgency=high
 

@@ -559,8 +559,11 @@ struct tDlJob
 				}
 
 				// ok, can pass the data to the file handler
-				h.set(header::XORIG, RemoteUri(false));
+				auto sremote = RemoteUri(false);
+				h.set(header::XORIG, sremote);
 				bool bDoRetry(false);
+
+				// detect bad auto-redirectors (auth-pages, etc.) by the mime-type of their target
 				if(acfg::redirmax
 						&& !acfg::badredmime.empty()
 						&& acfg::redirmax != m_nRedirRemaining
@@ -568,10 +571,18 @@ struct tDlJob
 						&& strstr(h.h[header::CONTENT_TYPE], acfg::badredmime.c_str())
 						&& h.getStatus() < 300) // contains the final data/response
 				{
-					// this was redirected and the destination is BAD!
-					h.frontLine="HTTP/1.1 501 Redirected to invalid target";
-					void DropDnsCache();
-					DropDnsCache();
+					if(m_pStorage->m_bCheckFreshness)
+					{
+						// volatile... this is still ok, just make sure time check works next time
+						h.set(header::LAST_MODIFIED, FAKEDATEMARK);
+					}
+					else
+					{
+						// this was redirected and the destination is BAD!
+						h.frontLine="HTTP/1.1 501 Redirected to invalid target";
+						void DropDnsCache();
+						DropDnsCache();
+					}
 				}
 
 				if(!m_pStorage->DownloadStartedStoreHeader(h, hDataLen,
