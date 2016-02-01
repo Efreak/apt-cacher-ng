@@ -14,6 +14,7 @@ $tool retest http://srv/foo.deb
 $tool retest http://srv/foo.deb | grep FILE_SOLID
 $tool retest http://srv/InRelease | grep FILE_VOLAT
 $tool retest http://srv/InRelease.html | grep NOMATCH
+$tool retest /connectivity-check.html | grep FILE_VOLAT
 $tool retest http://srv/InRelease.html "VfilePatternEx:.*html" | grep VOLATIL
 $tool retest http://srv/InRelease.html "PfilePatternEx:.*html" | grep SOLID
 
