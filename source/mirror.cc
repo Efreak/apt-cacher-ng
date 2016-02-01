@@ -224,7 +224,7 @@ void pkgmirror::Action()
 	if (m_bCalcSize)
 	{
 
-		uint dcount=0;
+		unsigned dcount=0;
 
 		SendFmt << "<b>Counting downloadable content size..."
 				<< (m_bAsNeeded? " (filtered)" : "")  << "</b><br>";

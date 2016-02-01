@@ -185,7 +185,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 	::signal(SIGPIPE, SIG_IGN);
 
 	// always consider first family, afterwards stop when no more specified
-	for (uint i=0; i< _countof(acfg::conprotos) && (0==i || acfg::conprotos[i]!=PF_UNSPEC); ++i)
+	for (unsigned i=0; i< _countof(acfg::conprotos) && (0==i || acfg::conprotos[i]!=PF_UNSPEC); ++i)
 	{
 		for (auto pInfo = dns->m_addrInfo; pInfo; pInfo = pInfo->ai_next)
 		{

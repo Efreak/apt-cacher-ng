@@ -133,7 +133,7 @@ tDeleter::tDeleter(const tRunParms& parms)
 
 	// do stricter path checks and prepare the query page data
 
-	uint lfd(1);
+	unsigned lfd(1);
 	for(const auto path : files)
 	{
 		if(path.find_first_of(BADCHARS)!=stmiss  // what the f..., XSS attempt?

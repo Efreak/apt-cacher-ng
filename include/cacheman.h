@@ -18,7 +18,6 @@ class dlcon;
 class tDlJobHints;
 struct foo;
 
-static cmstring FAKEDATEMARK("Sat, 26 Apr 1986 01:23:39 GMT+3");
 static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing, "
 		"aborting as requested.</span>");
 
@@ -132,7 +131,7 @@ protected:
 
 	unsigned int m_nProgIdx, m_nProgTell;
 
-	void TellCount(uint nCount, off_t nSize);
+	void TellCount(unsigned nCount, off_t nSize);
 
 	bool ParseAndProcessMetaFile(ifileprocessor &output_receiver,
 			const mstring &sPath, enumMetaType idxType);

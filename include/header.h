@@ -60,7 +60,7 @@ class header {
        * <0: error
        * >0: length of the processed data
        */
-      int LoadFromBuf(const char *src, uint length); 
+      int LoadFromBuf(const char *src, unsigned length); 
       int LoadFromFile(const mstring & sPath);
       
       //! returns byte count or negative errno value
@@ -85,7 +85,7 @@ class header {
       //@param pNotForUs unsorted map, key is header name, value is the rest of the line starting
       // with colon and ending with \r\n. In case of multiline, extending lines are appended to
       // the value string as-is
-      int Load(const char *src, uint length, tLPS *pNotForUs=nullptr);
+      int Load(const char *src, unsigned length, tLPS *pNotForUs=nullptr);
 };
 
 inline bool BODYFREECODE(int status)

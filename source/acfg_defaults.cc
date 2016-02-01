@@ -26,7 +26,7 @@ string spfilepat(INFOLDER ".*(\\.(d|u)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLI
 
 string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
-		"|\\.debdelta|\\.diff/.*\\.gz|(Devel)?ReleaseAnnouncement(\\?.*)?"
+		"|\\.debdelta|\\.diff/.*\\.gz"
 		"|[a-f0-9]+-(susedata|updateinfo|primary|deltainfo).xml.gz" //opensuse, index data, hash in filename
 		"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
 		"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
@@ -51,14 +51,15 @@ string vfilepat(INFOLDER
 		"|\\.o" // https://bugs.launchpad.net/ubuntu/+source/apt-cacher-ng/+bug/1078224
 		"|Components-.*yml" COMPOPT // DEP-11 aka AppStream"
 		"|icons-[x0-9]+\\.tar" COMPOPT
-    "|(latest|pub)\\.ssl" // FreeBSD
-
-						")$" // end of filename-only patterns
+		"|(latest|pub)\\.ssl" // FreeBSD
+		")$" // end of filename-only patterns
 
 		"|/dists/.*/installer-[^/]+/[^0-9][^/]+/images/.*" // d-i stuff but not containing a date (year number) in the revision directory (like "current", "beta", ...)
 		"|/pks/lookup.op.get" // some Ubuntu PPA management activity
 		"|centos/.*/images/.*img" // [#314924] Allow access to CentOS images
 
+		"|connectivity-check.html|ubiquity/.*update|getubuntu/releasenotes" // Ubuntu installer network check, etc.
+		"|wiki.ubuntu.com/.*/ReleaseNotes" // this is actually for an internal check and therefore contains the hostname
 		"|ubuntu/dists/.*\\.html" // http://archive.ubuntu.com/ubuntu/dists/vivid-updates/main/dist-upgrader-all/current/ReleaseAnnouncement.html
 );
 

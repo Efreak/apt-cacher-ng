@@ -249,7 +249,7 @@ static void SetupCacheDir()
 	{
 		// well, attempt to create it then
 		mstring path=cacheDirSlash+'/';
-		for(uint pos=0; (pos=path.find(SZPATHSEP, pos)) < path.size(); ++pos)
+		for(unsigned pos=0; (pos=path.find(SZPATHSEP, pos)) < path.size(); ++pos)
 			mkdir((const char*) path.substr(0,pos).c_str(), (uint) dirperms);
 	}
 

@@ -318,7 +318,7 @@ t_logger::~t_logger()
 tSS & t_logger::GetFmter()
 {
 	m_strm.clear();
-	for(uint i=0;i<m_nLevel;i++)
+	for(unsigned i=0;i<m_nLevel;i++)
 		m_strm << "\t";
 	m_strm<< " - ";
 	return m_strm;

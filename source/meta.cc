@@ -27,8 +27,8 @@ cmstring sDefPortHTTP("80");
 cmstring sDefPortHTTPS("443");
 #endif
 
-cmstring PROT_PFX_HTTPS("https://"), PROT_PFX_HTTP("http://");
-
+cmstring PROT_PFX_HTTPS(WITHLEN("https://")), PROT_PFX_HTTP(WITHLEN("http://"));
+cmstring FAKEDATEMARK(WITHLEN("Sat, 26 Apr 1986 01:23:39 GMT+3"));
 
 /*
 int getUUID() {
@@ -601,7 +601,7 @@ mstring EncodeBase64Auth(cmstring& sPwdString)
 }
 
 #ifdef HAVE_TOMCRYPT
-string EncodeBase64(LPCSTR data, uint len)
+string EncodeBase64(LPCSTR data, unsigned len)
 {
 	unsigned long reslen=len*2;
 	unsigned char buf[len*2];
@@ -609,10 +609,10 @@ string EncodeBase64(LPCSTR data, uint len)
 	return string((LPCSTR)&buf[0], reslen);
 }
 #else
-string EncodeBase64(LPCSTR data, uint len)
+string EncodeBase64(LPCSTR data, unsigned len)
 {
 	uint32_t bits=0;
-	uint char_count=0;
+	unsigned char_count=0;
 	char alphabet[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	string out;
 	for(auto p=data; p<data+len; ++p)

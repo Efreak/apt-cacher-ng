@@ -436,7 +436,7 @@ struct tDlJob
 	 *
 	 * Process new incoming data and write it down to disk or other receivers.
 	 */
-	uint ProcessIncomming(acbuf & inBuf, bool bOnlyRedirectionActivity)
+	unsigned ProcessIncomming(acbuf & inBuf, bool bOnlyRedirectionActivity)
 	{
 		LOGSTART("tDlJob::ProcessIncomming");
 		if (!m_pStorage)
@@ -559,8 +559,11 @@ struct tDlJob
 				}
 
 				// ok, can pass the data to the file handler
-				h.set(header::XORIG, RemoteUri(false));
+				auto sremote = RemoteUri(false);
+				h.set(header::XORIG, sremote);
 				bool bDoRetry(false);
+
+				// detect bad auto-redirectors (auth-pages, etc.) by the mime-type of their target
 				if(acfg::redirmax
 						&& !acfg::badredmime.empty()
 						&& acfg::redirmax != m_nRedirRemaining
@@ -568,10 +571,18 @@ struct tDlJob
 						&& strstr(h.h[header::CONTENT_TYPE], acfg::badredmime.c_str())
 						&& h.getStatus() < 300) // contains the final data/response
 				{
-					// this was redirected and the destination is BAD!
-					h.frontLine="HTTP/1.1 501 Redirected to invalid target";
-					void DropDnsCache();
-					DropDnsCache();
+					if(m_pStorage->m_bCheckFreshness)
+					{
+						// volatile... this is still ok, just make sure time check works next time
+						h.set(header::LAST_MODIFIED, FAKEDATEMARK);
+					}
+					else
+					{
+						// this was redirected and the destination is BAD!
+						h.frontLine="HTTP/1.1 501 Redirected to invalid target";
+						void DropDnsCache();
+						DropDnsCache();
+					}
 				}
 
 				if(!m_pStorage->DownloadStartedStoreHeader(h, hDataLen,
@@ -622,7 +633,7 @@ struct tDlJob
 					inBuf.move();
 					return HINT_MORE;
 				}
-				uint len(0);
+				unsigned len(0);
 				if (1 != sscanf(pStart, "%x", &len))
 				{
 					sErrorMsg = "500 Invalid data stream";
@@ -737,7 +748,7 @@ dlcon::~dlcon()
   g_nDlCons--;
 }
 
-inline uint dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &inpipe)
+inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &inpipe)
 {
 	LOGSTART2("dlcon::ExchangeData",
 			"qsize: " << inpipe.size() << ", sendbuf size: "
@@ -988,7 +999,7 @@ inline uint dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQu
 			{
 
 				ldbg("Processing job for " << inpipe.front()->RemoteUri(false));
-				uint res = inpipe.front()->ProcessIncomming(m_inBuf, false);
+				unsigned res = inpipe.front()->ProcessIncomming(m_inBuf, false);
 				ldbg(
 						"... incoming data processing result: " << res
 						<< ", emsg: " << inpipe.front()->sErrorMsg);
@@ -1033,7 +1044,7 @@ inline uint dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQu
 					auto it = inpipe.begin();
 					for(++it; it != inpipe.end(); ++it)
 					{
-						uint rr = (**it).ProcessIncomming(m_inBuf, true);
+						unsigned rr = (**it).ProcessIncomming(m_inBuf, true);
 						// just the internal rewriting applied and nothing else?
 						if( HINT_TGTCHANGE != rr )
 						{
@@ -1081,7 +1092,7 @@ void dlcon::WorkLoop()
 
 	tDljQueue inpipe;
 	tDlStreamHandle con;
-	uint loopRes=0;
+	unsigned loopRes=0;
 
 	bool bStopRequesting=false; // hint to stop adding request headers until the connection is restarted
 
@@ -1319,7 +1330,7 @@ void dlcon::WorkLoop()
 			bStopRequesting = false;
 
 			// no error bits set, not busy -> this connection is still good, recycle properly
-			uint all_err = HINT_DISCON | EFLAG_JOB_BROKEN | EFLAG_LOST_CON | EFLAG_MIRROR_BROKEN;
+			unsigned all_err = HINT_DISCON | EFLAG_JOB_BROKEN | EFLAG_LOST_CON | EFLAG_MIRROR_BROKEN;
 			if (con && !(loopRes & all_err))
 			{
 				dbgline;
