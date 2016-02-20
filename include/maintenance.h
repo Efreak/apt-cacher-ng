@@ -45,7 +45,9 @@ public:
 		workSTYLESHEET,
 		workTraceStart,
 		workTraceEnd,
-		workJStats
+		workJStats,
+		workTRUNCATE,
+		workTRUNCATECONFIRM
 	};
 	struct tRunParms
 	{

@@ -17,13 +17,6 @@
 #include <list>
 #include <unordered_map>
 
-#ifdef HAVE_SSL
-#include <openssl/evp.h>
-#include <openssl/bio.h>
-#include <openssl/sha.h>
-#include <openssl/crypto.h>
-#include <cstring>
-#endif
 
 using namespace std;
 
@@ -1281,27 +1274,6 @@ time_t BackgroundCleanup()
 	}
 	return ret;
 }
-
-#ifdef SUPPWHASH
-#ifdef HAVE_SSL
-bool DecodeBase64(LPCSTR pAscii, acbuf& binData) {
-	if(!pAscii)
-		return false;
-	auto len=::strlen(pAscii);
-	binData.setsize(len);
-	binData.clear();
-	FILE* memStrm = ::fmemopen( (void*) pAscii, len, "r");
-	auto strmBase = BIO_new(BIO_f_base64());
-	auto strmBin = BIO_new_fp(memStrm, BIO_NOCLOSE);
-	strmBin = BIO_push(strmBase, strmBin);
-	BIO_set_flags(strmBin, BIO_FLAGS_BASE64_NO_NL);
-	binData.got(BIO_read(strmBin, binData.wptr(), len));
-	BIO_free_all(strmBin);
-	checkForceFclose(memStrm);
-	return binData.size();
-}
-#endif
-#endif
 
 lockable authLock;
 

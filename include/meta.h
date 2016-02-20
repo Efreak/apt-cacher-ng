@@ -29,6 +29,8 @@
 
 #define EXTREME_MEMORY_SAVING false
 
+class acbuf;
+
 typedef std::string mstring;
 typedef const std::string cmstring;
 
@@ -290,6 +292,14 @@ inline mstring UrlUnescape(cmstring &from)
 	return ret;
 }
 mstring DosEscape(cmstring &s);
+// just the bare minimum to make sure the string does not break HTML formating
+inline mstring html_sanitize(cmstring& in)
+{
+	mstring ret;
+	for(auto c:in)
+		ret += ( strchr("<>'\"&;", (unsigned) c) ? '_' : c);
+	return ret;
+}
 
 #define pathTidy(s) { if(startsWithSz(s, "." SZPATHSEP)) s.erase(0, 2); tStrPos n(0); \
 	for(n=0;stmiss!=n;) { n=s.find(SZPATHSEP SZPATHSEP, n); if(stmiss!=n) s.erase(n, 1);}; \
@@ -438,6 +448,8 @@ inline mstring unEscape(cmstring &s)
 }
 
 std::string BytesToHexString(const uint8_t sum[], unsigned short lengthBin);
+//bool HexToString(const char *a, mstring& ret);
+bool Hex2buf(const char *a, size_t len, acbuf& ret);
 
 // STFU helpers, (void) casts are not effective for certain functions
 static inline void ignore_value (int i) { (void) i; }
@@ -487,6 +499,7 @@ struct tErrnoFmter: public mstring
 
 mstring EncodeBase64Auth(cmstring &sPwdString);
 mstring EncodeBase64(LPCSTR data, unsigned len);
+bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData);
 
 #if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
 #define COMPATGCC47

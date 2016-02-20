@@ -43,7 +43,6 @@ static cmstring sConstDiffIdxHead(".diff/Index.head");
 static cmstring sPatchBaseRel("_actmp/patch.base");
 static cmstring sPatchResRel("_actmp/patch.result");
 static const string relKey("/Release"), inRelKey("/InRelease");
-static unsigned int nKillLfd=1;
 time_t m_gMaintTimeNow=0;
 
 tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
@@ -2127,25 +2126,25 @@ void tCacheOperation::ProcessSeenMetaFiles(ifileprocessor &pkgHandler)
 	}
 }
 
-void tCacheOperation::AddDelCbox(cmstring &sFileRel, bool bExtra)
+void tCacheOperation::AddDelCbox(cmstring &sFileRel, bool bIsOptionalGuessedFile)
 {
-	auto ref_isnew = m_delCboxFilter.insert(sFileRel);
-	if(! ref_isnew.second)
+	bool isNew;
+	auto fileParm = AddLookupGetKey(sFileRel, isNew);
+	if(!isNew)
 		return;
 
-	if(bExtra)
+	if(bIsOptionalGuessedFile)
 	{
 		string bn(GetBaseName(sFileRel));
 		if(startsWithSz(bn, "/"))
 			bn.erase(0, 1);
-		SendFmtRemote <<  "<label><input type=\"checkbox\" name=\"kf" << (nKillLfd++)
-					<< "\" value=\"" << sFileRel << "\">(also tag " << bn << ")</label><br>";
+		SendFmtRemote <<  "<label><input type=\"checkbox\""
+				<< fileParm << ">(also tag " << html_sanitize(bn) << ")</label><br>";
 	}
 	else
-		SendFmtRemote <<  "<label><input type=\"checkbox\" name=\"kf" << (nKillLfd++)
-			<< "\" value=\"" << sFileRel << "\">Tag</label>"
+		SendFmtRemote <<  "<label><input type=\"checkbox\" "<< fileParm<<">Tag</label>"
 			"\n<!--\n" maark << int(ControLineType::Error) << "Problem with "
-			<< sFileRel << "\n-->\n";
+			<< html_sanitize(sFileRel) << "\n-->\n";
 }
 void tCacheOperation::TellCount(unsigned nCount, off_t nSize)
 {
@@ -2208,9 +2207,10 @@ void tCacheOperation::PrintStats(cmstring &title)
 				"<th colspan=2>" << title << "</th></tr></thead>\n<tbody>";
 		for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
 		{
-			m_fmtHelper << "<tr><td><input type=\"checkbox\" class=\"xfile\" name=\"kf" << nKillLfd++
-					<< "\" value=\"" << *(it->second) << "\"></td>"
-						"<td><b>" << offttosH(it->first) << "</b></td><td>"
+			bool xNew;
+			m_fmtHelper << "<tr><td><input type=\"checkbox\" class=\"xfile\""
+					<< AddLookupGetKey(*(it->second), xNew) << "></td>"
+						"<td><b>" << html_sanitize(offttosH(it->first)) << "</b></td><td>"
 					<< *(it->second) << "</td></tr>\n";
 
 
@@ -2218,10 +2218,12 @@ void tCacheOperation::PrintStats(cmstring &title)
 		SendFmt << "</tbody></table>";
 
 		if(m_delCboxFilter.empty())
+		{
 			SendFmtRemote << "<br><b>Action(s):</b><br>"
 							"<input type=\"submit\" name=\"doDelete\""
 							" value=\"Delete selected files\">";
-
+			SendFmtRemote << BuildCompressedDelFileCatalog();
+		}
 		if(!m_bVerbose)
 			SendFmt << "</div>";
 }

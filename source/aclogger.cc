@@ -262,8 +262,6 @@ string GetStatReport()
 	return ret;
 }
 #endif
-
-
 }
 
 // let the compiler decide between GNU and XSI version

@@ -155,8 +155,21 @@ protected:
 	// add certain files to the kill bill, to be removed after the activity is done
 	virtual void MarkObsolete(cmstring&) {};
 
-private:
+	// for compressed map of special stuff
+	inline mstring AddLookupGetKey(cmstring &sFilePathRel, bool& isNew)
+	{
+		unsigned id = m_delCboxFilter.size();
+		auto it = m_delCboxFilter.find(sFilePathRel);
+		isNew = it==m_delCboxFilter.end();
+		if(isNew)
+			m_delCboxFilter[sFilePathRel] = id;
+		else
+			id = it->second;
+		char buf[30];
+		return mstring(buf, snprintf(buf, sizeof(buf), " name=\"kf\" value=\"%x\"", id));
+	}
 
+private:
 	tContId2eqClass m_eqClasses;
 
 	bool Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,

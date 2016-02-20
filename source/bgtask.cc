@@ -16,6 +16,10 @@
 #include <limits.h>
 #include <errno.h>
 
+#ifdef HAVE_ZLIB
+#include <zlib.h>
+#endif
+
 using namespace std;
 
 #define LOG_DECO_START "<html><head><style type=\"text/css\">" \
@@ -217,13 +221,18 @@ void tSpecOpDetachable::Run()
 			Action();
 
 			if (!m_delCboxFilter.empty())
+			{
 				SendChunkRemoteOnly(WITHLEN(
 				"<br><b>Action(s):</b><br>"
 					"<input type=\"submit\" name=\"doDelete\""
 					" value=\"Delete selected files\">"
+					"|<input type=\"submit\" name=\"doTruncate\""
+											" value=\"Truncate selected files to zero size\">"
 					"|<button type=\"button\" onclick=\"checkOrUncheck(true);\">Check all</button>"
 					"<button type=\"button\" onclick=\"checkOrUncheck(false);\">Uncheck all</button><br>"));
-
+				auto blob=BuildCompressedDelFileCatalog();
+				SendChunkRemoteOnly(blob.data(), blob.size());
+			}
 
 			SendFmtRemote << "<br>\n<a href=\"/"<< acfg::reportpage<<"\">Return to main page</a>"
 					"</form>";
@@ -288,6 +297,39 @@ time_t tSpecOpDetachable::GetTaskId()
 	return pTracked ? pTracked->id : 0;
 }
 
+#ifdef HAVE_ZLIB
+mstring tSpecOpDetachable::BuildCompressedDelFileCatalog()
+{
+	mstring ret;
+	tSS buf;
+	//auto hm = m_delCboxFilter.size();
+	for(const auto& kv: m_delCboxFilter)
+	{
+		unsigned len=kv.first.size();
+		buf.add((const char*) &kv.second, sizeof(kv.second))
+		.add((const char*) &len, sizeof(len))
+		.add(kv.first.data(), kv.first.length());
+	}
+	unsigned uncompSize=buf.size();
+	tSS gzBuf;
+	uLongf gzSize = compressBound(buf.size())+32; // extra space for length header
+	gzBuf.setsize(gzSize);
+	// length header
+	gzBuf.add((const char*)&uncompSize, sizeof(uncompSize));
+	if(Z_OK == compress((Bytef*) gzBuf.wptr(), &gzSize,
+			(const Bytef*)buf.rptr(), buf.size()))
+	{
+		ret = "<input type=\"hidden\" name=\"blob\" value=\"";
+//		ret += BytesToHexString((const uint8_t*) gzBuf.wptr(), (unsigned short) gzSize);
+		ret += EncodeBase64(gzBuf.rptr(), (unsigned short) gzSize+sizeof(uncompSize));
+		ret += "\">";
+		return ret;
+	}
+	return "";
+}
+
+#endif
+
 #ifdef DEBUG
 void tBgTester::Action()
 {
@@ -302,4 +344,5 @@ void tBgTester::Action()
 		SendFmt << buf << "<br>\n";
 	}
 }
+
 #endif // DEBUG
