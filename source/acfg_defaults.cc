@@ -22,7 +22,7 @@ capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 //#define COMPONENT_OPTIONAL "(-[a-z0-9-])"
 //#define PARANOIASOURCE "(\\.orig|\\.debian)"
 
-string spfilepat(INFOLDER ".*(\\.(d|u)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")\\.gpg$");
+string spfilepat;
 
 string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
@@ -33,7 +33,13 @@ string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
     "|/[[:alpha:]]{1,2}/[a-f0-9]{64}(-[a-f0-9]{64})?(\\.gz)?" // FreeBSD, after https://alioth.debian.org/tracker/?func=detail&atid=413111&aid=315254&group_id=100566
 ")$");
 
-string svfilepat("/development/rawhide/.*");
+string svfilepat("/development/rawhide/.*"
+    // more stuff for ubuntu dist-upgrader
+    "|dists/.*dist-upgrader.*/current/.*" // /dists/xenial/main/dist-upgrader-all/current/xenial.tar.gz
+    "|changelogs.ubuntu.com/.*" // changelogs.ubuntu.com/meta-release-lts-development
+    // XXX: signature might change afterwards... any better solution than this location?
+    "|" INFOLDER ".*(\\.(d|u)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")\\.gpg$"
+    );
 
 string vfilepat(INFOLDER
 		"(Index|Packages" COMPOPT "|InRelease|Release|mirrors\\.txt|.*\\.gpg|NEWS\\.Debian"
