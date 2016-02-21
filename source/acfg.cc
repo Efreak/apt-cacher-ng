@@ -530,8 +530,12 @@ tStrDeq ExpandFileTokens(cmstring &token)
 		return res; // errrr... done here
 	// merge them
 	tStrSet dupeFil;
-	for(const auto& s: res)
-		dupeFil.emplace(GetBaseName(s));
+        for(const auto& s: res)
+#ifdef COMPATGCC47
+           dupeFil.insert(GetBaseName(s));
+#else
+        dupeFil.emplace(GetBaseName(s));
+#endif
 	for(const auto& s: suppres)
 		if(!ContHas(dupeFil, GetBaseName(s)))
 			res.emplace_back(s);

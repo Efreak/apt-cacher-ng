@@ -142,7 +142,11 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 			char *end(0);
 			auto val = strtoul(tok.c_str()+3, &end, 16);
 			if(*end == 0 || *end=='&')
+#ifdef COMPATGCC47                           
+				files.insert(val);
+#else
 				files.emplace(val);
+#endif
 		}
 		else if(startsWithSz(tok, "blob="))
 			tok.swap(blob);
