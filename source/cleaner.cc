@@ -46,7 +46,7 @@ void cleaner::WorkLoop()
 		{
 			setLockGuard;
 			// ok, who's next?
-			for (uint i = 0; i < _countof(stamps); ++i)
+			for (unsigned i = 0; i < _countof(stamps); ++i)
 				if (stamps[i] < stamps[what])
 					what = (eType) i;
 			now=GetTime();
@@ -98,7 +98,7 @@ void cleaner::WorkLoop()
 			stamps[what] = time_nextcand;
 
 		// ok, who's next?
-		for (uint i = 0; i < _countof(stamps); ++i)
+		for (unsigned i = 0; i < _countof(stamps); ++i)
 			if (stamps[i] < stamps[what])
 				what = (eType) i;
 	};

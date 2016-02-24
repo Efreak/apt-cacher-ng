@@ -63,8 +63,12 @@ private:
 	typedef SHARED_PTR<tProgressTracker> tProgTrackPtr;
 	static WEAK_PTR<tProgressTracker> g_pTracker;
 	tProgTrackPtr m_pTracker;
+
 	protected:
-	tStrSet m_delCboxFilter;
+	// value is an ID number assigned to the string (key) in the moment of adding it
+	std::map<mstring,unsigned> m_delCboxFilter;
+	// generates a lookup blob as hidden form parameter
+	mstring BuildCompressedDelFileCatalog();
 };
 
 struct tRemoteFileInfo;

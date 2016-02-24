@@ -18,7 +18,6 @@ class dlcon;
 class tDlJobHints;
 struct foo;
 
-static cmstring FAKEDATEMARK("Sat, 26 Apr 1986 01:23:39 GMT+3");
 static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing, "
 		"aborting as requested.</span>");
 
@@ -132,7 +131,7 @@ protected:
 
 	unsigned int m_nProgIdx, m_nProgTell;
 
-	void TellCount(uint nCount, off_t nSize);
+	void TellCount(unsigned nCount, off_t nSize);
 
 	bool ParseAndProcessMetaFile(ifileprocessor &output_receiver,
 			const mstring &sPath, enumMetaType idxType);
@@ -156,8 +155,21 @@ protected:
 	// add certain files to the kill bill, to be removed after the activity is done
 	virtual void MarkObsolete(cmstring&) {};
 
-private:
+	// for compressed map of special stuff
+	inline mstring AddLookupGetKey(cmstring &sFilePathRel, bool& isNew)
+	{
+		unsigned id = m_delCboxFilter.size();
+		auto it = m_delCboxFilter.find(sFilePathRel);
+		isNew = it==m_delCboxFilter.end();
+		if(isNew)
+			m_delCboxFilter[sFilePathRel] = id;
+		else
+			id = it->second;
+		char buf[30];
+		return mstring(buf, snprintf(buf, sizeof(buf), " name=\"kf\" value=\"%x\"", id));
+	}
 
+private:
 	tContId2eqClass m_eqClasses;
 
 	bool Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,

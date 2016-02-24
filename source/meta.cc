@@ -27,8 +27,8 @@ cmstring sDefPortHTTP("80");
 cmstring sDefPortHTTPS("443");
 #endif
 
-cmstring PROT_PFX_HTTPS("https://"), PROT_PFX_HTTP("http://");
-
+cmstring PROT_PFX_HTTPS(WITHLEN("https://")), PROT_PFX_HTTP(WITHLEN("http://"));
+cmstring FAKEDATEMARK(WITHLEN("Sat, 26 Apr 1986 01:23:39 GMT+3"));
 
 /*
 int getUUID() {
@@ -436,6 +436,25 @@ bool CsAsciiToBin(const char *a, uint8_t b[], unsigned short binLength)
 	}
 	return true;
 }
+bool Hex2buf(const char *a, size_t len, acbuf& ret)
+{
+	if(len%2)
+		return false;
+	ret.clear();
+	ret.setsize(len/2+1);
+	auto *uA = (const unsigned char*) a;
+	for(auto end=uA+len;uA<end;uA+=2)
+	{
+		if(!*uA || !uA[1])
+			return false;
+		if(hexmap[uA[0]]>15 || hexmap[uA[1]] > 15)
+			return false;
+		*(ret.wptr()) = hexmap[uA[0]] * 16 + hexmap[uA[1]];
+	}
+	ret.got(len/2);
+	return true;
+}
+
 char h2t_map[] =
 	{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd',
 			'e', 'f' };
@@ -551,9 +570,11 @@ void UrlEscapeAppend(cmstring &s, mstring &sTarget)
 mstring UrlEscape(cmstring &s)
 {
 	mstring ret;
+	ret.reserve(s.size());
 	UrlEscapeAppend(s, ret);
 	return ret;
 }
+
 mstring DosEscape(cmstring &s)
 {
 	mstring ret;
@@ -601,18 +622,34 @@ mstring EncodeBase64Auth(cmstring& sPwdString)
 }
 
 #ifdef HAVE_TOMCRYPT
-string EncodeBase64(LPCSTR data, uint len)
+// XXX: fix usage, no proper error checking, data duplication...
+string EncodeBase64(LPCSTR data, unsigned len)
 {
-	unsigned long reslen=len*2;
-	unsigned char buf[len*2];
-	base64_encode((const unsigned char*) data, (unsigned long) len, &buf[0], &reslen);
-	return string((LPCSTR)&buf[0], reslen);
+	unsigned long reslen=len*4/3+3;
+	vector<unsigned char>buf;
+	buf.reserve(reslen);
+	string ret;
+	if(base64_encode((const unsigned char*) data, (unsigned long) len, &buf[0], &reslen) == CRYPT_OK)
+		ret.assign((LPCSTR)&buf[0], reslen);
+	return ret;
+}
+bool DecodeBase64(LPCSTR data, size_t len, acbuf& binData)
+{
+	unsigned long reslen=len;
+	binData.clear();
+	binData.setsize(len);
+	auto rc=base64_decode((const unsigned char*) data,
+			(unsigned long) len, (unsigned char*)binData.wptr(), &reslen);
+	if(rc!=CRYPT_OK)
+		return false;
+	binData.got(reslen);
+	return true;
 }
 #else
-string EncodeBase64(LPCSTR data, uint len)
+string EncodeBase64(LPCSTR data, unsigned len)
 {
 	uint32_t bits=0;
-	uint char_count=0;
+	unsigned char_count=0;
 	char alphabet[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	string out;
 	for(auto p=data; p<data+len; ++p)
@@ -660,4 +697,116 @@ string EncodeBase64(LPCSTR data, uint len)
 	return out;
 }
 
+// XXX: this is a monstrousity and should be replaced with custom small function :-(
+#ifdef HAVE_SSL
+#include <openssl/evp.h>
+#include <openssl/bio.h>
+#include <openssl/sha.h>
+#include <openssl/crypto.h>
+#include <cstring>
+bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData)
+{
+	if(!pAscii)
+		return false;
+	binData.setsize(len);
+	binData.clear();
+	FILE* memStrm = ::fmemopen( (void*) pAscii, len, "r");
+	auto strmBase = BIO_new(BIO_f_base64());
+	auto strmBin = BIO_new_fp(memStrm, BIO_NOCLOSE);
+	strmBin = BIO_push(strmBase, strmBin);
+	BIO_set_flags(strmBin, BIO_FLAGS_BASE64_NO_NL);
+	binData.got(BIO_read(strmBin, binData.wptr(), len));
+	BIO_free_all(strmBin);
+	checkForceFclose(memStrm);
+	return binData.size();
+}
 #endif
+#endif
+
+// maybe finish later
+#if 0
+// let the compiler optimize something for us
+inline int8_t Base64char2code(char c)
+{
+	switch(c)
+	{
+	case 'A': return 0;
+	case 'B': return 1;
+	case 'C': return 2;
+	case 'D': return 3;
+	case 'E': return 4;
+	case 'F': return 5;
+	case 'G': return 6;
+	case 'H': return 7;
+	case 'I': return 8;
+	case 'J': return 9;
+	case 'K': return 10;
+	case 'L': return 11;
+	case 'M': return 12;
+	case 'N': return 13;
+	case 'O': return 14;
+	case 'P': return 15;
+	case 'Q': return 16;
+	case 'R': return 17;
+	case 'S': return 18;
+	case 'T': return 19;
+	case 'U': return 20;
+	case 'V': return 21;
+	case 'W': return 22;
+	case 'X': return 23;
+	case 'Y': return 24;
+	case 'Z': return 25;
+	case 'a': return 26;
+	case 'b': return 27;
+	case 'c': return 28;
+	case 'd': return 29;
+	case 'e': return 30;
+	case 'f': return 31;
+	case 'g': return 32;
+	case 'h': return 33;
+	case 'i': return 34;
+	case 'j': return 35;
+	case 'k': return 36;
+	case 'l': return 37;
+	case 'm': return 38;
+	case 'n': return 39;
+	case 'o': return 40;
+	case 'p': return 41;
+	case 'q': return 42;
+	case 'r': return 43;
+	case 's': return 44;
+	case 't': return 45;
+	case 'u': return 46;
+	case 'v': return 47;
+	case 'w': return 48;
+	case 'x': return 49;
+	case 'y': return 50;
+	case 'z': return 51;
+	case '0': return 52;
+	case '1': return 53;
+	case '2': return 54;
+	case '3': return 55;
+	case '4': return 56;
+	case '5': return 57;
+	case '6': return 58;
+	case '7': return 59;
+	case '8': return 60;
+	case '9': return 61;
+	case '+': return 62;
+	case '/': return 63;
+	default:
+		return -1;
+	}
+}
+bool DecodeBase64(const char *pAscii, size_t len, acbuf& binData) {
+	if(!pAscii)
+		return false;
+	binData.setsize(len);
+	binData.clear();
+	for(auto p=pAscii; p<pAscii+len; ++p)
+	{
+		auto val=Base64char2code(*p);
+	}
+}
+#endif
+

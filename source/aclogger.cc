@@ -1,7 +1,6 @@
 
 #include "meta.h"
 
-#undef _GNU_SOURCE // XSI strerror_r
 #include <string.h>
 #include <errno.h>
 
@@ -263,25 +262,30 @@ string GetStatReport()
 	return ret;
 }
 #endif
-
-
 }
 
+// let the compiler decide between GNU and XSI version
+inline void add_msg(int r, int err, const char* buf, mstring *p)
+{
+	if(r)
+		p->append(tSS() << "UNKNOWN ERROR: " << err);
+	else
+		p->append(buf);
+}
 
+inline void add_msg(const char *msg, int , const char* , mstring *p)
+{
+	p->append(msg);
+}
 
 tErrnoFmter::tErrnoFmter(const char *prefix)
 {
-	char buf[32];
-	buf[0]=buf[31]=0x0;
-
+	int err=errno;
+	char buf[64];
+	buf[0]=buf[sizeof(buf)-1]=0x0;
 	if(prefix)
 		assign(prefix);
-
-	int err=errno;
-	if(strerror_r(err, buf, sizeof(buf)-1))
-		append(tSS() << "UNKNOWN ERROR: " << err);
-	else
-		append(buf);
+	add_msg(strerror_r(err, buf, sizeof(buf)-1), err, buf, this);
 }
 
 #ifdef DEBUG
@@ -318,7 +322,7 @@ t_logger::~t_logger()
 tSS & t_logger::GetFmter()
 {
 	m_strm.clear();
-	for(uint i=0;i<m_nLevel;i++)
+	for(unsigned i=0;i<m_nLevel;i++)
 		m_strm << "\t";
 	m_strm<< " - ";
 	return m_strm;

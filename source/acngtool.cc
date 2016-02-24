@@ -256,7 +256,7 @@ int hashpwd()
 #ifdef HAVE_SSL
 	string plain;
 	uint32_t salt=0;
-	for(uint i=10; i; --i)
+	for(unsigned i=10; i; --i)
 	{
 		if(RAND_bytes(reinterpret_cast<unsigned char*>(&salt), 4) >0)
 			break;
@@ -860,7 +860,7 @@ void do_stuff_before_config()
 			perror("");
 			exit(1);
 		}
-		for (uint i = 0; i < sizeof(csum); i++)
+		for (unsigned i = 0; i < sizeof(csum); i++)
 			printf("%02x", csum[i]);
 		printf("\n");
 		envvar = getenv("REFSUM");

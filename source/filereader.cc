@@ -101,7 +101,7 @@ public:
 		if (ret == BZ_STREAM_END || ret == BZ_OK)
 		{
 			nBufPos = nBufSize - strm.avail_in;
-			uint nGotBytes = UncompBuf.freecapa() - strm.avail_out;
+			unsigned nGotBytes = UncompBuf.freecapa() - strm.avail_out;
 			UncompBuf.got(nGotBytes);
 			eof = ret == BZ_STREAM_END;
 			return true;
@@ -147,7 +147,7 @@ public:
 		if (ret == Z_STREAM_END || ret == Z_OK)
 		{
 			nBufPos = nBufSize - strm.avail_in;
-			uint nGotBytes = UncompBuf.freecapa() - strm.avail_out;
+			unsigned nGotBytes = UncompBuf.freecapa() - strm.avail_out;
 			UncompBuf.got(nGotBytes);
 			eof = ret == Z_STREAM_END;
 			return true;
@@ -201,7 +201,7 @@ public:
 		if (ret == LZMA_STREAM_END || ret == LZMA_OK)
 		{
 			nBufPos = nBufSize - strm.avail_in;
-			uint nGotBytes = UncompBuf.freecapa() - strm.avail_out;
+			unsigned nGotBytes = UncompBuf.freecapa() - strm.avail_out;
 			UncompBuf.got(nGotBytes);
 			eof = ret == LZMA_STREAM_END;
 			return true;
@@ -231,7 +231,7 @@ filereader::filereader()
 {
 };
 
-bool filereader::OpenFile(const string & sFilename, bool bNoMagic, uint nFakeTrailingNewlines)
+bool filereader::OpenFile(const string & sFilename, bool bNoMagic, unsigned nFakeTrailingNewlines)
 {
 	Close(); // reset to clean state
 	m_nEofLines=nFakeTrailingNewlines;
@@ -725,7 +725,7 @@ bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE
 				return false;
 			}
 
-			uint nPlainSize=m_UncompBuf.size();
+			unsigned nPlainSize=m_UncompBuf.size();
 			summer->add(m_UncompBuf.rptr(), nPlainSize);
 			if(fDump)
 				fwrite(m_UncompBuf.rptr(), sizeof(char), nPlainSize, fDump);

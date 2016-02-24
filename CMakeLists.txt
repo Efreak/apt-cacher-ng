@@ -298,7 +298,7 @@ endif()
 	if(tomcrypt_FOUND)
 		set(HAVE_TOMCRYPT on)
 		# with workaround, http://clang.debian.net/logs/2015-03-25/libtomcrypt_1.17-6_unstable_clang.log
-		string(REPLACE ";" " " ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} ${tomcrypt_CFLAGS} -DLTC_NO_ROLC")
+    string(REPLACE ";" " " ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} ${tomcrypt_CFLAGS} -DLTC_NO_ROLC -DLTC_BASE64")
 		string(REPLACE ";" " " SSL_LIB_LIST "${tomcrypt_LDFLAGS}")
 	else()
 		set(HAVE_TOMCRYPT off)
