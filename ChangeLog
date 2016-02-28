@@ -1,8 +1,12 @@
 apt-cacher-ng (0.9.1) THE-DARK-NIGHT; urgency=low
 
   * FIX: correct human error message printing with recent glibc
+  * FIX: corrected linking on systems that need additional libraries to be
+    linked manually for socket IO while libwrap was not available
+  * More file pattern changes for Ubuntu's do-release-upgrade tool
   * Better processing of filename sets in the "deletion" wizard (compressed
     parameter exchange for longer lists)
+  * Database update
 
  -- 
 

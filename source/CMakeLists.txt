@@ -31,7 +31,7 @@ ADD_LIBRARY(acngstuff OBJECT ${SHAREDSRCS})
 SET_TARGET_PROPERTIES(acngstuff PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} ${lsd_CFLAGS}")
 
 ADD_EXECUTABLE(apt-cacher-ng $<TARGET_OBJECTS:acngstuff> ${SRCS} apt-cacher.cc)
-TARGET_LINK_LIBRARIES(apt-cacher-ng ${ServerLibs} ${CompLibs} ${SSL_LIB_LIST} ${lsd_LDFLAGS} ${EXTRA_LIBS_ACNG})
+TARGET_LINK_LIBRARIES(apt-cacher-ng ${BaseNetworkLibs} ${ServerLibs} ${CompLibs} ${SSL_LIB_LIST} ${lsd_LDFLAGS} ${EXTRA_LIBS_ACNG})
 # I'd like this method more but apparently LINK_FLAGS is always prepended, no way to append it
 #SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES LINK_FLAGS "${lsd_LDFLAGS}")
 SET_TARGET_PROPERTIES(apt-cacher-ng PROPERTIES COMPILE_FLAGS "${ACNG_CXXFLAGS_COMMON} ${lsd_CFLAGS}")
