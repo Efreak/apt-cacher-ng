@@ -641,6 +641,41 @@ std::unordered_map<string, parm> parms = {
 	}
 	,
 #endif
+#if 0
+   {
+		"bin2hex",
+		{ 1, 1, [](LPCSTR p)
+			{
+         filereader f;
+         if(f.OpenFile(p, true))
+            exit(EIO);
+         std::cout << BytesToHexString(f.GetBuffer(), f.GetSize()) << std::endl;
+         exit(EXIT_SUCCESS);
+			}
+		}
+	}
+	,
+#endif
+#if 0 // def HAVE_DECB64
+	{
+     "decb64",
+     { 1, 1, [](LPCSTR p)
+        {
+#ifdef DEBUG
+           cerr << "decoding " << p <<endl;
+#endif
+           acbuf res;
+           if(DecodeBase64(p, strlen(p), res))
+           {
+              std::cout.write(res.rptr(), res.size());
+              exit(0);
+           }
+           exit(1);
+        }
+     }
+  }
+	,
+#endif
 	{
 		"encb64",
 		{ 1, 1, [](LPCSTR p)

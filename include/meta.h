@@ -499,7 +499,11 @@ struct tErrnoFmter: public mstring
 
 mstring EncodeBase64Auth(cmstring &sPwdString);
 mstring EncodeBase64(LPCSTR data, unsigned len);
+
+#if defined(HAVE_SSL) || defined(HAVE_TOMCRYPT)
+#define HAVE_DECB64
 bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData);
+#endif
 
 #if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
 #define COMPATGCC47
