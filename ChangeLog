@@ -8,7 +8,7 @@ apt-cacher-ng (0.9.1) THE-DARK-NIGHT; urgency=low
     parameter exchange for longer lists)
   * Database update
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Sun, 28 Feb 2016 17:17:43 +0100
 
 apt-cacher-ng (0.9.0) MAXIMUM-OVERDRIVE; urgency=low
 

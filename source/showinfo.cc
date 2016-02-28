@@ -116,7 +116,6 @@ void tDeleter::SendProp(cmstring &key)
 }
 
 // and deserialize it from GET parameter into m_delCboxFilter
-//void DecodeDelFileCatalog(mstring input);
 
 tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 : tMarkupFileSend(parms, "delconfirm.html", "text/html", "200 OK"),
@@ -157,6 +156,7 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 
 	tStrDeq filePaths;
 	acbuf buf;
+#ifdef HAVE_DECB64 // this page isn't accessible with crippled configuration anyway
 	if (!blob.empty())
 	{
 		// let's decode the blob and pickup what counts
@@ -177,7 +177,7 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 			return;
 		buf.got(uncompSize);
 	}
-
+#endif
 	while(true)
 	{
 		unsigned id, slen;

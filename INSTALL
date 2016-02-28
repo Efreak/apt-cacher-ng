@@ -4,10 +4,11 @@ Requirements:
  - CMake 2.6.2 or newer, probably also GNU make
  - gcc 4.7 or newer or clang 3.0 or newer and latest libstdc++ or Boost headers
  - on Linux systems, kernel 2.6.22 or newer and glibc 2.8 or newer
+ - pkg-config and zlib (and development components)
 
 Extra requirements for optional features:
- - zlib, libbz2, liblzma (from XZ), OpenSSL and their development components
- - LibTomCrypt might work as replacement for some parts of functionality if
+ - libbz2, liblzma (from XZ), OpenSSL and their development components
+ - LibTomCrypt can serve as replacement for some parts of functionality if
    OpenSSL is not available. See LibTomCrypt notes below!
  - recent FUSE library and its development files for the "virtual mirror"
    filesystem
@@ -25,8 +26,8 @@ Workflow example:
  - run "make -C builddir install" (maybe with DESTDIR=/tmp/somewhere/else)
 
 Troubleshooting and integrator notes:
- - on configuration problems or to change most settings afterwards, remove the
-   builddir directory or only builddir/CMakeCache.txt in easy cases
+ - on configuration problems or to change cached settings afterwards, remove the
+   builddir directory or just builddir/CMakeCache.txt in easy cases
  - the build system makes use of pkg-config to locate required software
    components. For locally built packages, you might need to adjust its
    path settings; see manpage for details.
