@@ -1,8 +1,8 @@
-apt-cacher-ng (0.9.1-0.1) UNRELEASED; urgency=low
+apt-cacher-ng (0.9.1-1) unstable; urgency=low
 
-  * TBD
+  * New upstream version
 
- -- Eduard Bloch <blade@debian.org>  Wed, 24 Feb 2016 09:17:08 +0100
+ -- Eduard Bloch <blade@debian.org>  Sun, 28 Feb 2016 17:20:41 +0100
 
 apt-cacher-ng (0.9.0-1) experimental; urgency=low
 
