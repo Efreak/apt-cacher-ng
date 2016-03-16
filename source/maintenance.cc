@@ -194,6 +194,8 @@ LPCSTR tSpecialRequest::GetTaskName()
 	case workMIRROR: return "Archive Mirroring";
 	case workDELETE: return "Manual File Deletion";
 	case workDELETECONFIRM: return "Manual File Deletion (Confirmed)";
+	case workTRUNCATE: return "Manual File Truncation";
+	case workTRUNCATECONFIRM: return "Manual File Truncation (Confirmed)";
 	case workCOUNTSTATS: return "Status Report With Statistics";
 	case workSTYLESHEET: return "CSS";
 	case workJStats: return "Stats";
@@ -261,6 +263,8 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 			{"doMirror=", workMIRROR},
 			{"doDelete=", workDELETECONFIRM},
 			{"doDeleteYes=", workDELETE},
+			{"doTruncate=", workTRUNCATECONFIRM},
+			{"doTruncateYes=", workTRUNCATE},
 			{"doCount=", workCOUNTSTATS},
 			{"doTraceStart=", workTraceStart},
 			{"doTraceEnd=", workTraceEnd},
@@ -304,7 +308,10 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 		return new pkgmirror(parms);
 	case workDELETE:
 	case workDELETECONFIRM:
-		return new tDeleter(parms);
+		return new tDeleter(parms, "Delet");
+	case workTRUNCATE:
+	case workTRUNCATECONFIRM:
+		return new tDeleter(parms, "Truncat");
 	case workSTYLESHEET:
 		return new tStyleCss(parms);
 	case workJStats:

@@ -256,7 +256,7 @@ int hashpwd()
 #ifdef HAVE_SSL
 	string plain;
 	uint32_t salt=0;
-	for(uint i=10; i; --i)
+	for(unsigned i=10; i; --i)
 	{
 		if(RAND_bytes(reinterpret_cast<unsigned char*>(&salt), 4) >0)
 			break;
@@ -352,6 +352,7 @@ inline bool patchChunk(tPatchSequence& idx, LPCSTR pline, size_t len, tPatchSequ
 
 int maint_job()
 {
+   acfg::SetOption("proxy=", nullptr);
 	LPCSTR envh = getenv("HOSTNAME");
 	if (!envh)
 		envh = "localhost";
@@ -550,7 +551,7 @@ LPCSTR g_missingCfgDir = nullptr;
 void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 {
 	LPCSTR szCfgDir=CFGDIR;
-	std::vector<LPCSTR> a, b;
+	std::vector<LPCSTR> validargs, nonoptions;
 
 	for (auto p=argv; p<argv+argc; p++)
 	{
@@ -567,7 +568,7 @@ void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 		else if(!strcmp(*p, "--verbose"))
 			g_bVerbose=true;
 		else if(**p) // not empty
-			a.emplace_back(*p);
+			validargs.emplace_back(*p);
 
 #if SUPPWHASH
 #warning FIXME
@@ -587,13 +588,13 @@ void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 
 	tStrVec non_opt_args;
 
-	for(auto& keyval : a)
+	for(auto& keyval : validargs)
 		if(!acfg::SetOption(keyval, 0))
-			b.emplace_back(keyval);
+			nonoptions.emplace_back(keyval);
 
 	acfg::PostProcConfig();
 
-	for(const auto& x: b)
+	for(const auto& x: nonoptions)
 		f(x);
 }
 
@@ -638,6 +639,41 @@ std::unordered_map<string, parm> parms = {
 			}
 		}
 	}
+	,
+#endif
+#if 0
+   {
+		"bin2hex",
+		{ 1, 1, [](LPCSTR p)
+			{
+         filereader f;
+         if(f.OpenFile(p, true))
+            exit(EIO);
+         std::cout << BytesToHexString(f.GetBuffer(), f.GetSize()) << std::endl;
+         exit(EXIT_SUCCESS);
+			}
+		}
+	}
+	,
+#endif
+#if 0 // def HAVE_DECB64
+	{
+     "decb64",
+     { 1, 1, [](LPCSTR p)
+        {
+#ifdef DEBUG
+           cerr << "decoding " << p <<endl;
+#endif
+           acbuf res;
+           if(DecodeBase64(p, strlen(p), res))
+           {
+              std::cout.write(res.rptr(), res.size());
+              exit(0);
+           }
+           exit(1);
+        }
+     }
+  }
 	,
 #endif
 	{
@@ -859,7 +895,7 @@ void do_stuff_before_config()
 			perror("");
 			exit(1);
 		}
-		for (uint i = 0; i < sizeof(csum); i++)
+		for (unsigned i = 0; i < sizeof(csum); i++)
 			printf("%02x", csum[i]);
 		printf("\n");
 		envvar = getenv("REFSUM");

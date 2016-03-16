@@ -27,8 +27,8 @@ cmstring sDefPortHTTP("80");
 cmstring sDefPortHTTPS("443");
 #endif
 
-cmstring PROT_PFX_HTTPS("https://"), PROT_PFX_HTTP("http://");
-
+cmstring PROT_PFX_HTTPS(WITHLEN("https://")), PROT_PFX_HTTP(WITHLEN("http://"));
+cmstring FAKEDATEMARK(WITHLEN("Sat, 26 Apr 1986 01:23:39 GMT+3"));
 
 /*
 int getUUID() {
@@ -436,6 +436,25 @@ bool CsAsciiToBin(const char *a, uint8_t b[], unsigned short binLength)
 	}
 	return true;
 }
+bool Hex2buf(const char *a, size_t len, acbuf& ret)
+{
+	if(len%2)
+		return false;
+	ret.clear();
+	ret.setsize(len/2+1);
+	auto *uA = (const unsigned char*) a;
+	for(auto end=uA+len;uA<end;uA+=2)
+	{
+		if(!*uA || !uA[1])
+			return false;
+		if(hexmap[uA[0]]>15 || hexmap[uA[1]] > 15)
+			return false;
+		*(ret.wptr()) = hexmap[uA[0]] * 16 + hexmap[uA[1]];
+	}
+	ret.got(len/2);
+	return true;
+}
+
 char h2t_map[] =
 	{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd',
 			'e', 'f' };
@@ -551,9 +570,11 @@ void UrlEscapeAppend(cmstring &s, mstring &sTarget)
 mstring UrlEscape(cmstring &s)
 {
 	mstring ret;
+	ret.reserve(s.size());
 	UrlEscapeAppend(s, ret);
 	return ret;
 }
+
 mstring DosEscape(cmstring &s)
 {
 	mstring ret;
@@ -601,18 +622,34 @@ mstring EncodeBase64Auth(cmstring& sPwdString)
 }
 
 #ifdef HAVE_TOMCRYPT
-string EncodeBase64(LPCSTR data, uint len)
+// XXX: fix usage, no proper error checking, data duplication...
+string EncodeBase64(LPCSTR data, unsigned len)
 {
-	unsigned long reslen=len*2;
-	unsigned char buf[len*2];
-	base64_encode((const unsigned char*) data, (unsigned long) len, &buf[0], &reslen);
-	return string((LPCSTR)&buf[0], reslen);
+	unsigned long reslen=len*4/3+3;
+	vector<unsigned char>buf;
+	buf.reserve(reslen);
+	string ret;
+	if(base64_encode((const unsigned char*) data, (unsigned long) len, &buf[0], &reslen) == CRYPT_OK)
+		ret.assign((LPCSTR)&buf[0], reslen);
+	return ret;
 }
-#else
-string EncodeBase64(LPCSTR data, uint len)
+bool DecodeBase64(LPCSTR data, size_t len, acbuf& binData)
+{
+	unsigned long reslen=len;
+	binData.clear();
+	binData.setsize(len);
+	auto rc=base64_decode((const unsigned char*) data,
+			(unsigned long) len, (unsigned char*)binData.wptr(), &reslen);
+	if(rc!=CRYPT_OK)
+		return false;
+	binData.got(reslen);
+	return true;
+}
+#else // not HAVE_TOMCRYPT, use internal version and SSL
+string EncodeBase64(LPCSTR data, unsigned len)
 {
 	uint32_t bits=0;
-	uint char_count=0;
+	unsigned char_count=0;
 	char alphabet[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	string out;
 	for(auto p=data; p<data+len; ++p)
@@ -660,4 +697,27 @@ string EncodeBase64(LPCSTR data, uint len)
 	return out;
 }
 
+#ifdef HAVE_SSL
+#include <openssl/evp.h>
+#include <openssl/bio.h>
+#include <openssl/sha.h>
+#include <openssl/crypto.h>
+#include <cstring>
+bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData)
+{
+   if(!pAscii)
+      return false;
+   binData.setsize(len);
+   binData.clear();
+   FILE* memStrm = ::fmemopen( (void*) pAscii, len, "r");
+   auto strmBase = BIO_new(BIO_f_base64());
+   auto strmBin = BIO_new_fp(memStrm, BIO_NOCLOSE);
+   strmBin = BIO_push(strmBase, strmBin);
+   BIO_set_flags(strmBin, BIO_FLAGS_BASE64_NO_NL);
+   binData.got(BIO_read(strmBin, binData.wptr(), len));
+   BIO_free_all(strmBin);
+   checkForceFclose(memStrm);
+   return binData.size();
+}
+#endif
 #endif

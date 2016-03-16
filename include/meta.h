@@ -29,6 +29,8 @@
 
 #define EXTREME_MEMORY_SAVING false
 
+class acbuf;
+
 typedef std::string mstring;
 typedef const std::string cmstring;
 
@@ -45,6 +47,8 @@ typedef std::pair<LPCSTR, size_t> tPtrLen;
 #define CPATHSEPWIN '\\'
 #define SZPATHSEPWIN "\\"
 extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS;
+
+extern cmstring FAKEDATEMARK;
 
 #ifdef WINDOWS
 #define WIN32
@@ -288,6 +292,14 @@ inline mstring UrlUnescape(cmstring &from)
 	return ret;
 }
 mstring DosEscape(cmstring &s);
+// just the bare minimum to make sure the string does not break HTML formating
+inline mstring html_sanitize(cmstring& in)
+{
+	mstring ret;
+	for(auto c:in)
+		ret += ( strchr("<>'\"&;", (unsigned) c) ? '_' : c);
+	return ret;
+}
 
 #define pathTidy(s) { if(startsWithSz(s, "." SZPATHSEP)) s.erase(0, 2); tStrPos n(0); \
 	for(n=0;stmiss!=n;) { n=s.find(SZPATHSEP SZPATHSEP, n); if(stmiss!=n) s.erase(n, 1);}; \
@@ -319,7 +331,7 @@ inline mstring ltos(long n)
 inline mstring offttosH(off_t n)
 {
 	LPCSTR  pref[]={"", " KiB", " MiB", " GiB", " TiB", " PiB", " EiB"};
-	for(uint i=0;i<_countof(pref)-1; i++)
+	for(unsigned i=0;i<_countof(pref)-1; i++)
 	{
 		if(n<1024)
 			return ltos(n)+pref[i];
@@ -352,7 +364,7 @@ class tSplitWalk
 	LPCSTR m_seps;
 
 public:
-	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, uint begin=0)
+	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, unsigned begin=0)
 	: s(*line), start(begin), len(stmiss), oob(line->size()), m_seps(separators) {}
 	inline bool Next()
 	{
@@ -436,6 +448,8 @@ inline mstring unEscape(cmstring &s)
 }
 
 std::string BytesToHexString(const uint8_t sum[], unsigned short lengthBin);
+//bool HexToString(const char *a, mstring& ret);
+bool Hex2buf(const char *a, size_t len, acbuf& ret);
 
 // STFU helpers, (void) casts are not effective for certain functions
 static inline void ignore_value (int i) { (void) i; }
@@ -448,7 +462,7 @@ static inline time_t GetTime()
 
 static const time_t END_OF_TIME(MAX_VAL(time_t)-2);
 
-static inline uint FormatTime(char *buf, const time_t cur)
+static inline unsigned FormatTime(char *buf, const time_t cur)
 {
 	struct tm tmp;
 	gmtime_r(&cur, &tmp);
@@ -461,7 +475,7 @@ static inline uint FormatTime(char *buf, const time_t cur)
 struct tCurrentTime
 {
 	char buf[30];
-	uint len;
+	unsigned len;
 	inline tCurrentTime() { len=FormatTime(buf, time(nullptr)); }
 	inline operator mstring() { return mstring(buf, len); }
 };
@@ -484,7 +498,12 @@ struct tErrnoFmter: public mstring
 };
 
 mstring EncodeBase64Auth(cmstring &sPwdString);
-mstring EncodeBase64(LPCSTR data, uint len);
+mstring EncodeBase64(LPCSTR data, unsigned len);
+
+#if defined(HAVE_SSL) || defined(HAVE_TOMCRYPT)
+#define HAVE_DECB64
+bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData);
+#endif
 
 #if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
 #define COMPATGCC47

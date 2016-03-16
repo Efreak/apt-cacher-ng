@@ -22,18 +22,24 @@ capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 //#define COMPONENT_OPTIONAL "(-[a-z0-9-])"
 //#define PARANOIASOURCE "(\\.orig|\\.debian)"
 
-string spfilepat(INFOLDER ".*(\\.(d|u)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")\\.gpg$");
+string spfilepat;
 
 string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
-		"|\\.debdelta|\\.diff/.*\\.gz|(Devel)?ReleaseAnnouncement(\\?.*)?"
+		"|\\.debdelta|\\.diff/.*\\.gz"
 		"|[a-f0-9]+-(susedata|updateinfo|primary|deltainfo).xml.gz" //opensuse, index data, hash in filename
 		"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
 		"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
     "|/[[:alpha:]]{1,2}/[a-f0-9]{64}(-[a-f0-9]{64})?(\\.gz)?" // FreeBSD, after https://alioth.debian.org/tracker/?func=detail&atid=413111&aid=315254&group_id=100566
 ")$");
 
-string svfilepat("/development/rawhide/.*");
+string svfilepat("/development/rawhide/.*"
+    // more stuff for ubuntu dist-upgrader
+    "|dists/.*dist-upgrader.*/current/.*" // /dists/xenial/main/dist-upgrader-all/current/xenial.tar.gz
+    "|changelogs.ubuntu.com/.*" // changelogs.ubuntu.com/meta-release-lts-development
+    // XXX: signature might change afterwards... any better solution than this location?
+    "|" INFOLDER ".*(\\.(d|u)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")\\.gpg$"
+    );
 
 string vfilepat(INFOLDER
 		"(Index|Packages" COMPOPT "|InRelease|Release|mirrors\\.txt|.*\\.gpg|NEWS\\.Debian"
@@ -51,14 +57,15 @@ string vfilepat(INFOLDER
 		"|\\.o" // https://bugs.launchpad.net/ubuntu/+source/apt-cacher-ng/+bug/1078224
 		"|Components-.*yml" COMPOPT // DEP-11 aka AppStream"
 		"|icons-[x0-9]+\\.tar" COMPOPT
-    "|(latest|pub)\\.ssl" // FreeBSD
-
-						")$" // end of filename-only patterns
+		"|(latest|pub)\\.ssl" // FreeBSD
+		")$" // end of filename-only patterns
 
 		"|/dists/.*/installer-[^/]+/[^0-9][^/]+/images/.*" // d-i stuff but not containing a date (year number) in the revision directory (like "current", "beta", ...)
 		"|/pks/lookup.op.get" // some Ubuntu PPA management activity
 		"|centos/.*/images/.*img" // [#314924] Allow access to CentOS images
 
+		"|connectivity-check.html|ubiquity/.*update|getubuntu/releasenotes" // Ubuntu installer network check, etc.
+		"|wiki.ubuntu.com/.*/ReleaseNotes" // this is actually for an internal check and therefore contains the hostname
 		"|ubuntu/dists/.*\\.html" // http://archive.ubuntu.com/ubuntu/dists/vivid-updates/main/dist-upgrader-all/current/ReleaseAnnouncement.html
 );
 

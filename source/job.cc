@@ -507,7 +507,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 		// extract the actual port from the URL
 		char *pEnd(0);
-		uint nPort = 80;
+		unsigned nPort = 80;
 		LPCSTR sPort=theUrl.GetPort().c_str();
 		if(!*sPort)
 		{

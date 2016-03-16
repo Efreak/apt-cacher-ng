@@ -74,7 +74,7 @@ header::header(const header &s)
 :type(s.type),
  frontLine(s.frontLine)
 {
-	for (uint i = 0; i < HEADPOS_MAX; i++)
+	for (unsigned i = 0; i < HEADPOS_MAX; i++)
 		h[i] = s.h[i] ? strdup(s.h[i]) : nullptr;
 }
 
@@ -82,7 +82,7 @@ header& header::operator=(const header& s)
 {
 	type=s.type;
 	frontLine=s.frontLine;
-	for (uint i = 0; i < HEADPOS_MAX; ++i)
+	for (unsigned i = 0; i < HEADPOS_MAX; ++i)
 	{
 		if (h[i])
 			free(h[i]);
@@ -99,7 +99,7 @@ header::~header()
 
 void header::clear()
 {
-	for(uint i=0; i<HEADPOS_MAX; i++)
+	for(unsigned i=0; i<HEADPOS_MAX; i++)
 		del((eHeadPos) i);
 	frontLine.clear();
 	type=INVALID;
@@ -111,7 +111,7 @@ void header::del(eHeadPos i)
 	h[i]=0;
 }
 
-int header::Load(LPCSTR const in, uint maxlen,
+int header::Load(LPCSTR const in, unsigned maxlen,
 		std::vector<std::pair<std::string, std::string>> *pNotForUs)
 {
 	if(maxlen<9)
@@ -138,7 +138,7 @@ int header::Load(LPCSTR const in, uint maxlen,
 	while (true)
 	{
 		auto szBegin=posNext;
-		uint pos=szBegin-in;
+		unsigned pos=szBegin-in;
 		auto end=(LPCSTR) memchr(szBegin, '\r', maxlen-pos);
 		if (!end)
 			return 0;
@@ -209,7 +209,7 @@ int header::Load(LPCSTR const in, uint maxlen,
 		{
 			if (xh.len != keyLen || key[xh.len] != ':' || strncasecmp(xh.str, key, keyLen))
 				continue;
-			uint l=end-sep;
+			unsigned l=end-sep;
 			lastLineIdx = xh.pos;
 			if( ! (h[xh.pos] = (char*) realloc(h[xh.pos], l+1)))
 				return -3;
@@ -224,7 +224,7 @@ int header::Load(LPCSTR const in, uint maxlen,
 	return -2;
 }
 
-int header::LoadFromBuf(const char * const in, uint maxlen)
+int header::LoadFromBuf(const char * const in, unsigned maxlen)
 {
 	clear();
 	int ret=Load(in, maxlen);

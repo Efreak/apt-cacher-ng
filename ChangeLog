@@ -1,3 +1,40 @@
+apt-cacher-ng (0.9.1) THE-DARK-NIGHT; urgency=low
+
+  * FIX: correct human error message printing with recent glibc
+  * FIX: corrected linking on systems that need additional libraries to be
+    linked manually for socket IO while libwrap was not available
+  * More file pattern changes for Ubuntu's do-release-upgrade tool
+  * Better processing of filename sets in the "deletion" wizard (compressed
+    parameter exchange for longer lists)
+  * Database update
+
+ -- Eduard Bloch <blade@debian.org>  Sun, 28 Feb 2016 17:17:43 +0100
+
+apt-cacher-ng (0.9.0) MAXIMUM-OVERDRIVE; urgency=low
+
+  * FIX: Ubuntu Installer's ReleaseNotes fetching was interpreted incorrectly
+    forced redirection of ISP to its auth page. Now keeping the target page
+    in doubt, just making sure it's reloaded next time.
+  * More volatile regexp's to cover requests from Ubuntu Installer, including
+    the link that it uses to examine state of the network connection
+  * FIX: Replaced "unofficial" uint type with unsigned (should resolve build
+    problems under FreeBSDs)
+
+ -- Eduard Bloch <blade@debian.org>  Mon, 01 Feb 2016 19:48:10 +0100
+
+apt-cacher-ng (0.8.9) VOID-WHICH-BINDS; urgency=high
+
+  * FIX: acngtool shall not use proxy in the maint job
+  * Minor tweaks for reproducible builds (file order, permissions in tarball)
+  * Removed debian-volatile archives from the DB generator
+  * Database update
+
+  [ Eric Vander Weele ]
+  * Fix for Alioth issue #315276 (explicit return type declaration in a
+    lambda, for a build failure with clang 3.5)
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 21 Jan 2016 20:21:59 +0100
+
 apt-cacher-ng (0.8.8) CTHULHU-IS-CALLING; urgency=medium
 
   * Added support for AppStream metadata in Debian

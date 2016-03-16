@@ -106,28 +106,33 @@ public:
     inline tSS() : m_fmtmode(dec){}
     inline tSS(size_t sz) : m_fmtmode(dec) { setsize(sz); }
     inline tSS(const tSS &src) : acbuf(), m_fmtmode(src.m_fmtmode) { add(src.data(), src.size()); }
+    // move ctor: steal resources and defuse dtor
+    inline tSS(tSS&& src) : m_fmtmode(src.m_fmtmode) { m_buf = src.m_buf; src.m_buf = 0;
+    m_nCapacity=src.m_nCapacity; r=src.r; w=src.w; }
     tSS & addEscaped(const char *fmt);
-    inline tSS & operator<<(const char c) { reserve(size()+1); *(wptr())=c; got(1); return *this;}
+    inline tSS & operator<<(const char c) { reserve_atleast(1); *(wptr())=c; got(1); return *this;}
     inline tSS & clean() { clear(); return *this;}
     inline tSS & append(const char *data, size_t len) { add(data,len); return *this; }
     // similar to syswrite but adapted to socket behavior and reports error codes as HTTP status lines
     bool send(int nConFd, mstring* sErrorStatus=nullptr);
     bool recv(int nConFd, mstring* sErrorStatus=nullptr);
 
+    inline tSS & add(const char *data, size_t len)
+	{ reserve_atleast(len); memcpy(wptr(), data, len); got(len); return *this;}
+	inline tSS & add(const char *val)
+	{ if(val) return add(val, strlen(val)); else return add("(null)", 6); }
+	inline tSS & add(cmstring& val) { return add((const char*) val.data(), (size_t) val.size());}
+
 protected:
     char fmtbuf[22];
 	fmtflags m_fmtmode;
-	inline void reserve(size_t minCapa) { minCapa+=(r+1); if(m_nCapacity>=minCapa) return;
-	char *p=(char*)realloc((void*) m_buf, (unsigned long) std::max(m_nCapacity, minCapa*2));
-	if(!p) throw std::bad_alloc(); m_nCapacity=minCapa*2; m_buf=p; }
-
-	inline tSS & add(cmstring& val) { return add((const char*) val.data(), (size_t) val.size());}
+	inline void reserve_atleast(size_t minWriteCapa)
+	{
+		if(w+minWriteCapa+1 < m_nCapacity) return;
+		auto capaNew=2*(w+minWriteCapa);
+		if(!setsize(capaNew)) throw std::bad_alloc();
+	}
 	inline tSS & appDosNL() { return add("\r\n", 2);}
-	inline tSS & add(const char *data, size_t len)
-	{ reserve(size()+len); memcpy(wptr(), data, len); got(len); return *this;}
-	inline tSS & add(const char *val)
-	{ if(val) return add(val, strlen(val)); else return add("(null)", 6); }
-
 };
 
 cmstring& GetFooter();

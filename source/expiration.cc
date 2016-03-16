@@ -350,7 +350,7 @@ inline void expiration::DropExceptionalVersions()
     	// if more than allowed, keep the highest versions for sure, others are expired as usual
     	if(version2trashGroup.size() > (uint) acfg::keepnver)
         	std::sort(version2trashGroup.begin(), version2trashGroup.end());
-    	for(uint i=0; i<version2trashGroup.size() && i<uint(acfg::keepnver); i++)
+    	for(unsigned i=0; i<version2trashGroup.size() && i<uint(acfg::keepnver); i++)
     		for(auto& j: * version2trashGroup[i].group)
     			j.second.nLostAt=m_gMaintTimeNow;
     	version2trashGroup.clear();
@@ -469,7 +469,7 @@ void expiration::Action()
 	{
 		LoadPreviousData(true);
 		off_t nSpace(0);
-		uint cnt(0);
+		unsigned cnt(0);
 		for (auto& i : m_trashFile2dir2Info)
 		{
 			for (auto& j : i.second)
@@ -691,7 +691,7 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		// and last but not least - care only about the modern version of that index
 		m_metaFilesRel.erase(idir + "MD5SUMS");
 	}
-	uint stripLen=0;
+	unsigned stripLen=0;
     if (endsWithSzAr(sPathRel, ".head"))
 		stripLen=5;
 	else if (AddIFileCandidate(sPathRel))
