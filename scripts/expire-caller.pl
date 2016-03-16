@@ -1,4 +1,8 @@
 #!/usr/bin/perl
+#
+
+print STDERR "WARNING: this script is considered deprecated. It may still work but could print incorrect results!\n"
+
 use strict;
 use Socket;
 
@@ -37,7 +41,7 @@ sub toBase64
    {
       # dirty little helper
       $ENV{"TOBASE64"}=$src;
-      return `/usr/sbin/apt-cacher-ng`;
+      return `/usr/lib/apt-cacher-ng/acngtool encb64 "\$TOBASE64"`;
    }
 }
 

@@ -37,7 +37,7 @@ protected:
 	// to be implemented by subclasses
 	virtual void Action() =0;
 
-	void AfterSendChunk(const char *data, size_t size) override;
+	void SendChunkLocalOnly(const char *data, size_t size) override;
 
 	void DumpLog(time_t id);
 
@@ -60,11 +60,15 @@ private:
 		tProgressTracker() : nEndSize(-1), id(0) {};
 		void SetEnd(off_t);
 	};
-	typedef SMARTPTR_SPACE::shared_ptr<tProgressTracker> tProgTrackPtr;
-	static SMARTPTR_SPACE::weak_ptr<tProgressTracker> g_pTracker;
+	typedef SHARED_PTR<tProgressTracker> tProgTrackPtr;
+	static WEAK_PTR<tProgressTracker> g_pTracker;
 	tProgTrackPtr m_pTracker;
+
 	protected:
-	tStrSet m_delCboxFilter;
+	// value is an ID number assigned to the string (key) in the moment of adding it
+	std::map<mstring,unsigned> m_delCboxFilter;
+	// generates a lookup blob as hidden form parameter
+	mstring BuildCompressedDelFileCatalog();
 };
 
 struct tRemoteFileInfo;

@@ -1,4 +1,4 @@
-.\" Eduard Bloch, Wed, 14 Nov 2007 00:21:52 +0100
+.\" Eduard Bloch, Thu, 03 Dec 2015 20:57:59 +0100
 .ie \n(.g .ds Aq \(aq
 .el       .ds Aq '
 .TH "apt\(hycacher\(hyng" "8" "November\ 2007" "apt\(hycacher\(hyng" "Eduard\ Bloch"
@@ -22,6 +22,13 @@ Scan the specified configuration directory and interpret configuration files fin
 Short option summary
 .IP "\fIvarname=varopt\fP"
 The options from the configuration can be passed on the command line as key=value pairs.
+.SH "CONFIGURATION"
+.PP
+Apt-Cacher NG is configured by a multi-config directory, i.e. the configuration is split into many configuration files having names with suffix \fI.conf\fP and stored in a single directory. Variables can override previously configured settings from other files, sometimes that settings are merged (depending on the variable).
+.PP
+The configuration directory is typically \fI/etc/apt-cacher-ng\fP but it can be adjusted with the -C option (see systemd service file for details or wherever the init system starts the daemon).
+.PP
+On Debian systems, there are at least three files installed by default: acng.conf (containing documented examples), security.conf (containing sensible data and only readable for special users) and zz_debconf.conf (containing popular settings which are set by the Debian Configuration mechanism).
 .SH "SIGNALS"
 .PP
 Only few signals are handled in non-default ways.

@@ -95,7 +95,7 @@ struct tDlDesc
 struct tDlDescLocal : public tDlDesc
 {
 	FILE *pFile;
-	tDlDescLocal(cmstring &path, uint ftype) : tDlDesc(path, ftype), pFile(NULL)
+	tDlDescLocal(cmstring &path, uint ftype) : tDlDesc(path, ftype), pFile(nullptr)
 	{
 	};
 
@@ -120,7 +120,7 @@ struct tDlDescLocal : public tDlDesc
 	{
 		if(pFile)
 			fclose(pFile);
-		pFile=NULL;
+		pFile=nullptr;
 	};
 
 	int Read(char *retbuf, const char *path, off_t pos, size_t len)
@@ -171,7 +171,7 @@ public:
 	tDlDescRemote(cmstring &p, uint n) : tDlDesc(p,n), bIsFirst(true)
 	{
 		// expire the caches every time, should not cost much anyway
-		tcpconnect::BackgroundCleanup();
+		g_tcp_con_factory.BackgroundCleanup();
 		CAddrInfo::BackgroundCleanup();
 	};
 
@@ -190,11 +190,11 @@ public:
 			off_t skipBytes;
 			int nErr;
 
-			ssize_t SendData(int, int, off_t&, size_t)
+			ssize_t SendData(int, int, off_t&, size_t) override
 			{
 				return 0;
 			} // nothing to send
-			bool StoreFileData(const char *p, unsigned int count)
+			bool StoreFileData(const char *p, unsigned int count) override
 			{
 				if (count == 0)
 				{
@@ -228,7 +228,7 @@ public:
 			}
 #define SETERROR { nErr=__LINE__; return false;}
 			bool &m_isFirst;
-			bool DownloadStartedStoreHeader(const header &head, const char*, bool bRestarted, bool&)
+			bool DownloadStartedStoreHeader(const header &head, size_t, const char*, bool bRestarted, bool&) override
 			{
 				_cerr(head.frontLine<<endl);
 				m_head = head; // XXX: bloat, only status line and contlen required
@@ -307,7 +307,7 @@ public:
 
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
-		dler.AddJob(spFi, &uri);
+		dler.AddJob(spFi, &uri, 0, 0, 0);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		pFi->WaitForFinish(&nHttpCode);
@@ -356,7 +356,7 @@ public:
 		class tFitemProbe: public fileitem
 		{
 		public:
-			ssize_t SendData(int, int, off_t&, size_t)
+			ssize_t SendData(int, int, off_t&, size_t) override
 			{
 				return 0;
 			} // nothing to send
@@ -368,7 +368,7 @@ public:
 			{
 				m_bHeadOnly = true;
 			}
-			bool DownloadStartedStoreHeader(const header &head, const char*,
+			bool DownloadStartedStoreHeader(const header &head, size_t, const char*,
 					bool bRestart, bool&) override
 			{
 				if(bRestart)
@@ -380,7 +380,7 @@ public:
 			}
 		};
 		auto probe(make_shared<tFitemProbe>());
-		dler.AddJob(probe, &uri);
+		dler.AddJob(probe, &uri, 0, 0, 0);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
@@ -554,7 +554,7 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 					if(0==p->Stat(stbuf))
 						goto desc_opened;
 					delete p;
-					p=NULL;
+					p=nullptr;
 				}
 		}
 

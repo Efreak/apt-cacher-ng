@@ -24,10 +24,10 @@ con::con(int fdId, const char *c) :
 	m_confd(fdId),
     m_bStopActivity(false),
     m_dlerthr(0),
-    m_pDlClient(NULL),
-    m_pTmpHead(NULL)
+    m_pDlClient(nullptr),
+    m_pTmpHead(nullptr)
 {
-	if(c) // if NULL, pick up later when sent by the wrapper
+	if(c) // if nullptr, pick up later when sent by the wrapper
 		m_sClientHost=c;
 
     LOGSTART2("con::con", "fd: " << fdId << ", clienthost: " << c);
@@ -54,200 +54,144 @@ con::~con() {
     if(m_pDlClient) 
     {
     	m_pDlClient->SignalStop();
-    	pthread_join(m_dlerthr, NULL);
+    	pthread_join(m_dlerthr, nullptr);
     	
     	delete m_pDlClient;
-    	m_pDlClient=NULL;
+    	m_pDlClient=nullptr;
     }
     if(m_pTmpHead)
     {
     	delete m_pTmpHead;
-    	m_pTmpHead=NULL;
+    	m_pTmpHead=nullptr;
     }
     aclog::flush();
 }
 
-class RawPassThrough
+namespace RawPassThrough
 {
-	protected:
-	tTcpHandlePtr m_spOutCon;
 
 #define POSTMARK "POST http://bugs.debian.org:80/"
-#define FAKEMARK "POST                          /"
 
-public:
-	inline bool CheckListbugs(const header &ph)
+inline static bool CheckListbugs(const header &ph)
+{
+	return (0 == ph.frontLine.compare(0, _countof(POSTMARK) - 1, POSTMARK));
+}
+inline static void RedirectBto2https(int fdClient, cmstring& uri)
+{
+	tSS clientBufOut;
+	clientBufOut << "HTTP/1.1 302 Redirect\r\nLocation: " << "https://bugs.debian.org:443/";
+	constexpr auto offset = _countof(POSTMARK) - 6;
+	clientBufOut.append(uri.c_str() + offset, uri.size() - offset);
+	clientBufOut << "\r\nConnection: close\r\n\r\n";
+	clientBufOut.send(fdClient);
+	// XXX: there is a minor risk of confusing the client if the POST body is bigger than the
+	// incoming buffer (probably 64k). But OTOH we shutdown the connection properly, so a not
+	// fully stupid client should cope with that. Maybe this should be investigate better.
+	return;
+}
+void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
+{
+	tDlStreamHandle m_spOutCon;
+
+	string sErr;
+	tSS clientBufOut;
+	clientBufOut.setsize(32 * 1024); // out to be enough for any BTS response
+
+	// arbitrary target/port, client cares about SSL handshake and other stuff
+	tHttpUrl url;
+	if (!url.SetHttpUrl(uri))
+		return;
+	auto proxy = acfg::GetProxyInfo();
+	if (!proxy)
 	{
-		return (0 == ph.frontLine.compare(0, _countof(POSTMARK) - 1, POSTMARK));
+		direct_connect:
+		m_spOutCon = g_tcp_con_factory.CreateConnected(url.sHost, url.GetPort(), sErr, 0, 0,
+		false, acfg::nettimeout, true);
 	}
-	void PassThrough(acbuf &clientBufIn, int fdClient,
-			bool modPOSTstringForBugsDO, cmstring& uri)
+	else
 	{
-		string sErr;
-		tSS clientBufOut;
-		clientBufOut.setsize(32*1024); // out to be enough for any BTS response
-//		bool bDoCrypto(false);
+		// switch to HTTPS tunnel in order to get a direct connection through the proxy
+		m_spOutCon = g_tcp_con_factory.CreateConnected(proxy->sHost, proxy->GetPort(),
+				sErr, 0, 0, false, acfg::optproxytimeout > 0 ?
+						acfg::optproxytimeout : acfg::nettimeout,
+						true);
 
-		// XXX: this is very similar except for minor details
-		// (fixed host vs. arbitrary, response expected vs. not expected)
-		if(modPOSTstringForBugsDO)
+		if (m_spOutCon)
 		{
-			if(acfg::proxy_info.sHost.empty())
+			if (!m_spOutCon->StartTunnel(tHttpUrl(url.sHost, url.GetPort(),
+			true), sErr, & proxy->sUserPass, false))
 			{
-				m_spOutCon = tcpconnect::CreateConnected("bugs.debian.org",
-					sDefPortHTTP, sErr, 0,0,false,acfg::nettimeout, true);
-			}
-			else
-			{
-#if 0
-				// yeah, that might work if the exchange loop is extended with crypto ops
-				// like in dlcon, but for now just redirect the client to HTTPS
-				// version which will establish direct communication that will
-				// be forwarded as-is by the handling below
-
-				// switch to HTTPS tunnel in order to get a direct connection through the proxy
-				m_spOutCon = tcpconnect::CreateConnected(acfg::proxy_info.sHost,
-						acfg::proxy_info.GetPort(), sErr, 0,0,false,acfg::nettimeout, true);
-				if(m_spOutCon)
-				{
-					if(!m_spOutCon->StartTunnel(tHttpUrl("bugs.debian.org", "443", true),
-							sErr, & acfg::proxy_info.sUserPass, true))
-					{
-						m_spOutCon.reset();
-					}
-					else
-						bDoCrypto = true;
-				}
-#else
-				clientBufOut << "HTTP/1.1 302 Redirect\r\nLocation: "
-						<< "https://bugs.debian.org:443/";
-				constexpr auto offset = _countof(POSTMARK)-6;
-				clientBufOut.append(uri.c_str()+offset, uri.size()-offset);
-				clientBufOut << "\r\nConnection: close\r\n\r\n";
-				clientBufOut.send(fdClient, sErr);
-				return;
-
-#endif
-			}
-			if(!m_spOutCon)
-			{
-				clientBufOut << "HTTP/1.0 502 Connection error: " << sErr << "\r\n\r\n";
-				clientBufOut.send(fdClient, sErr);
-				return;
+				m_spOutCon.reset();
 			}
 		}
-		else
+		else if(acfg::optproxytimeout > 0) // ok... try without
 		{
-			// arbitrary target/port, client cares about SSL other stuff
-			tHttpUrl url;
-			if(!url.SetHttpUrl(uri))
-				return;
-			if(acfg::proxy_info.sHost.empty())
-			{
-				m_spOutCon = tcpconnect::CreateConnected(url.sHost , url.GetPort(), sErr, 0,0,
-					false, acfg::nettimeout, true);
-			}
-			else
-			{
-				// switch to HTTPS tunnel in order to get a direct connection through the proxy
-				m_spOutCon = tcpconnect::CreateConnected(acfg::proxy_info.sHost,
-						acfg::proxy_info.GetPort(), sErr, 0, 0, false, acfg::nettimeout, true);
-
-				if (m_spOutCon)
-				{
-					if (!m_spOutCon->StartTunnel(tHttpUrl(url.sHost, url.GetPort(),
-							true), sErr,
-							&acfg::proxy_info.sUserPass, false))
-					{
-						m_spOutCon.reset();
-					}
-				}
-			}
-
-			if(m_spOutCon)
-				clientBufOut << "HTTP/1.0 200 Connection established\r\n\r\n";
-			else
-			{
-				clientBufOut << "HTTP/1.0 502 CONNECT error: " << sErr << "\r\n\r\n";
-				clientBufOut.send(fdClient, sErr);
-				return;
-			}
+			acfg::MarkProxyFailure();
+			goto direct_connect;
 		}
+	}
 
-		if(!m_spOutCon)
+	if (m_spOutCon)
+		clientBufOut << "HTTP/1.0 200 Connection established\r\n\r\n";
+	else
+	{
+		clientBufOut << "HTTP/1.0 502 CONNECT error: " << sErr << "\r\n\r\n";
+		clientBufOut.send(fdClient);
+		return;
+	}
+
+	if (!m_spOutCon)
+		return;
+
+	// for convenience
+	int ofd = m_spOutCon->GetFD();
+	acbuf &serverBufOut = clientBufIn, &serverBufIn = clientBufOut;
+
+	int maxfd = 1 + std::max(fdClient, ofd);
+
+	while (true)
+	{
+		fd_set rfds, wfds;
+		FD_ZERO(&rfds);
+		FD_ZERO(&wfds);
+
+		// can send to client?
+		if (clientBufOut.size() > 0)
+			FD_SET(fdClient, &wfds);
+
+		// can receive from client?
+		if (clientBufIn.freecapa() > 0)
+			FD_SET(fdClient, &rfds);
+
+		if (serverBufOut.size() > 0)
+			FD_SET(ofd, &wfds);
+
+		if (serverBufIn.freecapa() > 0)
+			FD_SET(ofd, &rfds);
+
+		int nReady = select(maxfd, &rfds, &wfds, nullptr, nullptr);
+		if (nReady < 0)
 			return;
 
-		// for convenience
-		int ofd = m_spOutCon->GetFD();
-		acbuf &serverBufOut = clientBufIn, &serverBufIn = clientBufOut;
-
-		int maxfd=1+std::max(fdClient, ofd);
-
-		while (true)
-		{
-			fd_set rfds, wfds;
-			FD_ZERO(&rfds);
-			FD_ZERO(&wfds);
-
-			// can send to client?
-			if(clientBufOut.size()>0)
-				FD_SET(fdClient, &wfds);
-
-			// can receive from client?
-			if(clientBufIn.freecapa()>0)
-				FD_SET(fdClient, &rfds);
-
-			if(serverBufOut.size()>0)
-				FD_SET(ofd, &wfds);
-
-			if(serverBufIn.freecapa()>0)
-				FD_SET(ofd, &rfds);
-
-			int nReady=select(maxfd, &rfds, &wfds, NULL, NULL);
-			if (nReady<0)
+		if (FD_ISSET(ofd, &wfds))
+			if (serverBufOut.syswrite(ofd) < 0)
 				return;
 
-			if(FD_ISSET(ofd, &wfds))
-			{
-				if (modPOSTstringForBugsDO)
-				{
-					// if the incoming request is from a proxy-style acng setup then we need to
-					// remove the HOST string from the prefix in the request header and replace it
-					// with something harmless.
-					// But if there is another web proxy, let it deal with the stuff...
-					serverBufOut.move();
-					char *p = 0;
+		if (FD_ISSET(fdClient, &wfds))
+			if (clientBufOut.syswrite(fdClient) < 0)
+				return;
 
-					while (0 != (p = strstr((char*) serverBufOut.rptr(),
-					POSTMARK)))
-						memcpy(p, FAKEMARK, _countof(FAKEMARK) - 1);
-				}
+		if (FD_ISSET(ofd, &rfds))
+			if (serverBufIn.sysread(ofd) <= 0)
+				return;
 
-				if(serverBufOut.syswrite(ofd)<0)
-					return;
-			}
-
-			if(FD_ISSET(fdClient, &wfds))
-			{
-				if(clientBufOut.syswrite(fdClient)<0)
-					return;
-			}
-
-			if(FD_ISSET(ofd, &rfds))
-			{
-				if(serverBufIn.sysread(ofd)<=0)
-					return;
-			}
-
-			if(FD_ISSET(fdClient, &rfds))
-			{
-				if(clientBufIn.sysread(fdClient)<=0)
-					return;
-			}
-		}
-		return;
-	};
-};
+		if (FD_ISSET(fdClient, &rfds))
+			if (clientBufIn.sysread(fdClient) <= 0)
+				return;
+	}
+	return;
+}
+}
 
 void con::WorkLoop() {
 
@@ -268,7 +212,7 @@ void con::WorkLoop() {
         if(inBuf.freecapa()==0)
         	return; // shouldn't even get here
         
-        job *pjSender(NULL);
+        job *pjSender(nullptr);
     
         if ( !m_jobs2send.empty())
 		{
@@ -282,7 +226,7 @@ void con::WorkLoop() {
         struct timeval tv;
         tv.tv_sec = acfg::nettimeout;
         tv.tv_usec = 23;
-        int ready = select(maxfd+1, &rfds, &wfds, NULL, &tv);
+        int ready = select(maxfd+1, &rfds, &wfds, nullptr, &tv);
         
         if(ready == 0)
         {
@@ -342,42 +286,38 @@ void con::WorkLoop() {
 				{
 					if (acfg::forwardsoap && !m_sClientHost.empty())
 					{
-						RawPassThrough pt;
-						if (pt.CheckListbugs(*m_pTmpHead))
+						if (RawPassThrough::CheckListbugs(*m_pTmpHead))
 						{
 							tSplitWalk iter(&m_pTmpHead->frontLine);
 							if(iter.Next() && iter.Next())
-								pt.PassThrough(inBuf, m_confd, true, iter);
-							else
-								return;
+								RawPassThrough::RedirectBto2https(m_confd, iter);
 						}
 						else
 						{
 							ldbg("not bugs.d.o: " << inBuf.rptr());
 						}
+						// disconnect anyhow
 						return;
 					}
 					ldbg("not allowed POST request: " << inBuf.rptr());
 					return;
 				}
 
-				inBuf.drop(nHeadBytes);
-
 				if(m_pTmpHead->type == header::CONNECT)
 				{
+
+					inBuf.drop(nHeadBytes);
+
 					tSplitWalk iter(&m_pTmpHead->frontLine);
 					if(iter.Next() && iter.Next())
 					{
 						cmstring tgt(iter);
 						if(rechecks::Match(tgt, rechecks::PASSTHROUGH))
-						{
-							RawPassThrough pt;
-							pt.PassThrough(inBuf, m_confd, false, tgt);
-						}
+							RawPassThrough::PassThrough(inBuf, m_confd, tgt);
 						else
 						{
 							tSS response;
-							response << "HTTP/1.0 403 CONNECT denied (ask the admin to allow tunnels)\r\n\r\n";
+							response << "HTTP/1.0 403 CONNECT denied (ask the admin to allow HTTPS tunnels)\r\n\r\n";
 							while(!response.empty())
 								response.syswrite(m_confd);
 						}
@@ -387,6 +327,9 @@ void con::WorkLoop() {
 				
 				if (m_sClientHost.empty()) // may come from wrapper... MUST identify itself
 				{
+
+					inBuf.drop(nHeadBytes);
+
 					if(m_pTmpHead->h[header::XORIG] && *(m_pTmpHead->h[header::XORIG]))
 					{
 						m_sClientHost=m_pTmpHead->h[header::XORIG];
@@ -397,19 +340,20 @@ void con::WorkLoop() {
 				}
 
 				ldbg("Parsed REQUEST:" << m_pTmpHead->frontLine);
-				ldbg("Rest: " << inBuf.size());
+				ldbg("Rest: " << (inBuf.size()-nHeadBytes));
 
 				{
 					job * j = new job(m_pTmpHead, this);
+					j->PrepareDownload(inBuf.rptr());
+					inBuf.drop(nHeadBytes);
 
-					j->PrepareDownload();
-					m_jobs2send.push_back(j);
+					m_jobs2send.emplace_back(j);
 #ifdef DEBUG
 					m_nProcessedJobs++;
 #endif
 				}
 
-				m_pTmpHead=NULL; // owned by job now
+				m_pTmpHead=nullptr; // owned by job now
 			}
         	MYCATCH(bad_alloc&)
         	{
@@ -433,7 +377,7 @@ void con::WorkLoop() {
 				{
 					m_jobs2send.pop_front(); 						
 					delete pjSender;
-					pjSender=NULL;
+					pjSender=nullptr;
 		
 					ldbg("Remaining jobs to send: " << m_jobs2send.size());
 					break;
@@ -450,7 +394,7 @@ void con::WorkLoop() {
 void * _StartDownloader(void *pVoidDler)
 {
 	static_cast<dlcon*>(pVoidDler) -> WorkLoop();
-	return NULL;
+	return nullptr;
 }
 
 bool con::SetupDownloader(const char *pszOrigin)
@@ -482,13 +426,13 @@ bool con::SetupDownloader(const char *pszOrigin)
 		return false;
 	}
 
-	if (0==pthread_create(&m_dlerthr, NULL, _StartDownloader,
+	if (0==pthread_create(&m_dlerthr, nullptr, _StartDownloader,
 			(void *)m_pDlClient))
 	{
 		return true;
 	}
 	delete m_pDlClient;
-	m_pDlClient=NULL;
+	m_pDlClient=nullptr;
 	return false;
 }
 

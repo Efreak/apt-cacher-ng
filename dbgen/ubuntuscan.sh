@@ -7,37 +7,32 @@
 # works with subshell parallelization and reasonable timeout
 
 set -x
+set -a
+
+if test "$1" = DO ; then
+   x="$2"
+   x=$(echo $x | sed -e 's,/\+,/,g ; s,http:/,http://, ; s,/$,,')
+   apx=$BASHPID.$RANDOM$RANDOM
+   export ufile=$tempdir/url.$apx
+   export ffile=$tempdir/log.$apx
+   echo "$x$sfx" > $ffile
+   wget -q -t 2 -O- --timeout=23 "$x$sfx" 2>>$ffile | grep -q "$testkey" && echo $x > $ufile || echo FAILED >> $ffile
+   exit 0
+fi
 
 listfile="$1"
 src="$2"
 tempdir=${3:-$(mktemp -d)}
 sfx=${4:-/dists}
 # Debian is easy, Ubuntu is bad... no symbolic name. Try to match well known release names
-testkey=${5:-'updates\|stable\|unstable\|security\|backports\|feisty\|gutsy\|hardy\|intrepid\|jaunty\|karmic\|lucid\|maverick\|depper\|natty\|oneiric\|dapper\|edgy\|precise\|quantal\|raring\|saucy\|trusty'}
+testkey=${5:-'updates\|stable\|unstable\|security\|backports\|feisty\|gutsy\|hardy\|intrepid\|jaunty\|karmic\|lucid\|maverick\|depper\|natty\|oneiric\|dapper\|edgy\|precise\|quantal\|raring\|saucy\|trusty\|vivid\|wily'}
 
 mkdir -p $tempdir
 rm -f $tempdir/url.* $tempdir/log.*
 
 test -s "$src" || exit 1
 
-a=0
-for x in `cat $src` ; do
-   x=$(echo $x | sed -e 's,/\+,/,g ; s,http:/,http://, ; s,/$,,')
-   a=$(( $a + 1 ))
-   export ufile=$tempdir/url.$a
-   export ffile=$tempdir/log.$a
-   echo "$x$sfx" > $ffile
-   ( if wget -q -t 1 -O- --timeout=30 "$x$sfx" 2>>$ffile | grep -q "$testkey" ;
-then
-   echo $x > $ufile
-else
-   echo FAILED >> $ffile
-fi
-) &
-   sleep 0.2
-done
-
-wait
+xargs -n1 -P 30 /bin/bash $0 DO < $src
 
 cat $tempdir/url.* | sed -e 's,$,/,;s,//$,/,' | sort -u > $listfile
 

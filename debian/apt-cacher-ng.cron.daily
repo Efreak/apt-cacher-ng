@@ -6,10 +6,5 @@
 # HOSTNAME=externallyVisibleHostName
 # export HOSTNAME
 
-# optional, specify IP address to connect to
-# ACNGIP=10.0.1.3
-# export ACNGIP
-
-if test -r /usr/lib/apt-cacher-ng/expire-caller.pl ; then
-   perl /usr/lib/apt-cacher-ng/expire-caller.pl || echo Please check error messages in one of: $(ls -t /var/log/apt-cacher-ng/maint*.log.html | head -n5)
-fi
+test -x /usr/lib/apt-cacher-ng/acngtool || exit 0
+/usr/lib/apt-cacher-ng/acngtool maint -c /etc/apt-cacher-ng SocketPath=/var/run/apt-cacher-ng/socket

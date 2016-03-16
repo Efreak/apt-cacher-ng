@@ -2,14 +2,14 @@
 # Copyright (C) 2014 THE apt-cacher-ng'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the apt-cacher-ng package.
 # Bruno Gurgel <bruno.gurgel@gmail.com>, 2010.
-# Adriano Rafael Gomes <adrianorg@arg.eti.br>, 2010, 2014.
+# Adriano Rafael Gomes <adrianorg@arg.eti.br>, 2010-2015.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: apt-cacher-ng 0.7.24-2\n"
+"Project-Id-Version: apt-cacher-ng 0.8.3-1\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
 "POT-Creation-Date: 2015-03-17 19:19+0100\n"
-"PO-Revision-Date: 2014-01-29 22:02-0200\n"
+"PO-Revision-Date: 2015-05-16 14:29-0300\n"
 "Last-Translator: Adriano Rafael Gomes <adrianorg@arg.eti.br>\n"
 "Language-Team: Brazilian Portuguese <debian-l10n-portuguese@lists.debian."
 "org>\n"
@@ -224,7 +224,7 @@ msgstr ""
 #. Description
 #: ../apt-cacher-ng.templates:7001
 msgid "Allow HTTP tunnels through Apt-Cacher NG?"
-msgstr ""
+msgstr "Permitir túneis HTTP através do Apt-Cacher NG?"
 
 #. Type: boolean
 #. Description
@@ -234,6 +234,10 @@ msgid ""
 "can be used to access remote servers that might otherwise be blocked by (for "
 "instance) a firewall filtering HTTPS connections."
 msgstr ""
+"O Apt-Cacher NG pode ser configurado para permitir que os usuários criem "
+"túneis HTTP, os quais podem ser usados para acessar servidores remotos que "
+"de outra forma poderiam estar bloqueados, por exemplo, por um firewall "
+"filtrando conexões HTTPS."
 
 #. Type: boolean
 #. Description
@@ -242,6 +246,8 @@ msgid ""
 "This feature is usually disabled for security reasons; enable it only for "
 "trusted LAN environments."
 msgstr ""
+"Geralmente, essa funcionalidade é desabilitada por razões de segurança; "
+"habilite-a somente para ambientes LAN confiáveis."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

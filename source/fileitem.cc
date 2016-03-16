@@ -20,6 +20,7 @@ using namespace std;
 mstring sReplDir("_altStore" SZPATHSEP);
 
 static tFiGlobMap mapItems;
+static lockable mapItemsMx;
 
 header const & fileitem::GetHeaderUnlocked()
 {
@@ -302,7 +303,8 @@ inline void _LogWithErrno(const char *msg, const string & sFile)
 
 #ifndef MINIBUILD
 
-bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const char *pNextData,
+bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+		const char *pNextData,
 		bool bForcedRestart, bool &bDoCleanRetry)
 {
 	LOGSTART("fileitem::DownloadStartedStoreHeader");
@@ -337,7 +339,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 	if(m_bCheckFreshness)
 		m_nTimeDlStarted = GetTime();
 
-	m_nIncommingCount+=h.m_nEstimLength;
+	m_nIncommingCount+=hDataLen;
 
 	// optional optimization: hints for the filesystem resp. kernel
 	off_t hint_start(0), hint_length(0);
@@ -537,9 +539,6 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 				
 		mkbasedir(sPathAbs);
 
-		// this makes sure not to truncate file while it's mmaped
-		auto tempLock = filelocks::Acquire(sPathAbs);
-
 		m_filefd=open(sPathAbs.c_str(), flags, acfg::fileperms);
 		ldbg("file opened?! returned: " << m_filefd);
 		
@@ -585,6 +584,9 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, const c
 		
 		if(0!=fstat(m_filefd, &stbuf) || !S_ISREG(stbuf.st_mode))
 			return withErrorAndKillFile("503 Not a regular file");
+
+		// this makes sure not to truncate file while it's mmaped
+		auto tempLock = TFileShrinkGuard::Acquire(stbuf);
 		
 		// crop, but only if the new size is smaller. MUST NEVER become larger (would fill with zeros)
 		if(m_nSizeChecked <= m_nSizeSeen)
@@ -716,7 +718,7 @@ inline void fileItemMgmt::Unreg()
 	if(!m_ptr) // unregistered before?
 		return;
 
-	lockguard managementLock(mapItems);
+	lockguard managementLock(mapItemsMx);
 
 	// invalid or not globally registered?
 	if(m_ptr->m_globRef == mapItems.end())
@@ -764,7 +766,7 @@ bool fileItemMgmt::PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 	MYTRY
 	{
 		mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
-		lockguard lockGlobalMap(mapItems);
+		lockguard lockGlobalMap(mapItemsMx);
 		tFiGlobMap::iterator it=mapItems.find(sPathRel);
 		if(it!=mapItems.end())
 		{
@@ -825,14 +827,13 @@ bool fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 
 	Unreg();
 
-	lockguard lockGlobalMap(mapItems);
+	lockguard lockGlobalMap(mapItemsMx);
 
 	if(ContHas(mapItems, spCustomFileItem->m_sPathRel))
 		return false; // conflict, another agent is already active
 
-	spCustomFileItem->m_globRef = mapItems.insert(make_pair(spCustomFileItem->m_sPathRel,
-			spCustomFileItem));
-
+	spCustomFileItem->m_globRef = mapItems.emplace(spCustomFileItem->m_sPathRel,
+			spCustomFileItem);
 	spCustomFileItem->usercount=1;
 	m_ptr = spCustomFileItem;
 	return true;
@@ -852,7 +853,7 @@ void fileItemMgmt::RegisterFileitemLocalOnly(fileitem* replacement)
 time_t fileItemMgmt::BackgroundCleanup()
 {
 	LOGSTART2s("fileItemMgmt::BackgroundCleanup", GetTime());
-	lockguard lockGlobalMap(mapItems);
+	lockguard lockGlobalMap(mapItemsMx);
 	tFiGlobMap::iterator it, here;
 
 	time_t now=GetTime();
@@ -933,7 +934,7 @@ void fileItemMgmt::dump_status()
 					<< item.second->m_nSizeSeen
 					<< "\n\tGotAt: " << item.second->m_nTimeDlStarted << "\n\n";
 		}
-		aclog::err(fmt.c_str(), NULL);
+		aclog::err(fmt.c_str(), nullptr);
 	}
 	aclog::flush();
 }

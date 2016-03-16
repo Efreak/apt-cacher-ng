@@ -33,7 +33,7 @@ This chapter introduces some terminology which is needed to understand the funct
 "Backend": a text file consisting of a list of mirror URLs, one per line (a more complex RFC822-like format is also supported). Used for URL remapping; see <a href="#repmap">section 4.3</a>.
 </li>
 <li>
-"Volatile files": nothing to do with debian-volatile, volatile here only means that they are volatile, i.e. their contents are expected to be regularly changed on the server. For example, metadata pertaining to package files stored in a remote archive is classified as 'volatile'. They are usually 'index files' known as Packages, Sources, Release, Pdiff and the like.
+"Volatile files": files with changing contents on the server while keeping the same URL (i.e. the same filename and location). For example, metadata pertaining to package files stored in a remote archive is classified as 'volatile'. They are usually 'index files' known as Packages, Sources, Release, Pdiff and the like, and maybe also associated extra data (like translations and thumbnail icons).
 </li>
 <li>
 "Package files": files that contain software packages and other "solid" data: DEBs, source files for their creation (.tar.gz, .diff, .dsc), various metadata which is not subject to change after first appearance on the server.
@@ -174,7 +174,7 @@ And finally, there is an optional third field in the <code>Remap</code> directiv
 <code>keyfile=...</code> The meaning of this setting is: if any real download error (status code 400 and higher) happens on a file which path ends with the specified string then the target server is blacklisted (considered faulty) immediately and this download (and subsequent ones requested by this client connection) are retried from other servers (see <code>TargetURLs</code> description above). Can be used multiple times to define a list. See below for documented example.
 </li>
 <li>
-<code>deltasrc=URL</code> Configures the base URL used to download .debdelta files. The path hierarchy below this URL should correspond to the source URLs and file paths in the cache. Only one URL can be specified at the moment. It is used for explicit mirroring operations, see <a href="howtos.html#mirroring">section 8.14</a> for details.
+<code>deltasrc=URL</code> Configures the base URL used to download .debdelta files. The path hierarchy below this URL should correspond to the source URLs and file paths in the cache. Only one URL can be specified at the moment. It is used for explicit mirroring operations, see <a href="howtos.html#mirroring">section 8.15</a> for details.
 </li>
 <li>
 <code>proxy=proxyspec</code> Configures an alternative proxy URL which overrides the global proxy setting in the context of this repository. Can be set empty to disable proxy usage.

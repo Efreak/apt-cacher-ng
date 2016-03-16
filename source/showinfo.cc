@@ -9,6 +9,10 @@
 
 #include <iostream>
 
+#ifdef HAVE_ZLIB
+#include <zlib.h>
+#endif
+
 using namespace std;
 
 #ifdef SendFmt
@@ -99,13 +103,23 @@ void tDeleter::SendProp(cmstring &key)
 {
 	if(key=="count")
 		return SendChunk(m_fmtHelper.clean()<<files.size());
-	if(key == "stuff")
+	else if(key=="countNZs")
+	{
+		if(files.size()!=1)
+			return SendChunk(m_fmtHelper.clean()<<"s");
+	}
+	else if(key == "stuff")
 		return SendChunk(sHidParms);
+	else if(key=="vmode")
+		return SendChunk(sVisualMode.data(), sVisualMode.size());
 	return tMarkupFileSend::SendProp(key);
 }
 
-tDeleter::tDeleter(const tRunParms& parms)
-: tMarkupFileSend(parms, "delconfirm.html", "text/html", "200 OK")
+// and deserialize it from GET parameter into m_delCboxFilter
+
+tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
+: tMarkupFileSend(parms, "delconfirm.html", "text/html", "200 OK"),
+  sVisualMode(vmode)
 {
 #define BADCHARS "<>\"'|\t"
 	tStrPos qpos=m_parms.cmd.find("?");
@@ -118,23 +132,70 @@ tDeleter::tDeleter(const tRunParms& parms)
 	}
 
 	mstring params(m_parms.cmd, qpos+1);
-
+	mstring blob;
 	for(tSplitWalk split(&params, "&"); split.Next();)
 	{
-		char *sep(0);
 		mstring tok(split);
-		if(startsWithSz(tok, "kf")
-				&& strtoul(tok.c_str()+2, &sep, 10)>0
-				&& sep && '=' == *sep)
+		if(startsWithSz(tok, "kf="))
 		{
-			files.push_back(UrlUnescape(sep+1));
+			char *end(0);
+			auto val = strtoul(tok.c_str()+3, &end, 16);
+			if(*end == 0 || *end=='&')
+#ifdef COMPATGCC47                           
+				files.insert(val);
+#else
+				files.emplace(val);
+#endif
 		}
+		else if(startsWithSz(tok, "blob="))
+			tok.swap(blob);
+	}
+	sHidParms << "<input type=\"hidden\" name=\"blob\" value=\"";
+	sHidParms.append(blob.data()+5, blob.size()-5);
+	sHidParms <<  "\">\n";
+
+	tStrDeq filePaths;
+	acbuf buf;
+#ifdef HAVE_DECB64 // this page isn't accessible with crippled configuration anyway
+	if (!blob.empty())
+	{
+		// let's decode the blob and pickup what counts
+		tSS gzBuf;
+		//if(!Hex2buf(blob.data()+5, blob.size()-5, gzBuf)) return;
+		if (!DecodeBase64(blob.data()+5, blob.size()-5, gzBuf)) return;
+		if(gzBuf.size() < 2 * sizeof(unsigned)) return;
+		unsigned ulen = 123456;
+		memcpy(&ulen, gzBuf.rptr(), sizeof(unsigned));
+		if (ulen > 100000) // no way...
+			return;
+		gzBuf.drop(sizeof(unsigned));
+		buf.setsize(ulen);
+		uLongf uncompSize = ulen;
+		auto gzCode = uncompress((Bytef*) buf.wptr(), &uncompSize, (const Bytef*) gzBuf.rptr(),
+				gzBuf.size());
+		if (Z_OK != gzCode)
+			return;
+		buf.got(uncompSize);
+	}
+#endif
+	while(true)
+	{
+		unsigned id, slen;
+		if(buf.size() < 2*sizeof(unsigned))
+			break;
+		memcpy(&id, buf.rptr(), sizeof(unsigned));
+		buf.drop(sizeof(unsigned));
+		memcpy(&slen, buf.rptr(), sizeof(unsigned));
+		buf.drop(sizeof(unsigned));
+		if(slen > buf.size()) // looks fishy
+			return;
+		if(ContHas(files, id))
+			filePaths.emplace_back(buf.rptr(), slen);
+		buf.drop(slen);
 	}
 
 	// do stricter path checks and prepare the query page data
-
-	uint lfd(1);
-	for(const auto path : files)
+	for(const auto& path : filePaths)
 	{
 		if(path.find_first_of(BADCHARS)!=stmiss  // what the f..., XSS attempt?
 		 || rechecks::Match(path, rechecks::NASTY_PATH))
@@ -142,16 +203,33 @@ tDeleter::tDeleter(const tRunParms& parms)
 			m_bFatalError=true;
 			return;
 		}
-		if(m_parms.type  == workDELETECONFIRM)
+	}
+
+	if (m_parms.type == workDELETECONFIRM || m_parms.type == workTRUNCATECONFIRM)
+	{
+		for (const auto& path : filePaths)
+			sHidParms << html_sanitize(path) << "<br>\n";
+		for (const auto& pathId : files)
+			sHidParms << "<input type=\"hidden\" name=\"kf\" value=\"" << tSS::fmtflags::hex
+					<< pathId << "\">\n" << tSS::fmtflags::dec;
+	}
+	else
+	{
+		auto del = (m_parms.type == workDELETE);
+		for (const auto& path : filePaths)
 		{
-			sHidParms << "<input type=\"hidden\" name=\"kf" << ++lfd << "\" value=\""
-					<< path <<"\">\n";
-		}
-		else
-		{
-			sHidParms<<"Deleting " << path<<"<br>\n";
-			::unlink((acfg::cacheDirSlash+path).c_str());
-			::unlink((acfg::cacheDirSlash+path+".head").c_str());
+			for (auto suf :
+			{ "", ".head" })
+			{
+				sHidParms << (del ? "Deleting " : "Truncating ") << path << suf << "<br>\n";
+				auto p = acfg::cacheDirSlash + path + suf;
+				int r = del ? unlink(p.c_str()) : truncate(p.c_str(), 0);
+				if (r && errno != ENOENT)
+				{
+					tErrnoFmter ferrno("<span class=\"ERROR\">[ error: ");
+					sHidParms << ferrno << " ]</span><br>\n";
+				}
+			}
 		}
 	}
 }
@@ -190,7 +268,7 @@ inline int tMarkupFileSend::CheckCondition(LPCSTR id, size_t len)
 		return -1;
 	}
 	if(RAWEQ(id, len, "delConfirmed"))
-		return m_parms.type != workDELETE;
+		return m_parms.type != workDELETE && m_parms.type != workTRUNCATE;
 
 	return -2;
 }

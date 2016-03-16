@@ -23,16 +23,17 @@ typedef std::list<tDlJobPtr> tDljQueue;
 class dlcon : public lockable
 { 
     public:
-        dlcon(bool bManualExecution, mstring *xff=NULL);
+        dlcon(bool bManualExecution, mstring *xff=nullptr,
+        		IDlConFactory *pConFactory = &g_tcp_con_factory);
         ~dlcon();
 
         void WorkLoop();
         
         void SignalStop();
 
-        bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl=nullptr,
-        		const acfg::tRepoData *pRepoDesc=nullptr,
-        		cmstring *sPatSuffix=nullptr);
+        bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
+        		const acfg::tRepoData *pRepoDesc,
+        		cmstring *sPatSuffix, LPCSTR reqHead);
 
         mstring m_sXForwardedFor;
 
@@ -45,6 +46,7 @@ class dlcon : public lockable
     	friend struct tDlJob;
     	
     	tDljQueue m_qNewjobs;
+    	IDlConFactory* m_pConFactory;
 
 #ifdef HAVE_LINUX_EVENTFD
     	int m_wakeventfd = -1;
@@ -60,13 +62,13 @@ class dlcon : public lockable
 
     	bool m_bStopASAP;
 
-    	uint m_bManualMode;
+    	unsigned m_bManualMode;
 
     	/// blacklist for permanently failing hosts, with error message
     	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
     	tSS m_sendBuf, m_inBuf;
 
-    	uint ExchangeData(mstring &sErrorMsg, tTcpHandlePtr &con, tDljQueue &qActive);
+    	unsigned ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &qActive);
 
     	// Disable pipelining for the next # requests. Actually used as crude workaround for the
     	// concept limitation (because of automata over a couple of function) and its

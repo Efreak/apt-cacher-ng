@@ -1,13 +1,32 @@
 #!/bin/bash
 set -e
 set -x
-exe=build/apt-cacher-ng
+exe=builddir/apt-cacher-ng
+tool="builddir/acngtool -c conf"
 test -x $exe
-TMP=$(mktemp -d)
+test "$TMP" || TMP=$(mktemp -d)
+
+# basic stuff not needing network activity
+
+test "c2Fucy1zZXJpZg==" = $($tool encb64 sans-serif)
+
+$tool retest http://srv/foo.deb
+$tool retest http://srv/foo.deb | grep FILE_SOLID
+$tool retest http://srv/InRelease | grep FILE_VOLAT
+$tool retest http://srv/InRelease.html | grep NOMATCH
+$tool retest /connectivity-check.html | grep FILE_VOLAT
+$tool retest http://srv/InRelease.html "VfilePatternEx:.*html" | grep VOLATIL
+$tool retest http://srv/InRelease.html "PfilePatternEx:.*html" | grep SOLID
+
+$exe -h > $TMP/y.txt
+grep -i usage $TMP/y.txt
+grep -i help $TMP/y.txt
+grep -i See $TMP/y.txt
+
+valgrind $tool curl http://www.example.org > $TMP/dump
+grep illustrative $TMP/dump
+
 PORT=$(( 11222 + $RANDOM / 2 ))
-$exe foreground=1 logdir=$TMP CacheDir=$TMP port:$PORT &
-sleep 1
-kill $!
 
 if $exe badOption:1 logdir=$TMP CacheDir=$TMP port:$PORT ; then
 	echo "Accepts unknown options"
@@ -30,32 +49,25 @@ for x in $pidsAfter ; do
 	fi
 done
 
-$exe -h > $TMP/y.txt
-grep -i usage $TMP/y.txt
-grep -i help $TMP/y.txt
-grep -i See $TMP/y.txt
+#! REFSUM=/dev/nada12341254324534125ljksaldfkj2345 GETSUM=sans-serif $exe
+#export REFSUM=$(sha1sum $TMP/dump | cut -c1-40)
+#GETSUM=$TMP/dump $exe
 
-BECURL=http://www.example.org $exe > $TMP/dump
-grep illustrative $TMP/dump
-! REFSUM=/dev/nada12341254324534125ljksaldfkj2345 GETSUM=sans-serif $exe
-export REFSUM=$(sha1sum $TMP/dump | cut -c1-40)
-GETSUM=$TMP/dump $exe
-
-test "c2Fucy1zZXJpZg==" = $(TOBASE64=sans-serif $exe)
-
+# test expiration
 mkdir -p $TMP/srv
 touch $TMP/srv/foo.deb
 $exe foreground=0 logdir=$TMP CacheDir:$TMP port:$PORT pidfile=$TMP/x.pid ExTreshold:0 -e
 ! test -e $TMP/srv/foo.deb
 
-$exe --retest http://srv/foo.deb
-$exe --retest http://srv/foo.deb | grep FILE_SOLID
-$exe --retest http://srv/InRelease | grep FILE_VOLAT
-$exe --retest http://srv/InRelease.html | grep NOMATCH
-$exe "VfilePatternEx:.*html" --retest http://srv/InRelease.html | grep VOLATIL
-$exe "PfilePatternEx:.*html" --retest http://srv/InRelease.html | grep SOLID
+$tool cfgdump > $TMP/vars
+$tool printvar useragent | grep Apt-Cacher-NG
 
-$exe -p > $TMP/vars
-PRINTCFGVAR=useragent $exe | grep Apt-Cacher-NG
+$exe foreground=1 logdir=$TMP CacheDir:$TMP port:$PORT pidfile=$TMP/x.pid &
+export xpid=$!
+sleep 1
+test $xpid -gt 0
+kill -0 $xpid
+trap "kill $xpid" 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+export http_proxy=http://localhost:$PORT
 
 rm -rf $TMP

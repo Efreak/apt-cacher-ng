@@ -38,10 +38,11 @@ struct tStyleCss : public tMarkupFileSend
 
 class tDeleter : public tMarkupFileSend
 {
-	tStrDeq files;
+	std::set<unsigned> files;
 	tSS sHidParms;
+	mstring sVisualMode; // Truncat or Delet
 public:
-	tDeleter(const tRunParms& parms);
+	tDeleter(const tRunParms& parms, cmstring& vmode);
 	virtual void SendProp(cmstring &key) override;
 };
 

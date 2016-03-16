@@ -2,6 +2,7 @@
 //#define LOCAL_DEBUG
 #include "debug.h"
 
+#include "cacheman.h"
 #include "expiration.h"
 #include "lockable.h"
 #include "acfg.h"
@@ -32,6 +33,8 @@
 //#define DEBUGSPAM
 #endif
 
+#define MAX_TOP_COUNT 10
+
 using namespace std;
 
 static cmstring oldStylei18nIdx("/i18n/Index");
@@ -40,7 +43,6 @@ static cmstring sConstDiffIdxHead(".diff/Index.head");
 static cmstring sPatchBaseRel("_actmp/patch.base");
 static cmstring sPatchResRel("_actmp/patch.result");
 static const string relKey("/Release"), inRelKey("/InRelease");
-static unsigned int nKillLfd=1;
 time_t m_gMaintTimeNow=0;
 
 tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
@@ -49,7 +51,7 @@ tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
 	m_bScanInternals(false), m_bByPath(false), m_bByChecksum(false), m_bSkipHeaderChecks(false),
 	m_bTruncateDamaged(false),
 	m_nErrorCount(0),
-	m_nProgIdx(0), m_nProgTell(1), m_pDlcon(NULL)
+	m_nProgIdx(0), m_nProgTell(1), m_pDlcon(nullptr)
 {
 	m_szDecoFile="maint.html";
 	m_gMaintTimeNow=GetTime();
@@ -59,7 +61,7 @@ tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
 tCacheOperation::~tCacheOperation()
 {
 	delete m_pDlcon;
-	m_pDlcon=NULL;
+	m_pDlcon=nullptr;
 }
 
 bool tCacheOperation::ProcessOthers(const string &, const struct stat &)
@@ -260,7 +262,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 				&& !pRepoDesc->m_backends.empty())
 		{
 			ldbg("will use backend mode, subdirectory is path suffix relative to backend uri");
-			sRemoteSuffix=parserPath.sPath;
+			sRemoteSuffix=parserPath.sPath.substr(1);
 		}
 		else
 		{
@@ -270,11 +272,11 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			// the URL as needed
 
 			if(bCachePathAsUriPlausible) // unless other rule matches, this path in cache should represent the remote URI
-				pResolvedDirectUrl=&parserPath;
+				pResolvedDirectUrl = parserPath.NormalizePath();
 
 			// and prefer the source from xorig which is likely to deliver better result
 			if(hor.h[header::XORIG] && parserHead.SetHttpUrl(hor.h[header::XORIG], false))
-				pResolvedDirectUrl=&parserHead;
+				pResolvedDirectUrl = parserHead.NormalizePath();
 			else if(flags.guessed)
 			{
 				// might use a related file as reference
@@ -296,7 +298,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 							xpath.erase(xpath.size() - diffIdxSfx.size());
 							xpath += sFilePathAbs.substr(pos);
 							if (parserHead.SetHttpUrl(xpath, false))
-								pResolvedDirectUrl = &parserHead;
+								pResolvedDirectUrl = parserHead.NormalizePath();
 						}
 					}
 				}
@@ -339,7 +341,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 								urlcand += *pCompSuf;
 								if (parserHead.SetHttpUrl(urlcand, false))
 								{
-									pResolvedDirectUrl = &parserHead;
+									pResolvedDirectUrl = parserHead.NormalizePath();
 									break;
 								}
 							}
@@ -370,10 +372,10 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		}
 	}
 
-	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix);
+	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix, 0);
 
 	m_pDlcon->WorkLoop();
-	if (pFi->WaitForFinish(NULL) == fileitem::FIST_COMPLETE
+	if (pFi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE
 			&& pFi->GetHeaderUnlocked().getStatus() == 200)
 	{
 		bSuccess = true;
@@ -463,15 +465,23 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		{
 			// another special case, slightly ugly :-(
 			// this is explicit hardcoded repair code
-			// for the removal of .bz2 compressed versions
-			// of various files
-			if (endsWithSzAr(sFilePathRel, "/Packages.bz2")
-					|| endsWithSzAr(sFilePathRel, "/Sources.bz2")
-					|| (StrHas(sFilePathRel, "i18n/Translation-") &&
-							endsWithSzAr(sFilePathRel, ".bz2")))
-
+			static struct {
+				string fromEnd, toEnd, extraCheck;
+			} fixmap[] =
 			{
-				SendChunkSZ("Attempting to download the .xz version... ");
+					{ "/Packages.bz2", "/Packages.xz", "" },
+					{ "/Sources.bz2", "/Sources.xz", "" },
+					{ "/Release", "/InRelease", "" },
+					{ "/InRelease", "/Release", "" },
+					{ ".bz2", ".xz", "i18n/Translation-" },
+					{ "/Packages.gz", "/Packages.xz", "" },
+					{ "/Sources.gz", "/Sources.xz", "" }
+			};
+			for(const auto& fix : fixmap)
+			{
+				if(!endsWith(sFilePathRel, fix.fromEnd) || !StrHas(sFilePathRel, fix.extraCheck))
+					continue;
+				SendChunkSZ("Attempting to download the alternative version... ");
 				// if we have it already, use it as-is
 				if (!pResolvedDirectUrl)
 				{
@@ -479,18 +489,23 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 					if (p && parserHead.SetHttpUrl(p))
 						pResolvedDirectUrl = &parserHead;
 				}
-				if (pResolvedDirectUrl)
+				auto newurl(*pResolvedDirectUrl);
+				if(!endsWith(newurl.sPath, fix.fromEnd) || !StrHas(newurl.sPath, fix.extraCheck))
+					continue;
+				newurl.sPath.replace(newurl.sPath.size()-fix.fromEnd.size(), fix.fromEnd.size(),
+						fix.toEnd);
+				if(Download(sFilePathRel.substr(0, sFilePathRel.size() - fix.fromEnd.size())
+						+ fix.toEnd, bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl,
+				hints&~DL_HINT_GUESS_REPLACEMENT ))
 				{
-					// XXX: maybe pointless copy, work around with a flag?
-					auto newurl(*pResolvedDirectUrl);
-					if (endsWithSzAr(newurl.sPath, ".bz2"))
-					{
-						newurl.sPath.erase(newurl.sPath.size() - 4);
-						newurl.sPath.append(".xz");
-						return Download(sFilePathRel.substr(0, sFilePathRel.size() - 4) + ".xz",
-								bIsVolatileFile, msgVerbosityLevel, tFileItemPtr(), &newurl);
-					}
+					MarkObsolete(sFilePathRel);
+					return true;
 				}
+				// XXX: this sucks a little bit since we don't want to show the checkbox
+				// when the fallback download succeeded... but on failures, the previous one
+				// already added a newline before
+				AddDelCbox(sFilePathRel, true);
+				return false;
 			}
 		}
 
@@ -600,7 +615,7 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 	enum { eCurLine, eHistory, ePatches} eSection;
 	eSection=eCurLine;
 
-	uint peAnz(0);
+	unsigned peAnz(0);
 
 	// This code should be tolerant to minor changes in the format
 
@@ -652,14 +667,15 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 			else if(tmp[0] == "SHA1-Patches:")
 				eSection=ePatches;
 			else
-				return NULL;
+				return nullptr;
 		}
 		else if(nTokens) // not null but weird count
-			return NULL; // error
+			return nullptr; // error
 	}
 
 	return ret.csType != CSTYPE_INVALID ? &ret : nullptr;
 }
+
 
 bool tCacheOperation::PatchFile(const string &srcRel,
 		const string &diffIdxPathRel, tPListConstIt pit, tPListConstIt itEnd,
@@ -692,7 +708,7 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 
 		SetFlags(pfile).parseignore=true; // not an ifile, never parse this
 		::mkbasedir(sFinalPatch);
-		if(!pf.p && ! (pf.p=fopen(sFinalPatch.c_str(), "w")))
+		if(!pf.p && ! (pf.p=fopen(sFinalPatch.c_str(), "w+")))
 		{
 			SendChunk("Failed to create intermediate patch file, stop patching...<br>");
 			return false;
@@ -730,7 +746,13 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 		SendChunk("Patching...<br>");
 
 	tSS cmd;
-	cmd << "cd '" << CACHE_BASE << "_actmp' && red --silent patch.base < combined.diff";
+	cmd << "cd '" << CACHE_BASE << "_actmp' && ";
+	auto act = acfg::suppdir + SZPATHSEP "acngtool";
+	if(!acfg::suppdir.empty() && 0==access(act.c_str(), X_OK))
+		cmd << "'" << act << "' patch patch.base " << sFinalPatch << " patch.result";
+	else
+		cmd << " red --silent patch.base < " << sFinalPatch;
+
 	if (::system(cmd.c_str()))
 	{
 		MTLOGASSERT(false, "Command failed: " << cmd);
@@ -801,6 +823,12 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 	if(GetFlags(to).uptodate)
 		return true;
 
+	auto sAbsFrom(SABSPATH(from)), sAbsTo(SABSPATH(to));
+
+	Cstat infoFrom(sAbsFrom), infoTo(sAbsTo);
+	if(infoFrom && infoTo && infoFrom.st_ino == infoTo.st_ino && infoFrom.st_dev == infoTo.st_dev)
+		return true;
+
 #ifdef DEBUG_FLAGS
 	bool nix = stmiss!=from.find("debrep/dists/squeeze/non-free/binary-amd64/");
 	SendFmt<<"Replacing "<<to<<" with " << from <<  "<br>\n";
@@ -812,7 +840,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 	{
 		pHead = &head;
 
-		if (head.LoadFromFile(SABSPATH(from+".head")) <= 0 || !head.h[header::CONTENT_LENGTH])
+		if (head.LoadFromFile(sAbsFrom+".head") <= 0 || !head.h[header::CONTENT_LENGTH])
 		{
 			MTLOGASSERT(0, "Cannot read " << from << ".head or bad data");
 			return false;
@@ -832,7 +860,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 		{
 		}
 		// noone else should attempt to store file through it
-		virtual bool DownloadStartedStoreHeader(const header &, const char *,
+		virtual bool DownloadStartedStoreHeader(const header &, size_t, const char *,
 				bool, bool&) override
 		{
 			return false;
@@ -873,9 +901,10 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 			if (Setup(true) > fileitem::FIST_COMPLETE)
 				return false;
 			bool bNix(false);
-			if (!fileitem_with_storage::DownloadStartedStoreHeader(head, NULL, false, bNix))
+			if (!fileitem_with_storage::DownloadStartedStoreHeader(head, 0,
+					nullptr, false, bNix))
 				return false;
-			if(!StoreFileData(data.GetBuffer(), data.GetSize()) || ! StoreFileData(NULL, 0))
+			if(!StoreFileData(data.GetBuffer(), data.GetSize()) || ! StoreFileData(nullptr, 0))
 				return false;
 			if(GetStatus() != FIST_COMPLETE)
 				return false;
@@ -1162,8 +1191,9 @@ void tCacheOperation::UpdateVolatileFiles()
 	{
 		cmstring sPathRel=relRef.first+relRef.second;
 
-		if(!Download(sPathRel, true, m_metaFilesRel[sPathRel].hideDlErrors
-					? eMsgHideErrors : eMsgShow))
+		if(!Download(sPathRel, true,
+				m_metaFilesRel[sPathRel].hideDlErrors ? eMsgHideErrors : eMsgShow,
+						tFileItemPtr(), 0, DL_HINT_GUESS_REPLACEMENT))
 		{
 			m_nErrorCount+=(!m_metaFilesRel[sPathRel].hideDlErrors);
 
@@ -1225,7 +1255,7 @@ has_base:
 					sCandId=it2->second;
 			}
 			tClassDesc &tgt=eqClasses[sCandId];
-			tgt.paths.push_back(if2cid.first);
+			tgt.paths.emplace_back(if2cid.first);
 
 			// pick up the id for bz2 verification later
 			if(tgt.bz2VersContId.second.empty() && endsWithSzAr(if2cid.first, ".bz2"))
@@ -1324,7 +1354,7 @@ strip_next_class:
 		int nProbeCnt(3);
 		string patchidxFileToUse;
 		deque<tPatchEntry> patchList;
-		tFingerprint *pEndSum(NULL);
+		tFingerprint *pEndSum(nullptr);
 		tPListConstIt itPatchStart;
 
 		if(CheckStopSignal())
@@ -1395,7 +1425,7 @@ strip_next_class:
 				MTLOGDEBUG("#### Testing file: " << pathRel << " as patch base candidate");
 				if (probe.ScanFile(absPath, CSTYPE_SHA1, true, df.p))
 				{
-					df.close(); // write the whole file to disk ASAP!
+					fflush(df.p); // write the whole file to disk ASAP!
 
 					if(CheckStopSignal())
 						return;
@@ -1444,7 +1474,7 @@ strip_next_class:
 							SendFmt << "Found patching base candidate, unpacked to "
 								<< sPatchBaseAbs << "<br>";
 
-						if (PatchFile(sPatchBaseAbs, patchidxFileToUse, itPatchStart,
+						if (df.close(), PatchFile(sPatchBaseAbs, patchidxFileToUse, itPatchStart,
 									patchList.end(), pEndSum))
 						{
 
@@ -1648,6 +1678,9 @@ tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(cmstring &sP
 	if (sPureIfileName == "MD5SUMS" && StrHas(sPath, "/installer-"))
 		return EIDX_MD5DILIST;
 
+	if (sPureIfileName == "SHA256SUMS" && StrHas(sPath, "/installer-"))
+		return EIDX_SHA256DILIST;
+
 	return EIDX_UNSUPPORTED;
 }
 
@@ -1676,9 +1709,13 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 		// directory starting in dists/?
 		// The assumption doesn't however apply to the d-i checksum
 		// lists, those refer to themselves only.
+		//
+		// similar considerations for Cygwin setup
 
 		if(idxType != EIDX_MD5DILIST && stmiss!=(pos=sCurFilesReferenceDirRel.rfind("/dists/")))
-			sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+1);
+			sPkgBaseDir = sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+1);
+		else if(idxType == EIDX_CYGSETUP && stmiss!=(pos=sCurFilesReferenceDirRel.rfind("/cygwin/")))
+			sPkgBaseDir = sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+8);
 		else
 			sPkgBaseDir=sCurFilesReferenceDirRel;
 	}
@@ -1763,7 +1800,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 	case EIDX_ARCHLXDB:
 		LOG("assuming Arch Linux package db");
 		{
-			uint nStep = 0;
+			unsigned nStep = 0;
 			enum tExpData
 			{
 				_fname, _csum, _csize, _nthng
@@ -1825,32 +1862,21 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 			if(CheckStopSignal())
 				return true;
 
-			static const string cygkeys[]={"install: ", "source: "};
-
-			trimBack(sLine);
-			for(auto& ckey: cygkeys)
+			unsigned begin(0);
+			if(startsWithSz(sLine, "install: "))
+				begin=9;
+			else if(startsWithSz(sLine, "source: "))
+				begin=8;
+			else
+				continue;
+			tSplitWalk split(&sLine, SPACECHARS, begin);
+			if(split.Next() && info.SetFromPath(split, sPkgBaseDir)
+					&& split.Next() && info.SetSize(split.remainder())
+					&& split.Next() && info.fpr.SetCs(split))
 			{
-				if(!startsWith(sLine, ckey))
-					continue;
-				if (3 == Tokenize(sLine, "\t ", vsMetrics, false, ckey.length())
-						&& info.fpr.SetCs(vsMetrics[2], CSTYPE_MD5)
-						&& 0>= (info.fpr.size=atoofft(vsMetrics[1].c_str(), -2)))
-				{
-					tStrPos pos = vsMetrics[0].rfind(SZPATHSEPUNIX);
-					if (pos == stmiss)
-					{
-						info.sFileName = vsMetrics[0];
-						info.sDirectory = sCurFilesReferenceDirRel;
-					}
-					else
-					{
-						info.sFileName = vsMetrics[0].substr(pos + 1);
-						info.sDirectory = sCurFilesReferenceDirRel + vsMetrics[0].substr(0, pos + 1);
-					}
-					ret.HandlePkgEntry(info);
-					info.SetInvalid();
-				}
+				ret.HandlePkgEntry(info);
 			}
+			info.SetInvalid();
 		}
 		break;
 	case EIDX_SUSEREPO:
@@ -1898,8 +1924,10 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 			}
 		}
 		break;
+		// like http://ftp.uni-kl.de/debian/dists/jessie/main/installer-amd64/current/images/SHA256SUMS
 	case EIDX_MD5DILIST:
-		LOG("Plain list of filenames and md5sums");
+	case EIDX_SHA256DILIST:
+		LOG("Plain list of filenames and checksums");
 		while(reader.GetOneLine(sLine))
 		{
 			if(CheckStopSignal())
@@ -1907,7 +1935,8 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 
 			tSplitWalk split(&sLine, SPACECHARS);
 			info.fpr.size=-1;
-			if( split.Next() && info.fpr.SetCs(split, CSTYPE_MD5)
+			if( split.Next() && info.fpr.SetCs(split,
+					idxType == EIDX_MD5DILIST ? CSTYPE_MD5 : CSTYPE_SHA256)
 					&& split.Next() && (info.sFileName = split).size()>0)
 			{
 				info.sDirectory = sCurFilesReferenceDirRel;
@@ -1944,8 +1973,8 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 	case EIDX_RELEASE:
 		info.fpr.csType = CSTYPE_SHA1;
 		sStartMark="SHA1:";
-		// fall-through, parser follows
-
+		// parser follows
+		//no break
 	case EIDX_RFC822WITHLISTS:
 		// common info object does not help here because there are many entries, and directory
 		// could appear after the list :-(
@@ -1973,7 +2002,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					sDirHeader=sLine.substr(pos)+SZPATHSEP;
 			}
 			else if (bUse)
-				fileList.push_back(sLine);
+				fileList.emplace_back(sLine);
 			else if(sLine.empty()) // ok, time to commit the list
 			{
 				for (auto& fline : fileList)
@@ -2097,17 +2126,27 @@ void tCacheOperation::ProcessSeenMetaFiles(ifileprocessor &pkgHandler)
 	}
 }
 
-void tCacheOperation::AddDelCbox(cmstring &sFileRel)
+void tCacheOperation::AddDelCbox(cmstring &sFileRel, bool bIsOptionalGuessedFile)
 {
-	std::pair<tStrSet::iterator,bool> ck = m_delCboxFilter.insert(sFileRel);
-	if(! ck.second)
+	bool isNew;
+	auto fileParm = AddLookupGetKey(sFileRel, isNew);
+	if(!isNew)
 		return;
 
-	SendFmtRemote <<  "<label><input type=\"checkbox\" name=\"kf" << (nKillLfd++)
-			<< "\" value=\"" << sFileRel << "\">Tag</label>";
-
+	if(bIsOptionalGuessedFile)
+	{
+		string bn(GetBaseName(sFileRel));
+		if(startsWithSz(bn, "/"))
+			bn.erase(0, 1);
+		SendFmtRemote <<  "<label><input type=\"checkbox\""
+				<< fileParm << ">(also tag " << html_sanitize(bn) << ")</label><br>";
+	}
+	else
+		SendFmtRemote <<  "<label><input type=\"checkbox\" "<< fileParm<<">Tag</label>"
+			"\n<!--\n" maark << int(ControLineType::Error) << "Problem with "
+			<< html_sanitize(sFileRel) << "\n-->\n";
 }
-void tCacheOperation::TellCount(uint nCount, off_t nSize)
+void tCacheOperation::TellCount(unsigned nCount, off_t nSize)
 {
 	SendFmt << "<br>\n" << nCount <<" package file(s) marked "
 			"for removal in few days. Estimated disk space to be released: "
@@ -2125,36 +2164,68 @@ void tCacheOperation::SetCommonUserFlags(cmstring &cmd)
 	m_bTruncateDamaged=(cmd.find("truncNow")!=stmiss);
 }
 
-
 void tCacheOperation::PrintStats(cmstring &title)
 {
 	multimap<off_t, cmstring*> sorted;
 	off_t total=0;
-	const uint nMax = m_bVerbose ? (UINT_MAX-1) : 10;
-	uint hidden=0;
 	for(auto &f: m_metaFilesRel)
 	{
 		total += f.second.space;
 		if(f.second.space)
-			sorted.insert(make_pair(f.second.space, &f.first));
-		if(sorted.size()>nMax)
-		{
-			sorted.erase(sorted.begin());
-			hidden++;
-		}
+			EMPLACE_PAIR(sorted,f.second.space, &f.first);
 	}
 	if(!total)
 		return;
-	m_fmtHelper << "<br>\n<table><tr><td colspan=2><u>" << title;
+	int nMax = std::min(int(sorted.size()), int(MAX_TOP_COUNT));
+	if(m_bVerbose)
+		nMax = MAX_VAL(int);
+
 	if(!m_bVerbose)
-		m_fmtHelper << " (Top " << sorted.size() << ", " << hidden <<  " more not displayed)";
-	m_fmtHelper << "</u></td></tr>\n";
+	{
+	m_fmtHelper << "<br>\n<table name=\"shorttable\"><thead>"
+			"<tr><th colspan=2>" << title;
+	if(!m_bVerbose && sorted.size()>MAX_TOP_COUNT)
+		m_fmtHelper << " (Top " << nMax << "<span name=\"noshowmore\">,"
+				" <a href=\"javascript:show_rest();\">show more / cleanup</a></span>)";
+	m_fmtHelper << "</th></tr></thead>\n<tbody>";
 	for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
 	{
-		m_fmtHelper << "<tr><td><b>" << offttosH(it->first) << "</b></td><td>"
+		m_fmtHelper << "<tr><td><b>"
+				<< offttosH(it->first) << "</b></td><td>"
 				<< *(it->second) << "</td></tr>\n";
+		if(nMax--<=0)
+			break;
 	}
-	SendFmt << "</table>";
+	SendFmt << "</tbody></table>"
+
+	// the other is hidden for now
+	<< "<div name=\"bigtable\" class=\"xhidden\">";
+	}
+
+	m_fmtHelper << "<br>\n<table><thead>"
+				"<tr><th colspan=1><input type=\"checkbox\" onclick=\"copycheck(this, 'xfile');\"></th>"
+				"<th colspan=2>" << title << "</th></tr></thead>\n<tbody>";
+		for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
+		{
+			bool xNew;
+			m_fmtHelper << "<tr><td><input type=\"checkbox\" class=\"xfile\""
+					<< AddLookupGetKey(*(it->second), xNew) << "></td>"
+						"<td><b>" << html_sanitize(offttosH(it->first)) << "</b></td><td>"
+					<< *(it->second) << "</td></tr>\n";
+
+
+		}
+		SendFmt << "</tbody></table>";
+
+		if(m_delCboxFilter.empty())
+		{
+			SendFmtRemote << "<br><b>Action(s):</b><br>"
+							"<input type=\"submit\" name=\"doDelete\""
+							" value=\"Delete selected files\">";
+			SendFmtRemote << BuildCompressedDelFileCatalog();
+		}
+		if(!m_bVerbose)
+			SendFmt << "</div>";
 }
 
 #ifdef DEBUG
@@ -2172,7 +2243,7 @@ int parseidx_demo(LPCSTR file)
 		virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override
 		{
 			cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
-					<< "Checksum-" << entry.fpr.GetCsName() << ": " << entry.fpr.GetCsAsString()
+					<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
 					<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
 		}
 		virtual bool ProcessRegular(const mstring &, const struct stat &) override {return true;}

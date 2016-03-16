@@ -90,7 +90,7 @@ void err(const char *msg, const char *client)
 	}
 	
 	static char buf[32];
-	const time_t tm=time(NULL);
+	const time_t tm=time(nullptr);
 	ctime_r(&tm, buf);
 	buf[24]=0;
 	fErr << buf << '|';
@@ -134,14 +134,14 @@ inline deque<tRowData> GetStats()
 	string sDataFile=acfg::cachedir+SZPATHSEP"_stats_dat";
 	deque<tRowData> out;
 	
-	time_t now = time(NULL);
+	time_t now = time(nullptr);
 
 	for (int i = 0; i < 7; i++)
 	{
 		tRowData d;
 		d.to = now - i * DAYSECONDS;
 		d.from = d.to - DAYSECONDS;
-		out.push_back(d);
+		out.emplace_back(d);
 	}
 
 	for (auto& log : ExpandFilePattern(acfg::logdir + SZPATHSEP "apt-cacher*.log", false))
@@ -262,30 +262,30 @@ string GetStatReport()
 	return ret;
 }
 #endif
-
-
 }
 
+// let the compiler decide between GNU and XSI version
+inline void add_msg(int r, int err, const char* buf, mstring *p)
+{
+	if(r)
+		p->append(tSS() << "UNKNOWN ERROR: " << err);
+	else
+		p->append(buf);
+}
 
+inline void add_msg(const char *msg, int , const char* , mstring *p)
+{
+	p->append(msg);
+}
 
 tErrnoFmter::tErrnoFmter(const char *prefix)
 {
-	char buf[32];
-	buf[0]=buf[31]=0x0;
-
+	int err=errno;
+	char buf[64];
+	buf[0]=buf[sizeof(buf)-1]=0x0;
 	if(prefix)
 		assign(prefix);
-
-#ifdef _GNU_SOURCE
-//#warning COMPILER BUG DETECTED -- _GNU_SOURCE was preset in C++ mode
-	append(strerror_r(errno, buf, sizeof(buf)-1));
-#else
-	int err=errno;
-	if(strerror_r(err, buf, sizeof(buf)-1))
-		append(tSS() << "UNKNOWN ERROR: " << err);
-	else
-		append(buf);
-#endif
+	add_msg(strerror_r(err, buf, sizeof(buf)-1), err, buf, this);
 }
 
 #ifdef DEBUG
@@ -322,7 +322,7 @@ t_logger::~t_logger()
 tSS & t_logger::GetFmter()
 {
 	m_strm.clear();
-	for(uint i=0;i<m_nLevel;i++)
+	for(unsigned i=0;i<m_nLevel;i++)
 		m_strm << "\t";
 	m_strm<< " - ";
 	return m_strm;

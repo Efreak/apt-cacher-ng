@@ -11,7 +11,7 @@
 
 class fileitem;
 typedef SHARED_PTR<fileitem> tFileItemPtr;
-class tFiGlobMap : public lockable, public std::unordered_multimap<mstring, tFileItemPtr> {};
+typedef std::unordered_multimap<mstring, tFileItemPtr> tFiGlobMap;
 
 //! Base class containing all required data and methods for communication with the download sources
 class fileitem : public condition
@@ -41,7 +41,8 @@ public:
 	
 	// downloader instruments
 	//typedef extended_bool<bool, false> SuccessWithTransErrorFlag;
-	virtual bool DownloadStartedStoreHeader(const header & h, const char *pNextData,
+	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+			const char *pNextData,
 			bool bForcedRestart, bool &bDoCleanRestart) =0;
 	void IncDlRefCount();
 	void DecDlRefCount(const mstring & sReasonStatusLine);
@@ -64,7 +65,7 @@ public:
 	bool CheckUsableRange_unlocked(off_t nRangeLastByte);
 
 	// returns when the state changes to complete or error
-	FiStatus WaitForFinish(int *httpCode=NULL);
+	FiStatus WaitForFinish(int *httpCode=nullptr);
 
 	bool SetupClean(bool bForce=false);
 	
@@ -107,7 +108,8 @@ public:
 	virtual ~fileitem_with_storage();
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
-	virtual bool DownloadStartedStoreHeader(const header & h, const char *pNextData,
+	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+			const char *pNextData,
 			bool bForcedRestart, bool&) override;
 	virtual bool StoreFileData(const char *data, unsigned int size) override;
 

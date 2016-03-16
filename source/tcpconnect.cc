@@ -19,6 +19,7 @@
 #include "fileio.h"
 #include "fileitem.h"
 #include "cleaner.h"
+#include <tuple>
 
 using namespace std;
 
@@ -36,12 +37,13 @@ atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 #include <openssl/err.h>
 #endif
 
-std::atomic_uint tcpconnect::g_nconns(0);
+std::atomic_uint dl_con_factory::g_nconns(0);
+dl_con_factory g_tcp_con_factory;
 
 tcpconnect::tcpconnect(acfg::tRepoData::IHookHandler *pObserver) : m_pStateObserver(pObserver)
 {
 	if(acfg::maxdlspeed != RESERVED_DEFVAL)
-		g_nconns.fetch_add(1);
+		dl_con_factory::g_nconns.fetch_add(1);
 	if(pObserver)
 		pObserver->OnAccess();
 }
@@ -51,7 +53,7 @@ tcpconnect::~tcpconnect()
 	LOGSTART("tcpconnect::~tcpconnect, terminating outgoing connection class");
 	Disconnect();
 	if(acfg::maxdlspeed != RESERVED_DEFVAL)
-		g_nconns.fetch_add(-1);
+		dl_con_factory::g_nconns.fetch_add(-1);
 #ifdef HAVE_SSL
 	if(m_ctx)
 	{
@@ -68,7 +70,7 @@ tcpconnect::~tcpconnect()
 }
 
 /*! \brief Helper to flush data stream contents reliable and close the connection then
- * DUDES, who write TCP implementations... why can this just not be done easy and reliable? Why do we need hacks like termsocket?
+ * DUDES, who write TCP implementations... why can this just not be done easy and reliable? Why do we need hacks like the method below?
  For details, see: http://blog.netherlabs.nl/articles/2009/01/18/the-ultimate-so_linger-page-or-why-is-my-tcp-not-reliable
  *
  */
@@ -102,7 +104,7 @@ void termsocket(int fd)
 	};
 }
 
-static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t addrlen, time_t timeout)
+static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t addrlen, time_t timeout, bool bAssumeNonBlock)
 {
 	long stflags;
 	struct timeval tv;
@@ -112,13 +114,15 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 	tv.tv_sec = timeout;
 	tv.tv_usec = 0;
 
-	if ((stflags = fcntl(sockfd, F_GETFL, NULL)) < 0)
-		return -1;
+	if(!bAssumeNonBlock)
+	{
+		if ((stflags = fcntl(sockfd, F_GETFL, nullptr)) < 0)
+			return -1;
 
-	// Set to non-blocking mode.
-	if (fcntl(sockfd, F_SETFL, stflags|O_NONBLOCK) < 0)
-		return -1;
-
+		// Set to non-blocking mode.
+		if (fcntl(sockfd, F_SETFL, stflags | O_NONBLOCK) < 0)
+			return -1;
+	}
 	res = connect(sockfd, addr, addrlen);
 	if (res < 0) {
 		if (EINPROGRESS == errno)
@@ -127,7 +131,7 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 				// Wait for connection.
 				FD_ZERO(&wfds);
 				FD_SET(sockfd, &wfds);
-				res = select(sockfd+1, NULL, &wfds, NULL, &tv);
+				res = select(sockfd+1, nullptr, &wfds, nullptr, &tv);
 				if (res < 0)
 				{
 					if (EINTR != errno)
@@ -160,8 +164,7 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 		}
 	}
 
-	// Set back to original mode, which may or may not have been blocking.
-	if (fcntl(sockfd, F_SETFL, stflags) < 0)
+	if(!bAssumeNonBlock && fcntl(sockfd, F_SETFL, stflags) < 0) // Set back to original mode
 		return -1;
 
 	return 0;
@@ -182,9 +185,9 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 	::signal(SIGPIPE, SIG_IGN);
 
 	// always consider first family, afterwards stop when no more specified
-	for (uint i=0; i< _countof(acfg::conprotos) && (0==i || acfg::conprotos[i]!=PF_UNSPEC); ++i)
+	for (unsigned i=0; i< _countof(acfg::conprotos) && (0==i || acfg::conprotos[i]!=PF_UNSPEC); ++i)
 	{
-		for (struct addrinfo *pInfo = dns->m_addrInfo; pInfo; pInfo = pInfo->ai_next)
+		for (auto pInfo = dns->m_addrInfo; pInfo; pInfo = pInfo->ai_next)
 		{
 			if (acfg::conprotos[i] != PF_UNSPEC && acfg::conprotos[i] != pInfo->ai_family)
 				continue;
@@ -207,18 +210,21 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 				::setsockopt(m_conFd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
 			}
 #endif
-
-			if (::connect_timeout(m_conFd, pInfo->ai_addr, pInfo->ai_addrlen, timeout) < 0)
+			set_nb(m_conFd);
+			if (::connect_timeout(m_conFd, pInfo->ai_addr, pInfo->ai_addrlen, timeout, true) < 0)
 			{
 				if(errno==ETIMEDOUT)
 					sErrorMsg="Connection timeout";
+#ifndef MINIBUILD
+				USRDBG(tErrnoFmter("Outgoing connection for ") << m_sHostName << ", Port: " << m_sPort );
+#endif
 				continue;
 			}
 #ifdef DEBUG
 			nConCount.fetch_add(1);
 #endif
 			ldbg("connect() ok");
-			set_nb(m_conFd);
+
 			return true;
 		}
 	}
@@ -244,53 +250,25 @@ void tcpconnect::Disconnect()
 
 #ifdef HAVE_SSL
 	if(m_bio)
-		BIO_free_all(m_bio), m_bio=NULL;
+		BIO_free_all(m_bio), m_bio=nullptr;
 #endif
 
 	m_lastFile.reset();
 
 	termsocket_quick(m_conFd);
 }
+lockable spareConPoolMx;
+multimap<tuple<string,string SSL_OPT_ARG(bool) >,
+		std::pair<tDlStreamHandle, time_t> > spareConPool;
 
-using namespace std;
-struct tHostHint // could derive from pair but prefer to save some bytes with references
-{
-	cmstring pHost, pPort;
-#ifdef HAVE_SSL
-	bool bSsled;
-	inline tHostHint(cmstring &h, cmstring &p, bool bSsl) : pHost(h), pPort(p), bSsled(bSsl) {};
-	bool operator<(const tHostHint &b) const
-	{
-		int rel=pHost.compare(b.pHost);
-		if(rel)
-			return rel < 0;
-		if(pPort != b.pPort)
-			return pPort < b.pPort;
-		return bSsled < b.bSsled;
-	}
-#else
-	inline tHostHint(cmstring &h, cmstring &p) : pHost(h), pPort(p) {};
-		bool operator<(const tHostHint &b) const
-		{
-			int rel=pHost.compare(b.pHost);
-			if(rel)
-				return rel < 0;
-			return pPort < b.pPort;
-		}
-#endif
-
-};
-class : public lockable, public multimap<tHostHint, std::pair<tTcpHandlePtr, time_t> >
-{} spareConPool;
-
-tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
+tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, acfg::tRepoData::IHookHandler *pStateTracker
 		,bool bSsl, int timeout, bool nocache)
 {
 	LOGSTART2s("tcpconnect::CreateConnected", "hostname: " << sHostname << ", port: " << sPort
 			<< (bSsl?" with ssl":" , no ssl"));
 
-	tTcpHandlePtr p;
+	tDlStreamHandle p;
 #ifndef HAVE_SSL
 	if(bSsl)
 	{
@@ -300,11 +278,7 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 #endif
 
 	bool bReused=false;
-	tHostHint key(sHostname, sPort
-#ifdef HAVE_SSL
-			, bSsl
-#endif
-	);
+	auto key = make_tuple(sHostname, sPort SSL_OPT_ARG(bSsl) );
 
 #ifdef NOCONCACHE
 	p.reset(new tcpconnect(pStateTracker));
@@ -317,7 +291,7 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 	if(!nocache)
 	{
 		// mutex context
-		lockguard __g(spareConPool);
+		lockguard __g(spareConPoolMx);
 		auto it=spareConPool.find(key);
 		if(spareConPool.end() != it)
 		{
@@ -368,7 +342,7 @@ tTcpHandlePtr tcpconnect::CreateConnected(cmstring &sHostname, cmstring &sPort,
 	return p;
 }
 
-void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
+void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
 {
 	if(!handle)
 		return;
@@ -380,15 +354,6 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 		handle->m_pStateObserver->OnRelease();
 		handle->m_pStateObserver = nullptr;
 	}
-
-	/*
-	if(handle->m_bIsTunnel)
-	{
-		ldbg("disconnecting an upgraded connection, drop " << handle.get());
-		handle.reset();
-		return;
-	}
-	*/
 
 	if(! acfg::persistoutgoing)
 	{
@@ -412,18 +377,14 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 	{
 #ifndef NOCONCACHE
 		time_t now = GetTime();
-		lockguard __g(spareConPool);
+		lockguard __g(spareConPoolMx);
 		ldbg("caching connection " << handle.get());
 
 		// a DOS?
 		if (spareConPool.size() < 50)
 		{
-			spareConPool.insert(make_pair(tHostHint(host, handle->GetPort()
-#ifdef HAVE_SSL
-					, handle->m_bio
-#endif
-					), make_pair(handle, now)));
-
+			EMPLACE_PAIR(spareConPool, make_tuple(host, handle->GetPort()
+					SSL_OPT_ARG(handle->m_bio) ), make_pair(handle, now));
 #ifndef MINIBUILD
 			g_victor.ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
 #endif
@@ -434,9 +395,9 @@ void tcpconnect::RecycleIdleConnection(tTcpHandlePtr & handle)
 	handle.reset();
 }
 
-time_t tcpconnect::BackgroundCleanup()
+time_t dl_con_factory::BackgroundCleanup()
 {
-	lockguard __g(spareConPool);
+	lockguard __g(spareConPoolMx);
 	time_t now=GetTime();
 
 	fd_set rfds;
@@ -447,7 +408,7 @@ time_t tcpconnect::BackgroundCleanup()
 	for (auto it = spareConPool.begin(); it != spareConPool.end();)
 	{
 		if (now >= (it->second.second + TIME_SOCKET_EXPIRE_CLOSE))
-			spareConPool.erase(it++);
+			it = spareConPool.erase(it);
 		else
 		{
 			int fd = it->second.first->GetFD();
@@ -460,12 +421,12 @@ time_t tcpconnect::BackgroundCleanup()
 	struct timeval tv;
 	tv.tv_sec = 0;
 	tv.tv_usec = 1;
-	int r=select(nMaxFd + 1, &rfds, NULL, NULL, &tv);
+	int r=select(nMaxFd + 1, &rfds, nullptr, nullptr, &tv);
 	// on error, also do nothing, or stop when r fds are processed
 	for (auto it = spareConPool.begin(); r>0 && it != spareConPool.end(); r--)
 	{
 		if(FD_ISSET(it->second.first->GetFD(), &rfds))
-			spareConPool.erase(it++);
+			it = spareConPool.erase(it);
 		else
 			++it;
 	}
@@ -483,12 +444,12 @@ void tcpconnect::KillLastFile()
 #endif
 }
 
-void tcpconnect::dump_status()
+void dl_con_factory::dump_status()
 {
-	lockguard __g(spareConPool);
+	lockguard __g(spareConPoolMx);
 	tSS msg;
 	msg << "TCP connection cache:\n";
-	for (auto& x : spareConPool)
+	for (const auto& x : spareConPool)
 	{
 		if(! x.second.first)
 		{
@@ -497,9 +458,8 @@ void tcpconnect::dump_status()
 		}
 
 		msg << x.second.first->m_conFd << ": for "
-				<< x.first.pHost << ":" << x.first.pPort
+				<< get<0>(x.first) << ":" << get<1>(x.first)
 				<< ", recycled at " << x.second.second
-				//<< ", is a tunnel?: " << x.second.first->m_bIsTunnel
 				<< "\n";
 	}
 #ifdef DEBUG
@@ -513,7 +473,7 @@ void tcpconnect::dump_status()
 #ifdef HAVE_SSL
 bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 {
-	SSL * ssl(NULL);
+	SSL * ssl(nullptr);
 	int hret(0);
 	LPCSTR perr(0);
 	mstring ebuf;
@@ -525,14 +485,16 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 		if (!m_ctx)
 			goto ssl_init_fail;
 
-		SSL_CTX_load_verify_locations(m_ctx, acfg::cafile.empty() ? NULL : acfg::cafile.c_str(),
-			acfg::capath.empty() ? NULL : acfg::capath.c_str());
-
+		SSL_CTX_load_verify_locations(m_ctx,
+				acfg::cafile.empty() ? nullptr : acfg::cafile.c_str(),
+			acfg::capath.empty() ? nullptr : acfg::capath.c_str());
 	}
 
 	ssl = SSL_new(m_ctx);
 	if(!ssl)
 		goto ssl_init_fail;
+
+	SSL_set_tlsext_host_name(ssl, sHostname.c_str());
 
 	// mark it connected and prepare for non-blocking mode
  	SSL_set_connect_state(ssl);
@@ -568,7 +530,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  		struct timeval tv;
  		tv.tv_sec = acfg::nettimeout;
  		tv.tv_usec = 0;
-		int nReady=select(m_conFd+1, &rfds, &wfds, NULL, &tv);
+		int nReady=select(m_conFd+1, &rfds, &wfds, nullptr, &tv);
 		if(!nReady)
 		{
 			perr="Socket timeout";
@@ -626,6 +588,8 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	return false;
 }
 
+#endif
+
 bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 		cmstring *psAuthorization, bool bDoSSL)
 {
@@ -647,14 +611,14 @@ bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 
 	try
 	{
-		if (!fmt.send(m_conFd, sError))
+		if (!fmt.send(m_conFd, &sError))
 			return false;
 
 		fmt.clear();
 		while (true)
 		{
 			fmt.setsize(4000);
-			if (!fmt.recv(m_conFd, sError))
+			if (!fmt.recv(m_conFd, &sError))
 				return false;
 			if(fmt.freecapa()<=0)
 			{
@@ -684,13 +648,15 @@ bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 
 		m_sHostName = realTarget.sHost;
 		m_sPort = realTarget.GetPort();
-
+#ifdef HAVE_SSL
 		if (bDoSSL && !SSLinit(sError, m_sHostName, m_sPort))
 		{
 			m_sHostName.clear();
 			return false;
 		}
-
+#else
+		(void) bDoSSL;
+#endif
 	}
 	catch(...)
 	{
@@ -699,4 +665,4 @@ bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 	return true;
 }
 
-#endif
+

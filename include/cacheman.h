@@ -18,7 +18,6 @@ class dlcon;
 class tDlJobHints;
 struct foo;
 
-static cmstring FAKEDATEMARK("Sat, 26 Apr 1986 01:23:39 GMT+3");
 static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing, "
 		"aborting as requested.</span>");
 
@@ -59,7 +58,8 @@ protected:
 		EIDX_XMLRPMLIST,
 		EIDX_RFC822WITHLISTS,
 		EIDX_TRANSIDX,
-		EIDX_MD5DILIST
+		EIDX_MD5DILIST,
+		EIDX_SHA256DILIST
 	};
 	struct tIfileAttribs
 	{
@@ -118,7 +118,7 @@ protected:
 	};
 	bool Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(),
-			const tHttpUrl *pForcedURL=NULL, unsigned hints=0);
+			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0);
 #define DL_HINT_GUESS_REPLACEMENT 0x1
 
 	// internal helper variables
@@ -131,7 +131,7 @@ protected:
 
 	unsigned int m_nProgIdx, m_nProgTell;
 
-	void TellCount(uint nCount, off_t nSize);
+	void TellCount(unsigned nCount, off_t nSize);
 
 	bool ParseAndProcessMetaFile(ifileprocessor &output_receiver,
 			const mstring &sPath, enumMetaType idxType);
@@ -140,28 +140,40 @@ protected:
 
 	bool GetAndCheckHead(cmstring & sHeadfile, cmstring &sFilePathRel, off_t nWantedSize);
 	bool Inject(cmstring &fromRel, cmstring &toRel,
-			bool bSetIfileFlags=true, const header *pForcedHeader=NULL, bool bTryLink=false);
+			bool bSetIfileFlags=true, const header *pForcedHeader=nullptr, bool bTryLink=false);
 
 	void PrintStats(cmstring &title);
 	mstring m_processedIfile;
 
 	void ProgTell();
-	void AddDelCbox(cmstring &sFileRel);
+	void AddDelCbox(cmstring &sFileRel, bool bExtraFile = false);
 
 	typedef std::pair<tFingerprint,mstring> tContId;
 	struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
 	typedef std::map<tContId, tClassDesc> tContId2eqClass;
 
-	// ugly solution to migrate to changed remote structures
-	tStrMap m_fallback_hints;
-	bool m_fallbacks_were_used = false;
+	// add certain files to the kill bill, to be removed after the activity is done
+	virtual void MarkObsolete(cmstring&) {};
+
+	// for compressed map of special stuff
+	inline mstring AddLookupGetKey(cmstring &sFilePathRel, bool& isNew)
+	{
+		unsigned id = m_delCboxFilter.size();
+		auto it = m_delCboxFilter.find(sFilePathRel);
+		isNew = it==m_delCboxFilter.end();
+		if(isNew)
+			m_delCboxFilter[sFilePathRel] = id;
+		else
+			id = it->second;
+		char buf[30];
+		return mstring(buf, snprintf(buf, sizeof(buf), " name=\"kf\" value=\"%x\"", id));
+	}
 
 private:
-
 	tContId2eqClass m_eqClasses;
 
 	bool Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
-			cmstring *psTmpUnpackedAbs=NULL);
+			cmstring *psTmpUnpackedAbs=nullptr);
 	void InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter);
 	tCacheOperation(const tCacheOperation&);
 	tCacheOperation& operator=(const tCacheOperation&);

@@ -2,6 +2,7 @@
 #define _HEADER_H
 
 #include <string>
+#include <unordered_set>
 #include <map>
 #include "meta.h"
 
@@ -32,13 +33,13 @@ class header {
     	  LOCATION,
     	  CONTENT_TYPE,
     	  // unreachable entry and size reference
-    	  HEADPOS_MAX
+    	  HEADPOS_MAX,
+		  HEADPOS_NOTFORUS
       };
 #define ACNGFSMARK XORIG
 
       eHeadType type = INVALID;
       mstring frontLine;
-      unsigned int m_nEstimLength=0;
       
       char *h[HEADPOS_MAX] = {0};
                            
@@ -56,10 +57,10 @@ class header {
        * 
        * return: 
        * 0: incomplete, needs more data
-       * -1: invalid
-       *  >0: length of the processed data
+       * <0: error
+       * >0: length of the processed data
        */
-      int LoadFromBuf(const char *src, uint length); 
+      int LoadFromBuf(const char *src, unsigned length); 
       int LoadFromFile(const mstring & sPath);
       
       //! returns byte count or negative errno value
@@ -79,9 +80,12 @@ class header {
       void clear();
       
       tSS ToString() const;
+      static std::vector<tPtrLen> GetKnownHeaders();
 
-   private:
-	   int Load(const char *src, uint length);
+      //@param pNotForUs unsorted map, key is header name, value is the rest of the line starting
+      // with colon and ending with \r\n. In case of multiline, extending lines are appended to
+      // the value string as-is
+      int Load(const char *src, unsigned length, tLPS *pNotForUs=nullptr);
 };
 
 inline bool BODYFREECODE(int status)
@@ -89,6 +93,5 @@ inline bool BODYFREECODE(int status)
 	// no response if not-modified or similar, following http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
 	return (304 == status || (status>=100 && status<200) || 204==status);
 }
-
 
 #endif

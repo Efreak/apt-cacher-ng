@@ -1,10 +1,16 @@
+#
+# IMPORTANT NOTE:
+#
+# THIS FILE IS MAYBE JUST ONE OF MANY CONFIGURATION FILES IN THIS DIRECTORY.
+# SETTINGS MADE IN OTHER FILES CAN OVERRIDE VALUES THAT YOU CHANGE HERE. GO
+# LOOK FOR OTHER CONFIGURATION FILES! CHECK THE MANUAL AND INSTALLATION NOTES
+# (like README.Debian) FOR MORE DETAILS!
+#
+
 # This is a configuration file for apt-cacher-ng, a smart caching proxy for
 # software package downloads. It's supposed to be in a directory specified by
 # the -c option of apt-cacher-ng, see apt-cacher-ng(8) for details.
-#
-# NOTE: command line switches and other configuration files matching the same
-# file naming scheme (*.conf) can override values from this file.
-
+# RULES:
 # Letter case in variable names does not matter, names and values should be
 # separated with colons. For boolean variables, zero number is considered false,
 # non-zero considered true. If a default value is not explicitly mentioned in
@@ -22,7 +28,7 @@ LogDir: /var/log/apt-cacher-ng
 # A place to look for additional configuration and resource files if they are not
 # found in the configuration directory
 #
-# SupportDir: /usr/lib/apt-cacher-ng
+SupportDir: @LIBDIR@
 
 # TCP server port for incoming http (or HTTP proxy) connections.
 # Can be set to 9999 to emulate apt-proxy.
@@ -54,7 +60,6 @@ LogDir: /var/log/apt-cacher-ng
 # Examples:
 Remap-debrep: file:deb_mirror*.gz /debian ; file:backends_debian # Debian Archives
 Remap-uburep: file:ubuntu_mirrors /ubuntu ; file:backends_ubuntu # Ubuntu Archives
-Remap-debvol: file:debvol_mirror*.gz /debian-volatile ; file:backends_debvol # Debian Volatile Archives
 Remap-cygwin: file:cygwin_mirrors /cygwin # ; file:backends_cygwin # incomplete, please create this file or specify preferred mirrors here
 Remap-sfnet:  file:sfnet_mirrors # ; file:backends_sfnet # incomplete, please create this file or specify preferred mirrors here
 Remap-alxrep: file:archlx_mirrors /archlinux # ; file:backend_archlx # Arch Linux
@@ -70,6 +75,9 @@ Remap-gentoo: file:gentoo_mirrors.gz /gentoo ; file:backends_gentoo # Gentoo Arc
 
 # Virtual page accessible in a web browser to see statistics and status
 # information, i.e. under http://localhost:3142/acng-report.html
+# NOTE: This option must be configured to run maintenance jobs (even when used
+# via acngtool in cron scripts). The AdminAuth option can be used to restrict
+# access to sensitive areas on that page.
 #
 # Default: not set, should be set by the system administrator
 #
@@ -145,7 +153,7 @@ ExTreshold: 4
 # responses to/from bugs.debian.org.
 # Default: guessed value, true unless ForceManaged is enabled
 #
-# ForwardBtsSoap: 1 
+# ForwardBtsSoap: 1
 
 # There is a small in-memory cache for DNS resolution data, expired by
 # this timeout (in seconds). Internal caching is disabled if set to a value
@@ -233,7 +241,7 @@ ExTreshold: 4
 # change their behaviour accordingly but ACNG might not support the expected
 # features.
 #
-# Default: 
+# Default:
 #
 # UserAgent: Yet Another HTTP Client/1.2.3p4
 
@@ -301,7 +309,7 @@ ExTreshold: 4
 # between them or explicitly create them.
 #
 # LocalDirs: woo /data/debarchive/woody ; hamm /data/debarchive/hamm
-LocalDirs: acng-doc /usr/share/doc/apt-cacher-ng
+LocalDirs: acng-doc @DOCDIR@
 
 # Precache a set of files referenced by specified index files. This can be used
 # to create a partial mirror usable for offline work. There are certain limits
@@ -313,7 +321,7 @@ LocalDirs: acng-doc /usr/share/doc/apt-cacher-ng
 # PrecacheFor: debrep/dists/unstable/*/source/Sources* debrep/dists/unstable/*/binary-amd64/Packages*
 
 # Arbitrary set of data to append to request headers sent over the wire. Should
-# be a well formated HTTP headers part including newlines (DOS style) which 
+# be a well formated HTTP headers part including newlines (DOS style) which
 # can be entered as escape sequences (\r\n).
 #
 # RequestAppendix: X-Tracking-Choice: do-not-track\r\n
@@ -390,8 +398,8 @@ LocalDirs: acng-doc /usr/share/doc/apt-cacher-ng
 # using a CONNECT request. This is particularly useful to allow access to SSL
 # sites (https proxying). The string is a regular expression which should cover
 # the server name with port and must be correctly formated and terminated.
-# Examples: 
-# PassThroughPattern: private-ppa\.launchpad\.net:443$ 
+# Examples:
+# PassThroughPattern: private-ppa\.launchpad\.net:443$
 # PassThroughPattern: .* # this would allow CONNECT to everything
 #
 # Default:
@@ -409,7 +417,7 @@ LocalDirs: acng-doc /usr/share/doc/apt-cacher-ng
 #
 # ResponseFreezeDetectTime: 500
 
-# Keep outgoing connections alive and reuse them for later downloads from 
+# Keep outgoing connections alive and reuse them for later downloads from
 # the same server as long as possible.
 #
 # ReuseConnections: 1
@@ -420,9 +428,9 @@ LocalDirs: acng-doc /usr/share/doc/apt-cacher-ng
 # servers. Makes most sense when also enabled on the client side, see apt.conf
 # documentation for details.
 #
-# Default: 255 if ReuseConnections is set, 1 otherwise
+# Default: 10 if ReuseConnections is set, 1 otherwise
 #
-# PipelineDepth: 255
+# PipelineDepth: 10
 
 # Path to the system directory containing trusted CA certificates used for
 # outgoing connections, see OpenSSL documentation for details.
@@ -432,17 +440,32 @@ LocalDirs: acng-doc /usr/share/doc/apt-cacher-ng
 # Path to a single trusted trusted CA certificate used for outgoing
 # connections, see OpenSSL documentation for details.
 #
-# CAfile: 
+# CAfile:
 
-
-# If this value is set to a (positive) number of seconds then the proxy host
-# specified by Proxy setting will be ignored if a connection to this host
-# could not be established within this time span. The connection will then
-# be made without HTTP proxy for the life time of the particular download
-# stream and it may also affect other users on multiuser systems.
+# There are different ways to detect that an upstream proxy is broken and turn
+# off its use and connect directly. The first is through a custom command -
+# when it returns successfully, the proxy is used, otherwise not and the
+# command will be rerun only after a specified period.
+# Another way is to try to connect to the proxy first and detect a connection
+# timeout. The connection will then be made without HTTP proxy for the life
+# time of the particular download stream and it may also affect other other
+# parallel downloads.
+# NOTE: this operation modes are still experimental and are subject to change!
+# Unwanted side effects may occur with multiple simultaneous user connections
+# or with specific per-repository proxy settings.
 #
-# NOTE: this feature is highly experimental and is subject to change! It can
-# interfere badly with the per-repository proxy setting.
+# Shell command, default: not set. Executed with the default shell and
+# permissions of the apt-cacher-ng's process user. Examples:
+# /bin/ip route | grep -q 192.168.117
+# /usr/sbin/arp | grep -q 00:22:1f:51:8e:c1
+#
+# OptProxyCheckCommand: ...
+#
+# Check intervall, in seconds.
+#
+# OptProxyCheckInterval: 99
+#
+# Conection timeout in seconds, default: negative, means disabled.
 #
 # OptProxyTimeout: -1
 
@@ -477,7 +500,8 @@ LocalDirs: acng-doc /usr/share/doc/apt-cacher-ng
 # Example:
 # BusAction: ls -l /proc/$PPID/ | mail -s SIGBUS! root
 
-# Only set this value for testing purposes. It disables SSL security checks
-# like strict host verification.
+# Only set this value for debugging purposes. It disables SSL security checks
+# like strict host verification. 0 means no, any other value can have
+# differrent meaning in the future.
 #
 # NoSSLChecks: 0

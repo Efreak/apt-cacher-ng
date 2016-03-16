@@ -14,8 +14,8 @@
 class acbuf
 {
     public:
-        inline acbuf() : r(0), w(0), m_nCapacity(0), m_buf(NULL) {};
-    	virtual ~acbuf() { free(m_buf); m_buf=NULL; }
+        inline acbuf() : r(0), w(0), m_nCapacity(0), m_buf(nullptr) {};
+    	virtual ~acbuf() { free(m_buf); m_buf=nullptr; }
     	inline bool empty() const { return w==r;}
     	//! Count of the data inside
         inline unsigned int size() const { return w-r;}
@@ -34,7 +34,7 @@ class acbuf
         inline char *wptr() { return m_buf+w;};
         //! Return pointer to read valid data from
         inline const char *rptr() const { return m_buf+r; }
-        //! like rptr but appends a NULL terminator
+        //! like rptr but appends a nullptr terminator
         inline const char *c_str() const { m_buf[w]=0x0; return rptr();}
         //! Equivalent to drop(size()), drops all data
         inline void clear() {w=r=0;}
@@ -52,14 +52,14 @@ class acbuf
          * \param maxlen Maximum amount of data to write
          * \return Number of written bytes, negative on failures, see write(2)
          */
-        int syswrite(int fd, unsigned int maxlen=UINT_MAX);
+        int syswrite(int fd, unsigned int maxlen=MAX_VAL(uint));
 
         /*
          * Reads from a file descriptor and append to buffered data, update position indexes.
          * \param fd File descriptor
          * \return Number of read bytes, negative on failures, see read(2)
          */
-        int sysread(int fd, unsigned int maxlen=MAX_VAL(unsigned int));
+        int sysread(int fd, unsigned int maxlen=MAX_VAL(uint));
 
 
     protected:
@@ -82,7 +82,7 @@ class tSS : public acbuf
 public:
 // map char array to buffer pointer and size
 	inline tSS & operator<<(const char *val) { return add(val); }
-	inline tSS & operator<<(const mstring& val) { return add(val); };
+	inline tSS & operator<<(cmstring& val) { return add(val); };
 	inline tSS & operator<<(const acbuf& val) { return add(val.rptr(), val.size()); };
 
 #define __tss_nbrfmt(x, h, y) { add(fmtbuf, sprintf(fmtbuf, m_fmtmode == hex ? h : x, y)); return *this; }
@@ -106,28 +106,33 @@ public:
     inline tSS() : m_fmtmode(dec){}
     inline tSS(size_t sz) : m_fmtmode(dec) { setsize(sz); }
     inline tSS(const tSS &src) : acbuf(), m_fmtmode(src.m_fmtmode) { add(src.data(), src.size()); }
+    // move ctor: steal resources and defuse dtor
+    inline tSS(tSS&& src) : m_fmtmode(src.m_fmtmode) { m_buf = src.m_buf; src.m_buf = 0;
+    m_nCapacity=src.m_nCapacity; r=src.r; w=src.w; }
     tSS & addEscaped(const char *fmt);
-    inline tSS & operator<<(const char c) { reserve(size()+1); *(wptr())=c; got(1); return *this;}
+    inline tSS & operator<<(const char c) { reserve_atleast(1); *(wptr())=c; got(1); return *this;}
     inline tSS & clean() { clear(); return *this;}
     inline tSS & append(const char *data, size_t len) { add(data,len); return *this; }
     // similar to syswrite but adapted to socket behavior and reports error codes as HTTP status lines
-    bool send(int nConFd, mstring& sErrorStatus);
-    bool recv(int nConFd, mstring& sErrorStatus);
+    bool send(int nConFd, mstring* sErrorStatus=nullptr);
+    bool recv(int nConFd, mstring* sErrorStatus=nullptr);
+
+    inline tSS & add(const char *data, size_t len)
+	{ reserve_atleast(len); memcpy(wptr(), data, len); got(len); return *this;}
+	inline tSS & add(const char *val)
+	{ if(val) return add(val, strlen(val)); else return add("(null)", 6); }
+	inline tSS & add(cmstring& val) { return add((const char*) val.data(), (size_t) val.size());}
 
 protected:
     char fmtbuf[22];
 	fmtflags m_fmtmode;
-	inline void reserve(size_t minCapa) { minCapa+=(r+1); if(m_nCapacity>=minCapa) return;
-	char *p=(char*)realloc(m_buf, std::max(m_nCapacity, minCapa*2));
-	if(!p) throw std::bad_alloc(); m_nCapacity=minCapa*2; m_buf=p; }
-
-	inline tSS & add(const mstring& val) { return add(val.data(), val.size());}
+	inline void reserve_atleast(size_t minWriteCapa)
+	{
+		if(w+minWriteCapa+1 < m_nCapacity) return;
+		auto capaNew=2*(w+minWriteCapa);
+		if(!setsize(capaNew)) throw std::bad_alloc();
+	}
 	inline tSS & appDosNL() { return add("\r\n", 2);}
-	inline tSS & add(const char *data, size_t len)
-	{ reserve(size()+len); memcpy(wptr(), data, len); got(len); return *this;}
-	inline tSS & add(const char *val)
-	{ if(val) return add(val, strlen(val)); else return add("(null)", 6); }
-
 };
 
 cmstring& GetFooter();

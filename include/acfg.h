@@ -26,7 +26,8 @@ namespace acfg
 {
 
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
-reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, bindaddr, port, sUmask,
+reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, adminauthB64,
+bindaddr, port, sUmask,
 tmpDontcacheReq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,
 cafile, capath, spfilepat, svfilepat, badredmime, sigbuscmd, connectPermPattern;
 
@@ -39,7 +40,8 @@ maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsu
 optproxytimeout, patrace, maxdlspeed, maxredlsize, nsafriendly;
 
 // processed config settings
-extern tHttpUrl proxy_info;
+extern const tHttpUrl* GetProxyInfo();
+extern void MarkProxyFailure();
 extern mstring agentheader;
 
 extern int conprotos[2];
@@ -47,11 +49,11 @@ extern int conprotos[2];
 extern std::atomic_bool degraded;
 
 bool SetOption(const mstring &line, NoCaseStringMap *pDupeChecker);
-void ReadConfigDirectory(const char*);
+void dump_config(bool includingDelicateValues=false);
+void ReadConfigDirectory(const char*, bool bReadErrorIsFatal=true);
 
 //! Prepare various things resulting from variable combinations, etc.
 void PostProcConfig();
-void dump_config();
 
 struct tRepoData
 {
@@ -138,6 +140,13 @@ bool CompileExpressions();
 
 bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
 
-void dump_config();
+// XXX: find a better place for this, shared between server and acngtool
+enum ControLineType
+{
+	NotForUs = 0,
+	BeforeError = 1,
+	Error = 2
+};
+#define maark "41d_a6aeb8-26dfa" // random enough to not match anything existing *g*
 
 #endif
