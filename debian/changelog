@@ -1,4 +1,4 @@
-apt-cacher-ng (0.9.1-1~bpo8+1) unstable; urgency=low
+apt-cacher-ng (0.9.1-1~bpo8+1) jessie-backports; urgency=low
 
   * Update to latest Testing version
 
