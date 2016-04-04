@@ -85,7 +85,7 @@ public:
 	inline tSS & operator<<(cmstring& val) { return add(val); };
 	inline tSS & operator<<(const acbuf& val) { return add(val.rptr(), val.size()); };
 
-#define __tss_nbrfmt(x, h, y) { add(fmtbuf, sprintf(fmtbuf, m_fmtmode == hex ? h : x, y)); return *this; }
+#define __tss_nbrfmt(x, h, y) { reserve_atleast(22); got(sprintf(wptr(), m_fmtmode == hex ? h : x, y)); return *this; }
 	inline tSS & operator<<(int val) __tss_nbrfmt("%d", "%x", val);
 	inline tSS & operator<<(unsigned int val) __tss_nbrfmt("%u", "%x", val);
 	inline tSS & operator<<(long val) __tss_nbrfmt("%ld", "%lx", val);
@@ -124,8 +124,8 @@ public:
 	inline tSS & add(cmstring& val) { return add((const char*) val.data(), (size_t) val.size());}
 
 protected:
-    char fmtbuf[22];
 	fmtflags m_fmtmode;
+	/// make sure to have at least minWriteCapa bytes extra available for writing
 	inline void reserve_atleast(size_t minWriteCapa)
 	{
 		if(w+minWriteCapa+1 < m_nCapacity) return;
