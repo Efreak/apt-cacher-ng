@@ -1,3 +1,12 @@
+apt-cacher-ng (0.9.2) COLD-SHOTS; urgency=low
+
+  * Added regexps for Debian, by-hash index files and changelog data on
+    ftp-master.debian.org
+  * FIX: expiration of orphaned Packages.bz2 (and similar) files in
+    Debian/Ubuntu repositories
+
+ -- 
+
 apt-cacher-ng (0.9.1) THE-DARK-NIGHT; urgency=low
 
   * FIX: correct human error message printing with recent glibc
