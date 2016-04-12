@@ -51,7 +51,7 @@
 
          <form action="#bottom">
 
-         <h2>Index update and processing options</h2>
+         <h2>Shared processing options</h2>
          Temporary options for the general behavour and index update
          configuration can set in this user interface. They are only relevant
          to expiration and import features triggered below.
@@ -64,6 +64,7 @@
                <br>
                <!--input type="checkbox" name="jsMode" value="js" checked> Auto-scrolling (requires JavaScript)
                <br-->
+            <label><input type="checkbox" name="skipIxUp" value="si"> Don't update index files (DANGEROUS for expiration tasks!)</label>
 
          <h2>Expiration</h2>
          <p>
@@ -186,8 +187,6 @@ function endisCb(idCon, idWhat)
             <label><input type="checkbox" name="doDownload" value="dd"> Download package files</label>
             <br>
             <label><input type="checkbox" name="asNeeded" value="an" checked="checked"> Restrict to packages related to previously cached files</label>
-            <br>
-            <label><input type="checkbox" name="skipIxUp" value="si"> Don't update index files</label>
             <br>
             <label><input type="checkbox" name="useDebDelta" value="ud"> Use Debdelta if possible (experimental)</label>
             <p>
