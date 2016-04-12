@@ -77,7 +77,7 @@ TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
 # also influence it, need to be adjusted carefully by user.
 SET(ACNG_CXXFLAGS_COMMON "-D_FILE_OFFSET_BITS=64")
 
-foreach(cxxarg  -pthread -Wall -Wextra -Wno-unused-parameter -fvisibility-inlines-hidden)
+foreach(cxxarg  -pthread -Wall -Wextra -Wno-unused-parameter -fvisibility-inlines-hidden -fvisibility=hidden)
 	STRING(REGEX REPLACE "=|-|," "" optname "${cxxarg}")
   CHECK_CXX_COMPILER_FLAG("${cxxarg}" "CXX_${optname}")
   if(CXX_${optname})
