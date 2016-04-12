@@ -70,12 +70,8 @@ void pkgmirror::Action()
 
 	SendChunk("<b>Locating index files, scanning...</b><br>\n");
 
-	SetCommonUserFlags(m_parms.cmd);
-	m_bErrAbort=false; // does not f...ing matter, do what we can
-
 	m_bCalcSize=(m_parms.cmd.find("calcSize=cs")!=stmiss);
 	m_bDoDownload=(m_parms.cmd.find("doDownload=dd")!=stmiss);
-	m_bSkipIxUpdate=(m_parms.cmd.find("skipIxUp=si")!=stmiss);
 	m_bAsNeeded=(m_parms.cmd.find("asNeeded=an")!=stmiss);
 	m_bUseDelta=(m_parms.cmd.find("useDebDelta=ud")!=stmiss);
 

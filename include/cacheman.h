@@ -33,7 +33,6 @@ typedef deque<tPatchEntry>::const_iterator tPListConstIt;
 
 void DelTree(const string &what);
 
-
 class tCacheOperation :
 	public IFileHandler,
 	public tSpecOpDetachable
@@ -84,8 +83,6 @@ protected:
 	const tIfileAttribs &GetFlags(cmstring &sPathRel) const;
 	tIfileAttribs &SetFlags(cmstring &sPathRel);
 
-	void SetCommonUserFlags(cmstring &cmd);
-
 	void UpdateVolatileFiles();
 	void _BusyDisplayLogs();
 	void _Usermsg(mstring m);
@@ -121,8 +118,8 @@ protected:
 			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0);
 #define DL_HINT_GUESS_REPLACEMENT 0x1
 
-	// internal helper variables
-	bool m_bErrAbort, m_bVerbose, m_bForceDownload;
+	// common helper variables
+	bool m_bErrAbort, m_bVerbose, m_bForceDownload, m_bSkipIxUpdate = false;
 	bool m_bScanInternals, m_bByPath, m_bByChecksum, m_bSkipHeaderChecks;
 	bool m_bTruncateDamaged;
 	int m_nErrorCount;
@@ -169,6 +166,10 @@ protected:
 		return mstring(buf, snprintf(buf, sizeof(buf), " name=\"kf\" value=\"%x\"", id));
 	}
 
+	// stuff in those directories must be managed by some top-level index files
+	// whitelist patterns do not apply there!
+	tStrSet m_managedDirs;
+
 private:
 	tContId2eqClass m_eqClasses;
 
@@ -180,7 +181,7 @@ private:
 	bool PatchFile(cmstring &srcRel, cmstring &patchIdxLocation,
 			tPListConstIt pit, tPListConstIt itEnd,
 			const tFingerprint *verifData);
-	dlcon *m_pDlcon;
+	dlcon *m_pDlcon = nullptr;
 
 	bool IsDeprecatedArchFile(cmstring &sFilePathRel);
 

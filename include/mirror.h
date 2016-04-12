@@ -26,8 +26,7 @@ protected:
 	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override;
 	void _LoadKeyCache(const mstring & sFileName);
 
-	bool m_bCalcSize=false, m_bSkipIxUpdate =false,
-			m_bDoDownload=false, m_bAsNeeded=false, m_bUseDelta=false;
+	bool m_bCalcSize=false, m_bDoDownload=false, m_bAsNeeded=false, m_bUseDelta=false;
 	off_t m_totalSize=0, m_totalHave=0;
 	tStrSet m_pathFilter;
 

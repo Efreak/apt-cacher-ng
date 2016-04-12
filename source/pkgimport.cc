@@ -179,9 +179,7 @@ void pkgimport::Action()
 	m_sSrcPath=CACHE_BASE+"_import";
 	
 	SendFmt << "Importing from " << m_sSrcPath << " directory.<br>Scanning local files...<br>";
-	
-	SetCommonUserFlags(m_parms.cmd);
-	m_bErrAbort=false; // does not f...ing matter, do what we can
+
 	m_bByPath=true; // should act on all locations
 
 	_LoadKeyCache();

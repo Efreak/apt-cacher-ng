@@ -1355,7 +1355,7 @@ const tHttpUrl* GetProxyInfo()
 		if(optProxyCheckCmd.empty())
 			proxy_failstate = false;
 		else
-			proxy_failstate = system(optProxyCheckCmd.c_str());
+			proxy_failstate = (bool) system(optProxyCheckCmd.c_str());
 	}
 
 	return proxy_failstate ? nullptr : &proxy_info;

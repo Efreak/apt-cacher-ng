@@ -56,6 +56,15 @@ tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
 	m_szDecoFile="maint.html";
 	m_gMaintTimeNow=GetTime();
 
+	m_bErrAbort=(parms.cmd.find("abortOnErrors=aOe")!=stmiss);
+	m_bByChecksum=(parms.cmd.find("byChecksum")!=stmiss);
+	m_bByPath=(StrHas(parms.cmd, "byPath") || m_bByChecksum);
+	m_bVerbose=(parms.cmd.find("beVerbose")!=stmiss);
+	m_bForceDownload=(parms.cmd.find("forceRedownload")!=stmiss);
+	m_bSkipHeaderChecks=(parms.cmd.find("skipHeadChecks")!=stmiss);
+	m_bTruncateDamaged=(parms.cmd.find("truncNow")!=stmiss);
+	m_bSkipIxUpdate=(m_parms.cmd.find("skipIxUp=si")!=stmiss);
+
 }
 
 tCacheOperation::~tCacheOperation()
@@ -226,6 +235,12 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	}
 	else
 	{
+		if(bIsVolatileFile && m_bSkipIxUpdate)
+		{
+			SendFmt << "Checking " << sFilePathRel << "... (skipped, as requested)<br>\n";
+			return true;
+		}
+
 		fileitem::FiStatus initState = pFi->Setup(bIsVolatileFile);
 		if (initState > fileitem::FIST_COMPLETE)
 			GOTOREPMSG(pFi->GetHeader().frontLine);
@@ -465,6 +480,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		{
 			// another special case, slightly ugly :-(
 			// this is explicit hardcoded repair code
+			// it switches to a version with better compression silently
 			static struct {
 				string fromEnd, toEnd, extraCheck;
 			} fixmap[] =
@@ -1168,28 +1184,27 @@ void tCacheOperation::UpdateVolatileFiles()
 			}
 	};
 
-	// little helper to pick only one of Release OR InRelease from the same directory
-	tStrMap releaseFilesUniq;
-	for (auto sfx :
-	{ inRelKey, relKey })
+	// make sure to have a copy not touched even m_metaFilesRel is modified later
+	// and without having Release/InRelease doppelgangers
+	tStrMap releaseFilesOnly;
+	// foo/Release comes after foo/InRelease and emplace() helps...
+	for (auto& iref : m_metaFilesRel)
 	{
-		for (auto& iref : m_metaFilesRel)
-		{
-			auto& sPathRel = iref.first;
-			if (endsWith(sPathRel, sfx))
-			{
-				auto pos = sPathRel.rfind('/');
-				auto& fname = releaseFilesUniq[sPathRel.substr(0, pos)];
-				if (fname.empty())
-					fname = sPathRel.substr(pos);
-			}
-		}
+		string::size_type sfxLen = 0;
+		if(endsWith(iref.first, inRelKey))
+			sfxLen = 8;
+		else if(endsWith(iref.first, relKey))
+			sfxLen=10;
+		else
+			continue;
+		EMPLACE_PAIR(releaseFilesOnly, iref.first.substr(0, iref.first.size()-sfxLen),
+				iref.first);
 	}
 
 	// iterate over initial *Releases files
-	for(auto& relRef : releaseFilesUniq)
+	for(auto& relKV : releaseFilesOnly)
 	{
-		cmstring sPathRel=relRef.first+relRef.second;
+		const auto& sPathRel=relKV.second;
 
 		if(!Download(sPathRel, true,
 				m_metaFilesRel[sPathRel].hideDlErrors ? eMsgHideErrors : eMsgShow,
@@ -1311,22 +1326,31 @@ has_base:
 	/*
 	 * OK, the equiv-classes map is built, now post-process the knowledge
 	 *
-	 * First, strip the list down to those which are at least partially present in the cache
+	 * First, strip the list down to those which are at least partially present in the cache.
+	 * And keep track of some folders for expiration.
 	 */
-
 	for(auto it=eqClasses.begin(); it!=eqClasses.end();)
 	{
+		unsigned found = 0;
 		for(auto& path: it->second.paths)
 		{
 			if(!GetFlags(path).vfile_ondisk)
 				continue;
-			goto strip_next_class;
+			found++;
+			auto pos = path.rfind('/');
+			if(pos!=stmiss)
+				m_managedDirs.emplace(path.substr(0, pos+1));
 		}
-		eqClasses.erase(it++);
-		continue;
-strip_next_class:
-		++it;
+		if(found)
+			++it;
+		else
+			eqClasses.erase(it++);
 	}
+#ifdef DEBUGIDX
+	SendFmt << "Folders with checked stuff:<br>";
+	for(auto s : m_managedDirs)
+		SendFmt << s << "<br>";
+#endif
 	ERRMSGABORT;
 	dbgDump("Refined (1):", 1);
 	dbgState();
@@ -2151,17 +2175,6 @@ void tCacheOperation::TellCount(unsigned nCount, off_t nSize)
 	SendFmt << "<br>\n" << nCount <<" package file(s) marked "
 			"for removal in few days. Estimated disk space to be released: "
 			<< offttosH(nSize) << ".<br>\n<br>\n";
-}
-
-void tCacheOperation::SetCommonUserFlags(cmstring &cmd)
-{
-	m_bErrAbort=(cmd.find("abortOnErrors=aOe")!=stmiss);
-	m_bByChecksum=(cmd.find("byChecksum")!=stmiss);
-	m_bByPath=(StrHas(cmd, "byPath") || m_bByChecksum);
-	m_bVerbose=(cmd.find("beVerbose")!=stmiss);
-	m_bForceDownload=(cmd.find("forceRedownload")!=stmiss);
-	m_bSkipHeaderChecks=(cmd.find("skipHeadChecks")!=stmiss);
-	m_bTruncateDamaged=(cmd.find("truncNow")!=stmiss);
 }
 
 void tCacheOperation::PrintStats(cmstring &title)

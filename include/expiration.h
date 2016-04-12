@@ -51,6 +51,9 @@ protected:
 private:
 	int m_nPrevFailCount =0;
 	bool CheckAndReportError();
+
+	void HandleDamagedFiles();
+	void ListExpiredFiles();
 };
 
 #endif /*EXPIRATION_H_*/
