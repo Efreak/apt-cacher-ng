@@ -46,7 +46,7 @@ inline bool IsIndexDiff(const string & sPath)
 }
 */
 
-bool pkgimport::ProcessRegular(cmstring &sPath, const struct stat &stinfo)
+bool pkgimport::ProcessRegular(const mstring &sPath, const struct stat &stinfo)
 {
 
 	{

@@ -1665,7 +1665,7 @@ void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator &eqClass
 #endif
 }
 
-tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(cmstring &sPath)
+tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(const mstring& sPath)
 {
 	tStrPos pos = sPath.rfind(SZPATHSEP);
 	string sPureIfileName = (stmiss == pos) ? sPath : sPath.substr(pos + 1);
