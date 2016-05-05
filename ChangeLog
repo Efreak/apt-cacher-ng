@@ -4,6 +4,7 @@ apt-cacher-ng (0.9.2) COLD-SHOTS; urgency=low
     ftp-master.debian.org
   * FIX: expiration of orphaned Packages.bz2 (and similar) files in
     Debian/Ubuntu repositories
+  * Added deb.debian.conf to Debian mirror list (Debian bug #820813)
 
  -- 
 
