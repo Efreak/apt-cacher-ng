@@ -44,7 +44,7 @@ string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt, optProxyCheckCmd;
 int optProxyCheckInt = 99;
 
 tStrMap localdirs;
-static class : public lockable, public NoCaseStringMap {} mimemap;
+static class : public base_with_mutex, public NoCaseStringMap {} mimemap;
 
 std::bitset<TCP_PORT_MAX> *pUserPorts = nullptr;
 
@@ -572,7 +572,7 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 	}
 }
 
-struct tHookHandler: public tRepoData::IHookHandler, public lockable
+struct tHookHandler: public tRepoData::IHookHandler, public base_with_mutex
 {
 	string cmdRel, cmdCon;
 	time_t downDuration, downTimeNext;
@@ -1279,7 +1279,7 @@ time_t BackgroundCleanup()
 	return ret;
 }
 
-lockable authLock;
+acmutex authLock;
 
 int CheckAdminAuth(LPCSTR auth)
 {
@@ -1338,7 +1338,7 @@ int CheckAdminAuth(LPCSTR auth)
 #endif // MINIBUILD
 
 static bool proxy_failstate = false;
-lockable proxy_fail_lock;
+acmutex proxy_fail_lock;
 const tHttpUrl* GetProxyInfo()
 {
 	if(proxy_info.sHost.empty())

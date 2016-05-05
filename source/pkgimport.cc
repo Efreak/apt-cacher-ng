@@ -50,8 +50,8 @@ bool pkgimport::ProcessRegular(const mstring &sPath, const struct stat &stinfo)
 {
 
 	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
+		lockguard g(&g_abortMx);
+		if(g_sigTaskAbort)
 			return false;
 	}
 	if(endsWithSzAr(sPath, ".head"))
@@ -192,8 +192,8 @@ void pkgimport::Action()
 	DirectoryWalk(acfg::cachedir, this, true);
 
 	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
+		lockguard g(&g_abortMx);
+		if(g_sigTaskAbort)
 			return;
 	}
 	
@@ -207,8 +207,8 @@ void pkgimport::Action()
 	UpdateVolatileFiles();
 
 	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
+		lockguard g(&g_abortMx);
+		if(g_sigTaskAbort)
 			return;
 	}
 	
@@ -223,8 +223,8 @@ void pkgimport::Action()
 	DirectoryWalk(m_sSrcPath, this, true);
 
 	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
+		lockguard g(&g_abortMx);
+		if(g_sigTaskAbort)
 			return;
 	}
 	
@@ -237,8 +237,8 @@ void pkgimport::Action()
 	ProcessSeenMetaFiles(*this);
 
 	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
+		lockguard g(&g_abortMx);
+		if(g_sigTaskAbort)
 			return;
 	}
 

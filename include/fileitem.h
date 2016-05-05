@@ -14,7 +14,7 @@ typedef SHARED_PTR<fileitem> tFileItemPtr;
 typedef std::unordered_multimap<mstring, tFileItemPtr> tFiGlobMap;
 
 //! Base class containing all required data and methods for communication with the download sources
-class fileitem : public condition
+class fileitem : public base_with_condition
 {
 public:
 

@@ -44,7 +44,7 @@ void cleaner::WorkLoop()
 		eType what = TYPE_EXDNS;
 		time_t now;
 		{
-			setLockGuard;
+			lockuniq g(this);
 			// ok, who's next?
 			for (unsigned i = 0; i < _countof(stamps); ++i)
 				if (stamps[i] < stamps[what])
@@ -52,7 +52,7 @@ void cleaner::WorkLoop()
 			now=GetTime();
 			if(stamps[what] > now)
 			{
-				wait_until(stamps[what], 112);
+				wait_until(g, stamps[what], 112);
 				continue;
 			}
 			stamps[what] = END_OF_TIME;

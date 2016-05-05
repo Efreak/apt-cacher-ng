@@ -20,7 +20,7 @@ struct tDlJob;
 typedef SHARED_PTR<tDlJob> tDlJobPtr;
 typedef std::list<tDlJobPtr> tDljQueue;
 
-class dlcon : public lockable
+class dlcon : public base_with_mutex
 { 
     public:
         dlcon(bool bManualExecution, mstring *xff=nullptr,

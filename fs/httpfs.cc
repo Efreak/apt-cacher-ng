@@ -157,7 +157,7 @@ tFileId() : m_size(0) {};
 tFileId(off_t a, mstring b) : m_size(a), m_ctime(b) {};
 bool operator!=(tFileId other) const { return m_size != other.m_size || m_ctime != other.m_ctime;}
 };
-static class : public lockable, public map<string, tFileId>
+static class : public base_with_mutex, public map<string, tFileId>
 {} remote_info_cache;
 
 struct tDlDescRemote : public tDlDesc

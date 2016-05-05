@@ -86,7 +86,7 @@ class job {
 };
 
 
-class tTraceData: public tStrSet, public lockable {
+class tTraceData: public tStrSet, public base_with_mutex {
 public:
 	static tTraceData& getInstance();
 };

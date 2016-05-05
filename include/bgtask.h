@@ -52,7 +52,7 @@ private:
 	// not letting a listener block the work of an operator by any means.
 
 	// notification of attached processes
-	class tProgressTracker : public condition
+	class tProgressTracker : public base_with_condition
 	{
 	public:
 		off_t nEndSize;
@@ -69,6 +69,9 @@ private:
 	std::map<mstring,unsigned> m_delCboxFilter;
 	// generates a lookup blob as hidden form parameter
 	mstring BuildCompressedDelFileCatalog();
+
+	static acmutex g_abortMx;
+	static bool g_sigTaskAbort;
 };
 
 struct tRemoteFileInfo;
@@ -79,9 +82,6 @@ public:
 	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) = 0;
 	virtual ~ifileprocessor() {};
 };
-
-extern pthread_mutex_t abortMx;
-extern bool bSigTaskAbort;
 
 #ifdef DEBUG
 class tBgTester : public tSpecOpDetachable

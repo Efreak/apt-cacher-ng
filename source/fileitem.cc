@@ -20,7 +20,7 @@ using namespace std;
 mstring sReplDir("_altStore" SZPATHSEP);
 
 static tFiGlobMap mapItems;
-static lockable mapItemsMx;
+static acmutex mapItemsMx;
 
 header const & fileitem::GetHeaderUnlocked()
 {
@@ -36,7 +36,6 @@ string fileitem::GetHttpMsg()
 }
 
 fileitem::fileitem() :
-	condition(),
 	m_nIncommingCount(0),
 	m_nSizeSeen(0),
 	m_nRangeLimit(-1),
@@ -286,9 +285,9 @@ void fileitem::SetupComplete()
 
 fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)
 {
-	setLockGuard;
+	lockuniq g(this);
 	while(m_status<FIST_COMPLETE)
-		wait();
+		wait(g);
 	if(httpCode)
 		*httpCode=m_head.getStatus();
 	return m_status;

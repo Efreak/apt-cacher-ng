@@ -11,7 +11,7 @@
 
 using namespace std;
 
-static class : public unordered_map<string, CAddrInfo::SPtr>, public lockable {} mapDnsCache;
+static class : public unordered_map<string, CAddrInfo::SPtr>, public base_with_mutex {} mapDnsCache;
 
 bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 		string & sErrorBuf)
@@ -88,7 +88,7 @@ CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string 
 		cand.reset(new CAddrInfo);
 		p=cand;
 		// lock the internal class and keep it until we are done with preparations
-		p->lock();
+		p->m_obj_mutex.lock();
 	}
 
 	if(!p)
@@ -100,14 +100,14 @@ CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string 
 #ifndef MINIBUILD
 		g_victor.ScheduleFor(p->m_nExpTime, cleaner::TYPE_EXDNS);
 #endif
-		p->unlock();
+		p->m_obj_mutex.unlock();
 	}
 	else // not good, remove from the cache again
 	{
 		aclog::err( (tSS()<<"Error resolving "<<dnsKey<<": " <<sErrorMsgBuf).c_str());
 		lockguard g(mapDnsCache);
 		mapDnsCache.erase(dnsKey);
-		p->unlock();
+		p->m_obj_mutex.unlock();
 		p.reset();
 	}
 

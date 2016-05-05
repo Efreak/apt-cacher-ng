@@ -18,7 +18,7 @@
 
 class CAddrInfo;
 
-class CAddrInfo : public lockable
+class CAddrInfo : public base_with_mutex
 {
 public:
 	time_t m_nExpTime=0;

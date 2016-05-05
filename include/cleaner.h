@@ -20,7 +20,7 @@
  * c) called method can be run at any time without side-effects
  * (they have to check the need of their internal work by themselves)
  */
-class cleaner : public condition
+class cleaner : public base_with_condition
 {
 public:
 	cleaner();
