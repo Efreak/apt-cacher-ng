@@ -1339,7 +1339,7 @@ has_base:
 			found++;
 			auto pos = path.rfind('/');
 			if(pos!=stmiss)
-				m_managedDirs.emplace(path.substr(0, pos+1));
+				m_managedDirs.insert(path.substr(0, pos+1));
 		}
 		if(found)
 			++it;
