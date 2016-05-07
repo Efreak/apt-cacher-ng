@@ -96,21 +96,22 @@ foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl
 endforeach(linkarg)
 
 option(USE_SSL "Use OpenSSL library for TLS and other crypto functionality" on)
-# option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" on)
 
 IF(CMAKE_SYSTEM MATCHES "Darwin")
    SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON} -D_DARWIN_C_SOURCE ")
 ENDIF(CMAKE_SYSTEM MATCHES "Darwin")
 
 IF(CMAKE_SYSTEM MATCHES "CYGWIN")
-	set(USE_LTO off)
+	set(USE_LTO_DEFAULT off)
 	SET(ACNG_CXXFLAGS_COMMON " ${ACNG_CXXFLAGS_COMMON}  -U__STRICT_ANSI__ -DNOMINMAX ")
 ELSE()
-
+  if(CMAKE_COMPILER_IS_GNUCXX AND CMAKE_CXX_COMPILER_VERSION MATCHES "^[56789]")
+     set(USE_LTO_DEFAULT on)
+  endif()
 ENDIF()
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
-   set(USE_LTO off)
+   set(USE_LTO_DEFAULT off)
    set(ACNG_CXXFLAGS_COMMON "-DDEBUG ${ACNG_CXXFLAGS_COMMON}")
 else()
    set(CMAKE_REQUIRED_FLAGS "-Wl,--gc-sections")
@@ -144,10 +145,16 @@ if(NOT COMPILER_SUPPORTS_DEFAULT_CXX11)
    endif()
 endif()
 
+# XXX: make this stuff not be printed later?
+#if(NOT DEFINED(USE_LTO))
+message("-- LTO default choice for this toolchain is: ${USE_LTO_DEFAULT}")
+#endif()
+option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" ${USE_LTO_DEFAULT})
+
 if(USE_LTO)
    SET(LDFLAGS_NOLTO "${CMAKE_EXE_LINKER_FLAGS}")
-   SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} -flto -flto-partition=none")
-   SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto -flto-partition=none")
+   SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} -flto")
+   SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto")
    CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" HAS_LTO)
    if(HAS_LTO)
       SET(ACNG_CXXFLAGS_COMMON ${CMAKE_REQUIRED_FLAGS})
@@ -157,6 +164,7 @@ if(USE_LTO)
       message(WARNING "Link Time Optimization support broken, disabling it.")
    endif()
 endif()
+message("-- LTO final setting is: ${USE_LTO}")
 
 FIND_LIBRARY(HAVE_SOCKETLIB socket) # separate socket lib looks like Solaris-like environment
 if(HAVE_SOCKETLIB)

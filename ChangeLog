@@ -6,6 +6,9 @@ apt-cacher-ng (0.9.2) COLD-SHOTS; urgency=low
     Debian/Ubuntu repositories
   * Added deb.debian.conf to Debian mirror list (Debian bug #820813)
   * Database update
+  * Enabling LTO on GCC 5+ as default (working around suspected pthread issues
+    by switching to std classes instead of custom pthread access), also fixing
+    some GCC 6 specific warnings
 
  -- 
 
