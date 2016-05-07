@@ -39,25 +39,36 @@ void cleaner::WorkLoop()
 {
 	LOGSTART("cleaner::WorkLoop");
 
+	lockuniq g(this);
 	for(;;)
 	{
 		eType what = TYPE_EXDNS;
-		time_t now;
+		time_t when = END_OF_TIME;
+
+		if(m_terminating)
+			return;
+
+		// ok, who's next?
+		for (unsigned i = 0; i < ETYPE_MAX; ++i)
 		{
-			lockuniq g(this);
-			// ok, who's next?
-			for (unsigned i = 0; i < _countof(stamps); ++i)
-				if (stamps[i] < stamps[what])
-					what = (eType) i;
-			now=GetTime();
-			if(stamps[what] > now)
+			if (stamps[i] < when)
 			{
-				wait_until(g, stamps[what], 112);
-				continue;
+				what = (eType) i;
+				when = stamps[i];
 			}
-			stamps[what] = END_OF_TIME;
-			// good, do the work now
 		}
+
+		auto now=GetTime();
+		if(when > now)
+		{
+			// work around buggy STL, add some years on top and hope it will be fixed everywhere by then
+			wait_until(g, when == END_OF_TIME ? (now | 0x3ffffffe) : when, 111);
+			continue;
+		}
+		stamps[what] = END_OF_TIME;
+		g.unLock();
+
+		// good, do the work now
 		time_t time_nextcand=END_OF_TIME;
 		switch(what)
 		{
@@ -81,8 +92,8 @@ void cleaner::WorkLoop()
 			USRDBG("fileitem::DoDelayedUnregAndCheck, nextRunTime now: " << time_nextcand);
 			break;
 
-		default:
-			return;
+		case ETYPE_MAX:
+			return; // heh?
 		}
 
 		if(time_nextcand <= now || time_nextcand < 1)
@@ -92,15 +103,10 @@ void cleaner::WorkLoop()
 			time_nextcand=GetTime()+60;
 		}
 
-		setLockGuard;
+		g.reLock();
 
 		if (time_nextcand < stamps[what])
 			stamps[what] = time_nextcand;
-
-		// ok, who's next?
-		for (unsigned i = 0; i < _countof(stamps); ++i)
-			if (stamps[i] < stamps[what])
-				what = (eType) i;
 	};
 }
 
@@ -140,7 +146,7 @@ void cleaner::Stop()
 		if(!m_thr)
 			return;
 
-		stamps[cleaner::TYPE_STOPSCHED] = 1;
+		m_terminating = true;
 		notifyAll();
 	}
     pthread_join(m_thr, nullptr);
@@ -154,7 +160,7 @@ void cleaner::dump_status()
 	setLockGuard;
 	tSS msg;
 	msg << "Cleanup schedule:\n";
-	for(int i=0; i<cleaner::TYPE_STOPSCHED; ++i)
+	for(int i=0; i<cleaner::ETYPE_MAX; ++i)
 		msg << stamps[i] << " (in " << (stamps[i]-GetTime()) << " seconds)\n";
 	aclog::err(msg);
 }
