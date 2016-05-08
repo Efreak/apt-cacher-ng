@@ -335,15 +335,16 @@ int * GetIntPtr(LPCSTR key, int &base) {
 	return nullptr;
 }
 
-tProperty* GetPropPtr(LPCSTR key)
+tProperty* GetPropPtr(cmstring& key)
 {
-	auto sep = strrchr(key, '-');
+	auto sep = key.find('-');
+	auto szkey = key.c_str();
 	for (auto &ent : n2pTbl)
 	{
-		if (0 == strcasecmp(key, ent.name))
+		if (0 == strcasecmp(szkey, ent.name))
 			return &ent;
-		// identified as prefix?
-		if(sep && 0 == ent.name[sep-key+1] && 0==strncasecmp(key, ent.name, sep-key+1))
+		// identified as prefix, with matching length?
+		if(sep != stmiss && 0==strncasecmp(szkey, ent.name, sep) && 0 == ent.name[sep+1])
 			return &ent;
 	}
 	return nullptr;
@@ -792,7 +793,7 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 			return false;
 		}
 	}
-	else if ( nullptr != (ppTarget = GetPropPtr(key.c_str())))
+	else if ( nullptr != (ppTarget = GetPropPtr(key)))
 	{
 		return ppTarget->set(key, value);
 	}
