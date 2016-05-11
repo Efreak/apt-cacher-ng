@@ -170,7 +170,7 @@ bool ParseKeyValLine(const string & sIn, string & sOutKey, string & sOutVal)
 	*/
 
 	string::size_type pos = sOutVal.find(":");
-	if (pos==string::npos)
+	if (AC_UNLIKELY(pos == 0 || pos==string::npos))
 	{
 		//cerr << "Bad configuration directive found, looking for: " << szKey << ", found: "<< sOut << endl;
 		return false;
