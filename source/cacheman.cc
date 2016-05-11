@@ -21,6 +21,7 @@
 #include <regex.h>
 
 #include <map>
+#include <unordered_map>
 #include <string>
 #include <iostream>
 #include <algorithm>
@@ -1709,7 +1710,7 @@ tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(const mstrin
 }
 
 bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::string &sPath,
-		enumMetaType idxType)
+		enumMetaType idxType, bool* pReportAllReturnHashMark)
 {
 
 	LOGSTART("expiration::ParseAndProcessMetaFile");
@@ -1720,30 +1721,12 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 
 	m_processedIfile = sPath;
 
-	// pre calc relative base folders for later
-	string sCurFilesReferenceDirRel(SZPATHSEP);
-	// for some file types that may differ, e.g. if the path looks like a Debian mirror path
-	string sPkgBaseDir = sCurFilesReferenceDirRel;
-	tStrPos pos = sPath.rfind(CPATHSEP);
-	if(stmiss!=pos)
-	{
-		sCurFilesReferenceDirRel.assign(sPath, 0, pos+1);
-
-		// does this look like a Debian archive structure? i.e. paths to other files have a base
-		// directory starting in dists/?
-		// The assumption doesn't however apply to the d-i checksum
-		// lists, those refer to themselves only.
-		//
-		// similar considerations for Cygwin setup
-
-		if(idxType != EIDX_MD5DILIST && stmiss!=(pos=sCurFilesReferenceDirRel.rfind("/dists/")))
-			sPkgBaseDir = sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+1);
-		else if(idxType == EIDX_CYGSETUP && stmiss!=(pos=sCurFilesReferenceDirRel.rfind("/cygwin/")))
-			sPkgBaseDir = sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+8);
-		else
-			sPkgBaseDir=sCurFilesReferenceDirRel;
-	}
-	else
+	// full path of the directory of the processed index file with trailing slash
+	string sBaseDir;
+	// for some file types the main directory that parsed entries refer to
+	// may differ, for some Debian index files for example
+	string sPkgBaseDir;
+	if(!CalculateBaseDirectories(sPath, idxType, sBaseDir, sPkgBaseDir))
 	{
 		m_nErrorCount++;
 		SendFmt << "Unexpected index file without subdir found: " << sPath;
@@ -1769,12 +1752,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 	info.SetInvalid();
 	tStrVec vsMetrics;
 	string sStartMark;
-	bool bUse(false);
 
-	enumMetaType origIdxType=idxType;
-
-
-	REDO_AS_TYPE:
 	switch(idxType)
 	{
 	case EIDX_PACKAGES:
@@ -1857,7 +1835,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					switch (typehint)
 					{
 					case _fname:
-						info.sDirectory = sCurFilesReferenceDirRel;
+						info.sDirectory = sBaseDir;
 						info.sFileName = sLine;
 						nStep = 0;
 						break;
@@ -1918,7 +1896,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					continue;
 				LOG("index basename: " << tok);
 				info.sFileName = tok;
-				info.sDirectory = sCurFilesReferenceDirRel;
+				info.sDirectory = sBaseDir;
 				ret.HandlePkgEntry(info);
 				info.SetInvalid();
 			}
@@ -1941,7 +1919,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 				{
 					LOG("RPM basename: " << tok);
 					info.sFileName = tok;
-					info.sDirectory = sCurFilesReferenceDirRel;
+					info.sDirectory = sBaseDir;
 					ret.HandlePkgEntry(info);
 					info.SetInvalid();
 				}
@@ -1963,9 +1941,9 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					idxType == EIDX_MD5DILIST ? CSTYPE_MD5 : CSTYPE_SHA256)
 					&& split.Next() && (info.sFileName = split).size()>0)
 			{
-				info.sDirectory = sCurFilesReferenceDirRel;
+				info.sDirectory = sBaseDir;
 
-				pos=info.sFileName.find_first_not_of("./");
+				auto pos=info.sFileName.find_first_not_of("./");
 				if(pos!=stmiss)
 					info.sFileName.erase(0, pos);
 
@@ -1981,113 +1959,177 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 		}
 		break;
 	case EIDX_DIFFIDX:
-		info.fpr.csType = CSTYPE_SHA1;
-		info.bInflateForCs = true;
-		sStartMark = "SHA1-Patches:";
-		idxType = EIDX_RFC822WITHLISTS;
-		goto REDO_AS_TYPE;
-
+		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_DIFFIDX, CSTYPES::CSTYPE_SHA1, true, "SHA1-Patches", pReportAllReturnHashMark);
 	case EIDX_SOURCES:
-		info.fpr.csType = CSTYPE_MD5;
-		sStartMark="Files:";
-		idxType = EIDX_RFC822WITHLISTS;
-		goto REDO_AS_TYPE;
-
+		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_SOURCES, CSTYPES::CSTYPE_MD5, false, "Files", pReportAllReturnHashMark);
 	case EIDX_TRANSIDX:
+		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_TRANSIDX, CSTYPES::CSTYPE_SHA1, false, "SHA1", pReportAllReturnHashMark);
 	case EIDX_RELEASE:
-		info.fpr.csType = CSTYPE_SHA1;
-		sStartMark="SHA1:";
-		// parser follows
-		//no break
-	case EIDX_RFC822WITHLISTS:
-		// common info object does not help here because there are many entries, and directory
-		// could appear after the list :-(
-	{
-		// template for the data set PLUS try-its-gzipped-version flag
-		tStrDeq fileList;
-		mstring sDirHeader;
-
-		UrlUnescape(sPkgBaseDir);
-
-		while(reader.GetOneLine(sLine))
-		{
-			if(startsWith(sLine, sStartMark))
-				bUse=true;
-			else if(!startsWithSz(sLine, " ")) // list header block ended for sure
-				bUse = false;
-
-			trimBack(sLine);
-
-			if(startsWithSz(sLine, "Directory:"))
-			{
-				trimBack(sLine);
-				tStrPos pos=sLine.find_first_not_of(SPACECHARS, 10);
-				if(pos!=stmiss)
-					sDirHeader=sLine.substr(pos)+SZPATHSEP;
-			}
-			else if (bUse)
-				fileList.emplace_back(sLine);
-			else if(sLine.empty()) // ok, time to commit the list
-			{
-				for (auto& fline : fileList)
-				{
-					info.sFileName.clear();
-					// ok, read "checksum size filename" into info and check the word count
-					tSplitWalk split(&fline);
-					if (!split.Next() || !info.fpr.SetCs(split, info.fpr.csType) || !split.Next())
-						continue;
-					val = split;
-					info.fpr.size = atoofft(val.c_str(), -2);
-					if (info.fpr.size < 0 || !split.Next())
-						continue;
-					UrlUnescapeAppend(split, info.sFileName);
-
-					switch (origIdxType)
-					{
-					case EIDX_SOURCES:
-						info.sDirectory = sPkgBaseDir + sDirHeader;
-						ret.HandlePkgEntry(info);
-						break;
-					case EIDX_TRANSIDX: // csum refers to the files as-is
-						info.sDirectory = sCurFilesReferenceDirRel + sDirHeader;
-						ret.HandlePkgEntry(info);
-						break;
-					case EIDX_DIFFIDX:
-						info.sDirectory = sCurFilesReferenceDirRel + sDirHeader;
-						ret.HandlePkgEntry(info);
-						info.sFileName += ".gz";
-						ret.HandlePkgEntry(info);
-						break;
-					case EIDX_RELEASE:
-						info.sDirectory = sCurFilesReferenceDirRel + sDirHeader;
-						// usually has subfolders, move into directory part
-						pos = info.sFileName.rfind(SZPATHSEPUNIX);
-						if (stmiss != pos)
-						{
-							info.sDirectory += info.sFileName.substr(0, pos + 1);
-							info.sFileName.erase(0, pos + 1);
-						}
-						ret.HandlePkgEntry(info);
-						break;
-					default:
-						ASSERT(!"Originally determined type cannot reach this case!");
-						break;
-					}
-				}
-				fileList.clear();
-			}
-
-			if(CheckStopSignal())
-				return true;
-
-		}
-	}
-	break;
-
+		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_RELEASE, CSTYPES::CSTYPE_SHA1, false, "SHA1", pReportAllReturnHashMark);
 	default:
 		SendChunk("<span class=\"WARNING\">"
 				"WARNING: unable to read this file (unsupported format)</span>\n<br>\n");
 		return false;
+	}
+	return reader.CheckGoodState(false);
+}
+
+bool tCacheOperation::CalculateBaseDirectories(cmstring& sPath, enumMetaType idxType, mstring& sBaseDir, mstring& sPkgBaseDir)
+{
+
+	// full path of the directory of the processed index file with trailing slash
+	sBaseDir.assign(SZPATHSEP);
+	// for some file types the main directory that parsed entries refer to
+	// may differ, for some Debian index files for example
+	sPkgBaseDir.assign(sBaseDir);
+
+	tStrPos pos = sPath.rfind(CPATHSEP);
+	if(stmiss==pos)
+		return false;
+	sBaseDir.assign(sPath, 0, pos + 1);
+
+	// does this look like a Debian archive structure? i.e. paths to other files have a base
+	// directory starting in dists/?
+	// The assumption doesn't however apply to the d-i checksum
+	// lists, those refer to themselves only.
+	//
+	// similar considerations for Cygwin setup
+
+	if (idxType != EIDX_MD5DILIST && idxType != EIDX_SHA256DILIST && stmiss != (pos =
+			sBaseDir.rfind("/dists/")))
+		sPkgBaseDir = sPkgBaseDir.assign(sBaseDir, 0, pos + 1);
+	else if (idxType == EIDX_CYGSETUP && stmiss != (pos = sBaseDir.rfind("/cygwin/")))
+		sPkgBaseDir = sPkgBaseDir.assign(sBaseDir, 0, pos + 8);
+	else
+		sPkgBaseDir = sBaseDir;
+
+	return true;
+}
+
+bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
+		ifileprocessor &ret, cmstring& sBaseDir, cmstring& sPkgBaseDirConst,
+		enumMetaType origIdxType, CSTYPES csType, bool ixInflatedChecksum,
+		cmstring& sExtListFilter, bool* pReportAllReturnHashMark)
+{
+	// beam the whole file into our model
+	map< string,deque<string> > contents;
+	{
+		string sLine, key, val, lastKey;
+		deque<string> *pLastVal(nullptr);
+		while (reader.GetOneLine(sLine))
+		{
+			if(sLine.empty())
+				continue;
+			if(isspace( (unsigned) sLine[0]))
+			{
+				if(pLastVal)
+				{
+					trimFront(sLine);
+					pLastVal->push_back(sLine);
+				}
+			}
+			else if(ParseKeyValLine(sLine, key, val))
+			{
+				if(!sExtListFilter.empty() || sExtListFilter == key) // so use it
+				{
+					auto ins=contents.emplace(key, deque<string> {val});
+					lastKey = key;
+					pLastVal = & ins.first->second;
+				}
+				else
+					pLastVal = nullptr;
+			}
+		}
+	}
+	mstring sSubDir;
+	auto it = contents.find("Directory");
+	if (it != contents.end() && !it->second.empty())
+	{
+		sSubDir = it->second.front();
+		trimBack(sSubDir);
+		sSubDir += sPathSep;
+	}
+	if(pReportAllReturnHashMark && contents.end() != (it = contents.find("Acquire-By-Hash")))
+		*pReportAllReturnHashMark = (!it->second.empty() && it->second.front() == "yes");
+
+	tRemoteFileInfo info;
+	info.SetInvalid();
+	info.bInflateForCs = ixInflatedChecksum;
+	info.fpr.csType = csType;
+
+	mstring sPkgBaseDir;
+	UrlUnescapeAppend(sPkgBaseDirConst, sPkgBaseDir);
+
+	auto processList = [this, &ret, &info, &sSubDir, &sBaseDir,
+						&sPkgBaseDir, &origIdxType](deque<string> fileList) -> void
+			{
+		uint32_t checkFilter(0); // don't do costly locking for every single line :-(
+		for (auto& fline: fileList)
+		{
+			if(!(checkFilter++ & 0xff) && CheckStopSignal())
+				return;
+
+			info.sFileName.clear();
+			// ok, read "checksum size filename" into info and check the word count
+			tSplitWalk split(&fline);
+			if (!split.Next() || !info.fpr.SetCs(split, info.fpr.csType) || !split.Next())
+				continue;
+			string val(split);
+			info.fpr.size = atoofft((LPCSTR) val.c_str(), -2L);
+			if (info.fpr.size < 0 || !split.Next())
+				continue;
+			UrlUnescapeAppend(split, info.sFileName);
+
+			switch (origIdxType)
+			{
+			case EIDX_SOURCES:
+				info.sDirectory = sPkgBaseDir + sSubDir;
+				ret.HandlePkgEntry(info);
+				break;
+			case EIDX_TRANSIDX: // csum refers to the files as-is
+				info.sDirectory = sBaseDir + sSubDir;
+				ret.HandlePkgEntry(info);
+				break;
+			case EIDX_DIFFIDX:
+				info.sDirectory = sBaseDir + sSubDir;
+				ret.HandlePkgEntry(info);
+				info.sFileName += ".gz";
+				ret.HandlePkgEntry(info);
+				break;
+			case EIDX_RELEASE:
+			{
+				info.sDirectory = sBaseDir + sSubDir;
+				// usually has subfolder prefix, split and move into directory part
+				auto pos = info.sFileName.rfind(SZPATHSEPUNIX);
+				if (stmiss != pos)
+				{
+					info.sDirectory += info.sFileName.substr(0, (unsigned long) pos + 1);
+					info.sFileName.erase(0, (unsigned long) pos + 1);
+				}
+				ret.HandlePkgEntry(info);
+				break;
+			}
+			default:
+				ASSERT(!"Originally determined type cannot reach this case!");
+				break;
+			}
+		}
+	};
+
+	if(origIdxType != EIDX_RELEASE || !pReportAllReturnHashMark || !*pReportAllReturnHashMark)
+		processList(contents[sExtListFilter]);
+	else
+	{
+		for(auto& cst: { CSTYPES::CSTYPE_MD5, CSTYPES::CSTYPE_SHA1,
+			CSTYPES::CSTYPE_SHA256, CSTYPES::CSTYPE_SHA512 })
+		{
+			info.fpr.csType = cst;
+			processList(contents[GetCsNameReleaseFile(cst)]);
+		}
 	}
 	return reader.CheckGoodState(false);
 }

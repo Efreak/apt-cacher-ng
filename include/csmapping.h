@@ -50,6 +50,17 @@ inline LPCSTR GetCsName(CSTYPES csType)
 	default: return "Other";
 	}
 }
+inline LPCSTR GetCsNameReleaseFile(CSTYPES csType)
+{
+	switch(csType)
+	{
+	case CSTYPE_MD5: return "MD5Sum";
+	case CSTYPE_SHA1: return "SHA1";
+	case CSTYPE_SHA256: return "SHA256";
+	case CSTYPE_SHA512: return "SHA512";
+	default: return "Other";
+	}
+}
 
 class csumBase
 {

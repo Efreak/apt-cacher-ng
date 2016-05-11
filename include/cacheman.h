@@ -42,9 +42,8 @@ public:
 	tCacheOperation(const tSpecialRequest::tRunParms& parms);
 	virtual ~tCacheOperation();
 
-protected:
 	enum enumMetaType
-		: uint_least8_t
+		: uint8_t
 		{
 			EIDX_UNSUPPORTED = 0,
 		EIDX_RELEASE,
@@ -60,6 +59,7 @@ protected:
 		EIDX_MD5DILIST,
 		EIDX_SHA256DILIST
 	};
+protected:
 	struct tIfileAttribs
 	{
 		bool vfile_ondisk:1, uptodate:1, parseignore:1, hideDlErrors:1,
@@ -130,8 +130,11 @@ protected:
 
 	void TellCount(unsigned nCount, off_t nSize);
 
+	/**
+	 * @param collectAllCsTypes If set, will send callbacks for all identified checksum types. In addition, will set the value of Acquire-By-Hash to the pointed boolean.
+	 */
 	bool ParseAndProcessMetaFile(ifileprocessor &output_receiver,
-			const mstring &sPath, enumMetaType idxType);
+			const mstring &sPath, enumMetaType idxType, bool* pReportAllReturnHashMark = NULL);
 
 	std::unordered_map<mstring,bool> m_forceKeepInTrash;
 
@@ -183,8 +186,21 @@ private:
 			const tFingerprint *verifData);
 	dlcon *m_pDlcon = nullptr;
 
+protected:
+	bool CalculateBaseDirectories(cmstring& sPath, enumMetaType idxType, mstring& sBaseDir, mstring& sBasePkgDir);
 	bool IsDeprecatedArchFile(cmstring &sFilePathRel);
-
+	/**
+	 * @brief Process key:val type files, handling multiline values as lists
+	 * @param ixInflatedChecksum Pass through as struct attribute to ret callback
+	 * @param sExtListFilter If set to non-empty, will only extract value(s) for that key
+	 * @param pReportAllReturnHashMark If set, will write back the value of Acquire-By-Hash==yes check to the pointed bool, and also trigger multiple callbacks, i.e. for each checksum type
+	 */
+	bool ParseGenericRfc822Index(filereader& reader, ifileprocessor &ret,
+			cmstring& sCurFilesReferenceDirRel,
+			cmstring& sPkgBaseDir,
+			enumMetaType ixType, CSTYPES csType, bool ixInflatedChecksum,
+			cmstring& sExtListFilter,
+			bool* pReportAllReturnHashMark);
 	const tIfileAttribs attr_dummy_pure = tIfileAttribs();
 	tIfileAttribs attr_dummy;
 };
