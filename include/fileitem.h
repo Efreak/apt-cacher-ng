@@ -117,6 +117,8 @@ public:
 	{
 		return acfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
 	}
+protected:
+	int MoveRelease2Sidestore();
 };
 
 #ifndef MINIBUILD
