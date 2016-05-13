@@ -1,3 +1,4 @@
+#if 0
 #ifndef SOURCE_JSONSTATS_H_
 #define SOURCE_JSONSTATS_H_
 
@@ -15,3 +16,5 @@ protected:
 };
 
 #endif /* SOURCE_JSONSTATS_H_ */
+
+#endif
