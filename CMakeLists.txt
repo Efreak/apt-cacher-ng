@@ -85,7 +85,7 @@ foreach(cxxarg  -pthread -Wall -Wextra -Wno-unused-parameter -fvisibility-inline
 	endif()
 endforeach()
 
-foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1 -Wl,-fuse-ld=gold)
+foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1 -Wl,-fuse-ld=gold -Wl,--threads)
 	STRING(REGEX REPLACE "=|-|," "" optname "${linkarg}")
 	set(CMAKE_REQUIRED_FLAGS "${linkarg}")
 	CHECK_CXX_COMPILER_FLAG("" "LD_${optname}")

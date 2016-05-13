@@ -10,7 +10,7 @@
 #include <unordered_map>
 
 class fileitem;
-typedef SHARED_PTR<fileitem> tFileItemPtr;
+typedef std::shared_ptr<fileitem> tFileItemPtr;
 typedef std::unordered_multimap<mstring, tFileItemPtr> tFiGlobMap;
 
 //! Base class containing all required data and methods for communication with the download sources
