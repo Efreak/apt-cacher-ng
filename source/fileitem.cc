@@ -14,6 +14,9 @@
 #include <errno.h>
 #include <algorithm>
 
+#include <sys/stat.h>
+#include <sys/types.h>
+
 using namespace std;
 
 #define MAXTEMPDELAY acfg::maxtempdelay // 27
@@ -529,8 +532,10 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 	if(m_bAllowStoreData)
 	{
 		// using adaptive Delete-Or-Replace-Or-CopyOnWrite strategy
-		
-		// First opening the file first to be sure that it can be written. Header storage is the critical point,
+
+		MoveRelease2Sidestore();
+
+		// First opening the file to be sure that it can be written. Header storage is the critical point,
 		// every error after that leads to full cleanup to not risk inconsistent file contents 
 		
 		int flags = O_WRONLY | O_CREAT | O_BINARY;
@@ -758,7 +763,7 @@ inline void fileItemMgmt::Unreg()
 }
 
 
-bool fileItemMgmt::PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore)
+bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore)
 {
 	LOGSTART2("fileitem::GetFileItem", sPathUnescaped);
 
@@ -945,6 +950,21 @@ fileitem_with_storage::~fileitem_with_storage()
 		::unlink(SZABSPATH(m_sPathRel));
 		::unlink((SABSPATH(m_sPathRel)+".head").c_str());
 	}
+}
+
+// special file? When it's rewritten from start, save the old version instead
+int fileitem_with_storage::MoveRelease2Sidestore()
+{
+	if(m_nSizeChecked)
+		return 0;
+	if(!endsWithSzAr(m_sPathRel, "/InRelease") && !endsWithSzAr(m_sPathRel, "/Release"))
+		return 0;
+	auto sidefolderAbs = CACHE_BASE + m_sPathRel + ".sidestore";
+	mkdir(sidefolderAbs.c_str(), acfg::dirperms);
+	auto srcAbs = CACHE_BASE + m_sPathRel;
+	Cstat st(srcAbs);
+	auto sideFileAbs = sidefolderAbs + sPathSep + ltos(st.st_ino);
+	return rename(srcAbs.c_str(), sideFileAbs.c_str());
 }
 
 #endif // MINIBUILD
