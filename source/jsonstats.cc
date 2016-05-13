@@ -1,3 +1,4 @@
+#if 0 // maybe revive it later
 #include <jsonstats.h>
 
 jsonstats::jsonstats(const tRunParms & parms) : expiration(parms)
@@ -46,3 +47,5 @@ void jsonstats::PrintJson()
 void jsonstats::Action()
 {
 }
+
+#endif
