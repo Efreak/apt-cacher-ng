@@ -106,7 +106,10 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
     }
 
 	if(scontains(sPathRel, "/by-hash/"))
+		m_oldHashedFiles.emplace(sPathRel);
+	if(scontains(sPathRel, "Release.sidestore/"))
 		m_oldReleaseFiles.emplace(sPathRel);
+
 
 	return false;
 }
@@ -1158,21 +1161,37 @@ void tCacheOperation::UpdateVolatileFiles()
 
 	MTLOGDEBUG("<br><br><b>STARTING ULTIMATE INTELLIGENCE</b><br><br>");
 
-	//SendFmt() << "Creating implicitly referenced files..." << "<br>";
-#if 0
+	SendChunk("<b>Checking implicitly referenced files...</b><br>");
 	for(const auto& snap: m_oldReleaseFiles)
 	{
-		struct snapProcessor : public ifileprocessor
+
+		ParseAndProcessMetaFile([this, &snap](const tRemoteFileInfo &entry)
 		{
-			public:
-				tFile2Cid m_file2cid;
-				virtual void HandlePkgEntry(const tRemoteFileInfo &entry)
+
+			auto hexname(BytesToHexString(entry.fpr.csum, GetCSTypeLen(entry.fpr.csType)));
+			// ok, getting all hash versions...
+				if(_checkSolidHashOnDisk(hexname, entry))
+				{
+					auto wanted = CACHE_BASE + entry.sDirectory + entry.sFileName;
+#ifdef DEBUG
+				string solidPath = CACHE_BASE + entry.sDirectory + "by-hash/" +
+				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+				SendFmt << solidPath << " was " << wanted << "<br>\n";
+#endif
+				if(0 != access(wanted.c_str(), F_OK))
 				{
 
+					SendFmt << "Touching untracked file: " << wanted << "<br>\n";
+					mkbasedir(wanted);
+					int fd = open(wanted.c_str(), O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK);
+					checkforceclose(fd);
 				}
-		}
+			}
+
+			//fmt << entry.sDirectory << entry.s
+		}, snap, enumMetaType::EIDX_RELEASE, true);
+
 	}
-#endif
 
 	/*
 	 * Update all Release files
@@ -1728,7 +1747,7 @@ tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(const mstrin
 }
 
 bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> ret, const std::string &sPath,
-		enumMetaType idxType, bool* pReportAllReturnHashMark)
+		enumMetaType idxType, bool byHashMode)
 {
 
 	LOGSTART("expiration::ParseAndProcessMetaFile");
@@ -1978,16 +1997,16 @@ bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFi
 		break;
 	case EIDX_DIFFIDX:
 		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_DIFFIDX, CSTYPES::CSTYPE_SHA1, true, "SHA1-Patches", pReportAllReturnHashMark);
+				EIDX_DIFFIDX, CSTYPES::CSTYPE_SHA1, true, "SHA1-Patches", byHashMode);
 	case EIDX_SOURCES:
 		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_SOURCES, CSTYPES::CSTYPE_MD5, false, "Files", pReportAllReturnHashMark);
+				EIDX_SOURCES, CSTYPES::CSTYPE_MD5, false, "Files", byHashMode);
 	case EIDX_TRANSIDX:
 		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_TRANSIDX, CSTYPES::CSTYPE_SHA1, false, "SHA1", pReportAllReturnHashMark);
+				EIDX_TRANSIDX, CSTYPES::CSTYPE_SHA1, false, "SHA1", byHashMode);
 	case EIDX_RELEASE:
 		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_RELEASE, CSTYPES::CSTYPE_SHA1, false, "SHA1", pReportAllReturnHashMark);
+				EIDX_RELEASE, CSTYPES::CSTYPE_SHA1, false, "SHA1", byHashMode);
 	default:
 		SendChunk("<span class=\"WARNING\">"
 				"WARNING: unable to read this file (unsupported format)</span>\n<br>\n");
@@ -2025,13 +2044,21 @@ bool tCacheOperation::CalculateBaseDirectories(cmstring& sPath, enumMetaType idx
 	else
 		sPkgBaseDir = sBaseDir;
 
+
+	if(idxType == EIDX_RELEASE)
+	{
+		StrSubst(sBaseDir, "/InRelease.sidestore", "", 0);
+		StrSubst(sBaseDir, "/Release.sidestore", "", 0);
+	}
+
+
 	return true;
 }
 
 bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 		std::function<void(const tRemoteFileInfo&)> ret, cmstring& sBaseDir, cmstring& sPkgBaseDirConst,
 		enumMetaType origIdxType, CSTYPES csType, bool ixInflatedChecksum,
-		cmstring& sExtListFilter, bool* pReportAllReturnHashMark)
+		cmstring& sExtListFilter, bool byHashMode)
 {
 	// beam the whole file into our model
 	map< string,deque<string> > contents;
@@ -2071,8 +2098,12 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 		trimBack(sSubDir);
 		sSubDir += sPathSep;
 	}
-	if(pReportAllReturnHashMark && contents.end() != (it = contents.find("Acquire-By-Hash")))
-		*pReportAllReturnHashMark = (!it->second.empty() && it->second.front() == "yes");
+	if(byHashMode)
+	{
+		it = contents.find("Acquire-By-Hash");
+		if(contents.end() == it || it->second.empty() || it->second.front() != "yes")
+			return true;
+	}
 
 	tRemoteFileInfo info;
 	info.SetInvalid();
@@ -2138,9 +2169,7 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 		}
 	};
 
-	if(origIdxType != EIDX_RELEASE || !pReportAllReturnHashMark || !*pReportAllReturnHashMark)
-		processList(contents[sExtListFilter]);
-	else
+	if(origIdxType == EIDX_RELEASE && byHashMode)
 	{
 		for(auto& cst: { CSTYPES::CSTYPE_MD5, CSTYPES::CSTYPE_SHA1,
 			CSTYPES::CSTYPE_SHA256, CSTYPES::CSTYPE_SHA512 })
@@ -2149,6 +2178,9 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 			processList(contents[GetCsNameReleaseFile(cst)]);
 		}
 	}
+	else
+		processList(contents[sExtListFilter]);
+
 	return reader.CheckGoodState(false);
 }
 
@@ -2316,7 +2348,7 @@ int parseidx_demo(LPCSTR file)
 				cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
 									<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
 									<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
-				HandlePkgEntry(e); }, file, GuessMetaTypeFromURL(file));
+				}, file, GuessMetaTypeFromURL(file));
 		}
 		virtual bool ProcessRegular(const mstring &, const struct stat &) override {return true;}
 		virtual bool ProcessOthers(const mstring &, const struct stat &) override {return true;}
@@ -2338,4 +2370,11 @@ void tCacheOperation::ProgTell()
 				<< (m_nProgIdx>1?"s":"") << "...<br />\n";
 		m_nProgTell*=2;
 	}
+}
+
+bool tCacheOperation::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry)
+{
+	string solidPath = CACHE_BASE + entry.sDirectory + "by-hash/" +
+				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+	return ! ::access(solidPath.c_str(), F_OK);
 }

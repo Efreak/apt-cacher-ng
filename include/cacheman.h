@@ -135,7 +135,7 @@ protected:
 	 * @param collectAllCsTypes If set, will send callbacks for all identified checksum types. In addition, will set the value of Acquire-By-Hash to the pointed boolean.
 	 */
 	bool ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> output_receiver,
-			const mstring &sPath, enumMetaType idxType, bool* pReportAllReturnHashMark = NULL);
+			const mstring &sPath, enumMetaType idxType, bool byHashMode = false);
 
 	std::unordered_map<mstring,bool> m_forceKeepInTrash;
 
@@ -201,11 +201,12 @@ protected:
 			cmstring& sPkgBaseDir,
 			enumMetaType ixType, CSTYPES csType, bool ixInflatedChecksum,
 			cmstring& sExtListFilter,
-			bool* pReportAllReturnHashMark);
+			bool byHashMode);
 	const tIfileAttribs attr_dummy_pure = tIfileAttribs();
 	tIfileAttribs attr_dummy;
 
-	std::unordered_set<std::string> m_oldReleaseFiles;
+	std::unordered_set<std::string> m_oldReleaseFiles, m_oldHashedFiles;
+	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry);
 };
 
 
