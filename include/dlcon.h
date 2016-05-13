@@ -17,7 +17,7 @@
 #include "acbuf.h"
 
 struct tDlJob;
-typedef SHARED_PTR<tDlJob> tDlJobPtr;
+typedef std::shared_ptr<tDlJob> tDlJobPtr;
 typedef std::list<tDlJobPtr> tDljQueue;
 
 /**

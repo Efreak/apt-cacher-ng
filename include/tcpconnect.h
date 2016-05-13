@@ -9,7 +9,7 @@
 #define TCPCONNECT_H_
 
 #include <atomic>
-
+#include <memory>
 #include "meta.h"
 #include "sockio.h"
 

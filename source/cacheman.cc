@@ -1241,7 +1241,8 @@ void tCacheOperation::UpdateVolatileFiles()
 							cid.second=entry.sFileName;
 					};
 
-		ParseAndProcessMetaFile(recvInfo, sPathRel, EIDX_RELEASE);
+		ParseAndProcessMetaFile(std::function<void (const tRemoteFileInfo &)>(recvInfo),
+				sPathRel, EIDX_RELEASE);
 
 		if(file2cid.empty())
 			continue;
@@ -2187,7 +2188,8 @@ void tCacheOperation::ProcessSeenMetaFiles(std::function<void(tRemoteFileInfo)> 
 
 		SendChunk(string("Parsing metadata in ")+path2att.first+"<br>\n");
 
-		if( ! ParseAndProcessMetaFile(pkgHandler, path2att.first, itype))
+		if( ! ParseAndProcessMetaFile(std::function<void (const tRemoteFileInfo &)>(pkgHandler),
+				path2att.first, itype))
 		{
 			if(!m_metaFilesRel[path2att.first].forgiveDlErrors)
 			{
@@ -2304,19 +2306,17 @@ void tCacheOperation::PrintStats(cmstring &title)
 int parseidx_demo(LPCSTR file)
 {
 
-	class tParser : public tCacheOperation, ifileprocessor
+	class tParser : public tCacheOperation
 	{
 	public:
 		tParser() : tCacheOperation({2, tSpecialRequest::workIMPORT, "doImport="}) {};
 		inline int demo(LPCSTR file)
 		{
-			return !ParseAndProcessMetaFile(*this, file, GuessMetaTypeFromURL(file));
-		}
-		virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override
-		{
-			cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
-					<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
-					<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
+			return !ParseAndProcessMetaFile([](const tRemoteFileInfo &entry) {
+				cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
+									<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
+									<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
+				HandlePkgEntry(e); }, file, GuessMetaTypeFromURL(file));
 		}
 		virtual bool ProcessRegular(const mstring &, const struct stat &) override {return true;}
 		virtual bool ProcessOthers(const mstring &, const struct stat &) override {return true;}
