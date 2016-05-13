@@ -212,7 +212,7 @@ msgstr "空白にした場合、Apt-Cacher NG はプロキシサーバを利用�
 #. Description
 #: ../apt-cacher-ng.templates:7001
 msgid "Allow HTTP tunnels through Apt-Cacher NG?"
-msgstr ""
+msgstr "Apt-Cacher NG 経由の HTTP トンネルを許可しますか?"
 
 #. Type: boolean
 #. Description
@@ -222,6 +222,10 @@ msgid ""
 "can be used to access remote servers that might otherwise be blocked by (for "
 "instance) a firewall filtering HTTPS connections."
 msgstr ""
+"Apt-Cacher NG は、ユーザが HTTP トンネル を作成できるように設定することができ"
+"ます。リモートサーバにアクセスするために使用することができますが、例えば "
+"HTTPS 接続をフィルタリングするファイアウォールなど、他の手段で遮断される可能"
+"性があります。"
 
 #. Type: boolean
 #. Description
@@ -230,3 +234,5 @@ msgid ""
 "This feature is usually disabled for security reasons; enable it only for "
 "trusted LAN environments."
 msgstr ""
+"この機能は、セキュリティ上の理由から通常は無効になっています。信頼できる "
+"LAN 環境の場合にのみ、機能を有効にします。"

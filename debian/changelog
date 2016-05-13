@@ -1,3 +1,16 @@
+apt-cacher-ng (0.9.2-1) unstable; urgency=low
+
+  * New upstream version
+    + basic support for by-hash index files (closes: #819852) including some
+      precaution in cache cleanup routines
+    + supports .asc signatures for source (closes: #823733)
+    + supports repo names with hyphens again (closes: #823570)
+    + supports deb.debian.org by default (closes: #820813)
+  * Japanese Debconf template update from Takuma Yamada included
+    (closes: #815527)
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 13 May 2016 20:04:32 +0200
+
 apt-cacher-ng (0.9.1-1) unstable; urgency=low
 
   * New upstream version
