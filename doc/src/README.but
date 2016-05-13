@@ -1308,9 +1308,9 @@ down. If you like, help the author on problem identification. To do that, do:
 \c   apt-get source apt-cacher-ng
 \c   apt-get build-dep apt-cacher-ng
 \c   cd apt-cacher-ng-*
-\c   make distclean all DEBUG=1
+\c   ./build.sh DEBUG
 \c   /etc/init.d/apt-cacher-ng stop
-\c   ./apt-cacher-ng -c /etc/apt-cacher-ng logdir=/tmp foreground=1 debug=7
+\c   builddir/apt-cacher-ng -c /etc/apt-cacher-ng logdir=/tmp foreground=1 debug=7
 \c   # (let apt-get run now, on timeouts just wait >> 20 seconds)
 \c   # stop the daemon with Ctrl-C
 \c   /etc/init.d/apt-cacher-ng start
