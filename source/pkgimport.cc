@@ -46,12 +46,12 @@ inline bool IsIndexDiff(const string & sPath)
 }
 */
 
-bool pkgimport::ProcessRegular(cmstring &sPath, const struct stat &stinfo)
+bool pkgimport::ProcessRegular(const mstring &sPath, const struct stat &stinfo)
 {
 
 	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
+		lockguard g(&g_abortMx);
+		if(g_sigTaskAbort)
 			return false;
 	}
 	if(endsWithSzAr(sPath, ".head"))
@@ -179,9 +179,7 @@ void pkgimport::Action()
 	m_sSrcPath=CACHE_BASE+"_import";
 	
 	SendFmt << "Importing from " << m_sSrcPath << " directory.<br>Scanning local files...<br>";
-	
-	SetCommonUserFlags(m_parms.cmd);
-	m_bErrAbort=false; // does not f...ing matter, do what we can
+
 	m_bByPath=true; // should act on all locations
 
 	_LoadKeyCache();
@@ -194,8 +192,8 @@ void pkgimport::Action()
 	DirectoryWalk(acfg::cachedir, this, true);
 
 	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
+		lockguard g(&g_abortMx);
+		if(g_sigTaskAbort)
 			return;
 	}
 	
@@ -209,8 +207,8 @@ void pkgimport::Action()
 	UpdateVolatileFiles();
 
 	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
+		lockguard g(&g_abortMx);
+		if(g_sigTaskAbort)
 			return;
 	}
 	
@@ -225,8 +223,8 @@ void pkgimport::Action()
 	DirectoryWalk(m_sSrcPath, this, true);
 
 	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
+		lockguard g(&g_abortMx);
+		if(g_sigTaskAbort)
 			return;
 	}
 	
@@ -236,11 +234,12 @@ void pkgimport::Action()
 		return;
 	}
 	
-	ProcessSeenMetaFiles(*this);
+	ProcessSeenMetaFiles([this](const tRemoteFileInfo &e) {
+		HandlePkgEntry(e); });
 
 	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
+		lockguard g(&g_abortMx);
+		if(g_sigTaskAbort)
 			return;
 	}
 

@@ -45,7 +45,7 @@ int yes(1);
 int g_sockunix(-1);
 vector<int> g_vecSocks;
 
-condition g_ThreadPoolCondition;
+base_with_condition g_ThreadPoolCondition;
 list<con*> g_freshConQueue;
 int g_nStandbyThreads(0);
 int g_nAllConThreadCount(0);
@@ -57,13 +57,13 @@ bool bTerminationMode(false);
 
 void * ThreadAction(void *)
 {
-	lockguard g(g_ThreadPoolCondition);
+	lockuniq g(g_ThreadPoolCondition);
 	list<con*> & Qu = g_freshConQueue;
 
 	while (true)
 	{
 		while (Qu.empty() && !bTerminationMode)
-			g_ThreadPoolCondition.wait();
+			g_ThreadPoolCondition.wait(g);
 
 		if (bTerminationMode)
 			break;

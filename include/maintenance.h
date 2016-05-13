@@ -45,7 +45,7 @@ public:
 		workSTYLESHEET,
 		workTraceStart,
 		workTraceEnd,
-		workJStats,
+//		workJStats, // disabled, probably useless
 		workTRUNCATE,
 		workTRUNCATECONFIRM
 	};

@@ -122,6 +122,8 @@ inline void trimString(mstring &s, LPCSTR junk=SPACECHARS)
 #define setIfNotEmpty(where, cand) { if(where.empty() && !cand.empty()) where = cand; }
 #define setIfNotEmpty2(where, cand, alt) { if(where.empty()) { if(!cand.empty()) where = cand; else where = alt; } }
 
+#define scontains(h,n) (h.find(n) != std::string::npos)
+
 mstring GetBaseName(cmstring &in);
 mstring GetDirPart(cmstring &in);
 
@@ -513,6 +515,16 @@ bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData);
 #endif
 
 typedef std::vector<std::pair<std::string, std::string>> tLPS;
+
+#ifdef __GNUC__
+#define AC_LIKELY(x)   __builtin_expect(!!(x), true)
+#define AC_UNLIKELY(x) __builtin_expect(!!(x), false)
+#else
+#define AC_LIKELY(x)   x
+#define AC_UNLIKELY(x) x
+#endif
+
+
 
 #endif // _META_H
 

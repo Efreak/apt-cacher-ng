@@ -26,7 +26,7 @@ namespace aclog
 {
 
 ofstream fErr, fStat;
-static pthread_mutex_t mx = PTHREAD_MUTEX_INITIALIZER;
+static acmutex mx;
 
 bool open()
 {
@@ -109,14 +109,14 @@ void err(const char *msg, const char *client)
 
 void flush()
 {
-	lockguard g(&mx);
+	lockguard g(mx);
 	if(fErr.is_open()) fErr.flush();
 	if(fStat.is_open()) fStat.flush();
 }
 
 void close(bool bReopen)
 {
-	lockguard g(&mx);
+	lockguard g(mx);
 	if(acfg::debug>=LOG_MORE) cerr << (bReopen ? "Reopening logs...\n" : "Closing logs...\n");
 	fErr.close();
 	fStat.close();
@@ -290,7 +290,7 @@ tErrnoFmter::tErrnoFmter(const char *prefix)
 
 #ifdef DEBUG
 
-static class : public lockable, public std::map<pthread_t, int>
+static class : public base_with_mutex, public std::map<pthread_t, int>
 {} stackDepths;
 
 t_logger::t_logger(const char *szFuncName,  const void * ptr)

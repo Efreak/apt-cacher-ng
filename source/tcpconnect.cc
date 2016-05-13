@@ -257,7 +257,7 @@ void tcpconnect::Disconnect()
 
 	termsocket_quick(m_conFd);
 }
-lockable spareConPoolMx;
+acmutex spareConPoolMx;
 multimap<tuple<string,string SSL_OPT_ARG(bool) >,
 		std::pair<tDlStreamHandle, time_t> > spareConPool;
 

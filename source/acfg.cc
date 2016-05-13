@@ -44,7 +44,7 @@ string tmpDontcache, tmpDontcacheReq, tmpDontcacheTgt, optProxyCheckCmd;
 int optProxyCheckInt = 99;
 
 tStrMap localdirs;
-static class : public lockable, public NoCaseStringMap {} mimemap;
+static class : public base_with_mutex, public NoCaseStringMap {} mimemap;
 
 std::bitset<TCP_PORT_MAX> *pUserPorts = nullptr;
 
@@ -335,15 +335,16 @@ int * GetIntPtr(LPCSTR key, int &base) {
 	return nullptr;
 }
 
-tProperty* GetPropPtr(LPCSTR key)
+tProperty* GetPropPtr(cmstring& key)
 {
-	auto sep = strrchr(key, '-');
+	auto sep = key.find('-');
+	auto szkey = key.c_str();
 	for (auto &ent : n2pTbl)
 	{
-		if (0 == strcasecmp(key, ent.name))
+		if (0 == strcasecmp(szkey, ent.name))
 			return &ent;
-		// identified as prefix?
-		if(sep && 0 == ent.name[sep-key+1] && 0==strncasecmp(key, ent.name, sep-key+1))
+		// identified as prefix, with matching length?
+		if(sep != stmiss && 0==strncasecmp(szkey, ent.name, sep) && 0 == ent.name[sep+1])
 			return &ent;
 	}
 	return nullptr;
@@ -572,7 +573,7 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 	}
 }
 
-struct tHookHandler: public tRepoData::IHookHandler, public lockable
+struct tHookHandler: public tRepoData::IHookHandler, public base_with_mutex
 {
 	string cmdRel, cmdCon;
 	time_t downDuration, downTimeNext;
@@ -792,7 +793,7 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 			return false;
 		}
 	}
-	else if ( nullptr != (ppTarget = GetPropPtr(key.c_str())))
+	else if ( nullptr != (ppTarget = GetPropPtr(key)))
 	{
 		return ppTarget->set(key, value);
 	}
@@ -1279,7 +1280,7 @@ time_t BackgroundCleanup()
 	return ret;
 }
 
-lockable authLock;
+acmutex authLock;
 
 int CheckAdminAuth(LPCSTR auth)
 {
@@ -1338,7 +1339,7 @@ int CheckAdminAuth(LPCSTR auth)
 #endif // MINIBUILD
 
 static bool proxy_failstate = false;
-lockable proxy_fail_lock;
+acmutex proxy_fail_lock;
 const tHttpUrl* GetProxyInfo()
 {
 	if(proxy_info.sHost.empty())
@@ -1355,7 +1356,7 @@ const tHttpUrl* GetProxyInfo()
 		if(optProxyCheckCmd.empty())
 			proxy_failstate = false;
 		else
-			proxy_failstate = system(optProxyCheckCmd.c_str());
+			proxy_failstate = (bool) system(optProxyCheckCmd.c_str());
 	}
 
 	return proxy_failstate ? nullptr : &proxy_info;

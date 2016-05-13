@@ -1431,9 +1431,9 @@ Chapter 9: Troubleshooting
            apt-get source apt-cacher-ng
            apt-get build-dep apt-cacher-ng
            cd apt-cacher-ng-*
-           make distclean all DEBUG=1
+           ./build.sh DEBUG
            /etc/init.d/apt-cacher-ng stop
-           ./apt-cacher-ng -c /etc/apt-cacher-ng logdir=/tmp foreground=1 debug=7
+           builddir/apt-cacher-ng -c /etc/apt-cacher-ng logdir=/tmp foreground=1 debug=7
            # (let apt-get run now, on timeouts just wait >> 20 seconds)
            # stop the daemon with Ctrl-C
            /etc/init.d/apt-cacher-ng start

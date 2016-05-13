@@ -11,6 +11,7 @@
 #include "bgtask.h"
 #include "fileitem.h"
 #include <unordered_map>
+#include <unordered_set>
 
 // #define USEDUPEFILTER
 
@@ -33,7 +34,6 @@ typedef deque<tPatchEntry>::const_iterator tPListConstIt;
 
 void DelTree(const string &what);
 
-
 class tCacheOperation :
 	public IFileHandler,
 	public tSpecOpDetachable
@@ -43,9 +43,8 @@ public:
 	tCacheOperation(const tSpecialRequest::tRunParms& parms);
 	virtual ~tCacheOperation();
 
-protected:
 	enum enumMetaType
-		: uint_least8_t
+		: uint8_t
 		{
 			EIDX_UNSUPPORTED = 0,
 		EIDX_RELEASE,
@@ -61,6 +60,7 @@ protected:
 		EIDX_MD5DILIST,
 		EIDX_SHA256DILIST
 	};
+protected:
 	struct tIfileAttribs
 	{
 		bool vfile_ondisk:1, uptodate:1, parseignore:1, hideDlErrors:1,
@@ -84,8 +84,6 @@ protected:
 	const tIfileAttribs &GetFlags(cmstring &sPathRel) const;
 	tIfileAttribs &SetFlags(cmstring &sPathRel);
 
-	void SetCommonUserFlags(cmstring &cmd);
-
 	void UpdateVolatileFiles();
 	void _BusyDisplayLogs();
 	void _Usermsg(mstring m);
@@ -106,7 +104,7 @@ protected:
 	 *   
 	 * */
 
-	void ProcessSeenMetaFiles(ifileprocessor &pkgHandler);
+	void ProcessSeenMetaFiles(std::function<void(tRemoteFileInfo)> pkgHandler);
 
 	void StartDlder();
 
@@ -121,8 +119,8 @@ protected:
 			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0);
 #define DL_HINT_GUESS_REPLACEMENT 0x1
 
-	// internal helper variables
-	bool m_bErrAbort, m_bVerbose, m_bForceDownload;
+	// common helper variables
+	bool m_bErrAbort, m_bVerbose, m_bForceDownload, m_bSkipIxUpdate = false;
 	bool m_bScanInternals, m_bByPath, m_bByChecksum, m_bSkipHeaderChecks;
 	bool m_bTruncateDamaged;
 	int m_nErrorCount;
@@ -133,8 +131,11 @@ protected:
 
 	void TellCount(unsigned nCount, off_t nSize);
 
-	bool ParseAndProcessMetaFile(ifileprocessor &output_receiver,
-			const mstring &sPath, enumMetaType idxType);
+	/**
+	 * @param collectAllCsTypes If set, will send callbacks for all identified checksum types. In addition, will set the value of Acquire-By-Hash to the pointed boolean.
+	 */
+	bool ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> output_receiver,
+			const mstring &sPath, enumMetaType idxType, bool byHashMode = false);
 
 	std::unordered_map<mstring,bool> m_forceKeepInTrash;
 
@@ -169,6 +170,10 @@ protected:
 		return mstring(buf, snprintf(buf, sizeof(buf), " name=\"kf\" value=\"%x\"", id));
 	}
 
+	// stuff in those directories must be managed by some top-level index files
+	// whitelist patterns do not apply there!
+	tStrSet m_managedDirs;
+
 private:
 	tContId2eqClass m_eqClasses;
 
@@ -180,12 +185,28 @@ private:
 	bool PatchFile(cmstring &srcRel, cmstring &patchIdxLocation,
 			tPListConstIt pit, tPListConstIt itEnd,
 			const tFingerprint *verifData);
-	dlcon *m_pDlcon;
+	dlcon *m_pDlcon = nullptr;
 
+protected:
+	bool CalculateBaseDirectories(cmstring& sPath, enumMetaType idxType, mstring& sBaseDir, mstring& sBasePkgDir);
 	bool IsDeprecatedArchFile(cmstring &sFilePathRel);
-
+	/**
+	 * @brief Process key:val type files, handling multiline values as lists
+	 * @param ixInflatedChecksum Pass through as struct attribute to ret callback
+	 * @param sExtListFilter If set to non-empty, will only extract value(s) for that key
+	 * @param pReportAllReturnHashMark If set, will write back the value of Acquire-By-Hash==yes check to the pointed bool, and also trigger multiple callbacks, i.e. for each checksum type
+	 */
+	bool ParseGenericRfc822Index(filereader& reader, std::function<void(const tRemoteFileInfo&)> ret,
+			cmstring& sCurFilesReferenceDirRel,
+			cmstring& sPkgBaseDir,
+			enumMetaType ixType, CSTYPES csType, bool ixInflatedChecksum,
+			cmstring& sExtListFilter,
+			bool byHashMode);
 	const tIfileAttribs attr_dummy_pure = tIfileAttribs();
 	tIfileAttribs attr_dummy;
+
+	std::unordered_set<std::string> m_oldReleaseFiles, m_oldHashedFiles;
+	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry);
 };
 
 

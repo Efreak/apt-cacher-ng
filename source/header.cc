@@ -274,7 +274,7 @@ void header::set(eHeadPos i, const char *val, size_t len)
 	}
 }
 
-void header::set(eHeadPos key, cmstring &value)
+void header::set(eHeadPos key, const mstring &value)
 {
 	string::size_type l=value.size()+1;
 	h[key]=(char*) realloc(h[key], l);

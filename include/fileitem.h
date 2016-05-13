@@ -10,11 +10,11 @@
 #include <unordered_map>
 
 class fileitem;
-typedef SHARED_PTR<fileitem> tFileItemPtr;
+typedef std::shared_ptr<fileitem> tFileItemPtr;
 typedef std::unordered_multimap<mstring, tFileItemPtr> tFiGlobMap;
 
 //! Base class containing all required data and methods for communication with the download sources
-class fileitem : public condition
+class fileitem : public base_with_condition
 {
 public:
 
@@ -117,6 +117,8 @@ public:
 	{
 		return acfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
 	}
+protected:
+	int MoveRelease2Sidestore();
 };
 
 #ifndef MINIBUILD
@@ -128,7 +130,7 @@ class fileItemMgmt
 public:
 
 	// public constructor wrapper, get a unique object from the map or a new one
-	bool PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore);
+	bool PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore);
 
 	// related to GetRegisteredFileItem but used for registration of custom file item
 	// implementations created elsewhere (which still need to obey regular work flow)

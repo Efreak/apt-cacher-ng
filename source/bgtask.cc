@@ -27,8 +27,9 @@ using namespace std;
 "</style></head><body>"
 #define LOG_DECO_END "</body></html>"
 
-bool bSigTaskAbort=false;
-pthread_mutex_t abortMx=PTHREAD_MUTEX_INITIALIZER;
+bool tSpecOpDetachable::g_sigTaskAbort=false;
+acmutex tSpecOpDetachable::g_abortMx;
+
 
 tSpecOpDetachable::~tSpecOpDetachable()
 {
@@ -66,8 +67,8 @@ void tSpecOpDetachable::Run()
 
 	if (m_parms.cmd.find("&sigabort")!=stmiss)
 	{
-		lockguard g(&abortMx);
-		bSigTaskAbort=true;
+		lockguard g(&g_abortMx);
+		g_sigTaskAbort=true;
 		tStrPos nQuest=m_parms.cmd.find("?");
 		if(nQuest!=stmiss)
 		{
@@ -108,7 +109,7 @@ void tSpecOpDetachable::Run()
 	tProgTrackPtr pTracked;
 
 	{ // this is locked just to make sure that only one can register as master
-		lockguard guard(abortMx);
+		lockguard guard(&g_abortMx);
 		pTracked=g_pTracker.lock();
 		if(!pTracked) // ok, not running yet -> become the log source then
 		{
@@ -146,7 +147,7 @@ void tSpecOpDetachable::Run()
 
 		for(;;)
 		{
-			lockguard g(*pTracked);
+			lockuniq g(*pTracked);
 
 			if(!pTracked->id && pTracked->nEndSize==off_t(-1))
 				break; // error? source is gone but end mark not set?
@@ -182,7 +183,7 @@ void tSpecOpDetachable::Run()
 			/* when file is truncated (disk full), the end size might be unreachable
 			 * -> detect the time out
 			 */
-			if(pTracked->wait_until(GetTime()+33, 1))
+			if(pTracked->wait_for(g, 33, 1))
 				break;
 		}
 		checkforceclose(fd);
@@ -194,8 +195,8 @@ void tSpecOpDetachable::Run()
 			 * This is the worker part
 			 *****************************************************/
 			{
-				lockguard g(&abortMx);
-				bSigTaskAbort=false;
+				lockguard g(&g_abortMx);
+				g_sigTaskAbort=false;
 			}
 
 			SendFmt << "Maintenance task <b>" << GetTaskName()
@@ -260,8 +261,8 @@ void tSpecOpDetachable::tProgressTracker::SetEnd(off_t endSize)
 
 bool tSpecOpDetachable::CheckStopSignal()
 {
-	lockguard g(&abortMx);
-	return bSigTaskAbort;
+	lockguard g(&g_abortMx);
+	return g_sigTaskAbort;
 }
 
 void tSpecOpDetachable::DumpLog(time_t id)
@@ -292,7 +293,7 @@ void tSpecOpDetachable::SendChunkLocalOnly(const char *data, size_t len)
 
 time_t tSpecOpDetachable::GetTaskId()
 {
-	lockguard guard(&abortMx);
+	lockguard guard(&g_abortMx);
 	tProgTrackPtr pTracked = g_pTracker.lock();
 	return pTracked ? pTracked->id : 0;
 }

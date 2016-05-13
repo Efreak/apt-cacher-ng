@@ -21,6 +21,7 @@
 #include <regex.h>
 
 #include <map>
+#include <unordered_map>
 #include <string>
 #include <iostream>
 #include <algorithm>
@@ -55,6 +56,15 @@ tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
 {
 	m_szDecoFile="maint.html";
 	m_gMaintTimeNow=GetTime();
+
+	m_bErrAbort=(parms.cmd.find("abortOnErrors=aOe")!=stmiss);
+	m_bByChecksum=(parms.cmd.find("byChecksum")!=stmiss);
+	m_bByPath=(StrHas(parms.cmd, "byPath") || m_bByChecksum);
+	m_bVerbose=(parms.cmd.find("beVerbose")!=stmiss);
+	m_bForceDownload=(parms.cmd.find("forceRedownload")!=stmiss);
+	m_bSkipHeaderChecks=(parms.cmd.find("skipHeadChecks")!=stmiss);
+	m_bTruncateDamaged=(parms.cmd.find("truncNow")!=stmiss);
+	m_bSkipIxUpdate=(m_parms.cmd.find("skipIxUp=si")!=stmiss);
 
 }
 
@@ -94,6 +104,13 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 
 		return true;
     }
+
+	if(scontains(sPathRel, "/by-hash/"))
+		m_oldHashedFiles.emplace(sPathRel);
+	if(scontains(sPathRel, "Release.sidestore/"))
+		m_oldReleaseFiles.emplace(sPathRel);
+
+
 	return false;
 }
 
@@ -207,7 +224,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if(!pFi)
 	{
-		fiaccess.PrepageRegisteredFileItemWithStorage(sFilePathRel, false);
+		fiaccess.PrepareRegisteredFileItemWithStorage(sFilePathRel, false);
 		pFi=fiaccess.get();
 	}
 	if (!pFi)
@@ -226,6 +243,12 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	}
 	else
 	{
+		if(bIsVolatileFile && m_bSkipIxUpdate)
+		{
+			SendFmt << "Checking " << sFilePathRel << "... (skipped, as requested)<br>\n";
+			return true;
+		}
+
 		fileitem::FiStatus initState = pFi->Setup(bIsVolatileFile);
 		if (initState > fileitem::FIST_COMPLETE)
 			GOTOREPMSG(pFi->GetHeader().frontLine);
@@ -465,6 +488,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		{
 			// another special case, slightly ugly :-(
 			// this is explicit hardcoded repair code
+			// it switches to a version with better compression silently
 			static struct {
 				string fromEnd, toEnd, extraCheck;
 			} fixmap[] =
@@ -947,7 +971,7 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 	fileItemMgmt src;
 	if(GetFlags(donorRel).uptodate)
 	{
-		if(!src.PrepageRegisteredFileItemWithStorage(donorRel, false))
+		if(!src.PrepareRegisteredFileItemWithStorage(donorRel, false))
 			return false;
 
 		src.get()->Setup(false);
@@ -1137,59 +1161,64 @@ void tCacheOperation::UpdateVolatileFiles()
 
 	MTLOGDEBUG("<br><br><b>STARTING ULTIMATE INTELLIGENCE</b><br><br>");
 
+	SendChunk("<b>Checking implicitly referenced files...</b><br>");
+	for(const auto& snap: m_oldReleaseFiles)
+	{
+
+		ParseAndProcessMetaFile([this, &snap](const tRemoteFileInfo &entry)
+		{
+
+			auto hexname(BytesToHexString(entry.fpr.csum, GetCSTypeLen(entry.fpr.csType)));
+			// ok, getting all hash versions...
+				if(_checkSolidHashOnDisk(hexname, entry))
+				{
+					auto wanted = CACHE_BASE + entry.sDirectory + entry.sFileName;
+#ifdef DEBUG
+				string solidPath = CACHE_BASE + entry.sDirectory + "by-hash/" +
+				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+				SendFmt << solidPath << " was " << wanted << "<br>\n";
+#endif
+				if(0 != access(wanted.c_str(), F_OK))
+				{
+
+					SendFmt << "Touching untracked file: " << wanted << "<br>\n";
+					mkbasedir(wanted);
+					int fd = open(wanted.c_str(), O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK, acfg::fileperms);
+					checkforceclose(fd);
+				}
+			}
+
+			//fmt << entry.sDirectory << entry.s
+		}, snap, enumMetaType::EIDX_RELEASE, true);
+
+	}
+
 	/*
 	 * Update all Release files
 	 *
 	 */
-	class releaseStuffReceiver : public ifileprocessor
+
+	// make sure to have a copy not touched even m_metaFilesRel is modified later
+	// and without having Release/InRelease doppelgangers
+	tStrMap releaseFilesOnly;
+	// foo/Release comes after foo/InRelease and emplace() helps...
+	for (auto& iref : m_metaFilesRel)
 	{
-		public:
-			tFile2Cid m_file2cid;
-			virtual void HandlePkgEntry(const tRemoteFileInfo &entry)
-			{
-				if(entry.bInflateForCs) // XXX: no usecase yet, ignore
-					return;
-
-				tStrPos compos=FindCompSfxPos(entry.sFileName);
-
-				// skip some obvious junk and its gzip version
-				if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
-					return;
-
-				auto& cid = m_file2cid[entry.sDirectory+entry.sFileName];
-				cid.first=entry.fpr;
-
-				tStrPos pos=entry.sDirectory.rfind(dis);
-				// if looking like Debian archive, keep just the part after binary-...
-				if(stmiss != pos)
-					cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
-				else
-					cid.second=entry.sFileName;
-			}
-	};
-
-	// little helper to pick only one of Release OR InRelease from the same directory
-	tStrMap releaseFilesUniq;
-	for (auto sfx :
-	{ inRelKey, relKey })
-	{
-		for (auto& iref : m_metaFilesRel)
-		{
-			auto& sPathRel = iref.first;
-			if (endsWith(sPathRel, sfx))
-			{
-				auto pos = sPathRel.rfind('/');
-				auto& fname = releaseFilesUniq[sPathRel.substr(0, pos)];
-				if (fname.empty())
-					fname = sPathRel.substr(pos);
-			}
-		}
+		string::size_type sfxLen = 0;
+		if(endsWith(iref.first, inRelKey))
+			sfxLen = 8;
+		else if(endsWith(iref.first, relKey))
+			sfxLen=10;
+		else
+			continue;
+		EMPLACE_PAIR(releaseFilesOnly, iref.first.substr(0, iref.first.size()-sfxLen),
+				iref.first);
 	}
 
 	// iterate over initial *Releases files
-	for(auto& relRef : releaseFilesUniq)
+	for(auto& relKV : releaseFilesOnly)
 	{
-		cmstring sPathRel=relRef.first+relRef.second;
+		const auto& sPathRel=relKV.second;
 
 		if(!Download(sPathRel, true,
 				m_metaFilesRel[sPathRel].hideDlErrors ? eMsgHideErrors : eMsgShow,
@@ -1207,14 +1236,38 @@ void tCacheOperation::UpdateVolatileFiles()
 #ifdef DEBUG
 		SendFmt << "Start parsing " << sPathRel << "<br>";
 #endif
-		releaseStuffReceiver recvr;
-		ParseAndProcessMetaFile(recvr, sPathRel, EIDX_RELEASE);
 
-		if(recvr.m_file2cid.empty())
+		tFile2Cid file2cid;
+		auto recvInfo = [&file2cid](const tRemoteFileInfo &entry)
+					{
+						if(entry.bInflateForCs) // XXX: no usecase yet, ignore
+							return;
+
+						tStrPos compos=FindCompSfxPos(entry.sFileName);
+
+						// skip some obvious junk and its gzip version
+						if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
+							return;
+
+						auto& cid = file2cid[entry.sDirectory+entry.sFileName];
+						cid.first=entry.fpr;
+
+						tStrPos pos=entry.sDirectory.rfind(dis);
+						// if looking like Debian archive, keep just the part after binary-...
+						if(stmiss != pos)
+							cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
+						else
+							cid.second=entry.sFileName;
+					};
+
+		ParseAndProcessMetaFile(std::function<void (const tRemoteFileInfo &)>(recvInfo),
+				sPathRel, EIDX_RELEASE);
+
+		if(file2cid.empty())
 			continue;
 
 		// first, look around for for .diff/Index files on disk and prepare their processing
-		for(const auto cid : recvr.m_file2cid)
+		for(const auto cid : file2cid)
 		{
 			// not diff index or not in cache?
 			if(!endsWith(cid.first, diffIdxSfx) || !GetFlags(cid.first).vfile_ondisk)
@@ -1230,7 +1283,7 @@ void tCacheOperation::UpdateVolatileFiles()
 			// ok, not found, enforce dload of any existing patch base file?
 			for(auto& suf : compSuffixesAndEmptyByRatio)
 			{
-				if(ContHas(recvr.m_file2cid, (sBase+suf)))
+				if(ContHas(file2cid, (sBase+suf)))
 				{
 					SetFlags(sBase+suf).guessed=true;
 					LOG("enforcing dl: " << (sBase+suf));
@@ -1243,15 +1296,15 @@ has_base:
 		dbgState();
 
 		// now refine all extracted information and store it in eqClasses for later processing
-		for(auto if2cid : recvr.m_file2cid)
+		for(auto if2cid : file2cid)
 		{
 			string sNativeName=if2cid.first.substr(0, FindCompSfxPos(if2cid.first));
 			tContId sCandId=if2cid.second;
 			// find a better one which serves as the flag content id for the whole group
 			for(auto& ps : compSuffixesAndEmptyByLikelyhood)
 			{
-				auto it2=recvr.m_file2cid.find(sNativeName+ps);
-				if(it2 != recvr.m_file2cid.end())
+				auto it2=file2cid.find(sNativeName+ps);
+				if(it2 != file2cid.end())
 					sCandId=it2->second;
 			}
 			tClassDesc &tgt=eqClasses[sCandId];
@@ -1264,8 +1317,8 @@ has_base:
 			// also the index file id
 			if(tgt.diffIdxId.second.empty()) // XXX if there is no index at all, avoid repeated lookups somehow?
 			{
-				auto j = recvr.m_file2cid.find(sNativeName+diffIdxSfx);
-				if(j!=recvr.m_file2cid.end())
+				auto j = file2cid.find(sNativeName+diffIdxSfx);
+				if(j!=file2cid.end())
 					tgt.diffIdxId=j->second;
 			}
 
@@ -1311,22 +1364,31 @@ has_base:
 	/*
 	 * OK, the equiv-classes map is built, now post-process the knowledge
 	 *
-	 * First, strip the list down to those which are at least partially present in the cache
+	 * First, strip the list down to those which are at least partially present in the cache.
+	 * And keep track of some folders for expiration.
 	 */
-
 	for(auto it=eqClasses.begin(); it!=eqClasses.end();)
 	{
+		unsigned found = 0;
 		for(auto& path: it->second.paths)
 		{
 			if(!GetFlags(path).vfile_ondisk)
 				continue;
-			goto strip_next_class;
+			found++;
+			auto pos = path.rfind('/');
+			if(pos!=stmiss)
+				m_managedDirs.insert(path.substr(0, pos+1));
 		}
-		eqClasses.erase(it++);
-		continue;
-strip_next_class:
-		++it;
+		if(found)
+			++it;
+		else
+			eqClasses.erase(it++);
 	}
+#ifdef DEBUGIDX
+	SendFmt << "Folders with checked stuff:<br>";
+	for(auto s : m_managedDirs)
+		SendFmt << s << "<br>";
+#endif
 	ERRMSGABORT;
 	dbgDump("Refined (1):", 1);
 	dbgState();
@@ -1641,7 +1703,7 @@ void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass::iterator &eqClass
 #endif
 }
 
-tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(cmstring &sPath)
+tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(const mstring& sPath)
 {
 	tStrPos pos = sPath.rfind(SZPATHSEP);
 	string sPureIfileName = (stmiss == pos) ? sPath : sPath.substr(pos + 1);
@@ -1684,8 +1746,8 @@ tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(cmstring &sP
 	return EIDX_UNSUPPORTED;
 }
 
-bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::string &sPath,
-		enumMetaType idxType)
+bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> ret, const std::string &sPath,
+		enumMetaType idxType, bool byHashMode)
 {
 
 	LOGSTART("expiration::ParseAndProcessMetaFile");
@@ -1696,30 +1758,12 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 
 	m_processedIfile = sPath;
 
-	// pre calc relative base folders for later
-	string sCurFilesReferenceDirRel(SZPATHSEP);
-	// for some file types that may differ, e.g. if the path looks like a Debian mirror path
-	string sPkgBaseDir = sCurFilesReferenceDirRel;
-	tStrPos pos = sPath.rfind(CPATHSEP);
-	if(stmiss!=pos)
-	{
-		sCurFilesReferenceDirRel.assign(sPath, 0, pos+1);
-
-		// does this look like a Debian archive structure? i.e. paths to other files have a base
-		// directory starting in dists/?
-		// The assumption doesn't however apply to the d-i checksum
-		// lists, those refer to themselves only.
-		//
-		// similar considerations for Cygwin setup
-
-		if(idxType != EIDX_MD5DILIST && stmiss!=(pos=sCurFilesReferenceDirRel.rfind("/dists/")))
-			sPkgBaseDir = sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+1);
-		else if(idxType == EIDX_CYGSETUP && stmiss!=(pos=sCurFilesReferenceDirRel.rfind("/cygwin/")))
-			sPkgBaseDir = sPkgBaseDir.assign(sCurFilesReferenceDirRel, 0, pos+8);
-		else
-			sPkgBaseDir=sCurFilesReferenceDirRel;
-	}
-	else
+	// full path of the directory of the processed index file with trailing slash
+	string sBaseDir;
+	// for some file types the main directory that parsed entries refer to
+	// may differ, for some Debian index files for example
+	string sPkgBaseDir;
+	if(!CalculateBaseDirectories(sPath, idxType, sBaseDir, sPkgBaseDir))
 	{
 		m_nErrorCount++;
 		SendFmt << "Unexpected index file without subdir found: " << sPath;
@@ -1745,12 +1789,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 	info.SetInvalid();
 	tStrVec vsMetrics;
 	string sStartMark;
-	bool bUse(false);
 
-	enumMetaType origIdxType=idxType;
-
-
-	REDO_AS_TYPE:
 	switch(idxType)
 	{
 	case EIDX_PACKAGES:
@@ -1766,7 +1805,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 			if (sLine.empty())
 			{
 				if(info.IsUsable())
-					ret.HandlePkgEntry(info);
+					ret(info);
 				info.SetInvalid();
 
 				if(CheckStopSignal())
@@ -1813,7 +1852,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 				if (nStep >= 2)
 				{
 					if (info.IsUsable())
-						ret.HandlePkgEntry(info);
+						ret(info);
 					info.SetInvalid();
 					nStep = 0;
 
@@ -1833,7 +1872,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					switch (typehint)
 					{
 					case _fname:
-						info.sDirectory = sCurFilesReferenceDirRel;
+						info.sDirectory = sBaseDir;
 						info.sFileName = sLine;
 						nStep = 0;
 						break;
@@ -1874,7 +1913,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					&& split.Next() && info.SetSize(split.remainder())
 					&& split.Next() && info.fpr.SetCs(split))
 			{
-				ret.HandlePkgEntry(info);
+				ret(info);
 			}
 			info.SetInvalid();
 		}
@@ -1894,8 +1933,8 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					continue;
 				LOG("index basename: " << tok);
 				info.sFileName = tok;
-				info.sDirectory = sCurFilesReferenceDirRel;
-				ret.HandlePkgEntry(info);
+				info.sDirectory = sBaseDir;
+				ret(info);
 				info.SetInvalid();
 			}
 		}
@@ -1917,8 +1956,8 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 				{
 					LOG("RPM basename: " << tok);
 					info.sFileName = tok;
-					info.sDirectory = sCurFilesReferenceDirRel;
-					ret.HandlePkgEntry(info);
+					info.sDirectory = sBaseDir;
+					ret(info);
 					info.SetInvalid();
 				}
 			}
@@ -1939,9 +1978,9 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					idxType == EIDX_MD5DILIST ? CSTYPE_MD5 : CSTYPE_SHA256)
 					&& split.Next() && (info.sFileName = split).size()>0)
 			{
-				info.sDirectory = sCurFilesReferenceDirRel;
+				info.sDirectory = sBaseDir;
 
-				pos=info.sFileName.find_first_not_of("./");
+				auto pos=info.sFileName.find_first_not_of("./");
 				if(pos!=stmiss)
 					info.sFileName.erase(0, pos);
 
@@ -1951,115 +1990,23 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					info.sDirectory += info.sFileName.substr(0, pos+1);
 					info.sFileName.erase(0, pos+1);
 				}
-				ret.HandlePkgEntry(info);
+				ret(info);
 				info.SetInvalid();
 			}
 		}
 		break;
 	case EIDX_DIFFIDX:
-		info.fpr.csType = CSTYPE_SHA1;
-		info.bInflateForCs = true;
-		sStartMark = "SHA1-Patches:";
-		idxType = EIDX_RFC822WITHLISTS;
-		goto REDO_AS_TYPE;
-
+		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_DIFFIDX, CSTYPES::CSTYPE_SHA1, true, "SHA1-Patches", byHashMode);
 	case EIDX_SOURCES:
-		info.fpr.csType = CSTYPE_MD5;
-		sStartMark="Files:";
-		idxType = EIDX_RFC822WITHLISTS;
-		goto REDO_AS_TYPE;
-
+		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_SOURCES, CSTYPES::CSTYPE_MD5, false, "Files", byHashMode);
 	case EIDX_TRANSIDX:
+		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_TRANSIDX, CSTYPES::CSTYPE_SHA1, false, "SHA1", byHashMode);
 	case EIDX_RELEASE:
-		info.fpr.csType = CSTYPE_SHA1;
-		sStartMark="SHA1:";
-		// parser follows
-		//no break
-	case EIDX_RFC822WITHLISTS:
-		// common info object does not help here because there are many entries, and directory
-		// could appear after the list :-(
-	{
-		// template for the data set PLUS try-its-gzipped-version flag
-		tStrDeq fileList;
-		mstring sDirHeader;
-
-		UrlUnescape(sPkgBaseDir);
-
-		while(reader.GetOneLine(sLine))
-		{
-			if(startsWith(sLine, sStartMark))
-				bUse=true;
-			else if(!startsWithSz(sLine, " ")) // list header block ended for sure
-				bUse = false;
-
-			trimBack(sLine);
-
-			if(startsWithSz(sLine, "Directory:"))
-			{
-				trimBack(sLine);
-				tStrPos pos=sLine.find_first_not_of(SPACECHARS, 10);
-				if(pos!=stmiss)
-					sDirHeader=sLine.substr(pos)+SZPATHSEP;
-			}
-			else if (bUse)
-				fileList.emplace_back(sLine);
-			else if(sLine.empty()) // ok, time to commit the list
-			{
-				for (auto& fline : fileList)
-				{
-					info.sFileName.clear();
-					// ok, read "checksum size filename" into info and check the word count
-					tSplitWalk split(&fline);
-					if (!split.Next() || !info.fpr.SetCs(split, info.fpr.csType) || !split.Next())
-						continue;
-					val = split;
-					info.fpr.size = atoofft(val.c_str(), -2);
-					if (info.fpr.size < 0 || !split.Next())
-						continue;
-					UrlUnescapeAppend(split, info.sFileName);
-
-					switch (origIdxType)
-					{
-					case EIDX_SOURCES:
-						info.sDirectory = sPkgBaseDir + sDirHeader;
-						ret.HandlePkgEntry(info);
-						break;
-					case EIDX_TRANSIDX: // csum refers to the files as-is
-						info.sDirectory = sCurFilesReferenceDirRel + sDirHeader;
-						ret.HandlePkgEntry(info);
-						break;
-					case EIDX_DIFFIDX:
-						info.sDirectory = sCurFilesReferenceDirRel + sDirHeader;
-						ret.HandlePkgEntry(info);
-						info.sFileName += ".gz";
-						ret.HandlePkgEntry(info);
-						break;
-					case EIDX_RELEASE:
-						info.sDirectory = sCurFilesReferenceDirRel + sDirHeader;
-						// usually has subfolders, move into directory part
-						pos = info.sFileName.rfind(SZPATHSEPUNIX);
-						if (stmiss != pos)
-						{
-							info.sDirectory += info.sFileName.substr(0, pos + 1);
-							info.sFileName.erase(0, pos + 1);
-						}
-						ret.HandlePkgEntry(info);
-						break;
-					default:
-						ASSERT(!"Originally determined type cannot reach this case!");
-						break;
-					}
-				}
-				fileList.clear();
-			}
-
-			if(CheckStopSignal())
-				return true;
-
-		}
-	}
-	break;
-
+		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_RELEASE, CSTYPES::CSTYPE_SHA1, false, "SHA1", byHashMode);
 	default:
 		SendChunk("<span class=\"WARNING\">"
 				"WARNING: unable to read this file (unsupported format)</span>\n<br>\n");
@@ -2068,7 +2015,176 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 	return reader.CheckGoodState(false);
 }
 
-void tCacheOperation::ProcessSeenMetaFiles(ifileprocessor &pkgHandler)
+bool tCacheOperation::CalculateBaseDirectories(cmstring& sPath, enumMetaType idxType, mstring& sBaseDir, mstring& sPkgBaseDir)
+{
+
+	// full path of the directory of the processed index file with trailing slash
+	sBaseDir.assign(SZPATHSEP);
+	// for some file types the main directory that parsed entries refer to
+	// may differ, for some Debian index files for example
+	sPkgBaseDir.assign(sBaseDir);
+
+	tStrPos pos = sPath.rfind(CPATHSEP);
+	if(stmiss==pos)
+		return false;
+	sBaseDir.assign(sPath, 0, pos + 1);
+
+	// does this look like a Debian archive structure? i.e. paths to other files have a base
+	// directory starting in dists/?
+	// The assumption doesn't however apply to the d-i checksum
+	// lists, those refer to themselves only.
+	//
+	// similar considerations for Cygwin setup
+
+	if (idxType != EIDX_MD5DILIST && idxType != EIDX_SHA256DILIST && stmiss != (pos =
+			sBaseDir.rfind("/dists/")))
+		sPkgBaseDir = sPkgBaseDir.assign(sBaseDir, 0, pos + 1);
+	else if (idxType == EIDX_CYGSETUP && stmiss != (pos = sBaseDir.rfind("/cygwin/")))
+		sPkgBaseDir = sPkgBaseDir.assign(sBaseDir, 0, pos + 8);
+	else
+		sPkgBaseDir = sBaseDir;
+
+
+	if(idxType == EIDX_RELEASE)
+	{
+		StrSubst(sBaseDir, "/InRelease.sidestore", "", 0);
+		StrSubst(sBaseDir, "/Release.sidestore", "", 0);
+	}
+
+
+	return true;
+}
+
+bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
+		std::function<void(const tRemoteFileInfo&)> ret, cmstring& sBaseDir, cmstring& sPkgBaseDirConst,
+		enumMetaType origIdxType, CSTYPES csType, bool ixInflatedChecksum,
+		cmstring& sExtListFilter, bool byHashMode)
+{
+	// beam the whole file into our model
+	map< string,deque<string> > contents;
+	{
+		string sLine, key, val, lastKey;
+		deque<string> *pLastVal(nullptr);
+		while (reader.GetOneLine(sLine))
+		{
+			if(sLine.empty())
+				continue;
+			if(isspace( (unsigned) sLine[0]))
+			{
+				if(pLastVal)
+				{
+					trimFront(sLine);
+					pLastVal->push_back(sLine);
+				}
+			}
+			else if(ParseKeyValLine(sLine, key, val))
+			{
+				if(!sExtListFilter.empty() || sExtListFilter == key) // so use it
+				{
+					auto ins=contents.emplace(key, deque<string> {val});
+					lastKey = key;
+					pLastVal = & ins.first->second;
+				}
+				else
+					pLastVal = nullptr;
+			}
+		}
+	}
+	mstring sSubDir;
+	auto it = contents.find("Directory");
+	if (it != contents.end() && !it->second.empty())
+	{
+		sSubDir = it->second.front();
+		trimBack(sSubDir);
+		sSubDir += sPathSep;
+	}
+	if(byHashMode)
+	{
+		it = contents.find("Acquire-By-Hash");
+		if(contents.end() == it || it->second.empty() || it->second.front() != "yes")
+			return true;
+	}
+
+	tRemoteFileInfo info;
+	info.SetInvalid();
+	info.bInflateForCs = ixInflatedChecksum;
+	info.fpr.csType = csType;
+
+	mstring sPkgBaseDir;
+	UrlUnescapeAppend(sPkgBaseDirConst, sPkgBaseDir);
+
+	auto processList = [this, &ret, &info, &sSubDir, &sBaseDir,
+						&sPkgBaseDir, &origIdxType](deque<string> fileList) -> void
+			{
+		uint32_t checkFilter(0); // don't do costly locking for every single line :-(
+		for (auto& fline: fileList)
+		{
+			if(!(checkFilter++ & 0xff) && CheckStopSignal())
+				return;
+
+			info.sFileName.clear();
+			// ok, read "checksum size filename" into info and check the word count
+			tSplitWalk split(&fline);
+			if (!split.Next() || !info.fpr.SetCs(split, info.fpr.csType) || !split.Next())
+				continue;
+			string val(split);
+			info.fpr.size = atoofft((LPCSTR) val.c_str(), -2L);
+			if (info.fpr.size < 0 || !split.Next())
+				continue;
+			UrlUnescapeAppend(split, info.sFileName);
+
+			switch (origIdxType)
+			{
+			case EIDX_SOURCES:
+				info.sDirectory = sPkgBaseDir + sSubDir;
+				ret(info);
+				break;
+			case EIDX_TRANSIDX: // csum refers to the files as-is
+				info.sDirectory = sBaseDir + sSubDir;
+				ret(info);
+				break;
+			case EIDX_DIFFIDX:
+				info.sDirectory = sBaseDir + sSubDir;
+				ret(info);
+				info.sFileName += ".gz";
+				ret(info);
+				break;
+			case EIDX_RELEASE:
+			{
+				info.sDirectory = sBaseDir + sSubDir;
+				// usually has subfolder prefix, split and move into directory part
+				auto pos = info.sFileName.rfind(SZPATHSEPUNIX);
+				if (stmiss != pos)
+				{
+					info.sDirectory += info.sFileName.substr(0, (unsigned long) pos + 1);
+					info.sFileName.erase(0, (unsigned long) pos + 1);
+				}
+				ret(info);
+				break;
+			}
+			default:
+				ASSERT(!"Originally determined type cannot reach this case!");
+				break;
+			}
+		}
+	};
+
+	if(origIdxType == EIDX_RELEASE && byHashMode)
+	{
+		for(auto& cst: { CSTYPES::CSTYPE_MD5, CSTYPES::CSTYPE_SHA1,
+			CSTYPES::CSTYPE_SHA256, CSTYPES::CSTYPE_SHA512 })
+		{
+			info.fpr.csType = cst;
+			processList(contents[GetCsNameReleaseFile(cst)]);
+		}
+	}
+	else
+		processList(contents[sExtListFilter]);
+
+	return reader.CheckGoodState(false);
+}
+
+void tCacheOperation::ProcessSeenMetaFiles(std::function<void(tRemoteFileInfo)> pkgHandler)
 {
 	LOGSTART("expiration::_ParseVolatileFilesAndHandleEntries");
 	for(auto& path2att: m_metaFilesRel)
@@ -2104,7 +2220,8 @@ void tCacheOperation::ProcessSeenMetaFiles(ifileprocessor &pkgHandler)
 
 		SendChunk(string("Parsing metadata in ")+path2att.first+"<br>\n");
 
-		if( ! ParseAndProcessMetaFile(pkgHandler, path2att.first, itype))
+		if( ! ParseAndProcessMetaFile(std::function<void (const tRemoteFileInfo &)>(pkgHandler),
+				path2att.first, itype))
 		{
 			if(!m_metaFilesRel[path2att.first].forgiveDlErrors)
 			{
@@ -2151,17 +2268,6 @@ void tCacheOperation::TellCount(unsigned nCount, off_t nSize)
 	SendFmt << "<br>\n" << nCount <<" package file(s) marked "
 			"for removal in few days. Estimated disk space to be released: "
 			<< offttosH(nSize) << ".<br>\n<br>\n";
-}
-
-void tCacheOperation::SetCommonUserFlags(cmstring &cmd)
-{
-	m_bErrAbort=(cmd.find("abortOnErrors=aOe")!=stmiss);
-	m_bByChecksum=(cmd.find("byChecksum")!=stmiss);
-	m_bByPath=(StrHas(cmd, "byPath") || m_bByChecksum);
-	m_bVerbose=(cmd.find("beVerbose")!=stmiss);
-	m_bForceDownload=(cmd.find("forceRedownload")!=stmiss);
-	m_bSkipHeaderChecks=(cmd.find("skipHeadChecks")!=stmiss);
-	m_bTruncateDamaged=(cmd.find("truncNow")!=stmiss);
 }
 
 void tCacheOperation::PrintStats(cmstring &title)
@@ -2232,19 +2338,17 @@ void tCacheOperation::PrintStats(cmstring &title)
 int parseidx_demo(LPCSTR file)
 {
 
-	class tParser : public tCacheOperation, ifileprocessor
+	class tParser : public tCacheOperation
 	{
 	public:
 		tParser() : tCacheOperation({2, tSpecialRequest::workIMPORT, "doImport="}) {};
 		inline int demo(LPCSTR file)
 		{
-			return !ParseAndProcessMetaFile(*this, file, GuessMetaTypeFromURL(file));
-		}
-		virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override
-		{
-			cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
-					<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
-					<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
+			return !ParseAndProcessMetaFile([](const tRemoteFileInfo &entry) {
+				cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
+									<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
+									<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
+				}, file, GuessMetaTypeFromURL(file));
 		}
 		virtual bool ProcessRegular(const mstring &, const struct stat &) override {return true;}
 		virtual bool ProcessOthers(const mstring &, const struct stat &) override {return true;}
@@ -2266,4 +2370,11 @@ void tCacheOperation::ProgTell()
 				<< (m_nProgIdx>1?"s":"") << "...<br />\n";
 		m_nProgTell*=2;
 	}
+}
+
+bool tCacheOperation::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry)
+{
+	string solidPath = CACHE_BASE + entry.sDirectory + "by-hash/" +
+				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+	return ! ::access(solidPath.c_str(), F_OK);
 }

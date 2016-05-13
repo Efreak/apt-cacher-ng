@@ -83,7 +83,7 @@ public:
 	}
 	virtual bool StoreFileData(const char *data, unsigned int size) override
 	{
-		setLockGuard;
+		lockuniq g(this);
 
 		LOGSTART2("tPassThroughFitem::StoreFileData", "status: " << m_status);
 
@@ -107,7 +107,7 @@ public:
 			m_nConsumable=size;
 			m_nConsumed=0;
 			while(0 == m_nConsumed && m_status <= FIST_COMPLETE)
-				wait();
+				wait(g);
 
 			dbgline;
 			// let the downloader abort?
@@ -123,12 +123,12 @@ public:
 	}
 	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow) override
 	{
-		setLockGuard;
+		lockuniq g(this);
 
 		while(0 == m_nConsumable && m_status<=FIST_COMPLETE
 				&& ! (m_nSizeChecked==0 && m_status==FIST_COMPLETE))
 		{
-			wait();
+			wait(g);
 		}
 		if (m_status >= FIST_DLERROR || !m_pData)
 			return -1;
@@ -151,7 +151,7 @@ public:
 			m_nConsumed+=r;
 			nSendPos+=r;
 		}
-		notify();
+		notifyAll();
 		return r;
 	}
 };
@@ -585,7 +585,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 			m_sFileLoc=theUrl.sHost+theUrl.sPath;
 
 		bForceFreshnessChecks = ( ! acfg::offlinemode && m_type == FILE_VOLATILE);
-		m_pItem.PrepageRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
+		m_pItem.PrepareRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
 
 	}
 	MYCATCH(std::out_of_range&) // better safe...
@@ -730,7 +730,7 @@ job::eJobResult job::SendData(int confd)
 
 	if (m_pItem)
 	{
-		lockguard g(m_pItem.get().get());
+		lockuniq g(m_pItem.get().get());
 		
 		for(;;)
 		{
@@ -770,7 +770,7 @@ job::eJobResult job::SendData(int confd)
 				break;
 			
 			dbgline;
-			m_pItem.get()->wait();
+			m_pItem.get()->wait(g);
 			
 			dbgline;
 		}

@@ -1,3 +1,4 @@
+#if 0 // maybe revive it later
 #include <jsonstats.h>
 
 jsonstats::jsonstats(const tRunParms & parms) : expiration(parms)
@@ -14,7 +15,6 @@ void jsonstats::Run()
 {
 	auto origFD = m_parms.fd;
 	m_parms.fd = -1; // no printing until we say so
-	SetCommonUserFlags(m_parms.cmd);
 	m_bIncompleteIsDamaged=StrHas(m_parms.cmd, "incomAsDamaged");
 	DirectoryWalk(acfg::cachedir, this);
 	CHECKABORT
@@ -47,3 +47,5 @@ void jsonstats::PrintJson()
 void jsonstats::Action()
 {
 }
+
+#endif

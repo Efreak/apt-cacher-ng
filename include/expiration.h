@@ -15,7 +15,7 @@ struct tDiskFileInfo
 	tFingerprint fpr;
 };
 
-class expiration : public tCacheOperation, public ifileprocessor
+class expiration : public tCacheOperation
 {
 public:
 	// XXX: g++ 4.7 is not there yet... using tCacheOperation::tCacheOperation;
@@ -32,9 +32,7 @@ protected:
 	virtual void Action() override;
 	// for FileHandler
 	virtual bool ProcessRegular(const mstring &sPath, const struct stat &) override;
-
-	// for ifileprocessor
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override;
+	void HandlePkgEntry(const tRemoteFileInfo &entry);
 
 	void LoadHints();
 
@@ -48,9 +46,14 @@ protected:
 	void MarkObsolete(cmstring&) override;
 	tStrVec m_killBill;
 
+	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry) override;
+
 private:
 	int m_nPrevFailCount =0;
 	bool CheckAndReportError();
+
+	void HandleDamagedFiles();
+	void ListExpiredFiles();
 };
 
 #endif /*EXPIRATION_H_*/

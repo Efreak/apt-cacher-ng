@@ -1,4 +1,3 @@
-
 //#define LOCAL_DEBUG
 #include "debug.h"
 
@@ -277,10 +276,14 @@ repro: check by path, after a minor distro upgrade
 				rangeIt->second.erase(it++);
 			};
 
-	// needs to match the exact file location.
+	// needs to match the exact file location if requested.
 	// And for "Index" files, they have always to be at a well defined location, this
 	// constraint is also needed to expire deprecated files
-	if(m_bByPath || entry.sFileName == sIndex)
+	// and in general, all kinds of index files shall be checked at the particular location since
+	// there are too many identical names spread between different repositories
+	bool byPath = (m_bByPath || entry.sFileName == sIndex ||
+			rechecks::Match(entry.sDirectory + entry.sFileName, rechecks::FILE_VOLATILE));
+	if(byPath)
 	{
 		// compare full paths (physical vs. remote) with their real paths
 		auto cleanPath(entry.sDirectory);
@@ -416,8 +419,12 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 			}
 			else if (Match(fileGroup.first, FILE_WHITELIST) || Match(sPathRel, FILE_WHITELIST))
 			{
-				LOG("Protected file, not to be removed");
-				continue;
+				// exception is stuff that should have some cover but doesn't
+				if(!ContHas(m_managedDirs, dir_props.first))
+				{
+					LOG("Protected file, not to be removed");
+					continue;
+				}
 			}
 
 			if (dir_props.second.nLostAt<=0) // heh, accidentally added?
@@ -467,72 +474,14 @@ void expiration::Action()
 	}
 	if (m_parms.type==workExList)
 	{
-		LoadPreviousData(true);
-		off_t nSpace(0);
-		unsigned cnt(0);
-		for (auto& i : m_trashFile2dir2Info)
-		{
-			for (auto& j : i.second)
-			{
-				auto rel = (j.first + i.first);
-				auto abspath = SABSPATH(rel);
-				off_t sz = GetFileSize(abspath, -2);
-				if (sz < 0)
-					continue;
-
-				cnt++;
-				SendChunk(rel + "<br>\n");
-				nSpace += sz;
-
-				sz = GetFileSize(abspath + ".head", -2);
-				if (sz >= 0)
-				{
-					nSpace += sz;
-					SendChunk(rel + ".head<br>\n");
-				}
-			}
-		}
-		TellCount(cnt, nSpace);
-
-		mstring delURL(m_parms.cmd);
-		StrSubst(delURL, "justShow", "justRemove");
-		SendFmtRemote << "<a href=\""<<delURL<<"\">Delete all listed files</a> "
-				"(no further confirmation)<br>\n";
+		ListExpiredFiles();
 		return;
 	}
-
 	if(m_parms.type==workExPurgeDamaged || m_parms.type==workExListDamaged || m_parms.type==workExTruncDamaged)
 	{
-		filereader f;
-		if(!f.OpenFile(SABSPATH(FNAME_DAMAGED)))
-		{
-			SendChunk(WITHLEN("List of damaged files not found"));
-			return;
-		}
-		mstring s;
-		while(f.GetOneLine(s))
-		{
-			if(s.empty())
-				continue;
-
-			if(m_parms.type == workExPurgeDamaged)
-			{
-				SendFmt << "Removing " << s << "<br>\n";
-				::unlink(SZABSPATH(s));
-				::unlink(SZABSPATH(s+".head"));
-			}
-			else if(m_parms.type == workExTruncDamaged)
-			{
-				SendFmt << "Truncating " << s << "<br>\n";
-				ignore_value(::truncate(SZABSPATH(s), 0));
-			}
-			else
-				SendFmt << s << "<br>\n";
-		}
+		HandleDamagedFiles();
 		return;
 	}
-
-	SetCommonUserFlags(m_parms.cmd);
 
 	m_bIncompleteIsDamaged=StrHas(m_parms.cmd, "incomAsDamaged");
 	m_bScanVolatileContents=StrHas(m_parms.cmd, "scanVolatile");
@@ -572,7 +521,8 @@ void expiration::Action()
 	m_damageList.open(SZABSPATH(FNAME_DAMAGED), ios::out | ios::trunc);
 
 	SendChunk(WITHLEN("<b>Validating cache contents...</b><br>\n"));
-	ProcessSeenMetaFiles(*this);
+	ProcessSeenMetaFiles([this](const tRemoteFileInfo &e) {
+		HandlePkgEntry(e); });
 
 	if(CheckAndReportError() || CheckStopSignal())
 		goto save_fail_count;
@@ -620,6 +570,73 @@ void expiration::Action()
 		}
 	}
 
+}
+
+void expiration::ListExpiredFiles()
+{
+	LoadPreviousData(true);
+	off_t nSpace(0);
+	unsigned cnt(0);
+	for (auto& i : this->m_trashFile2dir2Info)
+		{
+			for (auto& j : i.second)
+			{
+				auto rel = (j.first + i.first);
+				auto abspath = SABSPATH(rel);
+				off_t sz = GetFileSize(abspath, -2);
+				if (sz < 0)
+					continue;
+
+				cnt++;
+				this->SendChunk(rel + "<br>\n");
+				nSpace += sz;
+
+				sz = GetFileSize(abspath + ".head", -2);
+				if (sz >= 0)
+				{
+					nSpace += sz;
+					this->SendChunk(rel + ".head<br>\n");
+				}
+			}
+		}
+	this->TellCount(cnt, nSpace);
+
+	mstring delURL(this->m_parms.cmd);
+	StrSubst(delURL, "justShow", "justRemove");
+	SendFmtRemote << "<a href=\""<<delURL<<"\">Delete all listed files</a> "
+				"(no further confirmation)<br>\n";
+	return;
+}
+
+void expiration::HandleDamagedFiles()
+{
+	filereader f;
+	if(!f.OpenFile(SABSPATH(FNAME_DAMAGED)))
+		{
+			this->SendChunk(WITHLEN("List of damaged files not found"));
+			return;
+		}
+	mstring s;
+	while(f.GetOneLine(s))
+		{
+			if(s.empty())
+				continue;
+
+			if(this->m_parms.type == workExPurgeDamaged)
+			{
+				SendFmt << "Removing " << s << "<br>\n";
+				unlink(SZABSPATH(s));
+				unlink(SZABSPATH(s+".head"));
+			}
+			else if(this->m_parms.type == workExTruncDamaged)
+			{
+				SendFmt << "Truncating " << s << "<br>\n";
+				ignore_value(truncate(SZABSPATH(s), 0));
+			}
+			else
+				SendFmt << s << "<br>\n";
+		}
+	return;
 }
 
 void expiration::PurgeMaintLogs()
@@ -820,4 +837,9 @@ inline bool expiration::CheckAndReportError()
 void expiration::MarkObsolete(cmstring& sPathRel)
 {
 	m_killBill.emplace_back(sPathRel);
+}
+
+bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo&)
+{
+	return m_trashFile2dir2Info.find(hexname) != m_trashFile2dir2Info.end();
 }
