@@ -113,29 +113,17 @@ void pkgmirror::Action()
 
 	// prepare wildcard matching and collecting
 	tStrSet srcs;
-	class __srcpicker : public ifileprocessor
-	{
-	public:
-		tStrSet *pSrcs;
-		tStrVec matchList;
-		__srcpicker(tStrSet *x) : pSrcs(x)
-		{
-			Tokenize(acfg::mirrorsrcs, SPACECHARS, matchList);
-		};
-		void TryAdd(cmstring &s)
-		{
-			for(const auto& match : matchList)
-				if(0==fnmatch(match.c_str(), s.c_str(), FNM_PATHNAME))
-				{
-					pSrcs->insert(s);
-					break;
-				}
-		}
-		void HandlePkgEntry(const tRemoteFileInfo &entry)
-		{
-			TryAdd(entry.sDirectory+entry.sFileName);
-		}
-	} picker(&srcs);
+	tStrVec matchList;
+	Tokenize(acfg::mirrorsrcs, SPACECHARS, matchList);
+	auto TryAdd = [&matchList, &srcs](cmstring &s)
+			{
+				for(const auto& match : matchList)
+					if(0==fnmatch(match.c_str(), s.c_str(), FNM_PATHNAME))
+					{
+						srcs.emplace(s);
+						break;
+					}
+			};
 
 	mstring sErr;
 
@@ -147,17 +135,19 @@ void pkgmirror::Action()
 		{
 			if(!m_bSkipIxUpdate && !GetFlags((cmstring)path2x.first).uptodate)
 				Download((cmstring)path2x.first, true, eMsgShow);
-			ParseAndProcessMetaFile(picker, (cmstring) path2x.first, EIDX_RELEASE);
+			ParseAndProcessMetaFile([&TryAdd](const tRemoteFileInfo &entry) {
+				TryAdd(entry.sDirectory+entry.sFileName); },
+				(cmstring) path2x.first, EIDX_RELEASE);
 		}
 		else
-			picker.TryAdd((cmstring)path2x.first);
+			TryAdd((cmstring)path2x.first);
 	}
 
 	SendChunk("<b>Identifying more index files in cache...</b><br>");
 	// unless found in release files, get the from the local system
-	for (const auto& match: picker.matchList)
+	for (const auto& match: matchList)
 		for(const auto& path : ExpandFilePattern(CACHE_BASE+match, false))
-			picker.TryAdd(path);
+			TryAdd(path);
 
 	auto delBros = [&srcs](cmstring& mine)
 	{
@@ -233,7 +223,8 @@ void pkgmirror::Action()
 #endif
 			off_t needBefore=(m_totalSize-m_totalHave);
 
-			ParseAndProcessMetaFile(*this, src, GuessMetaTypeFromURL(src));
+			ParseAndProcessMetaFile([this](const tRemoteFileInfo &e) {
+				HandlePkgEntry(e); }, src, GuessMetaTypeFromURL(src));
 
 			SendFmt << src << ": "
 					<< offttosH((m_totalSize-m_totalHave)-needBefore)
@@ -263,7 +254,8 @@ void pkgmirror::Action()
 			if(CheckStopSignal())
 				return;
 			ConfigDelta(src);
-			ParseAndProcessMetaFile(*this, src, GuessMetaTypeFromURL(src));
+			ParseAndProcessMetaFile([this](const tRemoteFileInfo &e) {
+				HandlePkgEntry(e); }, src, GuessMetaTypeFromURL(src));
 		}
 	}
 }

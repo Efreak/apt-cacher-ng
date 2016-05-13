@@ -234,7 +234,8 @@ void pkgimport::Action()
 		return;
 	}
 	
-	ProcessSeenMetaFiles(*this);
+	ProcessSeenMetaFiles([this](const tRemoteFileInfo &e) {
+		HandlePkgEntry(e); });
 
 	{
 		lockguard g(&g_abortMx);

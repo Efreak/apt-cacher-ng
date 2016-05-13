@@ -8,7 +8,7 @@
 #include <cstring>
 #include "csmapping.h"
 
-class pkgimport : public tCacheOperation, ifileprocessor
+class pkgimport : public tCacheOperation
 {
 
 public:
@@ -22,8 +22,8 @@ protected:
 	// FileHandler
 	bool ProcessRegular(const mstring &sPath, const struct stat &) override;
 	//bool ProcessOthers(const mstring &sPath, const struct stat &);
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override;
 	void _LoadKeyCache();
+	void HandlePkgEntry(const tRemoteFileInfo &entry);
 
 private:
 
