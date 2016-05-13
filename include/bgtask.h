@@ -74,15 +74,6 @@ private:
 	static bool g_sigTaskAbort;
 };
 
-struct tRemoteFileInfo;
-// helper to make the code more robust
-class ifileprocessor
-{
-public:
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) = 0;
-	virtual ~ifileprocessor() {};
-};
-
 #ifdef DEBUG
 class tBgTester : public tSpecOpDetachable
 {

@@ -130,7 +130,7 @@ class fileItemMgmt
 public:
 
 	// public constructor wrapper, get a unique object from the map or a new one
-	bool PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore);
+	bool PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore);
 
 	// related to GetRegisteredFileItem but used for registration of custom file item
 	// implementations created elsewhere (which still need to obey regular work flow)

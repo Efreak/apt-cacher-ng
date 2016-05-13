@@ -11,6 +11,7 @@
 #include "bgtask.h"
 #include "fileitem.h"
 #include <unordered_map>
+#include <unordered_set>
 
 // #define USEDUPEFILTER
 
@@ -103,7 +104,7 @@ protected:
 	 *   
 	 * */
 
-	void ProcessSeenMetaFiles(ifileprocessor &pkgHandler);
+	void ProcessSeenMetaFiles(std::function<void(tRemoteFileInfo)> pkgHandler);
 
 	void StartDlder();
 
@@ -133,7 +134,7 @@ protected:
 	/**
 	 * @param collectAllCsTypes If set, will send callbacks for all identified checksum types. In addition, will set the value of Acquire-By-Hash to the pointed boolean.
 	 */
-	bool ParseAndProcessMetaFile(ifileprocessor &output_receiver,
+	bool ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> output_receiver,
 			const mstring &sPath, enumMetaType idxType, bool* pReportAllReturnHashMark = NULL);
 
 	std::unordered_map<mstring,bool> m_forceKeepInTrash;
@@ -195,7 +196,7 @@ protected:
 	 * @param sExtListFilter If set to non-empty, will only extract value(s) for that key
 	 * @param pReportAllReturnHashMark If set, will write back the value of Acquire-By-Hash==yes check to the pointed bool, and also trigger multiple callbacks, i.e. for each checksum type
 	 */
-	bool ParseGenericRfc822Index(filereader& reader, ifileprocessor &ret,
+	bool ParseGenericRfc822Index(filereader& reader, std::function<void(const tRemoteFileInfo&)> ret,
 			cmstring& sCurFilesReferenceDirRel,
 			cmstring& sPkgBaseDir,
 			enumMetaType ixType, CSTYPES csType, bool ixInflatedChecksum,
@@ -203,6 +204,8 @@ protected:
 			bool* pReportAllReturnHashMark);
 	const tIfileAttribs attr_dummy_pure = tIfileAttribs();
 	tIfileAttribs attr_dummy;
+
+	std::unordered_set<std::string> m_oldReleaseFiles;
 };
 
 

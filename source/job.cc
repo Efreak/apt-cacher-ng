@@ -585,7 +585,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 			m_sFileLoc=theUrl.sHost+theUrl.sPath;
 
 		bForceFreshnessChecks = ( ! acfg::offlinemode && m_type == FILE_VOLATILE);
-		m_pItem.PrepageRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
+		m_pItem.PrepareRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
 
 	}
 	MYCATCH(std::out_of_range&) // better safe...

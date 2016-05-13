@@ -122,6 +122,8 @@ inline void trimString(mstring &s, LPCSTR junk=SPACECHARS)
 #define setIfNotEmpty(where, cand) { if(where.empty() && !cand.empty()) where = cand; }
 #define setIfNotEmpty2(where, cand, alt) { if(where.empty()) { if(!cand.empty()) where = cand; else where = alt; } }
 
+#define scontains(h,n) (h.find(n) != std::string::npos)
+
 mstring GetBaseName(cmstring &in);
 mstring GetDirPart(cmstring &in);
 

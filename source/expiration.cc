@@ -521,7 +521,8 @@ void expiration::Action()
 	m_damageList.open(SZABSPATH(FNAME_DAMAGED), ios::out | ios::trunc);
 
 	SendChunk(WITHLEN("<b>Validating cache contents...</b><br>\n"));
-	ProcessSeenMetaFiles(*this);
+	ProcessSeenMetaFiles([this](const tRemoteFileInfo &e) {
+		HandlePkgEntry(e); });
 
 	if(CheckAndReportError() || CheckStopSignal())
 		goto save_fail_count;

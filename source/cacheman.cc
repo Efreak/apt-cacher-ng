@@ -104,6 +104,10 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 
 		return true;
     }
+
+	if(scontains(sPathRel, "/by-hash/"))
+		m_oldReleaseFiles.emplace(sPathRel);
+
 	return false;
 }
 
@@ -217,7 +221,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if(!pFi)
 	{
-		fiaccess.PrepageRegisteredFileItemWithStorage(sFilePathRel, false);
+		fiaccess.PrepareRegisteredFileItemWithStorage(sFilePathRel, false);
 		pFi=fiaccess.get();
 	}
 	if (!pFi)
@@ -964,7 +968,7 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 	fileItemMgmt src;
 	if(GetFlags(donorRel).uptodate)
 	{
-		if(!src.PrepageRegisteredFileItemWithStorage(donorRel, false))
+		if(!src.PrepareRegisteredFileItemWithStorage(donorRel, false))
 			return false;
 
 		src.get()->Setup(false);
@@ -1154,36 +1158,26 @@ void tCacheOperation::UpdateVolatileFiles()
 
 	MTLOGDEBUG("<br><br><b>STARTING ULTIMATE INTELLIGENCE</b><br><br>");
 
+	//SendFmt() << "Creating implicitly referenced files..." << "<br>";
+#if 0
+	for(const auto& snap: m_oldReleaseFiles)
+	{
+		struct snapProcessor : public ifileprocessor
+		{
+			public:
+				tFile2Cid m_file2cid;
+				virtual void HandlePkgEntry(const tRemoteFileInfo &entry)
+				{
+
+				}
+		}
+	}
+#endif
+
 	/*
 	 * Update all Release files
 	 *
 	 */
-	class releaseStuffReceiver : public ifileprocessor
-	{
-		public:
-			tFile2Cid m_file2cid;
-			virtual void HandlePkgEntry(const tRemoteFileInfo &entry)
-			{
-				if(entry.bInflateForCs) // XXX: no usecase yet, ignore
-					return;
-
-				tStrPos compos=FindCompSfxPos(entry.sFileName);
-
-				// skip some obvious junk and its gzip version
-				if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
-					return;
-
-				auto& cid = m_file2cid[entry.sDirectory+entry.sFileName];
-				cid.first=entry.fpr;
-
-				tStrPos pos=entry.sDirectory.rfind(dis);
-				// if looking like Debian archive, keep just the part after binary-...
-				if(stmiss != pos)
-					cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
-				else
-					cid.second=entry.sFileName;
-			}
-	};
 
 	// make sure to have a copy not touched even m_metaFilesRel is modified later
 	// and without having Release/InRelease doppelgangers
@@ -1223,14 +1217,37 @@ void tCacheOperation::UpdateVolatileFiles()
 #ifdef DEBUG
 		SendFmt << "Start parsing " << sPathRel << "<br>";
 #endif
-		releaseStuffReceiver recvr;
-		ParseAndProcessMetaFile(recvr, sPathRel, EIDX_RELEASE);
 
-		if(recvr.m_file2cid.empty())
+		tFile2Cid file2cid;
+		auto recvInfo = [&file2cid](const tRemoteFileInfo &entry)
+					{
+						if(entry.bInflateForCs) // XXX: no usecase yet, ignore
+							return;
+
+						tStrPos compos=FindCompSfxPos(entry.sFileName);
+
+						// skip some obvious junk and its gzip version
+						if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
+							return;
+
+						auto& cid = file2cid[entry.sDirectory+entry.sFileName];
+						cid.first=entry.fpr;
+
+						tStrPos pos=entry.sDirectory.rfind(dis);
+						// if looking like Debian archive, keep just the part after binary-...
+						if(stmiss != pos)
+							cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
+						else
+							cid.second=entry.sFileName;
+					};
+
+		ParseAndProcessMetaFile(recvInfo, sPathRel, EIDX_RELEASE);
+
+		if(file2cid.empty())
 			continue;
 
 		// first, look around for for .diff/Index files on disk and prepare their processing
-		for(const auto cid : recvr.m_file2cid)
+		for(const auto cid : file2cid)
 		{
 			// not diff index or not in cache?
 			if(!endsWith(cid.first, diffIdxSfx) || !GetFlags(cid.first).vfile_ondisk)
@@ -1246,7 +1263,7 @@ void tCacheOperation::UpdateVolatileFiles()
 			// ok, not found, enforce dload of any existing patch base file?
 			for(auto& suf : compSuffixesAndEmptyByRatio)
 			{
-				if(ContHas(recvr.m_file2cid, (sBase+suf)))
+				if(ContHas(file2cid, (sBase+suf)))
 				{
 					SetFlags(sBase+suf).guessed=true;
 					LOG("enforcing dl: " << (sBase+suf));
@@ -1259,15 +1276,15 @@ has_base:
 		dbgState();
 
 		// now refine all extracted information and store it in eqClasses for later processing
-		for(auto if2cid : recvr.m_file2cid)
+		for(auto if2cid : file2cid)
 		{
 			string sNativeName=if2cid.first.substr(0, FindCompSfxPos(if2cid.first));
 			tContId sCandId=if2cid.second;
 			// find a better one which serves as the flag content id for the whole group
 			for(auto& ps : compSuffixesAndEmptyByLikelyhood)
 			{
-				auto it2=recvr.m_file2cid.find(sNativeName+ps);
-				if(it2 != recvr.m_file2cid.end())
+				auto it2=file2cid.find(sNativeName+ps);
+				if(it2 != file2cid.end())
 					sCandId=it2->second;
 			}
 			tClassDesc &tgt=eqClasses[sCandId];
@@ -1280,8 +1297,8 @@ has_base:
 			// also the index file id
 			if(tgt.diffIdxId.second.empty()) // XXX if there is no index at all, avoid repeated lookups somehow?
 			{
-				auto j = recvr.m_file2cid.find(sNativeName+diffIdxSfx);
-				if(j!=recvr.m_file2cid.end())
+				auto j = file2cid.find(sNativeName+diffIdxSfx);
+				if(j!=file2cid.end())
 					tgt.diffIdxId=j->second;
 			}
 
@@ -1709,7 +1726,7 @@ tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(const mstrin
 	return EIDX_UNSUPPORTED;
 }
 
-bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::string &sPath,
+bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> ret, const std::string &sPath,
 		enumMetaType idxType, bool* pReportAllReturnHashMark)
 {
 
@@ -1768,7 +1785,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 			if (sLine.empty())
 			{
 				if(info.IsUsable())
-					ret.HandlePkgEntry(info);
+					ret(info);
 				info.SetInvalid();
 
 				if(CheckStopSignal())
@@ -1815,7 +1832,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 				if (nStep >= 2)
 				{
 					if (info.IsUsable())
-						ret.HandlePkgEntry(info);
+						ret(info);
 					info.SetInvalid();
 					nStep = 0;
 
@@ -1876,7 +1893,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					&& split.Next() && info.SetSize(split.remainder())
 					&& split.Next() && info.fpr.SetCs(split))
 			{
-				ret.HandlePkgEntry(info);
+				ret(info);
 			}
 			info.SetInvalid();
 		}
@@ -1897,7 +1914,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 				LOG("index basename: " << tok);
 				info.sFileName = tok;
 				info.sDirectory = sBaseDir;
-				ret.HandlePkgEntry(info);
+				ret(info);
 				info.SetInvalid();
 			}
 		}
@@ -1920,7 +1937,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					LOG("RPM basename: " << tok);
 					info.sFileName = tok;
 					info.sDirectory = sBaseDir;
-					ret.HandlePkgEntry(info);
+					ret(info);
 					info.SetInvalid();
 				}
 			}
@@ -1953,7 +1970,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(ifileprocessor &ret, const std::st
 					info.sDirectory += info.sFileName.substr(0, pos+1);
 					info.sFileName.erase(0, pos+1);
 				}
-				ret.HandlePkgEntry(info);
+				ret(info);
 				info.SetInvalid();
 			}
 		}
@@ -2011,7 +2028,7 @@ bool tCacheOperation::CalculateBaseDirectories(cmstring& sPath, enumMetaType idx
 }
 
 bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
-		ifileprocessor &ret, cmstring& sBaseDir, cmstring& sPkgBaseDirConst,
+		std::function<void(const tRemoteFileInfo&)> ret, cmstring& sBaseDir, cmstring& sPkgBaseDirConst,
 		enumMetaType origIdxType, CSTYPES csType, bool ixInflatedChecksum,
 		cmstring& sExtListFilter, bool* pReportAllReturnHashMark)
 {
@@ -2088,17 +2105,17 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 			{
 			case EIDX_SOURCES:
 				info.sDirectory = sPkgBaseDir + sSubDir;
-				ret.HandlePkgEntry(info);
+				ret(info);
 				break;
 			case EIDX_TRANSIDX: // csum refers to the files as-is
 				info.sDirectory = sBaseDir + sSubDir;
-				ret.HandlePkgEntry(info);
+				ret(info);
 				break;
 			case EIDX_DIFFIDX:
 				info.sDirectory = sBaseDir + sSubDir;
-				ret.HandlePkgEntry(info);
+				ret(info);
 				info.sFileName += ".gz";
-				ret.HandlePkgEntry(info);
+				ret(info);
 				break;
 			case EIDX_RELEASE:
 			{
@@ -2110,7 +2127,7 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 					info.sDirectory += info.sFileName.substr(0, (unsigned long) pos + 1);
 					info.sFileName.erase(0, (unsigned long) pos + 1);
 				}
-				ret.HandlePkgEntry(info);
+				ret(info);
 				break;
 			}
 			default:
@@ -2134,7 +2151,7 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 	return reader.CheckGoodState(false);
 }
 
-void tCacheOperation::ProcessSeenMetaFiles(ifileprocessor &pkgHandler)
+void tCacheOperation::ProcessSeenMetaFiles(std::function<void(tRemoteFileInfo)> pkgHandler)
 {
 	LOGSTART("expiration::_ParseVolatileFilesAndHandleEntries");
 	for(auto& path2att: m_metaFilesRel)

@@ -198,7 +198,7 @@ LPCSTR tSpecialRequest::GetTaskName()
 	case workTRUNCATECONFIRM: return "Manual File Truncation (Confirmed)";
 	case workCOUNTSTATS: return "Status Report With Statistics";
 	case workSTYLESHEET: return "CSS";
-	case workJStats: return "Stats";
+	// case workJStats: return "Stats";
 	}
 	return "SpecialOperation";
 }
@@ -268,7 +268,7 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 			{"doCount=", workCOUNTSTATS},
 			{"doTraceStart=", workTraceStart},
 			{"doTraceEnd=", workTraceEnd},
-			{"doJStats", workJStats}
+//			{"doJStats", workJStats}
 	};
 	for(auto& needle: matches)
 		if(StrHasFrom(cmd, needle.trigger, epos))
@@ -314,8 +314,10 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 		return new tDeleter(parms, "Truncat");
 	case workSTYLESHEET:
 		return new tStyleCss(parms);
+#if 0
 	case workJStats:
 		return new jsonstats(parms);
+#endif
 	}
 	return nullptr;
 }
