@@ -1183,7 +1183,7 @@ void tCacheOperation::UpdateVolatileFiles()
 
 					SendFmt << "Touching untracked file: " << wanted << "<br>\n";
 					mkbasedir(wanted);
-					int fd = open(wanted.c_str(), O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK);
+					int fd = open(wanted.c_str(), O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK, acfg::fileperms);
 					checkforceclose(fd);
 				}
 			}
