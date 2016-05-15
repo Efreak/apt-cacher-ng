@@ -1161,18 +1161,19 @@ void tCacheOperation::UpdateVolatileFiles()
 
 	MTLOGDEBUG("<br><br><b>STARTING ULTIMATE INTELLIGENCE</b><br><br>");
 
+	// this runs early with the state that is present on disk, before updating any file,
+	// since it deals with the "reality" in the cache
+
 	SendChunk("<b>Checking implicitly referenced files...</b><br>");
 	for(const auto& snap: m_oldReleaseFiles)
 	{
-
 		ParseAndProcessMetaFile([this, &snap](const tRemoteFileInfo &entry)
 		{
-
 			auto hexname(BytesToHexString(entry.fpr.csum, GetCSTypeLen(entry.fpr.csType)));
 			// ok, getting all hash versions...
-				if(_checkSolidHashOnDisk(hexname, entry))
-				{
-					auto wanted = CACHE_BASE + entry.sDirectory + entry.sFileName;
+			if(_checkSolidHashOnDisk(hexname, entry))
+			{
+				auto wanted = CACHE_BASE + entry.sDirectory + entry.sFileName;
 #ifdef DEBUG
 				string solidPath = CACHE_BASE + entry.sDirectory + "by-hash/" +
 				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
@@ -1180,15 +1181,12 @@ void tCacheOperation::UpdateVolatileFiles()
 #endif
 				if(0 != access(wanted.c_str(), F_OK))
 				{
-
 					SendFmt << "Touching untracked file: " << wanted << "<br>\n";
 					mkbasedir(wanted);
 					int fd = open(wanted.c_str(), O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK, acfg::fileperms);
 					checkforceclose(fd);
 				}
 			}
-
-			//fmt << entry.sDirectory << entry.s
 		}, snap, enumMetaType::EIDX_RELEASE, true);
 
 	}
@@ -1201,7 +1199,7 @@ void tCacheOperation::UpdateVolatileFiles()
 	// make sure to have a copy not touched even m_metaFilesRel is modified later
 	// and without having Release/InRelease doppelgangers
 	tStrMap releaseFilesOnly;
-	// foo/Release comes after foo/InRelease and emplace() helps...
+	// /Re comes after /In and emplace() helps...
 	for (auto& iref : m_metaFilesRel)
 	{
 		string::size_type sfxLen = 0;
@@ -1211,8 +1209,8 @@ void tCacheOperation::UpdateVolatileFiles()
 			sfxLen=10;
 		else
 			continue;
-		EMPLACE_PAIR(releaseFilesOnly, iref.first.substr(0, iref.first.size()-sfxLen),
-				iref.first);
+		string key = iref.first.substr(0, iref.first.size()-sfxLen);
+		releaseFilesOnly.emplace(key, iref.first);
 	}
 
 	// iterate over initial *Releases files
@@ -2081,9 +2079,15 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 			{
 				if(!sExtListFilter.empty() || sExtListFilter == key) // so use it
 				{
+#ifdef COMPATGCC47
+					auto& entry = contents[key];
+					entry.push_back(val);
+					pLastVal = &entry;
+#else
 					auto ins=contents.emplace(key, deque<string> {val});
 					lastKey = key;
 					pLastVal = & ins.first->second;
+#endif
 				}
 				else
 					pLastVal = nullptr;
@@ -2278,7 +2282,7 @@ void tCacheOperation::PrintStats(cmstring &title)
 	{
 		total += f.second.space;
 		if(f.second.space)
-			EMPLACE_PAIR(sorted,f.second.space, &f.first);
+			EMPLACE_PAIR_COMPAT(sorted,f.second.space, &f.first);
 	}
 	if(!total)
 		return;

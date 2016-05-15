@@ -99,6 +99,8 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 
 	for (auto p=argv+1; p<argv+argc; p++)
 	{
+		if (!strncmp(*p, "--", 2))
+			break;
 		if (!strncmp(*p, "-h", 2))
 			usage();
 		if (!strncmp(*p, "-v", 2))

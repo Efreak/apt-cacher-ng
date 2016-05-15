@@ -350,6 +350,12 @@ int Run()
 {
 	LOGSTART2s("Run", "GoGoGo");
 
+	if(g_vecSocks.empty())
+	{
+		cerr << "No valid server sockets configured" <<endl;
+		exit(EXIT_FAILURE);
+	}
+
 #ifdef HAVE_SD_NOTIFY
 	sd_notify(0, "READY=1");
 #endif

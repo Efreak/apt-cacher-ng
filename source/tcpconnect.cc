@@ -383,7 +383,7 @@ void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
 		// a DOS?
 		if (spareConPool.size() < 50)
 		{
-			EMPLACE_PAIR(spareConPool, make_tuple(host, handle->GetPort()
+			EMPLACE_PAIR_COMPAT(spareConPool, make_tuple(host, handle->GetPort()
 					SSL_OPT_ARG(handle->m_bio) ), make_pair(handle, now));
 #ifndef MINIBUILD
 			g_victor.ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);

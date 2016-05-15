@@ -29,6 +29,13 @@
 
 #define EXTREME_MEMORY_SAVING false
 
+#if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
+#define COMPATGCC47
+#define EMPLACE_PAIR_COMPAT(M,K,V) if((M).find(K) == (M).end()) (M).insert(std::make_pair(K,V))
+#else
+#define EMPLACE_PAIR_COMPAT(M,K,V) (M).emplace(K,V)
+#endif
+
 class acbuf;
 
 typedef std::string mstring;
@@ -87,7 +94,18 @@ int getUUID();
 
 #define SPACECHARS " \f\n\r\t\v"
 
+#ifdef COMPATGCC47
+class tStrMap : public std::map<mstring, mstring>
+{
+public:
+	void emplace(cmstring& key, cmstring& value)
+	{
+		EMPLACE_PAIR_COMPAT(*this, key, value);
+	}
+};
+#else
 typedef std::map<mstring, mstring> tStrMap;
+#endif
 
 inline void trimFront(mstring &s, LPCSTR junk=SPACECHARS)
 {
@@ -505,13 +523,6 @@ mstring EncodeBase64(LPCSTR data, unsigned len);
 #if defined(HAVE_SSL) || defined(HAVE_TOMCRYPT)
 #define HAVE_DECB64
 bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData);
-#endif
-
-#if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
-#define COMPATGCC47
-#define EMPLACE_PAIR(M,K,V) if(M.find(K) == M.end()) M.insert(std::make_pair(K,V))
-#else
-#define EMPLACE_PAIR(M,K,V) M.emplace(K,V)
 #endif
 
 typedef std::vector<std::pair<std::string, std::string>> tLPS;
