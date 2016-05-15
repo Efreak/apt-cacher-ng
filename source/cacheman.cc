@@ -1236,7 +1236,7 @@ void tCacheOperation::UpdateVolatileFiles()
 #endif
 
 		tFile2Cid file2cid;
-		auto recvInfo = [&file2cid](const tRemoteFileInfo &entry)
+		auto recvInfo = [&file2cid, this](const tRemoteFileInfo &entry)
 					{
 						if(entry.bInflateForCs) // XXX: no usecase yet, ignore
 							return;
@@ -2003,8 +2003,11 @@ bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFi
 		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
 				EIDX_TRANSIDX, CSTYPES::CSTYPE_SHA1, false, "SHA1", byHashMode);
 	case EIDX_RELEASE:
+		if(byHashMode)
+			return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+					EIDX_RELEASE, CSTYPES::CSTYPE_INVALID, false, "", true);
 		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_RELEASE, CSTYPES::CSTYPE_SHA1, false, "SHA1", byHashMode);
+				EIDX_RELEASE, CSTYPES::CSTYPE_SHA256, false, "SHA256", false);
 	default:
 		SendChunk("<span class=\"WARNING\">"
 				"WARNING: unable to read this file (unsupported format)</span>\n<br>\n");
@@ -2054,7 +2057,7 @@ bool tCacheOperation::CalculateBaseDirectories(cmstring& sPath, enumMetaType idx
 }
 
 bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
-		std::function<void(const tRemoteFileInfo&)> ret, cmstring& sBaseDir, cmstring& sPkgBaseDirConst,
+		std::function<void(const tRemoteFileInfo&)> &ret, cmstring& sBaseDir, cmstring& sPkgBaseDirConst,
 		enumMetaType origIdxType, CSTYPES csType, bool ixInflatedChecksum,
 		cmstring& sExtListFilter, bool byHashMode)
 {
@@ -2063,34 +2066,27 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 	{
 		string sLine, key, val, lastKey;
 		deque<string> *pLastVal(nullptr);
+		mstring keyByHash("Acquire-By-Hash");
 		while (reader.GetOneLine(sLine))
 		{
 			if(sLine.empty())
 				continue;
 			if(isspace( (unsigned) sLine[0]))
 			{
-				if(pLastVal)
-				{
-					trimFront(sLine);
-					pLastVal->push_back(sLine);
-				}
+				if(!pLastVal)
+					continue;
+				// also skip if a filter is set for extended lists on specific key
+				if(!sExtListFilter.empty() && sExtListFilter != lastKey)
+					continue;
+				trimFront(sLine);
+				pLastVal->push_back(sLine);
 			}
 			else if(ParseKeyValLine(sLine, key, val))
 			{
-				if(!sExtListFilter.empty() || sExtListFilter == key) // so use it
-				{
-#ifdef COMPATGCC47
-					auto& entry = contents[key];
-					entry.push_back(val);
-					pLastVal = &entry;
-#else
-					auto ins=contents.emplace(key, deque<string> {val});
-					lastKey = key;
-					pLastVal = & ins.first->second;
-#endif
-				}
-				else
-					pLastVal = nullptr;
+				// override the old key if existing, we don't merge
+				auto ins=contents.insert(make_pair(key, deque<string> {val}));
+				lastKey = key;
+				pLastVal = & ins.first->second;
 			}
 		}
 	}

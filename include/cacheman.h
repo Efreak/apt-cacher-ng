@@ -56,7 +56,7 @@ public:
 		EIDX_SUSEREPO,
 		EIDX_XMLRPMLIST,
 		EIDX_RFC822WITHLISTS,
-		EIDX_TRANSIDX,
+		EIDX_TRANSIDX, // XXX: in the old times, there were special i18n/Index files, are they gone for good now?
 		EIDX_MD5DILIST,
 		EIDX_SHA256DILIST
 	};
@@ -194,9 +194,9 @@ protected:
 	 * @brief Process key:val type files, handling multiline values as lists
 	 * @param ixInflatedChecksum Pass through as struct attribute to ret callback
 	 * @param sExtListFilter If set to non-empty, will only extract value(s) for that key
-	 * @param pReportAllReturnHashMark If set, will write back the value of Acquire-By-Hash==yes check to the pointed bool, and also trigger multiple callbacks, i.e. for each checksum type
+	 * @param byHashMode Return without calbacks if AcquireByHash is not set to yes. Not setting list filter also makes sense in this mode.
 	 */
-	bool ParseGenericRfc822Index(filereader& reader, std::function<void(const tRemoteFileInfo&)> ret,
+	bool ParseGenericRfc822Index(filereader& reader, std::function<void(const tRemoteFileInfo&)> &ret,
 			cmstring& sCurFilesReferenceDirRel,
 			cmstring& sPkgBaseDir,
 			enumMetaType ixType, CSTYPES csType, bool ixInflatedChecksum,
