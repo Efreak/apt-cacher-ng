@@ -1,6 +1,8 @@
 apt-cacher-ng (0.9.3) EAT-SOME-LIGHT-BALLS; urgency=high
 
   * Cope with removal of SHA1 checksums from Debian/Ubuntu InRelease files
+  * Review of volatile data whitelist - now removing Translations*/* data
+    without cover from Release index
 
  -- 
 
