@@ -149,7 +149,8 @@ MapNameToInt n2iTbl[] = {
 		,{  "OptProxyTimeout",                   &optproxytimeout,  nullptr,    10}
 		,{  "MaxDlSpeed",                        &maxdlspeed,       nullptr,    10}
 		,{  "MaxInresponsiveDlSize",             &maxredlsize,      nullptr,    10}
-
+		,{  "OptProxyCheckInterval",             &optProxyCheckInt, nullptr,    10}
+		// octal base interpretation of UNIX file permissions
 		,{  "DirPerms",                          &dirperms,         nullptr,    8}
 		,{  "FilePerms",                         &fileperms,        nullptr,    8}
 
@@ -158,7 +159,6 @@ MapNameToInt n2iTbl[] = {
 		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
 		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10}
 		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10}
-		,{ "OptProxyCheckInterval", &optProxyCheckInt, nullptr, 10}
 };
 
 

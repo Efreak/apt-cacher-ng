@@ -96,6 +96,7 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 	bool bExtraVerb=false;
 	LPCSTR szCfgDir=nullptr;
 	std::vector<LPCSTR> cmdvars;
+	bool ignoreCfgErrors = false;
 
 	for (auto p=argv+1; p<argv+argc; p++)
 	{
@@ -103,7 +104,9 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 			break;
 		if (!strncmp(*p, "-h", 2))
 			usage();
-		if (!strncmp(*p, "-v", 2))
+		if (!strncmp(*p, "-i", 2))
+			ignoreCfgErrors = true;
+		else if (!strncmp(*p, "-v", 2))
 			bExtraVerb = true;
 		else if (!strncmp(*p, "-e", 2))
 			bStartCleanup=true;
@@ -120,7 +123,7 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 	}
 
 	if(szCfgDir)
-		acfg::ReadConfigDirectory(szCfgDir);
+		acfg::ReadConfigDirectory(szCfgDir, !ignoreCfgErrors);
 
 	for(auto& keyval : cmdvars)
 		if(!acfg::SetOption(keyval, 0))
@@ -229,6 +232,7 @@ static void usage(int retCode) {
 		"-c: configuration directory\n"
 		"-e: on startup, run expiration once\n"
 		"-p: print configuration and exit\n"
+		"-i: ignore configuration loading errors\n"
 #if SUPPWHASH
 		"-H: read a password from STDIN and print its hash\n"
 #endif
