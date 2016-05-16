@@ -1138,7 +1138,6 @@ void tCacheOperation::UpdateVolatileFiles()
 		return;
 	}
 
-
 	auto dbgState = [&]() {
 #ifdef DEBUGSPAM
 	for (auto& f: m_metaFilesRel)
@@ -1163,36 +1162,6 @@ void tCacheOperation::UpdateVolatileFiles()
 
 	SendChunk("<b>Checking implicitly referenced files...</b><br>");
 
-#warning todo: for all InRelease files, check sidestore folder, if there is no ".upgrade" file then copy InRelease file into the folder forcibly, then touch .upgrade file
-
-	for(const auto& snap: m_oldReleaseFiles)
-	{
-		//auto snapInXstore = CACHE_BASE + acfg::privStoreRelSnapSufix + snap;
-		ParseAndProcessMetaFile([this](const tRemoteFileInfo &entry)
-		{
-			// ignore, those files are empty and are likely to report false positives
-			if(entry.fpr.size < 29)
-				return;
-
-			auto hexname(BytesToHexString(entry.fpr.csum, GetCSTypeLen(entry.fpr.csType)));
-			// ok, getting all hash versions...
-			if(_checkSolidHashOnDisk(hexname, entry))
-			{
-				auto wanted = CACHE_BASE + entry.sDirectory + entry.sFileName;
-#ifdef DEBUG
-				string solidPath = CACHE_BASE + entry.sDirectory + "by-hash/" +
-				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
-				SendFmt << solidPath << " was " << wanted << "<br>\n";
-#endif
-				if(0 != access(wanted.c_str(), F_OK))
-				{
-					SendFmt << "Touching untracked file: " << wanted << "<br>\n";
-					xtouch(wanted);
-				}
-			}
-		},
-		acfg::privStoreRelSnapSufix + sPathSep + snap, enumMetaType::EIDX_RELEASE, true);
-	}
 
 	/*
 	 * Update all Release files
@@ -2395,4 +2364,50 @@ void tCacheOperation::BuildCacheFileList()
 		m_oldReleaseFiles.emplace(sPath.substr(baseFolder.size() + 1));
 		return true;
 	});
+}
+
+bool tCacheOperation::UpgradeCacheForByHashStorage()
+{
+#warning complete me... for all inrelease files, check a stampfile in sidestore folder,
+#warning if stampfile not there then make a copy of the latest inrelease file for single-time processing with the code and only if that is ok then add a stampfile
+#warning good name for stamp file? .upgraded? .upgrayedd?
+
+	bool ret = true;
+
+	for(const auto& snap: m_oldReleaseFiles)
+	{
+		//auto snapInXstore = CACHE_BASE + acfg::privStoreRelSnapSufix + snap;
+		ParseAndProcessMetaFile([this, &ret](const tRemoteFileInfo &entry)
+		{
+			// ignore, those files are empty and are likely to report false positives
+			if(entry.fpr.size < 29)
+				return;
+
+			auto hexname(BytesToHexString(entry.fpr.csum, GetCSTypeLen(entry.fpr.csType)));
+			// ok, getting all hash versions...
+			if(_checkSolidHashOnDisk(hexname, entry))
+			{
+				auto wanted = CACHE_BASE + entry.sDirectory + entry.sFileName;
+#ifdef DEBUG
+				string solidPath = CACHE_BASE + entry.sDirectory + "by-hash/" +
+				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+				SendFmt << solidPath << " was " << wanted << hendl;
+#endif
+				if(0 != access(wanted.c_str(), F_OK))
+				{
+					SendFmt << "Touching untracked file: " << wanted << hendl;
+					if(!xtouch(wanted))
+						ret = false;
+				}
+			}
+		},
+		acfg::privStoreRelSnapSufix + sPathSep + snap, enumMetaType::EIDX_RELEASE, true);
+		if(!ret)
+		{
+			SendFmt << "Error at " << snap << hendl;
+			return ret;
+		}
+		unlink(SABSPATH(snap).c_str());
+	}
+
 }

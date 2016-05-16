@@ -53,7 +53,7 @@ typedef std::pair<LPCSTR, size_t> tPtrLen;
 #define SZPATHSEPUNIX "/"
 #define CPATHSEPWIN '\\'
 #define SZPATHSEPWIN "\\"
-extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS;
+extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS, hendl;
 
 extern cmstring FAKEDATEMARK;
 
@@ -154,8 +154,6 @@ tStrPos findHostStart(const mstring & sUri);
 
 #define WITHLEN(x) x, (_countof(x)-1)
 #define MAKE_PTR_0_LEN(x) x, 0, (_countof(x)-1)
-
-//extern mstring sPathSep, sPathSepUnix, sCR, sCRLF;
 
 // there is memchr and strpbrk but nothing like the last one acting on specified RAW memory range
 static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_t len)

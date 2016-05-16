@@ -208,6 +208,17 @@ protected:
 	std::unordered_set<std::string> m_oldReleaseFiles, m_oldHashedFiles;
 	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry);
 	void BuildCacheFileList();
+	/**
+	 * This is supposed to restore references to files that are no longer
+	 * downloaded by apt directly but via semi-static files identified by hash
+	 * value in their name.
+	 *
+	 * Without this link, the index processing would not be able to parse the
+	 * lists correctly and expiration would eventually "expire" good data.
+	 *
+	 * The code identify the original location of the index
+	 * file by Release file analysis. */
+	bool UpgradeCacheForByHashStorage();
 };
 
 
