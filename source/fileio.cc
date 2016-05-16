@@ -6,10 +6,13 @@
 #include "config.h"
 #include "fileio.h"
 #include "acbuf.h"
+#include "acfg.h"
 
 #ifdef HAVE_LINUX_FALLOCATE
 #include <linux/falloc.h>
 #include <fcntl.h>
+
+using namespace std;
 
 int falloc_helper(int fd, off_t start, off_t len)
 {
@@ -151,3 +154,44 @@ ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count)
 	return totalcnt;
 }
 
+
+bool xtouch(cmstring &wanted)
+{
+	mkbasedir(wanted);
+	int fd = open(wanted.c_str(), O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK, acfg::fileperms);
+	if(fd == -1)
+		return false;
+	checkforceclose(fd);
+	return true;
+}
+
+void mkbasedir(const string & path)
+{
+	if(0==mkdir(GetDirPart(path).c_str(), acfg::dirperms) || EEXIST == errno)
+		return; // should succeed in most cases
+
+	unsigned pos=0; // but skip the cache dir components, if possible
+	if(startsWith(path, acfg::cacheDirSlash))
+	{
+		// pos=acfg::cachedir.size();
+		pos=path.find("/", acfg::cachedir.size()+1);
+	}
+    for(; pos<path.size(); pos=path.find(SZPATHSEP, pos+1))
+    {
+        if(pos>0)
+            mkdir(path.substr(0,pos).c_str(), acfg::dirperms);
+    }
+}
+
+void mkdirhier(cmstring& path)
+{
+	if(0==mkdir(path.c_str(), acfg::dirperms) || EEXIST == errno)
+		return; // should succeed in most cases
+	if(path.empty())
+		return;
+	for(string::size_type pos = path[0] == '/' ? 1 : 0;pos < path.size();pos++)
+	{
+		pos = path.find('/', pos);
+		mkdir(path.substr(0,pos).c_str(), acfg::dirperms);
+	}
+}

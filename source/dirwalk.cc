@@ -131,12 +131,27 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 
 
 
-bool DirectoryWalk(const string & sRoot, IFileHandler *h, bool bFilterDoubleDirVisit,
+bool IFileHandler::DirectoryWalk(const string & sRoot, IFileHandler *h, bool bFilterDoubleDirVisit,
 		bool bFollowSymlinks)
 {
 	dnode root(nullptr);
 	dnode::tDupeFilter filter;
 	root.sPath=sRoot; 
 	return root.Walk(h, bFilterDoubleDirVisit ? &filter : nullptr, bFollowSymlinks);
+}
+
+// XXX: create some shortcut? wasting CPU cycles for virtual call PLUS std::function wrapper
+bool IFileHandler::FindFiles(const mstring & sRootDir, IFileHandler::output_receiver callBack, bool bFilterDoubleDirVisit,
+		bool bFollowSymlinks)
+{
+	struct tFileGrabber : public IFileHandler
+	{
+		IFileHandler::output_receiver &m_cb;
+		bool ProcessRegular(cmstring &sPath, const struct stat &st) override { return m_cb(sPath, st);}
+		bool ProcessOthers(cmstring &sPath, const struct stat &) override {return true;};
+		bool ProcessDirAfter(cmstring &sPath, const struct stat &) override {return true;};
+		tFileGrabber(IFileHandler::output_receiver &ret) : m_cb(ret) {}
+	} cb(callBack);
+	return DirectoryWalk(sRootDir, &cb, bFilterDoubleDirVisit, bFollowSymlinks);
 }
 

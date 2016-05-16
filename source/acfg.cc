@@ -1516,24 +1516,6 @@ mstring GetDirPart(const string &in)
 	return in.substr(0, end+1);
 }
 
-void mkbasedir(const string & path)
-{
-	if(0==mkdir(GetDirPart(path).c_str(), acfg::dirperms) || EEXIST == errno)
-		return; // should succeed in most cases
-
-	unsigned pos=0; // but skip the cache dir components, if possible
-	if(startsWith(path, acfg::cacheDirSlash))
-	{
-		// pos=acfg::cachedir.size();
-		pos=path.find("/", acfg::cachedir.size()+1);
-	}
-    for(; pos<path.size(); pos=path.find(SZPATHSEP, pos+1))
-    {
-        if(pos>0)
-            mkdir(path.substr(0,pos).c_str(), acfg::dirperms);
-    }
-}
-
 #ifndef MINIBUILD
 LPCSTR ReTest(LPCSTR s)
 {

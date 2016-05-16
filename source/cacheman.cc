@@ -107,9 +107,6 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 
 	if(scontains(sPathRel, "/by-hash/"))
 		m_oldHashedFiles.emplace(sPathRel);
-	if(scontains(sPathRel, "Release.sidestore/"))
-		m_oldReleaseFiles.emplace(sPathRel);
-
 
 	return false;
 }
@@ -594,7 +591,7 @@ void DelTree(const string &what)
 			return true;
 		}
 	} hh;
-	DirectoryWalk(what, &hh, false, false);
+	IFileHandler::DirectoryWalk(what, &hh, false, false);
 }
 
 struct fctLessThanCompMtime
@@ -1165,10 +1162,18 @@ void tCacheOperation::UpdateVolatileFiles()
 	// since it deals with the "reality" in the cache
 
 	SendChunk("<b>Checking implicitly referenced files...</b><br>");
+
+#warning todo: for all InRelease files, check sidestore folder, if there is no ".upgrade" file then copy InRelease file into the folder forcibly, then touch .upgrade file
+
 	for(const auto& snap: m_oldReleaseFiles)
 	{
-		ParseAndProcessMetaFile([this, &snap](const tRemoteFileInfo &entry)
+		//auto snapInXstore = CACHE_BASE + acfg::privStoreRelSnapSufix + snap;
+		ParseAndProcessMetaFile([this](const tRemoteFileInfo &entry)
 		{
+			// ignore, those files are empty and are likely to report false positives
+			if(entry.fpr.size < 29)
+				return;
+
 			auto hexname(BytesToHexString(entry.fpr.csum, GetCSTypeLen(entry.fpr.csType)));
 			// ok, getting all hash versions...
 			if(_checkSolidHashOnDisk(hexname, entry))
@@ -1182,13 +1187,11 @@ void tCacheOperation::UpdateVolatileFiles()
 				if(0 != access(wanted.c_str(), F_OK))
 				{
 					SendFmt << "Touching untracked file: " << wanted << "<br>\n";
-					mkbasedir(wanted);
-					int fd = open(wanted.c_str(), O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK, acfg::fileperms);
-					checkforceclose(fd);
+					xtouch(wanted);
 				}
 			}
-		}, snap, enumMetaType::EIDX_RELEASE, true);
-
+		},
+		acfg::privStoreRelSnapSufix + sPathSep + snap, enumMetaType::EIDX_RELEASE, true);
 	}
 
 	/*
@@ -1744,7 +1747,8 @@ tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(const mstrin
 	return EIDX_UNSUPPORTED;
 }
 
-bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> ret, const std::string &sPath,
+bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> ret,
+		const std::string &sPath,
 		enumMetaType idxType, bool byHashMode)
 {
 
@@ -2048,6 +2052,7 @@ bool tCacheOperation::CalculateBaseDirectories(cmstring& sPath, enumMetaType idx
 
 	if(idxType == EIDX_RELEASE)
 	{
+#warning fixen oder so
 		StrSubst(sBaseDir, "/InRelease.sidestore", "", 0);
 		StrSubst(sBaseDir, "/Release.sidestore", "", 0);
 	}
@@ -2374,7 +2379,20 @@ void tCacheOperation::ProgTell()
 
 bool tCacheOperation::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry)
 {
-	string solidPath = CACHE_BASE + entry.sDirectory + "by-hash/" +
+	string solidPath = CACHE_BASE + entry.sDirectory.substr(acfg::privStoreRelSnapSufix.length() +1) + "by-hash/" +
 				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
 	return ! ::access(solidPath.c_str(), F_OK);
+}
+
+void tCacheOperation::BuildCacheFileList()
+{
+	//dump_proc_status();
+	IFileHandler::DirectoryWalk(acfg::cachedir, this);
+	//dump_proc_status();
+	auto baseFolder = acfg::cacheDirSlash + acfg::privStoreRelSnapSufix;
+	IFileHandler::FindFiles(baseFolder, [&baseFolder, this](cmstring &sPath, const struct stat &st)
+			-> bool {
+		m_oldReleaseFiles.emplace(sPath.substr(baseFolder.size() + 1));
+		return true;
+	});
 }

@@ -15,7 +15,7 @@ SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} ${acngfs_cflags}")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_FUSE_25)
 
 if(fuse_FOUND AND HAVE_FUSE_25)
-	list(APPEND fsSRCS httpfs.cc ../source/lockable.cc ../source/header.cc ../source/caddrinfo.cc ../source/acbuf.cc ../source/acfg.cc ../source/acfg_defaults.cc ../source/tcpconnect.cc ../source/dlcon.cc ../source/fileitem.cc ../source/meta.cc)
+	list(APPEND fsSRCS httpfs.cc ../source/lockable.cc ../source/header.cc ../source/caddrinfo.cc ../source/acbuf.cc ../source/acfg.cc ../source/acfg_defaults.cc ../source/tcpconnect.cc ../source/dlcon.cc ../source/fileitem.cc ../source/meta.cc ../source/fileio.cc)
 
 	if(CMAKE_BUILD_TYPE MATCHES Debug)
 		list(APPEND fsSRCS ../source/aclogger.cc)

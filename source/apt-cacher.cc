@@ -251,12 +251,12 @@ static void usage(int retCode) {
 static void SetupCacheDir()
 {
 	using namespace acfg;
-	if(!Cstat(cacheDirSlash))
+	auto xstore(cacheDirSlash + "_xstore");
+	mkbasedir(xstore + "/Release");
+	if(!Cstat(xstore))
 	{
-		// well, attempt to create it then
-		mstring path=cacheDirSlash+'/';
-		for(unsigned pos=0; (pos=path.find(SZPATHSEP, pos)) < path.size(); ++pos)
-			mkdir((const char*) path.substr(0,pos).c_str(), (uint) dirperms);
+		cerr << "Error: Cannot create any directory in " << cacheDirSlash << endl;
+		exit(EXIT_FAILURE);
 	}
 
 	struct timeval tv;

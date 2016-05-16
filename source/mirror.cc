@@ -91,7 +91,7 @@ void pkgmirror::Action()
 	if(m_bUseDelta)
 		StartDlder();
 
-	DirectoryWalk(acfg::cachedir, this);
+	BuildCacheFileList();
 
 	if(CheckStopSignal())
 		return;

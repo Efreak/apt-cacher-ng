@@ -207,6 +207,7 @@ protected:
 
 	std::unordered_set<std::string> m_oldReleaseFiles, m_oldHashedFiles;
 	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry);
+	void BuildCacheFileList();
 };
 
 

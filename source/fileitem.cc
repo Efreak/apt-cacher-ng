@@ -959,11 +959,11 @@ int fileitem_with_storage::MoveRelease2Sidestore()
 		return 0;
 	if(!endsWithSzAr(m_sPathRel, "/InRelease") && !endsWithSzAr(m_sPathRel, "/Release"))
 		return 0;
-	auto sidefolderAbs = CACHE_BASE + m_sPathRel + ".sidestore";
-	mkdir(sidefolderAbs.c_str(), acfg::dirperms);
+	auto tgtDir = CACHE_BASE + acfg::privStoreRelSnapSufix + sPathSep + GetDirPart(m_sPathRel);
+	mkdirhier(tgtDir);
 	auto srcAbs = CACHE_BASE + m_sPathRel;
 	Cstat st(srcAbs);
-	auto sideFileAbs = sidefolderAbs + sPathSep + ltos(st.st_ino);
+	auto sideFileAbs = tgtDir + ltos(st.st_ino);
 	return rename(srcAbs.c_str(), sideFileAbs.c_str());
 }
 

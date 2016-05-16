@@ -82,7 +82,8 @@ private:
 	FILE_RAII operator=(const FILE_RAII&);
 };
 
-
+void mkdirhier(cmstring& path);
+bool xtouch(cmstring &wanted);
 void mkbasedir(const mstring & path);
 
 /*
