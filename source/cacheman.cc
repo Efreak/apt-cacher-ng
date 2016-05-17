@@ -835,24 +835,24 @@ bool tCacheOperation::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sRefere
 
 
 
-bool tCacheOperation::Inject(cmstring &from, cmstring &to,
+bool tCacheOperation::Inject(cmstring &fromRel, cmstring &toRel,
 		bool bSetIfileFlags, const header *pHead, bool bTryLink)
 {
 	LOGSTART("tCacheMan::Inject");
 
 	// XXX should it really filter it here?
-	if(GetFlags(to).uptodate)
+	if(GetFlags(toRel).uptodate)
 		return true;
 
-	auto sAbsFrom(SABSPATH(from)), sAbsTo(SABSPATH(to));
+	auto sAbsFrom(SABSPATH(fromRel)), sAbsTo(SABSPATH(toRel));
 
 	Cstat infoFrom(sAbsFrom), infoTo(sAbsTo);
 	if(infoFrom && infoTo && infoFrom.st_ino == infoTo.st_ino && infoFrom.st_dev == infoTo.st_dev)
 		return true;
 
 #ifdef DEBUG_FLAGS
-	bool nix = stmiss!=from.find("debrep/dists/squeeze/non-free/binary-amd64/");
-	SendFmt<<"Replacing "<<to<<" with " << from <<  "<br>\n";
+	bool nix = stmiss!=fromRel.find("debrep/dists/squeeze/non-free/binary-amd64/");
+	SendFmt<<"Replacing "<<toRel<<" with " << fromRel <<  "<br>\n";
 #endif
 
 	header head;
@@ -863,10 +863,10 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 
 		if (head.LoadFromFile(sAbsFrom+".head") <= 0 || !head.h[header::CONTENT_LENGTH])
 		{
-			MTLOGASSERT(0, "Cannot read " << from << ".head or bad data");
+			MTLOGASSERT(0, "Cannot read " << fromRel << ".head or bad data");
 			return false;
 		}
-		if(GetFileSize(SABSPATH(from), -1) != atoofft(head.h[header::CONTENT_LENGTH]))
+		if(GetFileSize(SABSPATH(fromRel), -1) != atoofft(head.h[header::CONTENT_LENGTH]))
 		{
 			MTLOGASSERT(0, "Bad file size");
 			return false;
@@ -932,7 +932,7 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 			return true;
 		}
 	};
-	auto pfi(make_shared<tInjectItem>(to, bTryLink));
+	auto pfi(make_shared<tInjectItem>(toRel, bTryLink));
 	// register it in global scope
 	fileItemMgmt fi;
 	if(!fi.RegisterFileItem(pfi))
@@ -940,13 +940,13 @@ bool tCacheOperation::Inject(cmstring &from, cmstring &to,
 		MTLOGASSERT(false, "Couldn't register copy item");
 		return false;
 	}
-	bool bOK = pfi->Inject(from, *pHead);
+	bool bOK = pfi->Inject(fromRel, *pHead);
 
 	MTLOGASSERT(bOK, "Inject: failed");
 
 	if(bSetIfileFlags)
 	{
-		tIfileAttribs &atts = SetFlags(to);
+		tIfileAttribs &atts = SetFlags(toRel);
 		atts.uptodate = atts.vfile_ondisk = bOK;
 	}
 
@@ -2018,15 +2018,6 @@ bool tCacheOperation::CalculateBaseDirectories(cmstring& sPath, enumMetaType idx
 	else
 		sPkgBaseDir = sBaseDir;
 
-
-	if(idxType == EIDX_RELEASE)
-	{
-#warning fixen oder so
-		StrSubst(sBaseDir, "/InRelease.sidestore", "", 0);
-		StrSubst(sBaseDir, "/Release.sidestore", "", 0);
-	}
-
-
 	return true;
 }
 
@@ -2318,7 +2309,7 @@ int parseidx_demo(LPCSTR file)
 		tParser() : tCacheOperation({2, tSpecialRequest::workIMPORT, "doImport="}) {};
 		inline int demo(LPCSTR file)
 		{
-			return !ParseAndProcessMetaFile([](const tRemoteFileInfo &entry) {
+			return !ParseAndProcessMetaFile([](const tRemoteFileInfo &entry) ->void {
 				cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
 									<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
 									<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
@@ -2368,16 +2359,45 @@ void tCacheOperation::BuildCacheFileList()
 
 bool tCacheOperation::UpgradeCacheForByHashStorage()
 {
-#warning complete me... for all inrelease files, check a stampfile in sidestore folder,
-#warning if stampfile not there then make a copy of the latest inrelease file for single-time processing with the code and only if that is ok then add a stampfile
-#warning good name for stamp file? .upgraded? .upgrayedd?
-
 	bool ret = true;
+	auto stampPath = CACHE_BASE + acfg::privStoreRelSnapSufix + "/.upgrayedd";
+	if(access(stampPath.c_str(), F_OK))
+	{
+		for(const auto& kv: m_metaFilesRel)
+		{
+			if(!endsWithSzAr(kv.first, "Release"))
+				continue;
 
+			auto tgt = CACHE_BASE + acfg::privStoreRelSnapSufix + sPathSep + kv.first;
+			mkbasedir(tgt);
+			// probably optional but better have it there
+			FileCopy(CACHE_BASE + kv.first + ".head", tgt + ".head");
+
+			if(FileCopy(CACHE_BASE + kv.first, tgt))
+			{
+				m_oldReleaseFiles.insert(kv.first);
+				continue;
+			}
+			ret = false; // try to continue the mission, though
+			SendFmt << "Could not prepare cache for by-hash storage, error at " << kv.first <<
+					" or " << tgt << hendl;
+		}
+		if(ret)
+			xtouch(stampPath);
+	}
+	return ret;
+}
+
+
+bool tCacheOperation::FixMissingByHashLinks()
+{
+	bool ret = true;
 	for(const auto& snap: m_oldReleaseFiles)
 	{
-		//auto snapInXstore = CACHE_BASE + acfg::privStoreRelSnapSufix + snap;
-		ParseAndProcessMetaFile([this, &ret](const tRemoteFileInfo &entry)
+		if(endsWithSzAr(snap, ".upgrayedd"))
+			continue;
+		auto xsnapRelPath = acfg::privStoreRelSnapSufix + sPathSep + snap;
+		ParseAndProcessMetaFile([this, &ret](const tRemoteFileInfo &entry) -> void
 		{
 			// ignore, those files are empty and are likely to report false positives
 			if(entry.fpr.size < 29)
@@ -2387,27 +2407,59 @@ bool tCacheOperation::UpgradeCacheForByHashStorage()
 			// ok, getting all hash versions...
 			if(_checkSolidHashOnDisk(hexname, entry))
 			{
-				auto wanted = CACHE_BASE + entry.sDirectory + entry.sFileName;
-#ifdef DEBUG
-				string solidPath = CACHE_BASE + entry.sDirectory + "by-hash/" +
-				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
-				SendFmt << solidPath << " was " << wanted << hendl;
+				auto wantedPathRel = entry.sDirectory.substr(acfg::privStoreRelSnapSufix.size() + 1)
+						+ entry.sFileName;
+				auto wantedPathAbs = SABSPATH(wantedPathRel);
+#ifdef DEBUGIDX
+				SendFmt << entry.sDirectory.substr(acfg::privStoreRelSnapSufix.length() +1) + "by-hash/" +
+						GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname
+						<< " was " << wantedPathAbs << hendl;
 #endif
-				if(0 != access(wanted.c_str(), F_OK))
+				if(0 != access(wantedPathAbs.c_str(), F_OK))
 				{
-					SendFmt << "Touching untracked file: " << wanted << hendl;
-					if(!xtouch(wanted))
+					string solidPathRel = entry.sDirectory.substr(acfg::privStoreRelSnapSufix.length() +1) + "by-hash/" +
+								GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+
+					SendFmt << "Restoring virtual file " << wantedPathRel
+							<< " (equal to " << solidPathRel << ")" << hendl;
+					header h;
+					string origin;
+					tStrPos pos;
+					// load by-hash header, check URL, rewrite URL, copy the stuff over
+					if(!h.LoadFromFile(SABSPATH(solidPathRel) + ".head") || ! h.h[header::XORIG] ||
+							(origin.assign(h.h[header::XORIG]),
+							pos = origin.rfind("by-hash/"), pos == stmiss) ||
+							(h.set(header::XORIG, origin.substr(0, pos) + entry.sFileName),
+							!Inject(solidPathRel, wantedPathRel, false, &h, false)))
+					{
 						ret = false;
+						return;
+					}
+
+#if 0
+					if(h.LoadFromFile(solidPath + ".head")
+							&& FileCopy_generic()
+
+#warning waaaah, create fake .head file based on head file from Release backup
+					if(!xtouch(wantedPathAbs))
+						ret = false;
+					else
+					{
+					}
+#endif
 				}
 			}
 		},
-		acfg::privStoreRelSnapSufix + sPathSep + snap, enumMetaType::EIDX_RELEASE, true);
+		xsnapRelPath, enumMetaType::EIDX_RELEASE, true);
 		if(!ret)
 		{
 			SendFmt << "Error at " << snap << hendl;
 			return ret;
 		}
-		unlink(SABSPATH(snap).c_str());
+#ifdef DEBUGIDX
+		SendFmt << "Purging " << SABSPATH(xsnapRelPath) << hendl;
+#endif
+		unlink(SABSPATH(xsnapRelPath).c_str());
 	}
-
+	return ret;
 }

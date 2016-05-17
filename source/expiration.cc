@@ -492,8 +492,8 @@ void expiration::Action()
 		goto save_fail_count;
 	SendFmt<<"Found "<<m_nProgIdx<<" files.<br />\n";
 
-	if(!UpgradeCacheForByHashStorage()) // no pending error exit, that stuff is critical
-		return;
+	if(!UpgradeCacheForByHashStorage() || !FixMissingByHashLinks())
+		return; // no pending error exit, that stuff might be critical
 
 #if 0 //def DEBUG
 	for(auto& i: m_trashFile2dir2Info)

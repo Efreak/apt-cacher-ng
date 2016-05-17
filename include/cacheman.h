@@ -218,6 +218,7 @@ protected:
 	 *
 	 * The code identify the original location of the index
 	 * file by Release file analysis. */
+	bool FixMissingByHashLinks();
 	bool UpgradeCacheForByHashStorage();
 };
 

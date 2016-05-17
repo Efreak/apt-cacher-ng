@@ -170,7 +170,8 @@ void mkbasedir(const string & path)
 	if(0==mkdir(GetDirPart(path).c_str(), acfg::dirperms) || EEXIST == errno)
 		return; // should succeed in most cases
 
-	unsigned pos=0; // but skip the cache dir components, if possible
+	// assuming the cache folder is already there, don't start from /, if possible
+	unsigned pos=0;
 	if(startsWith(path, acfg::cacheDirSlash))
 	{
 		// pos=acfg::cachedir.size();
