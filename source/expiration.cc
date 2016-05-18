@@ -835,9 +835,11 @@ void expiration::MarkObsolete(cmstring& sPathRel)
 	m_killBill.emplace_back(sPathRel);
 }
 
-bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo&,
-		cmstring&)
+bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo& entry,
+		cmstring& srcPrefix)
 {
-	return m_trashFile2dir2Info.find(hexname) != m_trashFile2dir2Info.end();
+	if(m_trashFile2dir2Info.find(hexname) == m_trashFile2dir2Info.end())
+		return false;
+	return tCacheOperation::_checkSolidHashOnDisk(hexname, entry, srcPrefix);
 }
 
