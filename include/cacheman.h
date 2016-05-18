@@ -219,11 +219,6 @@ protected:
 	 * The code identify the original location of the index
 	 * file by Release file analysis. */
 	bool FixMissingByHashLinks(std::unordered_set<std::string> &oldReleaseFiles);
-	/**
-	 * One-way function, supposed to create copies of Release files for
-	 * caches that have been managed by a version without by-hash support before.
-	 */
-	bool UpgradeCacheForByHashStorage();
 
 	/**
 	 * If the specified (In)Release file has By-Hash enabled, look for paths that match

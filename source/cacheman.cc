@@ -1140,8 +1140,10 @@ void tCacheOperation::UpdateVolatileFiles()
 		return;
 	}
 
+#if 0
 	if(!UpgradeCacheForByHashStorage())
 		return; // what the...
+#endif
 
 	auto dbgState = [&]() {
 #ifdef DEBUGSPAM
@@ -1191,6 +1193,10 @@ void tCacheOperation::UpdateVolatileFiles()
 
 	for(auto& sPathRel : goodReleaseFiles)
 	{
+		m_nErrorCount += !ProcessByHashReleaseFileRestoreFiles(sPathRel, "");
+		if(m_nErrorCount)
+			continue; // don't damage that copy
+
 		if(!Download(sPathRel, true,
 				m_metaFilesRel[sPathRel].hideDlErrors ? eMsgHideErrors : eMsgShow,
 						tFileItemPtr(), 0, DL_HINT_GUESS_REPLACEMENT))
@@ -2376,6 +2382,7 @@ void tCacheOperation::BuildCacheFileList()
 	//dump_proc_status();
 }
 
+#if 0
 bool tCacheOperation::UpgradeCacheForByHashStorage()
 {
 	bool ret = true;
@@ -2403,6 +2410,7 @@ bool tCacheOperation::UpgradeCacheForByHashStorage()
 	}
 	return ret;
 }
+#endif
 
 bool tCacheOperation::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cmstring& stripPrefix)
 {
