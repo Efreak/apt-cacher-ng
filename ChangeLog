@@ -9,8 +9,11 @@ apt-cacher-ng (0.9.3) HAVE-SOME-LIGHT-BALLS; urgency=high
     + Proper detection of caches where by-hash data has been downloaded by
       previous versions without tracking snapshots and work around this
       situation
+    + in case that by-hash directory has a better version of the reference
+      file (matching the latest InRelease's signature), the reference file
+      contents is replaced with that correct version
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Wed, 18 May 2016 22:43:39 +0200
 
 apt-cacher-ng (0.9.2) HERE-COMES-JASON; urgency=medium
 

@@ -2433,10 +2433,19 @@ bool tCacheOperation::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePath
 					GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname
 					<< " was " << wantedPathAbs << hendl;
 #endif
-			if(0 != access(wantedPathAbs.c_str(), F_OK))
+			Cstat wantedState(wantedPathAbs);
+			string solidPathRel, solidPathAbs;
+			if(wantedState.st_size != entry.fpr.size) // lazy construction of strings for the check below
 			{
-				string solidPathRel = entry.sDirectory.substr(stripPrefix.size()) + "by-hash/" +
-							GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+				solidPathRel = entry.sDirectory.substr(stripPrefix.size()) + "by-hash/" +
+										GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+				solidPathAbs = SABSPATH(solidPathRel);
+			}
+
+			// either target file is missing or is an older(?) version of different size and our version fits better
+			if(!wantedState || (wantedState.st_size != entry.fpr.size
+					&& entry.fpr.CheckFile(solidPathAbs)))
+			{
 
 				SendFmt << "Restoring virtual file " << wantedPathRel
 						<< " (equal to " << solidPathRel << ")" << hendl;
@@ -2448,6 +2457,9 @@ bool tCacheOperation::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePath
 						(origin.assign(h.h[header::XORIG]),
 						pos = origin.rfind("by-hash/"), pos == stmiss) ||
 						(h.set(header::XORIG, origin.substr(0, pos) + entry.sFileName),
+								// most servers report crap on by-hash files
+								h.set(header::CONTENT_TYPE, "octet/stream"),
+//	should be ok				h.set(header::CONTENT_LENGTH, entry.fpr.size),
 						!Inject(solidPathRel, wantedPathRel, false, &h, false)))
 				{
 					ret = false;
