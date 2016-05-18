@@ -552,6 +552,7 @@ void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 {
 	LPCSTR szCfgDir=CFGDIR;
 	std::vector<LPCSTR> validargs, nonoptions;
+	bool ignoreCfgErrors = false;
 
 	for (auto p=argv; p<argv+argc; p++)
 	{
@@ -567,6 +568,8 @@ void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 		}
 		else if(!strcmp(*p, "--verbose"))
 			g_bVerbose=true;
+		else if(!strcmp(*p, "-i"))
+			ignoreCfgErrors = true;
 		else if(**p) // not empty
 			validargs.emplace_back(*p);
 
@@ -583,7 +586,7 @@ void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 		if(!info || !S_ISDIR(info.st_mode))
 			g_missingCfgDir = szCfgDir;
 		else
-			acfg::ReadConfigDirectory(szCfgDir, false);
+			acfg::ReadConfigDirectory(szCfgDir, ignoreCfgErrors);
 	}
 
 	tStrVec non_opt_args;

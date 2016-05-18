@@ -29,6 +29,13 @@
 
 #define EXTREME_MEMORY_SAVING false
 
+#if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
+#define COMPATGCC47
+#define EMPLACE_PAIR_COMPAT(M,K,V) if((M).find(K) == (M).end()) (M).insert(std::make_pair(K,V))
+#else
+#define EMPLACE_PAIR_COMPAT(M,K,V) (M).emplace(K,V)
+#endif
+
 class acbuf;
 
 typedef std::string mstring;
@@ -46,7 +53,7 @@ typedef std::pair<LPCSTR, size_t> tPtrLen;
 #define SZPATHSEPUNIX "/"
 #define CPATHSEPWIN '\\'
 #define SZPATHSEPWIN "\\"
-extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS;
+extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS, hendl;
 
 extern cmstring FAKEDATEMARK;
 
@@ -87,7 +94,18 @@ int getUUID();
 
 #define SPACECHARS " \f\n\r\t\v"
 
+#ifdef COMPATGCC47
+class tStrMap : public std::map<mstring, mstring>
+{
+public:
+	void emplace(cmstring& key, cmstring& value)
+	{
+		EMPLACE_PAIR_COMPAT(*this, key, value);
+	}
+};
+#else
 typedef std::map<mstring, mstring> tStrMap;
+#endif
 
 inline void trimFront(mstring &s, LPCSTR junk=SPACECHARS)
 {
@@ -136,8 +154,6 @@ tStrPos findHostStart(const mstring & sUri);
 
 #define WITHLEN(x) x, (_countof(x)-1)
 #define MAKE_PTR_0_LEN(x) x, 0, (_countof(x)-1)
-
-//extern mstring sPathSep, sPathSepUnix, sCR, sCRLF;
 
 // there is memchr and strpbrk but nothing like the last one acting on specified RAW memory range
 static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_t len)
@@ -507,14 +523,17 @@ mstring EncodeBase64(LPCSTR data, unsigned len);
 bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData);
 #endif
 
-#if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
-#define COMPATGCC47
-#define EMPLACE_PAIR(M,K,V) if(M.find(K) == M.end()) M.insert(std::make_pair(K,V))
+typedef std::vector<std::pair<std::string, std::string>> tLPS;
+
+#ifdef __GNUC__
+#define AC_LIKELY(x)   __builtin_expect(!!(x), true)
+#define AC_UNLIKELY(x) __builtin_expect(!!(x), false)
 #else
-#define EMPLACE_PAIR(M,K,V) M.emplace(K,V)
+#define AC_LIKELY(x)   x
+#define AC_UNLIKELY(x) x
 #endif
 
-typedef std::vector<std::pair<std::string, std::string>> tLPS;
+
 
 #ifdef __GNUC__
 #define AC_LIKELY(x)   __builtin_expect(!!(x), true)

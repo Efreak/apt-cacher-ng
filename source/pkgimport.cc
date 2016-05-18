@@ -189,7 +189,8 @@ void pkgimport::Action()
 				<<" from the fingerprint cache<br>\n");
 	
 	m_bLookForIFiles=true;
-	DirectoryWalk(acfg::cachedir, this, true);
+
+	BuildCacheFileList();
 
 	{
 		lockguard g(&g_abortMx);

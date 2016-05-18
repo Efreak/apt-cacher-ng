@@ -31,8 +31,10 @@ Troubleshooting and integrator notes:
  - the build system makes use of pkg-config to locate required software
    components. For locally built packages, you might need to adjust its
    path settings; see manpage for details.
- - Link Time Optimization may be broken with some compilers. if a GCC "internal
-   compiler error" appears, first try -DUSE_LTO=off
+ - Link Time Optimization may be broken with some compilers. If a GCC "internal
+   compiler error" appears, first try -DUSE_LTO=off. Some installations also
+   have a broken GNU linker, disabling LTO or installing gold (and restarting
+   build process) might be advisable.
  - -DCMAKE_INSTALL_PREFIX=... specificies main directory to install (/usr/local is default)
  - -DCFGDIR=... (config directory, default is "etc" under CMAKE_INSTALL_PREFIX
    or just /etc if CMAKE_INSTALL_PREFIX is /usr)

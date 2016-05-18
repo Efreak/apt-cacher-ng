@@ -487,11 +487,7 @@ void expiration::Action()
 	m_bScanVolatileContents=StrHas(m_parms.cmd, "scanVolatile");
 
 	SendChunk("<b>Locating potentially expired files in the cache...</b><br>\n");
-
-	//dump_proc_status();
-	DirectoryWalk(acfg::cachedir, this);
-	//dump_proc_status();
-
+	BuildCacheFileList();
 	if(CheckStopSignal())
 		goto save_fail_count;
 	SendFmt<<"Found "<<m_nProgIdx<<" files.<br />\n";
@@ -839,7 +835,9 @@ void expiration::MarkObsolete(cmstring& sPathRel)
 	m_killBill.emplace_back(sPathRel);
 }
 
-bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo&)
+bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo&,
+		cmstring&)
 {
 	return m_trashFile2dir2Info.find(hexname) != m_trashFile2dir2Info.end();
 }
+

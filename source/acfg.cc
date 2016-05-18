@@ -149,7 +149,8 @@ MapNameToInt n2iTbl[] = {
 		,{  "OptProxyTimeout",                   &optproxytimeout,  nullptr,    10}
 		,{  "MaxDlSpeed",                        &maxdlspeed,       nullptr,    10}
 		,{  "MaxInresponsiveDlSize",             &maxredlsize,      nullptr,    10}
-
+		,{  "OptProxyCheckInterval",             &optProxyCheckInt, nullptr,    10}
+		// octal base interpretation of UNIX file permissions
 		,{  "DirPerms",                          &dirperms,         nullptr,    8}
 		,{  "FilePerms",                         &fileperms,        nullptr,    8}
 
@@ -158,7 +159,6 @@ MapNameToInt n2iTbl[] = {
 		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
 		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10}
 		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10}
-		,{ "OptProxyCheckInterval", &optProxyCheckInt, nullptr, 10}
 };
 
 
@@ -1514,24 +1514,6 @@ mstring GetDirPart(const string &in)
 		return sEmptyString;
 
 	return in.substr(0, end+1);
-}
-
-void mkbasedir(const string & path)
-{
-	if(0==mkdir(GetDirPart(path).c_str(), acfg::dirperms) || EEXIST == errno)
-		return; // should succeed in most cases
-
-	unsigned pos=0; // but skip the cache dir components, if possible
-	if(startsWith(path, acfg::cacheDirSlash))
-	{
-		// pos=acfg::cachedir.size();
-		pos=path.find("/", acfg::cachedir.size()+1);
-	}
-    for(; pos<path.size(); pos=path.find(SZPATHSEP, pos+1))
-    {
-        if(pos>0)
-            mkdir(path.substr(0,pos).c_str(), acfg::dirperms);
-    }
 }
 
 #ifndef MINIBUILD

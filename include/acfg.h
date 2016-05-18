@@ -105,6 +105,9 @@ int CheckAdminAuth(LPCSTR auth);
 
 extern bool g_bQuiet, g_bNoComplex;
 
+static const cmstring privStoreRelSnapSufix("_xstore/rsnap");
+
+
 } // namespace acfg
 
 namespace rechecks

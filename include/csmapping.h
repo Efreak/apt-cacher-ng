@@ -150,7 +150,7 @@ struct tFingerprint {
 	{
 		return !(other == *this);
 	}
-	bool CheckFile(cmstring & sFile)
+	bool CheckFile(cmstring & sFile) const
 	{
 		if(size != GetFileSize(sFile, -2))
 			return false;
