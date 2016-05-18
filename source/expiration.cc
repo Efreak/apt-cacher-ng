@@ -492,9 +492,6 @@ void expiration::Action()
 		goto save_fail_count;
 	SendFmt<<"Found "<<m_nProgIdx<<" files.<br />\n";
 
-	if(!UpgradeCacheForByHashStorage() || !FixMissingByHashLinks())
-		return; // no pending error exit, that stuff might be critical
-
 #if 0 //def DEBUG
 	for(auto& i: m_trashFile2dir2Info)
 	{
@@ -838,7 +835,8 @@ void expiration::MarkObsolete(cmstring& sPathRel)
 	m_killBill.emplace_back(sPathRel);
 }
 
-bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo&)
+bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo&,
+		cmstring&)
 {
 	return m_trashFile2dir2Info.find(hexname) != m_trashFile2dir2Info.end();
 }

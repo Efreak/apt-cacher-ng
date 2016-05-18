@@ -963,8 +963,9 @@ int fileitem_with_storage::MoveRelease2Sidestore()
 	mkdirhier(tgtDir);
 	auto srcAbs = CACHE_BASE + m_sPathRel;
 	Cstat st(srcAbs);
-	auto sideFileAbs = tgtDir + ltos(st.st_ino);
-	return rename(srcAbs.c_str(), sideFileAbs.c_str());
+	auto sideFileAbs = tgtDir + ltos(st.st_ino) + ltos(st.st_mtim.tv_sec) + ltos(st.st_mtim.tv_nsec);
+	return FileCopy(srcAbs, sideFileAbs);
+	//return rename(srcAbs.c_str(), sideFileAbs.c_str());
 }
 
 #endif // MINIBUILD

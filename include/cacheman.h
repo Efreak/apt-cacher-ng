@@ -205,8 +205,8 @@ protected:
 	const tIfileAttribs attr_dummy_pure = tIfileAttribs();
 	tIfileAttribs attr_dummy;
 
-	std::unordered_set<std::string> m_oldReleaseFiles, m_oldHashedFiles;
-	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry);
+	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry,
+			cmstring& srcPrefix);
 	void BuildCacheFileList();
 	/**
 	 * This is supposed to restore references to files that are no longer
@@ -218,8 +218,21 @@ protected:
 	 *
 	 * The code identify the original location of the index
 	 * file by Release file analysis. */
-	bool FixMissingByHashLinks();
+	bool FixMissingByHashLinks(std::unordered_set<std::string> &oldReleaseFiles);
+	/**
+	 * One-way function, supposed to create copies of Release files for
+	 * caches that have been managed by a version without by-hash support before.
+	 */
 	bool UpgradeCacheForByHashStorage();
+
+	/**
+	 * If the specified (In)Release file has By-Hash enabled, look for paths that match
+	 * the hash reference and if found, restore the data contents on the location of the
+	 * file that the by-hash blobs originated from.
+	 * @param releasePathRel cache-relative location of InRelease file
+	 * @param stripPrefix Optional prefix to prepend to releasePathRel but not to referenced files
+	 */
+	bool ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cmstring& stripPrefix);
 };
 
 

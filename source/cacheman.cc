@@ -105,8 +105,10 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 		return true;
     }
 
+	/*
 	if(scontains(sPathRel, "/by-hash/"))
 		m_oldHashedFiles.emplace(sPathRel);
+*/
 
 	return false;
 }
@@ -1138,6 +1140,9 @@ void tCacheOperation::UpdateVolatileFiles()
 		return;
 	}
 
+	if(!UpgradeCacheForByHashStorage())
+		return; // what the...
+
 	auto dbgState = [&]() {
 #ifdef DEBUGSPAM
 	for (auto& f: m_metaFilesRel)
@@ -1162,34 +1167,30 @@ void tCacheOperation::UpdateVolatileFiles()
 
 	SendChunk("<b>Checking implicitly referenced files...</b><br>");
 
-
 	/*
 	 * Update all Release files
 	 *
 	 */
-
-	// make sure to have a copy not touched even m_metaFilesRel is modified later
-	// and without having Release/InRelease doppelgangers
-	tStrMap releaseFilesOnly;
-	// /Re comes after /In and emplace() helps...
-	for (auto& iref : m_metaFilesRel)
+	tStrDeq goodReleaseFiles;
+	for (const auto& kv : m_metaFilesRel)
 	{
-		string::size_type sfxLen = 0;
-		if(endsWith(iref.first, inRelKey))
-			sfxLen = 8;
-		else if(endsWith(iref.first, relKey))
-			sfxLen=10;
-		else
-			continue;
-		string key = iref.first.substr(0, iref.first.size()-sfxLen);
-		releaseFilesOnly.emplace(key, iref.first);
+		if(endsWithSzAr(kv.first, "/Release"))
+		{
+			if(!goodReleaseFiles.empty() &&
+					goodReleaseFiles.back().size() + 2 == kv.first.size()
+					&& 0 == kv.first.compare(0, kv.first.size()-7, goodReleaseFiles.back(), 0, kv.first.size()-7)
+					&& 0 == goodReleaseFiles.back().compare(kv.first.size()-7, 9, "InRelease"))
+			{
+				continue;
+			}
+			goodReleaseFiles.emplace_back(kv.first);
+		}
+		else if(endsWithSzAr(kv.first, "/InRelease"))
+			goodReleaseFiles.emplace_back(kv.first);
 	}
 
-	// iterate over initial *Releases files
-	for(auto& relKV : releaseFilesOnly)
+	for(auto& sPathRel : goodReleaseFiles)
 	{
-		const auto& sPathRel=relKV.second;
-
 		if(!Download(sPathRel, true,
 				m_metaFilesRel[sPathRel].hideDlErrors ? eMsgHideErrors : eMsgShow,
 						tFileItemPtr(), 0, DL_HINT_GUESS_REPLACEMENT))
@@ -1203,32 +1204,53 @@ void tCacheOperation::UpdateVolatileFiles()
 		}
 
 		m_metaFilesRel[sPathRel].uptodate=true;
+	}
+
+	{
+		std::unordered_set<std::string> oldReleaseFiles;
+		auto baseFolder = acfg::cacheDirSlash + acfg::privStoreRelSnapSufix;
+		IFileHandler::FindFiles(baseFolder, [&baseFolder, &oldReleaseFiles, this](cmstring &sPath, const struct stat &st)
+				-> bool {
+			oldReleaseFiles.emplace(sPath.substr(baseFolder.size() + 1));
+			return true;
+		});
+
+		if(!FixMissingByHashLinks(oldReleaseFiles))
+		{
+			SendFmt << "Error fixing by-hash links" << hendl;
+			m_nErrorCount++;
+			return;
+		}
+	}
+
+	for(auto& sPathRel : goodReleaseFiles)
+	{
 #ifdef DEBUG
 		SendFmt << "Start parsing " << sPathRel << "<br>";
 #endif
 
 		tFile2Cid file2cid;
 		auto recvInfo = [&file2cid, this](const tRemoteFileInfo &entry)
-					{
-						if(entry.bInflateForCs) // XXX: no usecase yet, ignore
-							return;
+							{
+			if(entry.bInflateForCs) // XXX: no usecase yet, ignore
+				return;
 
-						tStrPos compos=FindCompSfxPos(entry.sFileName);
+			tStrPos compos=FindCompSfxPos(entry.sFileName);
 
-						// skip some obvious junk and its gzip version
-						if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
-							return;
+			// skip some obvious junk and its gzip version
+			if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
+				return;
 
-						auto& cid = file2cid[entry.sDirectory+entry.sFileName];
-						cid.first=entry.fpr;
+			auto& cid = file2cid[entry.sDirectory+entry.sFileName];
+			cid.first=entry.fpr;
 
-						tStrPos pos=entry.sDirectory.rfind(dis);
-						// if looking like Debian archive, keep just the part after binary-...
-						if(stmiss != pos)
-							cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
-						else
-							cid.second=entry.sFileName;
-					};
+			tStrPos pos=entry.sDirectory.rfind(dis);
+			// if looking like Debian archive, keep just the part after binary-...
+			if(stmiss != pos)
+				cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
+			else
+				cid.second=entry.sFileName;
+							};
 
 		ParseAndProcessMetaFile(std::function<void (const tRemoteFileInfo &)>(recvInfo),
 				sPathRel, EIDX_RELEASE);
@@ -2337,9 +2359,12 @@ void tCacheOperation::ProgTell()
 	}
 }
 
-bool tCacheOperation::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry)
+bool tCacheOperation::_checkSolidHashOnDisk(cmstring& hexname,
+		const tRemoteFileInfo &entry,
+		cmstring& srcPrefix
+		)
 {
-	string solidPath = CACHE_BASE + entry.sDirectory.substr(acfg::privStoreRelSnapSufix.length() +1) + "by-hash/" +
+	string solidPath = CACHE_BASE + entry.sDirectory.substr(srcPrefix.length()) + "by-hash/" +
 				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
 	return ! ::access(solidPath.c_str(), F_OK);
 }
@@ -2349,12 +2374,6 @@ void tCacheOperation::BuildCacheFileList()
 	//dump_proc_status();
 	IFileHandler::DirectoryWalk(acfg::cachedir, this);
 	//dump_proc_status();
-	auto baseFolder = acfg::cacheDirSlash + acfg::privStoreRelSnapSufix;
-	IFileHandler::FindFiles(baseFolder, [&baseFolder, this](cmstring &sPath, const struct stat &st)
-			-> bool {
-		m_oldReleaseFiles.emplace(sPath.substr(baseFolder.size() + 1));
-		return true;
-	});
 }
 
 bool tCacheOperation::UpgradeCacheForByHashStorage()
@@ -2371,13 +2390,10 @@ bool tCacheOperation::UpgradeCacheForByHashStorage()
 			auto tgt = CACHE_BASE + acfg::privStoreRelSnapSufix + sPathSep + kv.first;
 			mkbasedir(tgt);
 			// probably optional but better have it there
-			FileCopy(CACHE_BASE + kv.first + ".head", tgt + ".head");
+			//FileCopy(CACHE_BASE + kv.first + ".head", tgt + ".head");
 
 			if(FileCopy(CACHE_BASE + kv.first, tgt))
-			{
-				m_oldReleaseFiles.insert(kv.first);
 				continue;
-			}
 			ret = false; // try to continue the mission, though
 			SendFmt << "Could not prepare cache for by-hash storage, error at " << kv.first <<
 					" or " << tgt << hendl;
@@ -2388,78 +2404,74 @@ bool tCacheOperation::UpgradeCacheForByHashStorage()
 	return ret;
 }
 
-
-bool tCacheOperation::FixMissingByHashLinks()
+bool tCacheOperation::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cmstring& stripPrefix)
 {
 	bool ret = true;
-	for(const auto& snap: m_oldReleaseFiles)
+	return ParseAndProcessMetaFile([this, &ret, &stripPrefix](const tRemoteFileInfo &entry) -> void
 	{
-		if(endsWithSzAr(snap, ".upgrayedd"))
-			continue;
-		auto xsnapRelPath = acfg::privStoreRelSnapSufix + sPathSep + snap;
-		ParseAndProcessMetaFile([this, &ret](const tRemoteFileInfo &entry) -> void
+		// ignore, those files are empty and are likely to report false positives
+		if(entry.fpr.size < 29)
+			return;
+
+		auto hexname(BytesToHexString(entry.fpr.csum, GetCSTypeLen(entry.fpr.csType)));
+		// ok, getting all hash versions...
+		if(_checkSolidHashOnDisk(hexname, entry, stripPrefix))
 		{
-			// ignore, those files are empty and are likely to report false positives
-			if(entry.fpr.size < 29)
-				return;
-
-			auto hexname(BytesToHexString(entry.fpr.csum, GetCSTypeLen(entry.fpr.csType)));
-			// ok, getting all hash versions...
-			if(_checkSolidHashOnDisk(hexname, entry))
-			{
-				auto wantedPathRel = entry.sDirectory.substr(acfg::privStoreRelSnapSufix.size() + 1)
-						+ entry.sFileName;
-				auto wantedPathAbs = SABSPATH(wantedPathRel);
+			auto wantedPathRel = entry.sDirectory.substr(stripPrefix.size())
+					+ entry.sFileName;
+			auto wantedPathAbs = SABSPATH(wantedPathRel);
 #ifdef DEBUGIDX
-				SendFmt << entry.sDirectory.substr(acfg::privStoreRelSnapSufix.length() +1) + "by-hash/" +
-						GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname
-						<< " was " << wantedPathAbs << hendl;
+			SendFmt << entry.sDirectory.substr(stripPrefix.size()) + "by-hash/" +
+					GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname
+					<< " was " << wantedPathAbs << hendl;
 #endif
-				if(0 != access(wantedPathAbs.c_str(), F_OK))
+			if(0 != access(wantedPathAbs.c_str(), F_OK))
+			{
+				string solidPathRel = entry.sDirectory.substr(stripPrefix.size()) + "by-hash/" +
+							GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+
+				SendFmt << "Restoring virtual file " << wantedPathRel
+						<< " (equal to " << solidPathRel << ")" << hendl;
+				header h;
+				string origin;
+				tStrPos pos;
+				// load by-hash header, check URL, rewrite URL, copy the stuff over
+				if(!h.LoadFromFile(SABSPATH(solidPathRel) + ".head") || ! h.h[header::XORIG] ||
+						(origin.assign(h.h[header::XORIG]),
+						pos = origin.rfind("by-hash/"), pos == stmiss) ||
+						(h.set(header::XORIG, origin.substr(0, pos) + entry.sFileName),
+						!Inject(solidPathRel, wantedPathRel, false, &h, false)))
 				{
-					string solidPathRel = entry.sDirectory.substr(acfg::privStoreRelSnapSufix.length() +1) + "by-hash/" +
-								GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
-
-					SendFmt << "Restoring virtual file " << wantedPathRel
-							<< " (equal to " << solidPathRel << ")" << hendl;
-					header h;
-					string origin;
-					tStrPos pos;
-					// load by-hash header, check URL, rewrite URL, copy the stuff over
-					if(!h.LoadFromFile(SABSPATH(solidPathRel) + ".head") || ! h.h[header::XORIG] ||
-							(origin.assign(h.h[header::XORIG]),
-							pos = origin.rfind("by-hash/"), pos == stmiss) ||
-							(h.set(header::XORIG, origin.substr(0, pos) + entry.sFileName),
-							!Inject(solidPathRel, wantedPathRel, false, &h, false)))
-					{
-						ret = false;
-						return;
-					}
-
-#if 0
-					if(h.LoadFromFile(solidPath + ".head")
-							&& FileCopy_generic()
-
-#warning waaaah, create fake .head file based on head file from Release backup
-					if(!xtouch(wantedPathAbs))
-						ret = false;
-					else
-					{
-					}
-#endif
+					ret = false;
+					return;
 				}
 			}
-		},
-		xsnapRelPath, enumMetaType::EIDX_RELEASE, true);
-		if(!ret)
+		}
+	},
+	stripPrefix + releasePathRel, enumMetaType::EIDX_RELEASE, true) && ret;
+}
+
+bool tCacheOperation::FixMissingByHashLinks(std::unordered_set<std::string> &oldReleaseFiles)
+{
+	bool ret = true;
+
+	// path of side store with trailing slash relativ to cache folder
+	auto srcPrefix(acfg::privStoreRelSnapSufix + sPathSep);
+
+	for(const auto& snapPathInXstore: oldReleaseFiles)
+	{
+		if(endsWithSzAr(snapPathInXstore, ".upgrayedd"))
+			continue;
+		// path relative to cache folder
+		if(!ProcessByHashReleaseFileRestoreFiles(snapPathInXstore, srcPrefix))
 		{
-			SendFmt << "Error at " << snap << hendl;
+			SendFmt << "Error at " << snapPathInXstore << hendl;
 			return ret;
 		}
 #ifdef DEBUGIDX
-		SendFmt << "Purging " << SABSPATH(xsnapRelPath) << hendl;
+		SendFmt << "Purging " << SABSPATH(srcPrefix + snapPathInXstore) << hendl;
 #endif
-		unlink(SABSPATH(xsnapRelPath).c_str());
+		unlink(SABSPATH(srcPrefix + snapPathInXstore).c_str());
 	}
 	return ret;
 }

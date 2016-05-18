@@ -46,7 +46,8 @@ protected:
 	void MarkObsolete(cmstring&) override;
 	tStrVec m_killBill;
 
-	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry) override;
+	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry,
+			cmstring& srcPrefix) override;
 
 private:
 	int m_nPrevFailCount =0;
