@@ -228,6 +228,9 @@ protected:
 	 * @param stripPrefix Optional prefix to prepend to releasePathRel but not to referenced files
 	 */
 	bool ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cmstring& stripPrefix);
+
+	// simple helper for use by others as well, and let compiler do RVO
+	tStrDeq GetGoodReleaseFiles();
 };
 
 
