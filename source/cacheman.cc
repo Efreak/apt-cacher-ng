@@ -1173,23 +1173,7 @@ void tCacheOperation::UpdateVolatileFiles()
 	 * Update all Release files
 	 *
 	 */
-	tStrDeq goodReleaseFiles;
-	for (const auto& kv : m_metaFilesRel)
-	{
-		if(endsWithSzAr(kv.first, "/Release"))
-		{
-			if(!goodReleaseFiles.empty() &&
-					goodReleaseFiles.back().size() + 2 == kv.first.size()
-					&& 0 == kv.first.compare(0, kv.first.size()-7, goodReleaseFiles.back(), 0, kv.first.size()-7)
-					&& 0 == goodReleaseFiles.back().compare(kv.first.size()-7, 9, "InRelease"))
-			{
-				continue;
-			}
-			goodReleaseFiles.emplace_back(kv.first);
-		}
-		else if(endsWithSzAr(kv.first, "/InRelease"))
-			goodReleaseFiles.emplace_back(kv.first);
-	}
+	tStrDeq goodReleaseFiles = GetGoodReleaseFiles();
 
 	for(auto& sPathRel : goodReleaseFiles)
 	{
@@ -2179,7 +2163,7 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 
 void tCacheOperation::ProcessSeenMetaFiles(std::function<void(tRemoteFileInfo)> pkgHandler)
 {
-	LOGSTART("expiration::_ParseVolatileFilesAndHandleEntries");
+	LOGSTART("tCacheOperation::ProcessSeenMetaFiles");
 	for(auto& path2att: m_metaFilesRel)
 	{
 		if(CheckStopSignal())
@@ -2213,13 +2197,12 @@ void tCacheOperation::ProcessSeenMetaFiles(std::function<void(tRemoteFileInfo)> 
 
 		SendChunk(string("Parsing metadata in ")+path2att.first+"<br>\n");
 
-		if( ! ParseAndProcessMetaFile(std::function<void (const tRemoteFileInfo &)>(pkgHandler),
-				path2att.first, itype))
+		if( ! ParseAndProcessMetaFile(pkgHandler, path2att.first, itype))
 		{
 			if(!m_metaFilesRel[path2att.first].forgiveDlErrors)
 			{
 				m_nErrorCount++;
-				SendChunk("<span class=\"ERROR\">An error occured while reading this file, some contents may have been ignored.</span>\n");
+				SendChunk("<span class=\"ERROR\">An error occurred while reading this file, some contents may have been ignored.</span>\n");
 				AddDelCbox(path2att.first);
 				SendChunk("<br>\n");
 			}
@@ -2494,4 +2477,26 @@ bool tCacheOperation::FixMissingByHashLinks(std::unordered_set<std::string> &old
 		unlink(SABSPATH(srcPrefix + snapPathInXstore).c_str());
 	}
 	return ret;
+}
+
+tStrDeq tCacheOperation::GetGoodReleaseFiles()
+{
+	tStrDeq goodReleaseFiles;
+	for (const auto& kv : m_metaFilesRel)
+	{
+		if(endsWithSzAr(kv.first, "/Release"))
+		{
+			if(!goodReleaseFiles.empty() &&
+					goodReleaseFiles.back().size() + 2 == kv.first.size()
+					&& 0 == kv.first.compare(0, kv.first.size()-7, goodReleaseFiles.back(), 0, kv.first.size()-7)
+					&& 0 == goodReleaseFiles.back().compare(kv.first.size()-7, 9, "InRelease"))
+			{
+				continue;
+			}
+			goodReleaseFiles.emplace_back(kv.first);
+		}
+		else if(endsWithSzAr(kv.first, "/InRelease"))
+			goodReleaseFiles.emplace_back(kv.first);
+	}
+	return goodReleaseFiles;
 }

@@ -517,6 +517,26 @@ void expiration::Action()
 	m_damageList.open(SZABSPATH(FNAME_DAMAGED), ios::out | ios::trunc);
 
 	SendChunk(WITHLEN("<b>Validating cache contents...</b><br>\n"));
+
+	// by-hash stuff needs special handling...
+	for(const auto& sPathRel : GetGoodReleaseFiles())
+	{
+		auto func = [this](const tRemoteFileInfo &e) {
+			auto hexname(BytesToHexString(e.fpr.csum, GetCSTypeLen(e.fpr.csType)));
+			auto hit = m_trashFile2dir2Info.find(hexname);
+			if(hit == m_trashFile2dir2Info.end())
+				return; // unknown
+			if(!m_bByPath)
+			{
+				m_trashFile2dir2Info.erase(hit);
+				return;
+			}
+			auto sdir = e.sDirectory + "by-hash/" + GetCsNameReleaseFile(e.fpr.csType) + '/';
+			hit->second.erase(sdir);
+		};
+		ParseAndProcessMetaFile(func, sPathRel, EIDX_RELEASE, true);
+	}
+
 	ProcessSeenMetaFiles([this](const tRemoteFileInfo &e) {
 		HandlePkgEntry(e); });
 
@@ -835,9 +855,11 @@ void expiration::MarkObsolete(cmstring& sPathRel)
 	m_killBill.emplace_back(sPathRel);
 }
 
-bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo&,
-		cmstring&)
+bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo& entry,
+		cmstring& srcPrefix)
 {
-	return m_trashFile2dir2Info.find(hexname) != m_trashFile2dir2Info.end();
+	if(m_trashFile2dir2Info.find(hexname) == m_trashFile2dir2Info.end())
+		return false;
+	return tCacheOperation::_checkSolidHashOnDisk(hexname, entry, srcPrefix);
 }
 
