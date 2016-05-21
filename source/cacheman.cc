@@ -2484,6 +2484,8 @@ tStrDeq tCacheOperation::GetGoodReleaseFiles()
 	tStrDeq goodReleaseFiles;
 	for (const auto& kv : m_metaFilesRel)
 	{
+		if(!kv.second.vfile_ondisk)
+			continue;
 		if(endsWithSzAr(kv.first, "/Release"))
 		{
 			if(!goodReleaseFiles.empty() &&
