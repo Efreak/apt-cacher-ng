@@ -330,7 +330,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 					//
 					cmstring * pCompSuf = nullptr;
 					auto xBasePath = sFilePathAbs;
-					for (auto& testCompSuf : compSuffixesAndEmpty)
+					for (auto& testCompSuf : sfxXzBz2GzLzmaNone)
 					{
 						if (endsWith(xBasePath, testCompSuf))
 						{
@@ -549,7 +549,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 inline tStrPos FindCompSfxPos(const string &s)
 {
-	for(auto &p : compSuffixes)
+	for(auto &p : sfxXzBz2GzLzma)
 		if(endsWith(s, p))
 			return(s.size()-p.size());
 	return stmiss;
@@ -557,8 +557,8 @@ inline tStrPos FindCompSfxPos(const string &s)
 static unsigned short FindCompIdx(cmstring &s)
 {
 	unsigned short i=0;
-	for(;i<_countof(compSuffixes); i++)
-		if(endsWith(s, compSuffixes[i]))
+	for(;i<_countof(sfxXzBz2GzLzma); i++)
+		if(endsWith(s, sfxXzBz2GzLzma[i]))
 			return i;
 	return i;
 }
@@ -1000,7 +1000,7 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 				// tracked by upstream index then force its installation!
 				auto cpos=FindCompSfxPos(tgtCand);
 				string sBasename=tgtCand.substr(0, cpos);
-				for(auto& sfx : compSuffixesAndEmpty)
+				for(auto& sfx : sfxXzBz2GzLzmaNone)
 				{
 					if(endsWith(tgtCand, sfx)) // same file, checked before
 						continue;
@@ -1043,7 +1043,7 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 		tStrPos cpos=FindCompSfxPos(tgt);
 		string sBasename=tgt.substr(0, cpos);
 		string sux=cpos==stmiss ? "" : tgt.substr(FindCompSfxPos(tgt));
-		for(auto& compsuf : compSuffixesAndEmpty)
+		for(auto& compsuf : sfxXzBz2GzLzmaNone)
 		{
 			if(sux==compsuf) continue; // touch me not
 			mstring sBro = sBasename+compsuf;
@@ -1243,14 +1243,14 @@ void tCacheOperation::UpdateVolatileFiles()
 				continue;
 			// found an ...diff/Index file!
 			string sBase=cid.first.substr(0, cid.first.size()-diffIdxSfx.size());
-			for(auto& suf : compSuffixesAndEmptyByRatio)
+			for(auto& suf : sfxXzBz2GzLzma)
 			{
 				const auto& flags=GetFlags(sBase+suf);
 				if(flags.vfile_ondisk)
 					goto has_base; // break 2 levels
 			}
 			// ok, not found, enforce dload of any existing patch base file?
-			for(auto& suf : compSuffixesAndEmptyByRatio)
+			for(auto& suf : sfxXzBz2GzLzma)
 			{
 				if(ContHas(file2cid, (sBase+suf)))
 				{
@@ -1270,7 +1270,7 @@ has_base:
 			string sNativeName=if2cid.first.substr(0, FindCompSfxPos(if2cid.first));
 			tContId sCandId=if2cid.second;
 			// find a better one which serves as the flag content id for the whole group
-			for(auto& ps : compSuffixesAndEmptyByLikelyhood)
+			for(auto& ps : sfxXzBz2GzLzma)
 			{
 				auto it2=file2cid.find(sNativeName+ps);
 				if(it2 != file2cid.end())
@@ -1552,7 +1552,7 @@ NOT_PATCHABLE:
 		MTLOGDEBUG("trying a blind fetch of some good version of that file from any location, starting with best compression type");
 		// prefer to download them in that order, no uncompressed versions because
 		// mirrors usually don't have them
-		for (auto& ps : compSuffixesByRatio)
+		for (auto& ps : sfxXzBz2GzLzma)
 		{
 			for (auto& cand: cid2eqcl->second.paths)
 			{
