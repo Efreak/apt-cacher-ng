@@ -13,6 +13,9 @@ apt-cacher-ng (0.9.3) HAVE-SOME-LIGHT-BALLS; urgency=medium
       file (matching the latest InRelease's signature), the reference file
       contents is replaced with that correct version
     + correct handling for expiration with or without strict path checking
+  * Small review of expiration (index file updating) code, replaced some
+    cruft to make analysis with less syscalls and attempt to get more likely
+    available of remote files in some cases.
 
  -- Eduard Bloch <blade@debian.org>  Thu, 19 May 2016 23:01:44 +0200
 

@@ -60,7 +60,6 @@ public:
 		EIDX_MD5DILIST,
 		EIDX_SHA256DILIST
 	};
-protected:
 	struct tIfileAttribs
 	{
 		bool vfile_ondisk:1, uptodate:1, parseignore:1, hideDlErrors:1,
@@ -75,21 +74,35 @@ protected:
 				forgiveDlErrors(false), alreadyparsed(false),
 				guessed(false)
 		{};
+#ifdef DEBUG
+		inline tSS toString() const
+		{
+			return tSS() << alreadyparsed << "|"
+					<< forgiveDlErrors << "|"
+					<< hideDlErrors << "|"
+					<< parseignore << "|"
+					<< space << "|"
+					<< uptodate << "|"
+					<< guessed << "|"
+					<< vfile_ondisk;
+		}
+#endif
 	};
 
-	// this is not unordered because sometimes it might need modification
-	// while an iterator still works on it
-	std::map<mstring,tIfileAttribs> m_metaFilesRel;
 	// helpers to keep the code cleaner and more readable
 	const tIfileAttribs &GetFlags(cmstring &sPathRel) const;
-	tIfileAttribs &SetFlags(cmstring &sPathRel);
 
+protected:
+	// this is not unordered because sometimes we make use of iterator references while
+	// doing modification of the map
+	std::map<mstring,tIfileAttribs> m_metaFilesRel;
+	tIfileAttribs &SetFlags(cmstring &sPathRel);
 	void UpdateVolatileFiles();
 	void _BusyDisplayLogs();
 	void _Usermsg(mstring m);
 	bool AddIFileCandidate(const mstring &sFileRel);
 
-	// NOOP, implemented here for convinience
+	// NOOP, implemented here for convenience
 	bool ProcessOthers(const mstring &sPath, const struct stat &);
 	bool ProcessDirAfter(const mstring &sPath, const struct stat &);
 

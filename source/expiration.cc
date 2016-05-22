@@ -34,8 +34,10 @@ using namespace std;
 
 void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
-	LOGSTART2("expiration::_HandlePkgEntry:",
+#ifdef DEBUGSPAM
+	LOGSTART2("expiration::HandlePkgEntry:",
 			"\ndir:" << entry.sDirectory << "\nname: " << entry.sFileName << "\nsize: " << entry.fpr.size << "\ncsum: " << entry.fpr.GetCsAsString());
+#endif
 
 #define ECLASS "<span class=\"ERROR\">ERROR: "
 #define WCLASS "<span class=\"WARNING\">WARNING: "
@@ -113,15 +115,15 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			// Basic header checks. Skip if the file was forcibly updated/reconstructed before.
 			if (m_bSkipHeaderChecks || descHave.bNoHeaderCheck)
 			{
-				LOG("Skipped header check for " << sPathRel);
+//				LOG("Skipped header check for " << sPathRel);
 			}
 			else if(entry.bInflateForCs)
 			{
-				LOG("Skipped header check for " << sPathRel << ", cannot compare sizes");
+//				LOG("Skipped header check for " << sPathRel << ", cannot compare sizes");
 			}
 			else if(entry.fpr.size>=0)
 			{
-				LOG("Doing basic header checks");
+//				LOG("Doing basic header checks");
 				header h;
 				auto sHeadAbs(sPathAbs+".head");
 				if (0<h.LoadFromFile(sHeadAbs))

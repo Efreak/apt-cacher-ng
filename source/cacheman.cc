@@ -104,12 +104,6 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 
 		return true;
     }
-
-	/*
-	if(scontains(sPathRel, "/by-hash/"))
-		m_oldHashedFiles.emplace(sPathRel);
-*/
-
 	return false;
 }
 
@@ -191,9 +185,6 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	mstring sErr;
 	bool bSuccess=false;
-#ifdef DEBUG_FLAGS
-	bool nix=StrHas(sFilePathRel, "debrep/dists/experimental/non-free/debian-installer/binary-mips/Packages.gz");
-#endif
 
 #define NEEDED_VERBOSITY_ALL_BUT_ERRORS (msgVerbosityLevel >= eMsgHideErrors)
 #define NEEDED_VERBOSITY_EVERYTHING (msgVerbosityLevel >= eMsgShow)
@@ -596,26 +587,30 @@ void DelTree(const string &what)
 	IFileHandler::DirectoryWalk(what, &hh, false, false);
 }
 
-struct fctLessThanCompMtime
+struct lessThanByAvailability
 {
-	string m_base;
-	fctLessThanCompMtime(const string &base) :
-		m_base(base)
+	tCacheOperation& m_cman;
+	lessThanByAvailability(tCacheOperation &cman) :
+		m_cman(cman)
 	{
 	}
+
 	bool operator()(const string &s1, const string &s2) const
-	{
-		struct stat stbuf1, stbuf2;
-		tStrPos cpos1(FindCompSfxPos(s1) ), cpos2(FindCompSfxPos(s2));
-		if(cpos1!=cpos2)
-			return cpos1 > cpos2; // sfx found -> less than npos (=w/o sfx) -> be smaller
-		// s1 is lesser when its newer
-		if (::stat((m_base + s1).c_str(), &stbuf1))
-			stbuf1.st_mtime = 0;
-		if (::stat((m_base + s2).c_str(), &stbuf2))
-			stbuf2.st_mtime = 0;
-		return stbuf1.st_mtime > stbuf2.st_mtime;
-	}
+		{
+		auto f1(m_cman.GetFlags(s1)), f2(m_cman.GetFlags(s2));
+		if(f1.vfile_ondisk && !f2.vfile_ondisk)
+			return true;
+		if(!f1.vfile_ondisk && f2.vfile_ondisk)
+			return false;
+		if(!f1.vfile_ondisk)
+			return false;
+		// both here?
+		Cstat st1(SABSPATH(s1)), st2(SABSPATH(s2));
+		// errors?
+		if(!st1) st1.st_mtim.tv_sec = 0;
+		if(!st2) st2.st_mtim.tv_sec = 0;
+		return st1.st_mtim.tv_sec > st2.st_mtim.tv_sec;
+		}
 };
 
 struct tCompByState : public tFingerprint
@@ -961,7 +956,6 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass::iterator eq
 {
 #ifdef DEBUG
 	SendFmt<< "Installing " << donorRel << "<br>\n";
-	bool nix=StrHas(donorRel, "debrep/dists/experimental/main/binary-amd64/Packages");
 #endif
 
 	const tStrDeq &tgts = eqClassIter->second.paths;
@@ -1149,14 +1143,7 @@ void tCacheOperation::UpdateVolatileFiles()
 #ifdef DEBUGSPAM
 	for (auto& f: m_metaFilesRel)
 		SendFmt << "State of " << f.first << ": "
-			<< f.second.alreadyparsed << "|"
-			<< f.second.forgiveDlErrors << "|"
-			<< f.second.hideDlErrors << "|"
-			<< f.second.parseignore << "|"
-			<< f.second.space << "|"
-			<< f.second.uptodate << "|"
-			<< f.second.vfile_ondisk << "|"
-			<< f.second.guessed << "|<br>\n";
+			<< f.second.toString();
 #endif
 	};
 	dbgState();
@@ -1330,7 +1317,7 @@ has_base:
 				<< cp.second.diffIdxId.second <<"<br>\n" << pfx << ": "
 				<< "Paths:<br>\n";
 			for(const auto& path : cp.second.paths)
-				printBuf << pfx << ":&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << path <<"<br>\n";
+				printBuf << pfx << ":&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << path << "&lt;=&gt;" << GetFlags(path).toString() << hendl;
 		}
 		SendChunk(printBuf);
 	};
@@ -1382,7 +1369,7 @@ has_base:
 			assert(!x.empty());
 #endif
 		sort(it.second.paths.begin(), it.second.paths.end(),
-				fctLessThanCompMtime(CACHE_BASE));
+				lessThanByAvailability(*this));
 		// and while we are at it, give them pointers back to the eq-classes
 		for(auto &path : it.second.paths)
 			SetFlags(path).bros=&it.second.paths;
@@ -1562,8 +1549,7 @@ has_base:
 
 NOT_PATCHABLE:
 
-		MTLOGDEBUG("ok, now try to get a good version of that file and install this into needed locations");
-
+		MTLOGDEBUG("trying a blind fetch of some good version of that file from any location, starting with best compression type");
 		// prefer to download them in that order, no uncompressed versions because
 		// mirrors usually don't have them
 		for (auto& ps : compSuffixesByRatio)
@@ -1572,7 +1558,7 @@ NOT_PATCHABLE:
 			{
 				if(!endsWith(cand, ps))
 					continue;
-				if(Download(cand, true, GetFlags(cand).hideDlErrors ? eMsgHideErrors : eMsgShow))
+				if(Download(cand, true, eMsgHideErrors))
 				{
 					if(CheckStopSignal())
 						return;
