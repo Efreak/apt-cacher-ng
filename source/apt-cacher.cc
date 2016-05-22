@@ -252,7 +252,7 @@ static void SetupCacheDir()
 {
 	using namespace acfg;
 	auto xstore(cacheDirSlash + "_xstore");
-	mkbasedir(xstore + "/Release");
+	mkdirhier(xstore);
 	if(!Cstat(xstore))
 	{
 		cerr << "Error: Cannot create any directory in " << cacheDirSlash << endl;
