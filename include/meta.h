@@ -327,7 +327,7 @@ inline mstring html_sanitize(cmstring& in)
 
 #define StrHas(haystack, needle) (haystack.find(needle) != stmiss)
 #define StrHasFrom(haystack, needle, startpos) (haystack.find(needle, startpos) != stmiss)
-#define StrChopOf(s,len) ((s).substr(0, (s).size()-(len)))
+#define StrEraseEnd(s,len) (s).erase((s).size() - len)
 
 off_t GetFileSize(cmstring & path, off_t defret);
 

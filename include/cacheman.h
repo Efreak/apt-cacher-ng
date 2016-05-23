@@ -46,7 +46,7 @@ public:
 	enum enumMetaType
 		: uint8_t
 		{
-			EIDX_UNSUPPORTED = 0,
+			EIDX_NOTREFINDEX = 0,
 		EIDX_RELEASE,
 		EIDX_PACKAGES,
 		EIDX_SOURCES,
@@ -63,16 +63,14 @@ public:
 	struct tIfileAttribs
 	{
 		bool vfile_ondisk:1, uptodate:1, parseignore:1, hideDlErrors:1,
-				forgiveDlErrors:1, alreadyparsed:1,
-				guessed:1; // file is not on disk, the name is pure calculation from pdiff mechanism
-		enumMetaType eIdxType = EIDX_UNSUPPORTED;
+				forgiveDlErrors:1, alreadyparsed:1;
+		enumMetaType eIdxType = EIDX_NOTREFINDEX;
 		const tStrDeq *bros = nullptr;
 		off_t space = 0;
 		inline tIfileAttribs() :
 				vfile_ondisk(false), uptodate(false),
 				parseignore(false), hideDlErrors(false),
-				forgiveDlErrors(false), alreadyparsed(false),
-				guessed(false)
+				forgiveDlErrors(false), alreadyparsed(false)
 		{};
 #ifdef DEBUG
 		inline tSS toString() const
@@ -83,7 +81,6 @@ public:
 					<< parseignore << "|"
 					<< space << "|"
 					<< uptodate << "|"
-					<< guessed << "|"
 					<< vfile_ondisk;
 		}
 #endif
@@ -129,7 +126,7 @@ protected:
 	};
 	bool Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(),
-			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0);
+			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0, cmstring* sGuessedFrom = nullptr);
 #define DL_HINT_GUESS_REPLACEMENT 0x1
 
 	// common helper variables

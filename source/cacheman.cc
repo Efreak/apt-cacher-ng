@@ -91,17 +91,13 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 {
 	if(sPathRel.empty())
 		return false;
-
-	enumMetaType t;
-	if ( (rechecks::FILE_VOLATILE == rechecks::GetFiletype(sPathRel)
-	// SUSE stuff, not volatile but also contains file index data
-	|| endsWithSzAr(sPathRel, ".xml.gz") )
-	&& (t=GuessMetaTypeFromURL(sPathRel)) != EIDX_UNSUPPORTED)
+	if (rechecks::FILE_VOLATILE == rechecks::GetFiletype(sPathRel)
+	// SUSE stuff, not volatile but might also contain file index data
+	|| endsWithSzAr(sPathRel, ".xml.gz"))
 	{
-		tIfileAttribs & atts=m_metaFilesRel[sPathRel];
+		auto& atts = SetFlags(sPathRel);
 		atts.vfile_ondisk=true;
-		atts.eIdxType=t;
-
+		atts.eIdxType=GuessMetaTypeFromURL(sPathRel);
 		return true;
     }
 	return false;
@@ -175,10 +171,20 @@ bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
 	return false;
 }
 
+/*
+mstring FindCommonPath(cmstring& a, cmstring& b)
+{
+	LPCSTR pa(a.c_str), pb(b.c_str());
+	LPCSTR po(pa), lspos(pa);
+	while(*pa && *pb) { if(*pa == '/') lspos = pa;  ++pa; ++pb; }
+	return a.substr(0, lspos-po);
+}
+*/
 
 bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		tCacheOperation::eDlMsgPrio msgVerbosityLevel,
-		tFileItemPtr pFi, const tHttpUrl * pForcedURL, unsigned hints)
+		tFileItemPtr pFi, const tHttpUrl * pForcedURL, unsigned hints,
+		cmstring* sGuessedFrom)
 {
 
 	LOGSTART("tCacheMan::Download");
@@ -270,6 +276,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		bool bCachePathAsUriPlausible=parserPath.SetHttpUrl(sFilePathRel, false);
 		ldbg("Find backend for " << sFilePathRel << " parsed as host: "  << parserPath.sHost
 				<< " and path: " << parserPath.sPath << ", ok? " << bCachePathAsUriPlausible);
+
 		if(!acfg::stupidfs && bCachePathAsUriPlausible
 				&& 0 != (pRepoDesc = acfg::GetRepoData(parserPath.sHost))
 				&& !pRepoDesc->m_backends.empty())
@@ -284,82 +291,36 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			// if not possible, guessing by looking at related files and making up
 			// the URL as needed
 
-			if(bCachePathAsUriPlausible) // unless other rule matches, this path in cache should represent the remote URI
+			if(bCachePathAsUriPlausible) // default fallback, unless the next check matches
 				pResolvedDirectUrl = parserPath.NormalizePath();
 
 			// and prefer the source from xorig which is likely to deliver better result
 			if(hor.h[header::XORIG] && parserHead.SetHttpUrl(hor.h[header::XORIG], false))
 				pResolvedDirectUrl = parserHead.NormalizePath();
-			else if(flags.guessed)
+			else if(sGuessedFrom
+					&& hor.LoadFromFile(SABSPATH(*sGuessedFrom + ".head"))
+					&& hor.h[header::XORIG]) // might use a related file as reference
 			{
-				// might use a related file as reference
+				mstring refURL(hor.h[header::XORIG]);
 
-				auto pos = sFilePathAbs.rfind(".diff/");
-				if (pos != stmiss)
+				tStrPos spos(0); // if not 0 -> last slash sign position if both
+				for(tStrPos i=0; i< sGuessedFrom->size() && i< sFilePathRel.size(); ++i)
 				{
-					// ok, that's easy, looks like getting patches and the
-					// .diff/Index must be already there
-					auto xpath = sFilePathAbs.substr(0, pos) + sConstDiffIdxHead;
-					if (hor.LoadFromFile(xpath) > 0 && hor.h[header::XORIG])
-					{
-						xpath = hor.h[header::XORIG];
-						// got the URL of the original .diff/Index file?
-						ldbg("sample url is " << xpath);
-						if (endsWith(xpath, diffIdxSfx))
-						{
-							// yes, it is, replace the ending with the local part of the filename
-							xpath.erase(xpath.size() - diffIdxSfx.size());
-							xpath += sFilePathAbs.substr(pos);
-							if (parserHead.SetHttpUrl(xpath, false))
-								pResolvedDirectUrl = parserHead.NormalizePath();
-						}
-					}
+					if(sFilePathRel[i] != sGuessedFrom->at(i))
+						break;
+					if(sFilePathRel[i] == '/')
+						spos = i;
 				}
-				else
+				// cannot underflow since checked by less-than
+				auto chopLen = sGuessedFrom->length() - spos;
+				auto urlSlashPos = refURL.size()-chopLen;
+				if(chopLen < refURL.size() && refURL[urlSlashPos] == '/')
 				{
-					// usecase: getting a non-pdiff file
-					// potential neighbors? something like:
-					static cmstring testsfxs[] =
-					{ ".diff/Index", ".bz2", ".gz", ".xz", ".lzma" };
-
-					// First, getting a "native" base path of that file, therefore
-					// chop of the compression suffix and append foo while testing
-					//
-					// after resolving, chop of foo from the URL and add the
-					// comp.suffix again
-					//
-					cmstring * pCompSuf = nullptr;
-					auto xBasePath = sFilePathAbs;
-					for (auto& testCompSuf : sfxXzBz2GzLzmaNone)
-					{
-						if (endsWith(xBasePath, testCompSuf))
-						{
-							pCompSuf = &testCompSuf;
-							xBasePath.erase(xBasePath.size()-testCompSuf.size());
-							break;
-						}
-					}
-
-					for (auto& foo : testsfxs)
-					{
-						ldbg("get example url from header of " << xBasePath);
-						if (pCompSuf && hor.LoadFromFile(xBasePath + foo + ".head") > 0 && hor.h[header::XORIG])
-						{
-							string urlcand = hor.h[header::XORIG];
-							if (endsWith(urlcand, foo))
-							{
-								// ok, looks plausible
-								ldbg("sample url is " << urlcand);
-								urlcand.erase(urlcand.size() - foo.size());
-								urlcand += *pCompSuf;
-								if (parserHead.SetHttpUrl(urlcand, false))
-								{
-									pResolvedDirectUrl = parserHead.NormalizePath();
-									break;
-								}
-							}
-						}
-					}
+					refURL.erase(urlSlashPos);
+					refURL += sFilePathRel.substr(spos);
+					//refURL.replace(urlSlashPos, chopLen, sPathSep.substr(spos));
+					if(parserHead.SetHttpUrl(refURL, false))
+						pResolvedDirectUrl = parserHead.NormalizePath();
 				}
 			}
 
@@ -711,10 +672,13 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 	{
 		string pfile(diffIdxPathRel.substr(0, diffIdxPathRel.size()-diffIdxSfx.size()+6)
 				+pit->patchName+".gz");
-		auto& flags=SetFlags(pfile);
-		flags.guessed=true;
-		flags.hideDlErrors=true;
-		if(!Download(pfile, false, eMsgShow))
+		if(Download(pfile, false, eMsgShow, tFileItemPtr(), 0, 0, &diffIdxPathRel))
+		{
+			auto&f = SetFlags(pfile);
+			// and not an ifile, never parse this
+			f.vfile_ondisk = f.parseignore = true;
+		}
+		else
 		{
 			m_metaFilesRel.erase(pfile); // remove the mess for sure
 			SendFmt << "Failed to download patch file " << pfile << " , stop patching...<br>";
@@ -724,7 +688,6 @@ bool tCacheOperation::PatchFile(const string &srcRel,
 		if(CheckStopSignal())
 			return false;
 
-		SetFlags(pfile).parseignore=true; // not an ifile, never parse this
 		::mkbasedir(sFinalPatch);
 		if(!pf.p && ! (pf.p=fopen(sFinalPatch.c_str(), "w+")))
 		{
@@ -1243,24 +1206,24 @@ void tCacheOperation::UpdateVolatileFiles()
 				continue;
 			// found an ...diff/Index file!
 			string sBase=cid.first.substr(0, cid.first.size()-diffIdxSfx.size());
-			for(auto& suf : sfxXzBz2GzLzma)
-			{
-				const auto& flags=GetFlags(sBase+suf);
-				if(flags.vfile_ondisk)
-					goto has_base; // break 2 levels
-			}
+			// std::find_if sucks more :-(
+			for(auto& suf: sfxXzBz2GzLzma)
+				if(GetFlags(sBase + suf).vfile_ondisk)
+					goto found_base;
 			// ok, not found, enforce dload of any existing patch base file?
 			for(auto& suf : sfxXzBz2GzLzma)
 			{
-				if(ContHas(file2cid, (sBase+suf)))
+				auto cand(sBase+suf);
+				if(!ContHas(file2cid, cand))
+					continue;
+				SendFmt << "No base file to use patching on " << cid.first << ", trying to fetch " << cand << hendl;
+				if(Download(cand, true, eMsgShow, tFileItemPtr(), 0, 0, &cid.first))
 				{
-					SetFlags(sBase+suf).guessed=true;
-					LOG("enforcing dl: " << (sBase+suf));
-					break;
+					SetFlags(sBase+suf).vfile_ondisk=true;
+					goto found_base;
 				}
 			}
-has_base:
-			;
+			found_base:;
 		}
 		dbgState();
 
@@ -1583,12 +1546,12 @@ CONTINUE_NEXT_GROUP:
 
 	MTLOGDEBUG("<br><br><b>NOW GET THE REST</b><br><br>");
 
-	// fetch all remaining stuff
+	// fetch all remaining stuff, at least the relevant parts
 	for(auto& idx2att : m_metaFilesRel)
 	{
 		if (idx2att.second.uptodate || idx2att.second.parseignore)
 			continue;
-		if(!idx2att.second.vfile_ondisk && !idx2att.second.guessed)
+		if(!idx2att.second.vfile_ondisk || idx2att.second.eIdxType == EIDX_NOTREFINDEX)
 			continue;
 		string sErr;
 		if(Download(idx2att.first, true,
@@ -1711,7 +1674,7 @@ tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(const mstrin
 	if (sPureIfileName == "SHA256SUMS" && StrHas(sPath, "/installer-"))
 		return EIDX_SHA256DILIST;
 
-	return EIDX_UNSUPPORTED;
+	return EIDX_NOTREFINDEX;
 }
 
 bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> ret,
