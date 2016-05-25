@@ -17,7 +17,7 @@
 
 class dlcon;
 class tDlJobHints;
-struct foo;
+class tContId2eqClass;
 
 static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing, "
 		"aborting as requested.</span>");
@@ -25,12 +25,11 @@ static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing,
 static cmstring sIndex("Index");
 static cmstring sslIndex("/Index");
 
-struct tPatchEntry
-{
-	string patchName;
-	tFingerprint fprState, fprPatch;
-};
-typedef deque<tPatchEntry>::const_iterator tPListConstIt;
+static cmstring sfxXzBz2GzLzma[] = { ".xz", ".bz2", ".gz", ".lzma"};
+static cmstring sfxXzBz2GzLzmaNone[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
+
+bool CompDebVerLessThan(cmstring &s1, cmstring s2);
+extern time_t m_gMaintTimeNow;
 
 void DelTree(const string &what);
 
@@ -114,7 +113,7 @@ protected:
 	 *   
 	 * */
 
-	void ProcessSeenMetaFiles(std::function<void(tRemoteFileInfo)> pkgHandler);
+	void ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHandler);
 
 	void StartDlder();
 
@@ -159,10 +158,6 @@ protected:
 	void ProgTell();
 	void AddDelCbox(cmstring &sFileRel, bool bExtraFile = false);
 
-	typedef std::pair<tFingerprint,mstring> tContId;
-	struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
-	typedef std::map<tContId, tClassDesc> tContId2eqClass;
-
 	// add certain files to the kill bill, to be removed after the activity is done
 	virtual void MarkObsolete(cmstring&) {};
 
@@ -185,16 +180,12 @@ protected:
 	tStrSet m_managedDirs;
 
 private:
-	tContId2eqClass m_eqClasses;
 
-	bool Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
+	bool Propagate(cmstring &donorRel, tContId2eqClass& eqClasses, const void* eqClassIter,
 			cmstring *psTmpUnpackedAbs=nullptr);
-	void InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter);
+	void InstallBz2edPatchResult(tContId2eqClass& eqClasses, void* eqClassIter);
 	tCacheOperation(const tCacheOperation&);
 	tCacheOperation& operator=(const tCacheOperation&);
-	bool PatchFile(cmstring &srcRel, cmstring &patchIdxLocation,
-			tPListConstIt pit, tPListConstIt itEnd,
-			const tFingerprint *verifData);
 	dlcon *m_pDlcon = nullptr;
 
 protected:
@@ -243,11 +234,5 @@ protected:
 	tStrDeq GetGoodReleaseFiles();
 };
 
-
-static cmstring sfxXzBz2GzLzma[] = { ".xz", ".bz2", ".gz", ".lzma"};
-static cmstring sfxXzBz2GzLzmaNone[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
-
-bool CompDebVerLessThan(cmstring &s1, cmstring s2);
-extern time_t m_gMaintTimeNow;
 
 #endif /*_CACHEMAN_H_*/

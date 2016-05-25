@@ -1,8 +1,7 @@
 apt-cacher-ng (0.9.3) HAVE-SOME-LIGHT-BALLS; urgency=medium
 
   * Cope with removal of SHA1 checksums from Debian/Ubuntu (In)Release files
-  * Review of volatile data whitelist - now removing Translations*/* data
-    without cover from Release index
+  * Review of volatile data whitelist - now expiring old Translations*/* data
   * Better handling of by-hash type files:
     + Moved internal storage of Release files' tracking snapshots to a private
       namespace of the cache

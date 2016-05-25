@@ -539,7 +539,7 @@ void expiration::Action()
 		ParseAndProcessMetaFile(func, sPathRel, EIDX_RELEASE, true);
 	}
 
-	ProcessSeenMetaFiles([this](const tRemoteFileInfo &e) {
+	ProcessSeenIndexFiles([this](const tRemoteFileInfo &e) {
 		HandlePkgEntry(e); });
 
 	if(CheckAndReportError() || CheckStopSignal())
