@@ -17,7 +17,7 @@
 
 class dlcon;
 class tDlJobHints;
-class tContId2eqClass;
+class tFileGroups;
 
 static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing, "
 		"aborting as requested.</span>");
@@ -64,13 +64,15 @@ public:
 		bool vfile_ondisk:1, uptodate:1, parseignore:1, hideDlErrors:1,
 				forgiveDlErrors:1, alreadyparsed:1;
 		enumMetaType eIdxType = EIDX_NOTREFINDEX;
-		const tStrDeq *bros = nullptr;
+		tIfileAttribs *bro; // point to a related descriptor, circled single-linked list
 		off_t space = 0;
 		inline tIfileAttribs() :
 				vfile_ondisk(false), uptodate(false),
 				parseignore(false), hideDlErrors(false),
 				forgiveDlErrors(false), alreadyparsed(false)
-		{};
+		{
+			bro = this;
+		};
 #ifdef DEBUG
 		inline tSS toString() const
 		{
@@ -181,9 +183,9 @@ protected:
 
 private:
 
-	bool Propagate(cmstring &donorRel, tContId2eqClass& eqClasses, const void* eqClassIter,
+	bool Propagate(cmstring &donorRel, tFileGroups& eqClasses, const void* eqClassIter,
 			cmstring *psTmpUnpackedAbs=nullptr);
-	void InstallBz2edPatchResult(tContId2eqClass& eqClasses, void* eqClassIter);
+	void InstallBz2edPatchResult(tFileGroups& eqClasses, void* eqClassIter);
 	tCacheOperation(const tCacheOperation&);
 	tCacheOperation& operator=(const tCacheOperation&);
 	dlcon *m_pDlcon = nullptr;

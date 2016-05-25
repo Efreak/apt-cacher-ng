@@ -40,7 +40,6 @@ using namespace std;
 
 static cmstring oldStylei18nIdx("/i18n/Index");
 static cmstring diffIdxSfx(".diff/Index");
-static cmstring sConstDiffIdxHead(".diff/Index.head");
 static cmstring sPatchBaseRel("_actmp/patch.base");
 static cmstring sPatchResRel("_actmp/patch.result");
 static const string relKey("/Release"), inRelKey("/InRelease");
@@ -53,9 +52,27 @@ struct tPatchEntry
 };
 typedef deque<tPatchEntry>::const_iterator tPListConstIt;
 
-typedef std::pair<tFingerprint,mstring> tContId;
-struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
-class tContId2eqClass : public std::map<tContId, tClassDesc> {};
+struct tContentKey
+{
+	mstring distinctName;
+	tFingerprint fpr;
+	mstring toString() const
+	{
+		return distinctName + "|" + (mstring) fpr;
+	}
+	bool operator<(const tContentKey& other) const
+	{
+		if(fpr == other.fpr)
+			return distinctName < other.distinctName;
+		return fpr < other.fpr;
+	}
+};
+struct tFileGroup {
+	tStrDeq paths;
+	tContentKey diffIdxId, bz2VersContId;
+	bool isReferenced = false;
+};
+class tFileGroups : public std::map<tContentKey, tFileGroup> {};
 
 
 tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
@@ -833,7 +850,7 @@ bool tCacheOperation::Inject(cmstring &fromRel, cmstring &toRel,
 }
 
 
-bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass& eqClasses,
+bool tCacheOperation::Propagate(cmstring &donorRel, tFileGroups& eqClasses,
 		const void* peqClassIter,
 		cmstring *psTmpUnpackedAbs)
 {
@@ -841,7 +858,7 @@ bool tCacheOperation::Propagate(cmstring &donorRel, tContId2eqClass& eqClasses,
 	SendFmt<< "Installing " << donorRel << "<br>\n";
 #endif
 
-	auto eqClassIter = *((tContId2eqClass::iterator*)peqClassIter);
+	auto eqClassIter = *((tFileGroups::iterator*)peqClassIter);
 
 	const tStrDeq &tgts = eqClassIter->second.paths;
 
@@ -1018,7 +1035,7 @@ void tCacheOperation::UpdateVolatileFiles()
 	}
 
 
-	tContId2eqClass eqClasses;
+	tFileGroups idxGroups;
 
 #if 0
 	if(!UpgradeCacheForByHashStorage())
@@ -1039,17 +1056,16 @@ void tCacheOperation::UpdateVolatileFiles()
 			printBuf << "#########################################################################<br>\n"
 					<< "## " <<  msg  << "<br>\n"
 					<< "#########################################################################<br>\n";
-			for(const auto& cp : eqClasses)
+			for(const auto& cp : idxGroups)
 			{
-				printBuf << pfx << ": TID: "
-						<<  cp.first.first<<cp.first.second<<"<br>\n" << pfx << ": "
-						<< "bz2TID:" << cp.second.bz2VersContId.first
-						<< cp.second.bz2VersContId.second<<"<br>\n" << pfx << ": "
-						<< "idxTID:"<<cp.second.diffIdxId.first
-						<< cp.second.diffIdxId.second <<"<br>\n" << pfx << ": "
-						<< "Paths:<br>\n";
+				printBuf << pfx << ": cKEY: " << cp.first.toString() << hendl
+						<< pfx << ": bz2TID:" << cp.second.bz2VersContId.toString() << hendl
+						<< pfx << ": idxTID:"<<cp.second.diffIdxId.toString() << hendl
+						<< pfx << ": Paths:" << hendl;
 				for(const auto& path : cp.second.paths)
-					printBuf << pfx << ":&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" << path << "&lt;=&gt;" << GetFlags(path).toString() << hendl;
+					printBuf << pfx << ":&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
+					<< path << "&lt;=&gt;" << GetFlags(path).toString()
+					<< hendl;
 			}
 			SendChunk(printBuf);
 		};
@@ -1117,7 +1133,7 @@ void tCacheOperation::UpdateVolatileFiles()
 #endif
 		// raw data extraction
 		{
-			typedef unordered_map<string, tContId> tFile2Cid;
+			typedef map<string, tContentKey> tFile2Cid;
 			// pull all contents into a sorted dictionary for later filtering
 			tFile2Cid file2cid;
 			auto recvInfo = [&file2cid, this](const tRemoteFileInfo &entry)
@@ -1132,14 +1148,14 @@ void tCacheOperation::UpdateVolatileFiles()
 					return;
 
 				auto& cid = file2cid[entry.sDirectory+entry.sFileName];
-				cid.first=entry.fpr;
+				cid.fpr=entry.fpr;
 
 				tStrPos pos=entry.sDirectory.rfind(dis);
 				// if looking like Debian archive, keep just the part after binary-...
 				if(stmiss != pos)
-					cid.second=entry.sDirectory.substr(pos)+entry.sFileName;
+					cid.distinctName=entry.sDirectory.substr(pos)+entry.sFileName;
 				else
-					cid.second=entry.sFileName;
+					cid.distinctName=entry.sFileName;
 									};
 
 			ParseAndProcessMetaFile(std::function<void (const tRemoteFileInfo &)>(recvInfo),
@@ -1148,7 +1164,7 @@ void tCacheOperation::UpdateVolatileFiles()
 			if(file2cid.empty())
 				continue;
 
-#warning dieser block ist mist und sollte nur für release-files inhalt gemacht werden
+#if 0
 			// first, look around for for .diff/Index files on disk, update them, check patch base file
 			for(const auto cid : file2cid)
 			{
@@ -1187,40 +1203,43 @@ void tCacheOperation::UpdateVolatileFiles()
 				}
 				found_base:;
 			}
+#endif
 			dbgState();
 
 			// now refine all extracted information and store it in eqClasses for later processing
 			for(auto if2cid : file2cid)
 			{
 				string sNativeName=if2cid.first.substr(0, FindCompSfxPos(if2cid.first));
-				tContId sCandId=if2cid.second;
-				// find a better one which serves as the flag content id for the whole group
-				for(auto& ps : sfxXzBz2GzLzma)
-				{
-					auto it2=file2cid.find(sNativeName+ps);
-					if(it2 != file2cid.end())
-						sCandId=it2->second;
-				}
-				tClassDesc &tgt=eqClasses[sCandId];
+				tContentKey groupId;
+
+				// identify the key for this group. Ideally, this is the descriptor
+				// of the native representation, if found in the release file, in doubt
+				// take the one from the best compressed form or the current one
+				auto it2=file2cid.find(sNativeName);
+				if(it2 != file2cid.end())
+					groupId=it2->second;
+				else
+					for(auto& ps : sfxXzBz2GzLzma)
+						ifThereStoreThereAndBreak(file2cid, sNativeName+ps, groupId);
+				if(groupId.distinctName.empty())
+					groupId = if2cid.second;
+
+				tFileGroup &tgt = idxGroups[groupId];
 				tgt.paths.emplace_back(if2cid.first);
 
 				// pick up the id for bz2 verification later
-				if(tgt.bz2VersContId.second.empty() && endsWithSzAr(if2cid.first, ".bz2"))
+				if(tgt.bz2VersContId.distinctName.empty() && endsWithSzAr(if2cid.first, ".bz2"))
 					tgt.bz2VersContId=if2cid.second;
 
 				// also the index file id
-				if(tgt.diffIdxId.second.empty()) // XXX if there is no index at all, avoid repeated lookups somehow?
-				{
-					auto j = file2cid.find(sNativeName+diffIdxSfx);
-					if(j!=file2cid.end())
-						tgt.diffIdxId=j->second;
-				}
+				if(tgt.diffIdxId.distinctName.empty()) // XXX if there is no index at all, avoid repeated lookups somehow?
+					ifThereStoreThere(file2cid, sNativeName+diffIdxSfx, tgt.diffIdxId);
 
 				// and while we are at it, check the checksum of small files in order
 				// to reduce server request count
-				if(if2cid.second.first.size<10000 && ContHas(m_metaFilesRel, if2cid.first))
+				if(if2cid.second.fpr.size<10000 && ContHas(m_metaFilesRel, if2cid.first))
 				{
-					if(if2cid.second.first.CheckFile(SABSPATH(if2cid.first)))
+					if(if2cid.second.fpr.CheckFile(SABSPATH(if2cid.first)))
 						m_metaFilesRel[if2cid.first].uptodate=true;
 				}
 			}
@@ -1238,7 +1257,7 @@ void tCacheOperation::UpdateVolatileFiles()
 	 * First, strip the list down to those which are at least partially present in the cache.
 	 * And keep track of some folders for expiration.
 	 */
-	for(auto it=eqClasses.begin(); it!=eqClasses.end();)
+	for(auto it=idxGroups.begin(); it!=idxGroups.end();)
 	{
 		unsigned found = 0;
 		for(auto& path: it->second.paths)
@@ -1250,10 +1269,21 @@ void tCacheOperation::UpdateVolatileFiles()
 			if(pos!=stmiss)
 				m_managedDirs.insert(path.substr(0, pos+1));
 		}
+
 		if(found)
+		{
+			// remember that index file might be used by other groups
+			if(!it->second.diffIdxId.distinctName.empty())
+			{
+				auto indexIter = idxGroups.find(it->second.diffIdxId);
+				if(indexIter != idxGroups.end())
+					indexIter->second.isReferenced = true;
+			}
+
 			++it;
+		}
 		else
-			eqClasses.erase(it++);
+			idxGroups.erase(it++);
 	}
 #ifdef DEBUGIDX
 	SendFmt << "Folders with checked stuff:<br>";
@@ -1261,12 +1291,46 @@ void tCacheOperation::UpdateVolatileFiles()
 		SendFmt << s << "<br>";
 #endif
 
+	// some preparation of patch index processing
+	for(auto& group: idxGroups)
+	{
+		if(!endsWith(group.first.distinctName, diffIdxSfx))
+			continue;
+		for(auto& indexPath: group.second.paths)
+			Download(indexPath, true, eMsgShow, tFileItemPtr(), 0, 0);
+
+		if(group.second.isReferenced)
+			continue;
+
+		// existing but unreferenced pdiff index files are bad, that means that some client
+		// is tracking this stuff via diff update but ACNG has no clue of the remaining contents
+		// -> let's make sure the best compressed version is present on disk
+		// In that special case the extra index files will not become active ASAP but that's
+		// probably good enough for expiration activity (use it the day after).
+
+		for(auto& indexPath: group.second.paths)
+		{
+			auto sBase = indexPath.substr(0, indexPath.size()-diffIdxSfx.size());
+			SendFmt << "Warning: no base file to use patching on " << indexPath
+					<< ", trying to fetch some" << hendl;
+			for(auto& suf : sfxXzBz2GzLzma)
+			{
+				auto cand(sBase+suf);
+				if(Download(cand, true, eMsgShow, tFileItemPtr(), 0, 0, &indexPath))
+				{
+					SetFlags(cand).vfile_ondisk=true;
+					break;
+				}
+			}
+		}
+	}
+
 	ERRMSGABORT;
 	dbgDump("Refined (1):", 1);
 	dbgState();
 
-	// Let the most recent files be in the front of the list, but the uncompressed ones have priority
-	for(auto& it: eqClasses)
+	// sort by quality and add references for later disarming of group neighbors
+	for(auto& it: idxGroups)
 	{
 #ifdef DEBUG
 		for(auto&x : it.second.paths)
@@ -1274,16 +1338,32 @@ void tCacheOperation::UpdateVolatileFiles()
 #endif
 		sort(it.second.paths.begin(), it.second.paths.end(),
 				lessThanByAvailability(*this));
-		// and while we are at it, give them pointers back to the eq-classes
+		// and connect them together but only the existing ones
+		tIfileAttribs *pfirst(nullptr), *pprev(nullptr);
 		for(auto &path : it.second.paths)
-			SetFlags(path).bros=&it.second.paths;
+		{
+			auto it=m_metaFilesRel.find(path);
+			if(it==m_metaFilesRel.end())
+				continue;
+			if(!pfirst)
+			{
+				pprev = pfirst = & it->second;
+				continue;
+			}
+			pprev->bro = & it->second;
+			pprev = & it->second;
+		}
+		if(pprev)
+			pprev->bro = pfirst;
 	}
+
+#if 0
 	dbgDump("Refined (2):", 2);
 	dbgState();
 //	DelTree(SABSPATH("_actmp")); // do one to test the permissions
 
 	// Iterate over classes and do patch-update where possible
-	for(auto cid2eqcl=eqClasses.begin(); cid2eqcl!=eqClasses.end();cid2eqcl++)
+	for(auto cid2eqcl=idxGroups.begin(); cid2eqcl!=idxGroups.end();cid2eqcl++)
 	{
 		decltype(cid2eqcl) itDiffIdx; // iterator pointing to the patch index descriptor
 		int nProbeCnt(3);
@@ -1401,8 +1481,8 @@ void tCacheOperation::UpdateVolatileFiles()
 
 		DelTree(SABSPATH("_actmp"));
 
-		if (cid2eqcl->second.diffIdxId.second.empty() || eqClasses.end() == (itDiffIdx
-					= eqClasses.find(cid2eqcl->second.diffIdxId)) || itDiffIdx->second.paths.empty())
+		if (cid2eqcl->second.diffIdxId.distinctName.empty() || idxGroups.end() == (itDiffIdx
+					= idxGroups.find(cid2eqcl->second.diffIdxId)) || itDiffIdx->second.paths.empty())
 			goto NOT_PATCHABLE; // no patches available
 
 		// iterate over patch paths and fine a present one which is most likely the most recent one
@@ -1487,7 +1567,7 @@ void tCacheOperation::UpdateVolatileFiles()
 						if(m_bVerbose)
 							SendFmt << "Found fresh version in " << pathRel << "<br>";
 
-						Propagate(pathRel, eqClasses, &cid2eqcl, &sPatchBaseAbs);
+						Propagate(pathRel, idxGroups, &cid2eqcl, &sPatchBaseAbs);
 
 						if(CheckStopSignal())
 							return;
@@ -1530,12 +1610,12 @@ void tCacheOperation::UpdateVolatileFiles()
 							}
 
 							SendChunk("Patching result: succeeded<br>");
-							Propagate(sPatchResRel, eqClasses, &cid2eqcl);
+							Propagate(sPatchResRel, idxGroups, &cid2eqcl);
 
 							if(CheckStopSignal())
 								return;
 
-							InstallBz2edPatchResult(eqClasses, &cid2eqcl);
+							InstallBz2edPatchResult(idxGroups, &cid2eqcl);
 
 							if(CheckStopSignal())
 								return;
@@ -1556,6 +1636,7 @@ void tCacheOperation::UpdateVolatileFiles()
 		}
 
 NOT_PATCHABLE:
+#endif
 
 #if 0
 
@@ -1581,14 +1662,14 @@ NOT_PATCHABLE:
 					return;
 			}
 		}
-#endif
+
 
 CONTINUE_NEXT_GROUP:
 
 		if(CheckStopSignal())
 			return;
 	}
-
+#endif
 	dbgDump("Refined (3):", 3);
 
 	dbgState();
@@ -1613,7 +1694,7 @@ CONTINUE_NEXT_GROUP:
 	}
 }
 
-void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass& eqClasses,
+void tCacheOperation::InstallBz2edPatchResult(tFileGroups& eqClasses,
 		void* peqClassIter)
 {
 #ifndef HAVE_LIBBZ2
@@ -1622,10 +1703,10 @@ void tCacheOperation::InstallBz2edPatchResult(tContId2eqClass& eqClasses,
 	if(!acfg::recompbz2)
 		return;
 
-	auto& eqClassIter = *((tContId2eqClass::iterator*)peqClassIter);
+	auto& eqClassIter = *((tFileGroups::iterator*)peqClassIter);
 
 	string sFreshBz2Rel;
-	tFingerprint &bz2fpr=eqClassIter->second.bz2VersContId.first;
+	tFingerprint &bz2fpr = eqClassIter->second.bz2VersContId.fpr;
 	string sRefBz2Rel;
 
 	for (const auto& tgt : eqClassIter->second.paths)
@@ -2174,7 +2255,7 @@ void tCacheOperation::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)>
 		if(CheckStopSignal())
 			return;
 
-		const tIfileAttribs &att=path2att.second;
+		tIfileAttribs &att=path2att.second;
 		enumMetaType itype = att.eIdxType;
 		if(!itype) // default?
 			itype=GuessMetaTypeFromURL(path2att.first);
@@ -2213,13 +2294,12 @@ void tCacheOperation::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)>
 			}
 			continue;
 		}
-		else if(!m_bByPath && att.bros)
+		else if(!m_bByPath)
 		{
-			for(auto& bro: *att.bros)
-			{
-				MTLOGDEBUG("Marking " << bro << " as processed");
-				SetFlags(bro).alreadyparsed=true;
-			}
+			MTLOGDEBUG("Marking siblings as processed");
+			att.alreadyparsed = true;
+			for(auto next = att.bro; next != &att; next = next->bro)
+				next->alreadyparsed = true;
 		}
 	}
 }
