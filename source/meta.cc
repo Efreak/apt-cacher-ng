@@ -722,3 +722,21 @@ bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData)
 }
 #endif
 #endif
+
+mstring GetDirPart(cmstring &in)
+{
+	if(in.empty())
+		return sEmptyString;
+
+	tStrPos end = in.find_last_of(CPATHSEP);
+	if(end == stmiss) // none? don't care then
+		return sEmptyString;
+
+	return in.substr(0, end+1);
+}
+
+std::pair<mstring, mstring> SplitDirPath(cmstring& in)
+		{
+auto dir=GetDirPart(in);
+return std::pair<mstring,mstring>(dir, in.substr(dir.length()));
+		}

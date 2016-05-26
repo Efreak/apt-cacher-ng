@@ -142,6 +142,14 @@ inline void trimString(mstring &s, LPCSTR junk=SPACECHARS)
 
 mstring GetBaseName(cmstring &in);
 mstring GetDirPart(cmstring &in);
+std::pair<mstring, mstring> SplitDirPath(cmstring& in);
+
+inline LPCSTR GetTypeSuffix(cmstring& s)
+{
+	auto pos = s.find_last_of("/.");
+	auto p = s.c_str();
+	return pos == stmiss ? p + s.length() : p + pos;
+}
 
 void trimProto(mstring & sUri);
 tStrPos findHostStart(const mstring & sUri);
@@ -373,17 +381,17 @@ inline void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar)
 
 extern cmstring sEmptyString;
 
-//! split-and-extract helper for strings, for convenient use with for-loops
+//! iterator-like helper for string splitting, for convenient use with for-loops
 class tSplitWalk
 {
 	cmstring &s;
-	mstring::size_type start, len, oob;
+	mutable mstring::size_type start, len, oob;
 	LPCSTR m_seps;
 
 public:
 	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, unsigned begin=0)
 	: s(*line), start(begin), len(stmiss), oob(line->size()), m_seps(separators) {}
-	inline bool Next()
+	inline bool Next() const
 	{
 		if(len != stmiss) // not initial state, find the next position
 			start = start + len + 1;
@@ -410,9 +418,9 @@ public:
 
 		return true;
 	}
-	inline mstring str(){ return s.substr(start, len); }
-	inline operator mstring() { return str(); }
-	inline LPCSTR remainder() { return s.c_str() + start; }
+	inline mstring str() const { return s.substr(start, len); }
+	inline operator mstring() const { return str(); }
+	inline LPCSTR remainder() const { return s.c_str() + start; }
 };
 
 //bool CreateDetachedThread(void *(*threadfunc)(void *));

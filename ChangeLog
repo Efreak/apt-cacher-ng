@@ -1,7 +1,16 @@
 apt-cacher-ng (0.9.3) HAVE-SOME-LIGHT-BALLS; urgency=medium
 
-  * Cope with removal of SHA1 checksums from Debian/Ubuntu (In)Release files
-  * Review of volatile data whitelist - now expiring old Translations*/* data
+  * FIX: Cope with removal of SHA1 checksums from Debian/Ubuntu (In)Release files
+  * FIX: Overhaul of pdiff based update code, actually repairing pdiff code in
+    some environments which has been silently broken for about 2-3 months.  The
+    old code was designed for the situation a half decade ago when
+    information like compressed version's checksum was not available in the
+    patch index.
+  * FIX: reduction of volatile data whitelist - now expiring deprecated
+    Translations*/* data
+  * Small review of expiration (index file updating) code, replaced some
+    cruft to make analysis with less syscalls and attempt to get more likely
+    available of remote files in some cases.
   * Better handling of by-hash type files:
     + Moved internal storage of Release files' tracking snapshots to a private
       namespace of the cache
@@ -12,9 +21,6 @@ apt-cacher-ng (0.9.3) HAVE-SOME-LIGHT-BALLS; urgency=medium
       file (matching the latest InRelease's signature), the reference file
       contents is replaced with that correct version
     + correct handling for expiration with or without strict path checking
-  * Small review of expiration (index file updating) code, replaced some
-    cruft to make analysis with less syscalls and attempt to get more likely
-    available of remote files in some cases.
 
  -- Eduard Bloch <blade@debian.org>  Thu, 19 May 2016 23:01:44 +0200
 

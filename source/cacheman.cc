@@ -38,12 +38,16 @@
 
 using namespace std;
 
+
+static cmstring dis("/binary-");
 static cmstring oldStylei18nIdx("/i18n/Index");
 static cmstring diffIdxSfx(".diff/Index");
-static cmstring sPatchBaseRel("_actmp/patch.base");
-static cmstring sPatchResRel("_actmp/patch.result");
 static const string relKey("/Release"), inRelKey("/InRelease");
 time_t m_gMaintTimeNow=0;
+
+static cmstring sPatchCombinedRel("_actmp/combined.diff");
+static cmstring sPatchInputRel("_actmp/patch.base");
+static cmstring sPatchResultRel("_actmp/patch.result");
 
 struct tPatchEntry
 {
@@ -58,7 +62,7 @@ struct tContentKey
 	tFingerprint fpr;
 	mstring toString() const
 	{
-		return distinctName + "|" + (mstring) fpr;
+		return valid() ? distinctName + "|" + (mstring) fpr : sEmptyString;
 	}
 	bool operator<(const tContentKey& other) const
 	{
@@ -66,14 +70,32 @@ struct tContentKey
 			return distinctName < other.distinctName;
 		return fpr < other.fpr;
 	}
+	bool valid() const { return fpr.csType != CSTYPES::CSTYPE_INVALID; }
 };
 struct tFileGroup {
+	// the list shall be finally sorted by compression type (most favorable first)
+	// and among the same type by modification date so the newest appears on top which
+	// should be the most appropriate for patching
 	tStrDeq paths;
-	tContentKey diffIdxId, bz2VersContId;
+
+	tContentKey diffIdxId;
+#ifdef EXPLICIT_INDEX_USE_CHECKING
 	bool isReferenced = false;
+#endif
 };
 class tFileGroups : public std::map<tContentKey, tFileGroup> {};
+cmstring& tCacheOperation::GetFirstPresentPath(const tFileGroups& groups, const tContentKey& ckey)
+{
+	auto it = groups.find(ckey);
+	if(it == groups.end())
+		return sEmptyString;
 
+	for(auto& s: it->second.paths)
+		if(GetFlags(s).vfile_ondisk)
+			return s;
+
+	return sEmptyString;
+}
 
 tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
 	tSpecOpDetachable(parms),
@@ -148,6 +170,14 @@ tCacheOperation::tIfileAttribs &tCacheOperation::SetFlags(cmstring &sPathRel)
 {
 	ASSERT(!sPathRel.empty());
 	return sPathRel.empty() ? attr_dummy : m_metaFilesRel[sPathRel];
+}
+
+tCacheOperation::tIfileAttribs & tCacheOperation::GetRWFlags(cmstring &sPathRel)
+{
+	auto it=m_metaFilesRel.find(sPathRel);
+	if(m_metaFilesRel.end()==it)
+		return const_cast<tCacheOperation::tIfileAttribs&>(attr_dummy_pure);
+	return it->second;
 }
 
 // detects when an architecture has been removed entirely from the Debian archive
@@ -225,7 +255,7 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	mstring sErr;
 	bool bSuccess=false;
 
-	bool holdon = StrHas(sFilePathRel, "icons");
+//	bool holdon = sFilePathRel == "debrep/dists/experimental/contrib/binary-amd64/Packages";
 
 #define NEEDED_VERBOSITY_ALL_BUT_ERRORS (msgVerbosityLevel >= eMsgHideErrors)
 #define NEEDED_VERBOSITY_EVERYTHING (msgVerbosityLevel >= eMsgShow)
@@ -550,16 +580,14 @@ inline tStrPos FindCompSfxPos(const string &s)
 			return(s.size()-p.size());
 	return stmiss;
 }
-static unsigned short FindCompIdx(cmstring &s)
+
+static short FindCompIdx(cmstring &s)
 {
-	unsigned short i=0;
-	for(;i<_countof(sfxXzBz2GzLzma); i++)
+	for(unsigned i=0;i<_countof(sfxXzBz2GzLzma); ++i)
 		if(endsWith(s, sfxXzBz2GzLzma[i]))
 			return i;
-	return i;
+	return -1;
 }
-
-static const string dis("/binary-");
 
 void DelTree(const string &what)
 {
@@ -583,6 +611,8 @@ void DelTree(const string &what)
 	IFileHandler::DirectoryWalk(what, &hh, false, false);
 }
 
+// crap
+#if 0
 struct lessThanByAvailability
 {
 	tCacheOperation& m_cman;
@@ -609,11 +639,27 @@ struct lessThanByAvailability
 		}
 };
 
-struct tCompByState : public tFingerprint
+struct tEqualToFingerprint : public tFingerprint
 {
-	tCompByState(const tFingerprint &re) : tFingerprint(re) {}
+	tEqualToFingerprint(const tFingerprint &re) : tFingerprint(re) {}
 	bool operator()(const tPatchEntry &other) const { return other.fprState == *this; }
 };
+
+
+struct tCompRateIterator
+{
+	tStrDeq& _stuff;
+	tStrDeq::iterator it;
+	tCompRateIterator(tStrDeq& stuff) : _stuff(stuff) { it = _stuff.end();};
+	mstring& value() { return *it;	}
+	bool next() {
+		if(it == _stuff.end()) {it = _stuff.begin(); return it != _stuff.end();}
+
+	}
+};
+
+#endif
+
 
 tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 {
@@ -740,9 +786,9 @@ bool tCacheOperation::Inject(cmstring &fromRel, cmstring &toRel,
 	if(GetFlags(toRel).uptodate)
 		return true;
 
-	auto sAbsFrom(SABSPATH(fromRel)), sAbsTo(SABSPATH(toRel));
+	auto sFromAbs(SABSPATH(fromRel)), sToAbs(SABSPATH(toRel));
 
-	Cstat infoFrom(sAbsFrom), infoTo(sAbsTo);
+	Cstat infoFrom(sFromAbs), infoTo(sToAbs);
 	if(infoFrom && infoTo && infoFrom.st_ino == infoTo.st_ino && infoFrom.st_dev == infoTo.st_dev)
 		return true;
 
@@ -751,22 +797,37 @@ bool tCacheOperation::Inject(cmstring &fromRel, cmstring &toRel,
 	SendFmt<<"Replacing "<<toRel<<" with " << fromRel <<  "<br>\n";
 #endif
 
+	if(!infoFrom)
+	{
+		MTLOGASSERT(0, "Bad source file: " << sFromAbs);
+		return false;
+	}
+
 	header head;
 
 	if (!pHead)
 	{
 		pHead = &head;
 
-		if (head.LoadFromFile(sAbsFrom+".head") <= 0 || !head.h[header::CONTENT_LENGTH])
+		if (head.LoadFromFile(sFromAbs+".head") > 0 && head.h[header::CONTENT_LENGTH])
 		{
-			MTLOGASSERT(0, "Cannot read " << fromRel << ".head or bad data");
+			if(infoFrom.st_size != atoofft(head.h[header::CONTENT_LENGTH]))
+			{
+				MTLOGASSERT(0, "Bad file size");
+				return false;
+			}
+		}
+		else if(head.LoadFromFile(sToAbs+".head") > 0)
+		{
+			head.set(header::CONTENT_LENGTH, (off_t) infoFrom.st_size);
+		}
+		else
+		{
+			MTLOGASSERT(0, "Cannot build meta data for " << sToAbs);
 			return false;
 		}
-		if(GetFileSize(SABSPATH(fromRel), -1) != atoofft(head.h[header::CONTENT_LENGTH]))
-		{
-			MTLOGASSERT(0, "Bad file size");
-			return false;
-		}
+		head.set(header::CONTENT_TYPE, "octet/stream");
+		head.set(header::LAST_MODIFIED, FAKEDATEMARK);
 	}
 
 	class tInjectItem : public fileitem_with_storage
@@ -849,167 +910,493 @@ bool tCacheOperation::Inject(cmstring &fromRel, cmstring &toRel,
 	return bOK;
 }
 
-
-bool tCacheOperation::Propagate(cmstring &donorRel, tFileGroups& eqClasses,
-		const void* peqClassIter,
-		cmstring *psTmpUnpackedAbs)
-{
-#ifdef DEBUG
-	SendFmt<< "Installing " << donorRel << "<br>\n";
-#endif
-
-	auto eqClassIter = *((tFileGroups::iterator*)peqClassIter);
-
-	const tStrDeq &tgts = eqClassIter->second.paths;
-
-	// we know it's uptodate, make sure to avoid attempts to modify it in background
-	fileItemMgmt src;
-	if(GetFlags(donorRel).uptodate)
-	{
-		if(!src.PrepareRegisteredFileItemWithStorage(donorRel, false))
-			return false;
-
-		src.get()->Setup(false);
-		// something changed it in meantime?!
-		if (src.get()->GetStatus() != fileitem::FIST_COMPLETE)
-			return false;
-	}
-
-	int nInjCount=0;
-	for (const auto& tgtCand : tgts)
-	{
-		if(donorRel == tgtCand)
-			continue;
-		const tIfileAttribs &flags=GetFlags(tgtCand);
-		// exists somewhere else and same compression type? -> replace it
-		if(FindCompIdx(donorRel) == FindCompIdx(tgtCand))
-		{
-			if (flags.vfile_ondisk)
-			{
-				// counts fresh file as injected, no need to recheck them in Inject()
-				if (flags.uptodate || Inject(donorRel, tgtCand))
-					nInjCount++;
-				else
-					MTLOGASSERT(false, "Inject failed");
-			}
-#if 0 // little hack to make repairs faster (bz2 to xz) in case where there is an extra copy
-			// actually it's overkill for what it's good for,
-			// the alternative version download attempt
-			// fixes the issue good enough
-			else
-			{
-				// however, if it has bros lying around that are no longer
-				// tracked by upstream index then force its installation!
-				auto cpos=FindCompSfxPos(tgtCand);
-				string sBasename=tgtCand.substr(0, cpos);
-				for(auto& sfx : sfxXzBz2GzLzmaNone)
-				{
-					if(endsWith(tgtCand, sfx)) // same file, checked before
-						continue;
-					auto probeOtherSfx = sBasename+sfx;
-					if(!GetFlags(probeOtherSfx).vfile_ondisk)
-						continue;
-					// HIT! Install a copy and break
-					if (Inject(donorRel, tgtCand))
-					{
-						SendFmt << "<span class=\"WARNING\">"
-								"Warning: added a new file "
-								<< tgtCand << " from another source "
-								"because upstream index apparently "
-								"stopped listing the "
-								<< probeOtherSfx <<
-								"version</span><br>\n";
-						nInjCount++;
-						SetFlags(tgtCand) = flags;
-					}
-					break;
-				}
-			}
-#endif
-		}
-	}
-
-	// defuse some stuff located in the same directory, like .gz variants of .bz2 files
-	// and this REALLY means: ONLY THE SAME DIRECTORY!
-	// it disables alternative variants with different compressions
-	// and shall not affect the strict-path checking later
-	for (const auto& tgt: tgts)
-	{
-#ifdef DEBUG_EXTRA
-	SendFmt<< "Bro check for " << tgt << "<br>\n";
-#endif
-		auto& myState = GetFlags(tgt);
-		if(!myState.vfile_ondisk || !myState.uptodate || myState.parseignore)
-			continue;
-
-		tStrPos cpos=FindCompSfxPos(tgt);
-		string sBasename=tgt.substr(0, cpos);
-		string sux=cpos==stmiss ? "" : tgt.substr(FindCompSfxPos(tgt));
-		for(auto& compsuf : sfxXzBz2GzLzmaNone)
-		{
-			if(sux==compsuf) continue; // touch me not
-			mstring sBro = sBasename+compsuf;
-#ifdef DEBUG_EXTRA
-	SendFmt<< "Search bro: " << sBro << "<br>\n";
-#endif
-			auto kv=m_metaFilesRel.find(sBro);
-			if(kv!=m_metaFilesRel.end() && kv->second.vfile_ondisk)
-			{
-				kv->second.parseignore=true; // gotcha
-				MTLOGDEBUG("Defused bro of " << tgt << ": " << sBro);
-
-				// also, we don't care if the pdiff index vanished for some reason
-				kv = m_metaFilesRel.find(sBasename+".diff/Index");
-				if(kv!=m_metaFilesRel.end())
-					kv->second.forgiveDlErrors=true;
-
-				// if we have a freshly unpacked version and bro should be the the same
-				// and bro is older than the donor file for some reason... update bro!
-				if (psTmpUnpackedAbs && compsuf.empty())
-				{
-					struct stat stbuf;
-					time_t broModTime;
-
-					if (0 == ::stat(SZABSPATH(sBro), &stbuf)
-							&& (broModTime = stbuf.st_mtime, 0 == ::stat(SZABSPATH(donorRel), &stbuf))
-							&& broModTime < stbuf.st_mtime)
-					{
-						MTLOGDEBUG("Unpacked version in " << sBro << " too old, replace from "
-								<< *psTmpUnpackedAbs);
-						FileCopy(*psTmpUnpackedAbs, SZABSPATH(sBro));
-					}
-				}
-			}
-		}
-	}
-
-	if(!nInjCount && endsWith(donorRel, sPatchResRel))
-	{
-		/*
-		 * Now that's a special case, the file was patched and
-		 * we need to store the latest state somewhere. But there
-		 * was no good candidate to keep that copy. Looking closer for
-		 * some appropriate location.
-		 * */
-		string sLastRessort;
-		for (auto& tgt : tgts)
-		{
-			if(stmiss!=FindCompSfxPos(tgt))
-				continue;
-			// ultimate ratio... and then use the shortest path
-			if(sLastRessort.empty() || sLastRessort.size() > tgt.size())
-				sLastRessort=tgt;
-		}
-		Inject(donorRel, sLastRessort);
-	}
-
-	return true;
-}
-
 void tCacheOperation::StartDlder()
 {
 	if (!m_pDlcon)
 		m_pDlcon = new dlcon(true);
+}
+
+void tCacheOperation::ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups& idxGroups,
+		const tStrDeq& releaseFilesRel)
+{
+	for(auto& sPathRel : releaseFilesRel)
+	{
+#ifdef DEBUG
+		SendFmt << "Start parsing " << sPathRel << "<br>";
+#endif
+		// raw data extraction
+		{
+			typedef map<string, tContentKey> tFile2Cid;
+			// pull all contents into a sorted dictionary for later filtering
+			tFile2Cid file2cid;
+			auto recvInfo = [&file2cid, this](const tRemoteFileInfo &entry)
+									{
+#if 0 // bad, keeps re-requesting update of such stuff forever. Better let the quick content check analyze and skip them.
+				tStrPos compos=FindCompSfxPos(entry.sFileName);
+				// skip some obvious junk and its gzip version
+				if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
+					return;
+#endif
+				auto& cid = file2cid[entry.sDirectory+entry.sFileName];
+				cid.fpr=entry.fpr;
+
+				tStrPos pos=entry.sDirectory.rfind(dis);
+				// if looking like Debian archive, keep just the part after binary-...
+				if(stmiss != pos)
+					cid.distinctName=entry.sDirectory.substr(pos)+entry.sFileName;
+				else
+					cid.distinctName=entry.sFileName;
+									};
+
+			ParseAndProcessMetaFile(std::function<void (const tRemoteFileInfo &)>(recvInfo),
+					sPathRel, EIDX_RELEASE);
+
+			if(file2cid.empty())
+				continue;
+
+
+#ifndef EXPLICIT_INDEX_USE_CHECKING
+			// first, look around for for .diff/Index files on disk, update them, check patch base file
+			// and make sure one is there or something is not right
+			for(const auto cid : file2cid)
+			{
+				// not diff index or not in cache?
+				if(!endsWith(cid.first, diffIdxSfx))
+					continue;
+				auto& flags = GetFlags(cid.first);
+				if(!flags.vfile_ondisk)
+					continue;
+				//if(!flags.uptodate && !Download(cid.first, true, eMsgShow))
+				//	continue;
+
+				// ok, having a good .diff/Index file, what now?
+
+				string sBase=cid.first.substr(0, cid.first.size()-diffIdxSfx.size());
+
+				// two rounds, try to find any in descending order, then try to download one
+				for(int checkmode=0; checkmode < 3; checkmode++)
+				{
+					for(auto& suf: sfxXzBz2GzLzma)
+					{
+						auto cand(sBase+suf);
+						if(checkmode == 0)
+						{
+							if(_QuickCheckSolidFileOnDisk(cand))
+								goto found_base;
+						}
+						else if(checkmode == 1) // now really check on disk
+						{
+							if(0 == ::access(SZABSPATH(cand), F_OK))
+								goto found_base;
+						}
+						else
+						{
+							SendFmt << "No base file to use patching on " << cid.first << ", trying to fetch " << cand << hendl;
+							if(Download(cand, true, eMsgHideErrors, tFileItemPtr(), 0, 0, &cid.first))
+							{
+								SetFlags(cand).vfile_ondisk=true;
+								goto found_base;
+							}
+						}
+					}
+				}
+				found_base:;
+			}
+#endif
+			//dbgState();
+
+			// now refine all extracted information and store it in eqClasses for later processing
+			for(auto if2cid : file2cid)
+			{
+				string sNativeName=if2cid.first.substr(0, FindCompSfxPos(if2cid.first));
+				tContentKey groupId;
+
+				// identify the key for this group. Ideally, this is the descriptor
+				// of the native representation, if found in the release file, in doubt
+				// take the one from the best compressed form or the current one
+				auto it2=file2cid.find(sNativeName);
+				if(it2 != file2cid.end())
+					groupId=it2->second;
+				else
+					for(auto& ps : sfxXzBz2GzLzma)
+						ifThereStoreThereAndBreak(file2cid, sNativeName+ps, groupId);
+				if(!groupId.valid())
+					groupId = if2cid.second;
+
+				tFileGroup &tgt = idxGroups[groupId];
+				tgt.paths.emplace_back(if2cid.first);
+
+				// also the index file id
+				if(!tgt.diffIdxId.valid()) // XXX if there is no index at all, avoid repeated lookups somehow?
+					ifThereStoreThere(file2cid, sNativeName+diffIdxSfx, tgt.diffIdxId);
+
+				// and while we are at it, check the checksum of small files in order
+				// to reduce server request count
+				if(if2cid.second.fpr.size < 42000)
+				{
+					auto& flags = GetRWFlags(if2cid.first);
+					if(flags.vfile_ondisk && if2cid.second.fpr.CheckFile(SABSPATH(if2cid.first)))
+						flags.uptodate=true;
+				}
+
+			}
+		}
+	}
+
+}
+
+/*
+* First, strip the list down to those which are at least partially present in the cache.
+* And keep track of some folders for expiration.
+*/
+
+void tCacheOperation::FilterGroupData(tFileGroups& idxGroups)
+{
+	for(auto it=idxGroups.begin(); it!=idxGroups.end();)
+	{
+		unsigned found = 0;
+		for(auto& path: it->second.paths)
+		{
+			// WARNING: this check works only as long as stuff is volatile AND index type
+			if(!GetFlags(path).vfile_ondisk)
+				continue;
+			found++;
+			auto pos = path.rfind('/');
+			if(pos!=stmiss)
+				m_managedDirs.insert(path.substr(0, pos+1));
+		}
+
+		if(found)
+		{
+#ifdef EXPLICIT_INDEX_USE_CHECKING
+			//bool holdon = StrHas(it->second.paths.front(), "contrib/binary-amd64/Packa");
+			// remember that index file might be used by other groups
+			if(it->second.diffIdxId.valid())
+			{
+				auto indexIter = idxGroups.find(it->second.diffIdxId);
+				if(indexIter != idxGroups.end())
+					indexIter->second.isReferenced = true;
+			}
+#endif
+			++it;
+		}
+		else
+			idxGroups.erase(it++);
+	}
+#ifdef DEBUGIDX
+	SendFmt << "Folders with checked stuff:<br>";
+	for(auto s : m_managedDirs)
+		SendFmt << s << "<br>";
+#endif
+#ifdef EXPLICIT_INDEX_USE_CHECKING
+	// some preparation of patch index processing
+	for(auto& group: idxGroups)
+	{
+		if(!endsWith(group.first.distinctName, diffIdxSfx))
+			continue;
+		for(auto& indexPath: group.second.paths)
+			Download(indexPath, true, eMsgShow, tFileItemPtr(), 0, 0);
+
+		if(group.second.isReferenced)
+			continue;
+
+		// existing but unreferenced pdiff index files are bad, that means that some client
+		// is tracking this stuff via diff update but ACNG has no clue of the remaining contents
+		// -> let's make sure the best compressed version is present on disk
+		// In that special case the extra index files will not become active ASAP but that's
+		// probably good enough for expiration activity (use it the day after).
+
+		for(auto& indexPath: group.second.paths)
+		{
+			auto sBase = indexPath.substr(0, indexPath.size()-diffIdxSfx.size());
+			SendFmt << "Warning: no base file to use patching on " << indexPath
+					<< ", trying to fetch some" << hendl;
+			for(auto& suf : sfxXzBz2GzLzma)
+			{
+				auto cand(sBase+suf);
+				if(Download(cand, true, eMsgShow, tFileItemPtr(), 0, 0, &indexPath))
+				{
+					SetFlags(cand).vfile_ondisk=true;
+					break;
+				}
+			}
+		}
+	}
+#endif
+
+}
+void tCacheOperation::SortAndInterconnectGroupData(tFileGroups& idxGroups)
+{
+
+	for(auto& it: idxGroups)
+	{
+#ifdef DEBUG
+		for(auto&x : it.second.paths)
+			assert(!x.empty());
+#endif
+		for(auto jit = it.second.paths.begin(); jit != it.second.paths.end();)
+		{
+			if(FindCompIdx(*jit) < 0) // uncompressed stays for now
+				jit++;
+			else if(GetFlags(*jit).vfile_ondisk)
+				jit++;
+			else
+				jit = it.second.paths.erase(jit);
+		}
+
+		// FULLY clean data set, disk-referencing after this moment
+
+		sort(it.second.paths.begin(), it.second.paths.end());
+				//lessThanByAvailability(*this));
+
+		// build a daisy chain for later download disarming
+		tIfileAttribs *pfirst(nullptr), *pprev(nullptr);
+		for(auto &path : it.second.paths)
+		{
+			auto it=m_metaFilesRel.find(path);
+			if(it==m_metaFilesRel.end())
+				continue;
+			if(!pfirst)
+			{
+				pprev = pfirst = & it->second;
+				continue;
+			}
+			pprev->bro = & it->second;
+			pprev = & it->second;
+		}
+		if(pprev)
+			pprev->bro = pfirst;
+	}
+}
+
+void tCacheOperation::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
+{
+//	cmstring* pBest = nullptr;
+//	const tIfileAttribs* pBestAttr = nullptr;
+	int changeNeedCount = 0;
+	//tStrSet locationsInSidestore;
+
+	for(const auto& pb: siblings)
+	{
+		auto& fl = GetFlags(pb);
+		if(!fl.vfile_ondisk)
+			continue;
+		if(!fl.parseignore && !fl.uptodate)
+			changeNeedCount++;
+		//locationsInSidestore.emplace( pb.substr(0, FindCompSfxPos(pb)));
+	}
+
+	if(!changeNeedCount)
+		return;
+	filereader reader;
+	if(!reader.OpenFile(SABSPATH(pindexPathRel), true, 1))
+		return;
+	map<string, deque<string> > contents;
+	ParseGenericRfc822File(reader, "", contents);
+	auto& sStateCurrent = contents["SHA256-Current"];
+	if(sStateCurrent.empty() || sStateCurrent.front().empty())
+		return;
+	auto& csHist = contents["SHA256-History"];
+	if(csHist.empty() || csHist.size() < 2)
+		return;
+
+	tFingerprint probeStateWanted, // the target data
+	probe, // temp scan object
+	probeOrig; // appropriate patch base stuff
+
+	if(!probeStateWanted.Set(tSplitWalk(& sStateCurrent.front()), CSTYPE_SHA256))
+				return;
+
+	unordered_map<string,tFingerprint> patchSums;
+	for(const auto& line: contents["SHA256-Patches"])
+	{
+		tSplitWalk split(&line);
+		tFingerprint probe;
+		if(!probe.Set(split, CSTYPE_SHA256) || !split.Next())
+			continue;
+		EMPLACE_PAIR_COMPAT(patchSums, split.str(), probe);
+	}
+	cmstring sPatchResultAbs(SABSPATH(sPatchResultRel));
+	cmstring sPatchInputAbs(SABSPATH(sPatchInputRel));
+	cmstring sPatchCombinedAbs(SABSPATH(sPatchCombinedRel));
+
+	// returns true if a new patched file was created
+	auto tryPatch = [&](cmstring& pbaseRel) -> bool
+			{
+		// XXX: use smarter line matching or regex
+		auto probeCS = probeOrig.GetCsAsString();
+		auto probeSize = offttos(probeOrig.size);
+		FILE_RAII pf;
+		for(const auto& histLine: csHist)
+		{
+			// quick filter
+			if(!pf.p && !startsWith(histLine, probeCS))
+				continue;
+
+			// analyze the state line
+			tSplitWalk split(&histLine, SPACECHARS);
+			if(!split.Next() || !split.Next())
+				continue;
+			// at size token
+			if(!pf.p && probeSize != split.str())
+				return false; // faulty data?
+			if(!split.Next())
+				continue;
+			string pname = split.str();
+			trimString(pname);
+			if(pname.empty())
+				return false; // XXX: maybe throw int with line number
+
+			// ok, first patch of the sequence found
+			if(!pf.p)
+			{
+				::mkbasedir(sPatchCombinedAbs);
+				// append mode!
+				pf.p=fopen(sPatchCombinedAbs.c_str(), "w");
+				if(!pf.p)
+				{
+					SendChunk("Failed to create intermediate patch file, stop patching...<br>");
+					return false;
+				}
+			}
+			// ok, so we started collecting patches...
+
+			string patchPathRel(pindexPathRel.substr(0, pindexPathRel.size()-5) +
+					pname + ".gz");
+			if(!Download(patchPathRel, false, eDlMsgPrio::eMsgHideErrors,
+					tFileItemPtr(), 0, 0, &pindexPathRel))
+				return false;
+			SetFlags(patchPathRel).parseignore = true; // static stuff, hands off!
+
+			// append context to combined diff while unpacking
+			// XXX: probe result can be checked against contents["SHA256-History"]
+			if(!probe.ScanFile(SABSPATH(patchPathRel), CSTYPE_SHA256, true, pf.p))
+			{
+				if(m_bVerbose)
+					SendFmt << "Failure on checking of intermediate patch data in " << patchPathRel << ", stop patching...<br>";
+				return false;
+			}
+			if(probe != patchSums[pname])
+			{
+				SendFmt<< "Bad patch data in " << patchPathRel <<" , stop patching...<br>";
+				return false;
+			}
+		}
+		if(pf.p)
+		{
+			::fprintf(pf.p, "w patch.result\n");
+			::fflush(pf.p); // still a slight risk of file closing error but it's good enough for now
+			if(::ferror(pf.p))
+			{
+				SendChunk("Patch application error<br>");
+				return false;
+			}
+			checkForceFclose(pf.p);
+
+#ifndef DEBUGIDX
+			if(m_bVerbose)
+#endif
+				SendChunk("Patching...<br>");
+
+			tSS cmd;
+			cmd << "cd '" << CACHE_BASE << "_actmp' && ";
+			auto act = acfg::suppdir + SZPATHSEP "acngtool";
+			if(!acfg::suppdir.empty() && 0==access(act.c_str(), X_OK))
+				cmd << "'" << act << "' patch patch.base " << sPatchCombinedAbs << " patch.result";
+			else
+				cmd << " red --silent patch.base < " << sPatchCombinedAbs;
+
+			if (::system(cmd.c_str()))
+			{
+				MTLOGASSERT(false, "Command failed: " << cmd);
+				return false;
+			}
+
+			if (!probe.ScanFile(sPatchResultAbs, CSTYPE_SHA256, false))
+			{
+				MTLOGASSERT(false, "Scan failed: " << sPatchResultAbs);
+				return false;
+			}
+
+			if(probe != probeStateWanted)
+			{
+				MTLOGASSERT(false,"Final verification failed");
+				return false;
+			}
+			return true;
+		}
+		return false;
+			};
+
+	// start with uncompressed type, xz, bz2, gz, lzma
+	for(auto itype : { -1, 0, 1, 2, 3})
+	{
+		for(const auto& pb : siblings)
+		{
+			if(itype != FindCompIdx(pb))
+				continue;
+
+			FILE_RAII df;
+			DelTree(SABSPATH("_actmp"));
+			::mkbasedir(sPatchInputAbs);
+			df.p = fopen(sPatchInputAbs.c_str(), "w");
+			if(!df.p)
+			{
+				SendFmt << "Cannot write temporary patch data to "
+						<< sPatchInputRel << "<br>";
+				return;
+			}
+			if(!probeOrig.ScanFile(SABSPATH(pb),
+					CSTYPE_SHA256, true, df.p))
+				continue;
+			df.close();
+			if(probeStateWanted == probeOrig)
+			{
+				SetFlags(pb).uptodate = true;
+				SyncSiblings(pb, siblings);
+				return; // the file is uptodate already...
+			}
+
+			if(!tryPatch(pb))
+				continue; // only if fails on file checks
+
+			// install to one of uncompressed locations, let SyncSiblings handle the rest
+			for(auto& path: siblings)
+			{
+				// if possible, try to reconstruct reliable download information
+				// inject might need it
+				header h;
+				header *ph(0);
+				if(h.LoadFromFile(SABSPATH(pindexPathRel)+".head")
+						&& h.h[header::XORIG])
+				{
+					auto len=strlen(h.h[header::XORIG]);
+					if(len < diffIdxSfx.length())
+						return; // heh?
+					h.h[header::XORIG][len-diffIdxSfx.length()] = 0;
+					h.set(header::CONTENT_TYPE, "octet/stream");
+					h.set(header::LAST_MODIFIED, FAKEDATEMARK);
+					h.set(header::CONTENT_LENGTH, probeStateWanted.size);
+					ph = &h;
+				}
+
+#ifndef DEBUGIDX
+				if(m_bVerbose)
+#endif
+					SendFmt << "Installing as " << path << ", state: " <<  probeStateWanted << hendl;
+
+
+				if(FindCompIdx(path) < 0
+						&& Inject(sPatchResultRel, path, true, ph, 0))
+				{
+					SyncSiblings(path, siblings);
+				}
+			}
+
+			// patched, installed, DONE!
+			return;
+		}
+	}
 }
 
 void tCacheOperation::UpdateVolatileFiles()
@@ -1017,8 +1404,6 @@ void tCacheOperation::UpdateVolatileFiles()
 	LOGSTART("expiration::UpdateVolatileFiles()");
 
 	string sErr; // for download error output
-	const string sPatchBaseAbs=CACHE_BASE+sPatchBaseRel;
-	mkbasedir(sPatchBaseAbs);
 
 	// just reget them as-is and we are done. Also include non-index files, to be sure...
 	if (m_bForceDownload)
@@ -1034,13 +1419,7 @@ void tCacheOperation::UpdateVolatileFiles()
 		return;
 	}
 
-
 	tFileGroups idxGroups;
-
-#if 0
-	if(!UpgradeCacheForByHashStorage())
-		return; // what the...
-#endif
 
 	auto dbgState = [&]() {
 #ifdef DEBUGSPAM
@@ -1059,8 +1438,7 @@ void tCacheOperation::UpdateVolatileFiles()
 			for(const auto& cp : idxGroups)
 			{
 				printBuf << pfx << ": cKEY: " << cp.first.toString() << hendl
-						<< pfx << ": bz2TID:" << cp.second.bz2VersContId.toString() << hendl
-						<< pfx << ": idxTID:"<<cp.second.diffIdxId.toString() << hendl
+						<< pfx << ": idxKey:"<<cp.second.diffIdxId.toString() << hendl
 						<< pfx << ": Paths:" << hendl;
 				for(const auto& path : cp.second.paths)
 					printBuf << pfx << ":&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"
@@ -1126,553 +1504,72 @@ void tCacheOperation::UpdateVolatileFiles()
 		}
 	}
 
-	for(auto& sPathRel : goodReleaseFiles)
-	{
-#ifdef DEBUG
-		SendFmt << "Start parsing " << sPathRel << "<br>";
-#endif
-		// raw data extraction
-		{
-			typedef map<string, tContentKey> tFile2Cid;
-			// pull all contents into a sorted dictionary for later filtering
-			tFile2Cid file2cid;
-			auto recvInfo = [&file2cid, this](const tRemoteFileInfo &entry)
-									{
-				if(entry.bInflateForCs) // XXX: no usecase yet, ignore
-					return;
+	ExtractAllRawReleaseDataFixStrandedPatchIndex(idxGroups, goodReleaseFiles);
 
-				tStrPos compos=FindCompSfxPos(entry.sFileName);
-
-				// skip some obvious junk and its gzip version
-				if(0==entry.fpr.size || (entry.fpr.size<33 && stmiss!=compos))
-					return;
-
-				auto& cid = file2cid[entry.sDirectory+entry.sFileName];
-				cid.fpr=entry.fpr;
-
-				tStrPos pos=entry.sDirectory.rfind(dis);
-				// if looking like Debian archive, keep just the part after binary-...
-				if(stmiss != pos)
-					cid.distinctName=entry.sDirectory.substr(pos)+entry.sFileName;
-				else
-					cid.distinctName=entry.sFileName;
-									};
-
-			ParseAndProcessMetaFile(std::function<void (const tRemoteFileInfo &)>(recvInfo),
-					sPathRel, EIDX_RELEASE);
-
-			if(file2cid.empty())
-				continue;
-
-#if 0
-			// first, look around for for .diff/Index files on disk, update them, check patch base file
-			for(const auto cid : file2cid)
-			{
-				// not diff index or not in cache?
-				if(!endsWith(cid.first, diffIdxSfx))
-					continue;
-				auto& flags = GetFlags(cid.first);
-				if(!flags.vfile_ondisk)
-					continue;
-				if(!flags.uptodate && !Download(cid.first, true, eMsgShow))
-					continue;
-				// found an ...diff/Index file!
-				string sBase=cid.first.substr(0, cid.first.size()-diffIdxSfx.size());
-
-				for(auto& suf: sfxXzBz2GzLzma)
-				{
-					auto baseflags(GetFlags(sBase + suf));
-					// base already here OR it's not package index at all, skip it too
-					if(baseflags.vfile_ondisk) // || !baseflags.eIdxType)
-						goto found_base;
-				}
-
-				// ok, base file not found, but some client needed this Index file,
-				// therefore enforce dload of any known file?
-				for(auto& suf : sfxXzBz2GzLzma)
-				{
-					auto cand(sBase+suf);
-					if(!ContHas(file2cid, cand))
-						continue;
-					SendFmt << "No base file to use patching on " << cid.first << ", trying to fetch " << cand << hendl;
-					if(Download(cand, true, eMsgShow, tFileItemPtr(), 0, 0, &cid.first))
-					{
-						SetFlags(sBase+suf).vfile_ondisk=true;
-						goto found_base;
-					}
-				}
-				found_base:;
-			}
-#endif
-			dbgState();
-
-			// now refine all extracted information and store it in eqClasses for later processing
-			for(auto if2cid : file2cid)
-			{
-				string sNativeName=if2cid.first.substr(0, FindCompSfxPos(if2cid.first));
-				tContentKey groupId;
-
-				// identify the key for this group. Ideally, this is the descriptor
-				// of the native representation, if found in the release file, in doubt
-				// take the one from the best compressed form or the current one
-				auto it2=file2cid.find(sNativeName);
-				if(it2 != file2cid.end())
-					groupId=it2->second;
-				else
-					for(auto& ps : sfxXzBz2GzLzma)
-						ifThereStoreThereAndBreak(file2cid, sNativeName+ps, groupId);
-				if(groupId.distinctName.empty())
-					groupId = if2cid.second;
-
-				tFileGroup &tgt = idxGroups[groupId];
-				tgt.paths.emplace_back(if2cid.first);
-
-				// pick up the id for bz2 verification later
-				if(tgt.bz2VersContId.distinctName.empty() && endsWithSzAr(if2cid.first, ".bz2"))
-					tgt.bz2VersContId=if2cid.second;
-
-				// also the index file id
-				if(tgt.diffIdxId.distinctName.empty()) // XXX if there is no index at all, avoid repeated lookups somehow?
-					ifThereStoreThere(file2cid, sNativeName+diffIdxSfx, tgt.diffIdxId);
-
-				// and while we are at it, check the checksum of small files in order
-				// to reduce server request count
-				if(if2cid.second.fpr.size<10000 && ContHas(m_metaFilesRel, if2cid.first))
-				{
-					if(if2cid.second.fpr.CheckFile(SABSPATH(if2cid.first)))
-						m_metaFilesRel[if2cid.first].uptodate=true;
-				}
-			}
-		}
-	}
-
-	dbgDump("After class building:", 0);
+	dbgDump("After group building:", 0);
 
 	if(CheckStopSignal())
 		return;
 
-	/*
-	 * OK, the equiv-classes map is built, now post-process the knowledge
-	 *
-	 * First, strip the list down to those which are at least partially present in the cache.
-	 * And keep track of some folders for expiration.
-	 */
-	for(auto it=idxGroups.begin(); it!=idxGroups.end();)
-	{
-		unsigned found = 0;
-		for(auto& path: it->second.paths)
-		{
-			if(!GetFlags(path).vfile_ondisk)
-				continue;
-			found++;
-			auto pos = path.rfind('/');
-			if(pos!=stmiss)
-				m_managedDirs.insert(path.substr(0, pos+1));
-		}
-
-		if(found)
-		{
-			// remember that index file might be used by other groups
-			if(!it->second.diffIdxId.distinctName.empty())
-			{
-				auto indexIter = idxGroups.find(it->second.diffIdxId);
-				if(indexIter != idxGroups.end())
-					indexIter->second.isReferenced = true;
-			}
-
-			++it;
-		}
-		else
-			idxGroups.erase(it++);
-	}
-#ifdef DEBUGIDX
-	SendFmt << "Folders with checked stuff:<br>";
-	for(auto s : m_managedDirs)
-		SendFmt << s << "<br>";
-#endif
-
-	// some preparation of patch index processing
-	for(auto& group: idxGroups)
-	{
-		if(!endsWith(group.first.distinctName, diffIdxSfx))
-			continue;
-		for(auto& indexPath: group.second.paths)
-			Download(indexPath, true, eMsgShow, tFileItemPtr(), 0, 0);
-
-		if(group.second.isReferenced)
-			continue;
-
-		// existing but unreferenced pdiff index files are bad, that means that some client
-		// is tracking this stuff via diff update but ACNG has no clue of the remaining contents
-		// -> let's make sure the best compressed version is present on disk
-		// In that special case the extra index files will not become active ASAP but that's
-		// probably good enough for expiration activity (use it the day after).
-
-		for(auto& indexPath: group.second.paths)
-		{
-			auto sBase = indexPath.substr(0, indexPath.size()-diffIdxSfx.size());
-			SendFmt << "Warning: no base file to use patching on " << indexPath
-					<< ", trying to fetch some" << hendl;
-			for(auto& suf : sfxXzBz2GzLzma)
-			{
-				auto cand(sBase+suf);
-				if(Download(cand, true, eMsgShow, tFileItemPtr(), 0, 0, &indexPath))
-				{
-					SetFlags(cand).vfile_ondisk=true;
-					break;
-				}
-			}
-		}
-	}
-
+	// OK, the equiv-classes map is built, now post-process the knowledge
+	FilterGroupData(idxGroups);
 	ERRMSGABORT;
 	dbgDump("Refined (1):", 1);
 	dbgState();
 
-	// sort by quality and add references for later disarming of group neighbors
-	for(auto& it: idxGroups)
-	{
-#ifdef DEBUG
-		for(auto&x : it.second.paths)
-			assert(!x.empty());
-#endif
-		sort(it.second.paths.begin(), it.second.paths.end(),
-				lessThanByAvailability(*this));
-		// and connect them together but only the existing ones
-		tIfileAttribs *pfirst(nullptr), *pprev(nullptr);
-		for(auto &path : it.second.paths)
-		{
-			auto it=m_metaFilesRel.find(path);
-			if(it==m_metaFilesRel.end())
-				continue;
-			if(!pfirst)
-			{
-				pprev = pfirst = & it->second;
-				continue;
-			}
-			pprev->bro = & it->second;
-			pprev = & it->second;
-		}
-		if(pprev)
-			pprev->bro = pfirst;
-	}
+	SortAndInterconnectGroupData(idxGroups);
 
-#if 0
-	dbgDump("Refined (2):", 2);
+	// there was a quick check during data extraction but its context is lost now.
+	// share it's knowledge between different members of the group
+	for(auto& g: idxGroups)
+		for(auto& p: g.second.paths)
+			if(GetFlags(p).uptodate)
+				SyncSiblings(p, g.second.paths);
+
+	dbgDump("Refined (5):", 5);
 	dbgState();
 //	DelTree(SABSPATH("_actmp")); // do one to test the permissions
 
-	// Iterate over classes and do patch-update where possible
-	for(auto cid2eqcl=idxGroups.begin(); cid2eqcl!=idxGroups.end();cid2eqcl++)
+	// now do patching where possible
+	for(auto& groupKV: idxGroups)
 	{
-		decltype(cid2eqcl) itDiffIdx; // iterator pointing to the patch index descriptor
-		int nProbeCnt(3);
-		string patchidxFileToUse;
-		deque<tPatchEntry> patchList;
-		tFingerprint *pEndSum(nullptr);
-		tPListConstIt itPatchStart;
-
-		if(CheckStopSignal())
-			return;
-
-		auto PatchFile = [this](const string &srcRel,
-				const string &diffIdxPathRel, tPListConstIt pit,
-				tPListConstIt itEnd,
-				const tFingerprint *verifData)
-		{
-			if(m_bVerbose)
-				SendFmt<< "Patching from " << srcRel << " via " << diffIdxPathRel << "...<br>\n";
-
-			string sFinalPatch(CACHE_BASE+"_actmp/combined.diff");
-			if(diffIdxPathRel.length()<=diffIdxSfx.length())
-				return false; // just be sure about that
-
-			FILE_RAII pf;
-			for(;pit!=itEnd; pit++)
-			{
-				string pfile(diffIdxPathRel.substr(0, diffIdxPathRel.size()-diffIdxSfx.size()+6)
-						+pit->patchName+".gz");
-				if(Download(pfile, false, eMsgShow, tFileItemPtr(), 0, 0, &diffIdxPathRel))
-				{
-					auto&f = SetFlags(pfile);
-					// and not an ifile, never parse this
-					f.vfile_ondisk = f.parseignore = true;
-				}
-				else
-				{
-					m_metaFilesRel.erase(pfile); // remove the mess for sure
-					SendFmt << "Failed to download patch file " << pfile << " , stop patching...<br>";
-					return false;
-				}
-
-				if(CheckStopSignal())
-					return false;
-
-				::mkbasedir(sFinalPatch);
-				if(!pf.p && ! (pf.p=fopen(sFinalPatch.c_str(), "w+")))
-				{
-					SendChunk("Failed to create intermediate patch file, stop patching...<br>");
-					return false;
-				}
-				tFingerprint probe;
-				if(!probe.ScanFile(CACHE_BASE+pfile, CSTYPE_SHA1, true, pf.p))
-				{
-
-					if(CheckStopSignal())
-						return false;
-
-					if(m_bVerbose)
-						SendFmt << "Failure on checking of intermediate patch data in " << pfile << ", stop patching...<br>";
-					return false;
-				}
-				if ( ! (probe == pit->fprPatch))
-				{
-					SendFmt<< "Bad patch data in " << pfile <<" , stop patching...<br>";
-					return false;
-				}
-			}
-			if(pf.p)
-			{
-				::fprintf(pf.p, "w patch.result\n");
-				::fflush(pf.p); // still a slight risk of file closing error but it's good enough for now
-				if(::ferror(pf.p))
-				{
-					SendChunk("Patch merging error<br>");
-					return false;
-				}
-				checkForceFclose(pf.p);
-			}
-
-			if(m_bVerbose)
-				SendChunk("Patching...<br>");
-
-			tSS cmd;
-			cmd << "cd '" << CACHE_BASE << "_actmp' && ";
-			auto act = acfg::suppdir + SZPATHSEP "acngtool";
-			if(!acfg::suppdir.empty() && 0==access(act.c_str(), X_OK))
-				cmd << "'" << act << "' patch patch.base " << sFinalPatch << " patch.result";
-			else
-				cmd << " red --silent patch.base < " << sFinalPatch;
-
-			if (::system(cmd.c_str()))
-			{
-				MTLOGASSERT(false, "Command failed: " << cmd);
-				return false;
-			}
-
-			tFingerprint probe;
-			string respathAbs = CACHE_BASE + sPatchResRel;
-			if (!probe.ScanFile(respathAbs, CSTYPE_SHA1, false))
-			{
-				MTLOGASSERT(false, "Scan failed: " << respathAbs);
-				return false;
-			}
-
-			if(verifData && probe != *verifData)
-			{
-				MTLOGASSERT(false,"Verification failed, against: " << respathAbs);
-				return false;
-			}
-			return true;
-		};
-
-
-
-
-		DelTree(SABSPATH("_actmp"));
-
-		if (cid2eqcl->second.diffIdxId.distinctName.empty() || idxGroups.end() == (itDiffIdx
-					= idxGroups.find(cid2eqcl->second.diffIdxId)) || itDiffIdx->second.paths.empty())
-			goto NOT_PATCHABLE; // no patches available
-
-		// iterate over patch paths and fine a present one which is most likely the most recent one
-		for (const auto& pp : itDiffIdx->second.paths)
-		{
-			if (m_metaFilesRel[pp].vfile_ondisk)
-			{
-				patchidxFileToUse = pp;
-				break;
-			}
-		}
-		if (patchidxFileToUse.empty()) // huh, not found? Then just take the first one
-			patchidxFileToUse = itDiffIdx->second.paths.front();
-
-		if (!Download(patchidxFileToUse, true, eMsgShow))
+		if(!groupKV.second.diffIdxId.valid())
 			continue;
-
-		if(CheckStopSignal())
-			return;
-
-		pEndSum=BuildPatchList(CACHE_BASE+patchidxFileToUse, patchList);
-
-		if(!pEndSum)
-			goto NOT_PATCHABLE;
-
-		/* ok, patches should be available, what to patch? Probe up to three of the most
-		 * recent ones
-		 *
-		 * 		 XXX now ideally, it should unpack on each test into an extra file and
-		 * 		  then get the one which matched best. But it's too cumbersome, and
-		 * 		   if the code works correctly, the first hit should always the best version
-		 * 		   */
-
-		for(const auto& pathRel: cid2eqcl->second.paths)
-		{
-			if(--nProbeCnt<0)
-				break;
-
-			FILE_RAII df;
-			tFingerprint probe;
-			auto absPath(SABSPATH(pathRel));
-			::mkbasedir(sPatchBaseAbs);
-			df.p = fopen(sPatchBaseAbs.c_str(), "w");
-			if(!df.p)
-			{
-				SendFmt << "Cannot write temporary patch data to " << sPatchBaseAbs << "<br>";
-				break;
-			}
-			if (GetFlags(pathRel).vfile_ondisk)
-			{
-				header h;
-				if(h.LoadFromFile(absPath+ ".head")<=0  || GetFileSize(absPath, -2)
-						!= atoofft(h.h[header::CONTENT_LENGTH], -3))
-				{
-					// only use sources that look like consistent downloads
-					MTLOGDEBUG("########### Header looks suspicious on " << absPath << ".head");
-					continue;
-				}
-				MTLOGDEBUG("#### Testing file: " << pathRel << " as patch base candidate");
-				if (probe.ScanFile(absPath, CSTYPE_SHA1, true, df.p))
-				{
-					fflush(df.p); // write the whole file to disk ASAP!
-
-					if(CheckStopSignal())
-						return;
-
-#ifdef DEBUG
-					MTLOGDEBUG("## Looking for a patch for " << probe.GetCsAsString()
-							<< "_" << probe.size
-							<< " and latest version: "
-							<< pEndSum->GetCsAsString() << "_" << pEndSum->size
-							<< " or in ... "
-					);
-					for(auto patch:patchList)
-						SendFmt << patch.fprPatch << " for version " << patch.fprState<<"<br>";
-#endif
-					// Hit the current state, no patching needed for it?
-					if(probe == *pEndSum)
-					{
-						// since we know the stuff is fresh, no need to refetch it later
-						m_metaFilesRel[pathRel].uptodate=true;
-						if(m_bVerbose)
-							SendFmt << "Found fresh version in " << pathRel << "<br>";
-
-						Propagate(pathRel, idxGroups, &cid2eqcl, &sPatchBaseAbs);
-
-						if(CheckStopSignal())
-							return;
-
-						goto CONTINUE_NEXT_GROUP;
-					}
-					// or found at some previous state, try to patch it?
-					else if (patchList.end() != (itPatchStart = find_if(patchList.begin(),
-									patchList.end(), tCompByState(probe))))
-					{
-						// XXX for now, construct a replacement header based on some assumptions
-						// tried hard and cannot imagine any case where this would be harmful
-						if (h.h[header::XORIG])
-						{
-							string s(h.h[header::XORIG]);
-							h.set(header::XORIG, s.substr(0, FindCompSfxPos(s)));
-						}
-
-						if(CheckStopSignal())
-							return;
-
-						if (m_bVerbose)
-							SendFmt << "Found patching base candidate, unpacked to "
-								<< sPatchBaseAbs << "<br>";
-
-						if (df.close(), PatchFile(sPatchBaseAbs, patchidxFileToUse, itPatchStart,
-									patchList.end(), pEndSum))
-						{
-
-							if(CheckStopSignal())
-								return;
-
-							h.set(header::LAST_MODIFIED, FAKEDATEMARK);
-							h.set(header::CONTENT_LENGTH, pEndSum->size);
-							if (h.StoreToFile(CACHE_BASE+sPatchResRel+".head") <= 0)
-							{
-								MTLOGDEBUG("############ Failed to store target header as "
-										<< SABSPATH(sPatchResRel) << ".head");
-								continue;
-							}
-
-							SendChunk("Patching result: succeeded<br>");
-							Propagate(sPatchResRel, idxGroups, &cid2eqcl);
-
-							if(CheckStopSignal())
-								return;
-
-							InstallBz2edPatchResult(idxGroups, &cid2eqcl);
-
-							if(CheckStopSignal())
-								return;
-
-							break;
-						}
-						else
-						{
-							SendChunk("Patching result: failed<br>");
-							// don't break, maybe the next one can be patched
-						}
-
-						if(CheckStopSignal())
-							return;
-					}
-				}
-			}
-		}
-
-NOT_PATCHABLE:
-#endif
-
-#if 0
-
-#warning murks, das wird der finalle download cycle zur not machen, base wurde vorher geholt
-		MTLOGDEBUG("trying a blind fetch of some good version of that file from any location, starting with best compression type");
-		// prefer to download them in that order, no uncompressed versions because
-		// mirrors usually don't have them
-		for (auto& ps : sfxXzBz2GzLzma)
-		{
-			for (auto& cand: cid2eqcl->second.paths)
-			{
-				if(!endsWith(cand, ps))
-					continue;
-				if(Download(cand, true, eMsgHideErrors))
-				{
-					if(CheckStopSignal())
-						return;
-					if(Propagate(cand, cid2eqcl)) // all locations are covered?
-						goto CONTINUE_NEXT_GROUP;
-				}
-
-				if(CheckStopSignal())
-					return;
-			}
-		}
-
-
-CONTINUE_NEXT_GROUP:
-
-		if(CheckStopSignal())
-			return;
+		// any of them should do the job
+		auto& ipath = GetFirstPresentPath(idxGroups, groupKV.second.diffIdxId);
+		if(ipath.empty())
+			continue;
+		mstring sPatchedPathRel;
+		PatchOne(ipath, groupKV.second.paths);
 	}
-#endif
-	dbgDump("Refined (3):", 3);
-
 	dbgState();
+
+	// semi-smart download of remaining files
+	for(auto& groupKV: idxGroups)
+	{
+		for(auto& sfxFilter: sfxXzBz2GzLzmaNone)
+		{
+			for(auto& pathRel: groupKV.second.paths)
+			{
+//				bool holdon = StrHas(pathRel, "debrep/dists/experimental/contrib/source/Sources.xz");
+
+				if(!endsWith(pathRel, sfxFilter))
+					continue;
+
+				auto &fl = GetFlags(pathRel);
+#ifdef DEBUGIDX
+				SendFmt << "Considering flags: " << pathRel << " " << fl.toString() << hendl;
+#endif
+				if(!fl.vfile_ondisk)
+					continue;
+				if(fl.parseignore)
+					continue;
+
+				if(fl.uptodate || Download(pathRel, true, eMsgShow))
+					SyncSiblings(pathRel, groupKV.second.paths);
+			}
+		}
+	}
 
 	MTLOGDEBUG("<br><br><b>NOW GET THE REST</b><br><br>");
 
@@ -1694,77 +1591,34 @@ CONTINUE_NEXT_GROUP:
 	}
 }
 
-void tCacheOperation::InstallBz2edPatchResult(tFileGroups& eqClasses,
-		void* peqClassIter)
+void tCacheOperation::SyncSiblings(cmstring &srcPathRel,const tStrDeq& targets)
 {
-#ifndef HAVE_LIBBZ2
-	return;
-#else
-	if(!acfg::recompbz2)
-		return;
-
-	auto& eqClassIter = *((tFileGroups::iterator*)peqClassIter);
-
-	string sFreshBz2Rel;
-	tFingerprint &bz2fpr = eqClassIter->second.bz2VersContId.fpr;
-	string sRefBz2Rel;
-
-	for (const auto& tgt : eqClassIter->second.paths)
+	auto srcDirFile = SplitDirPath(srcPathRel);
+	//auto srcType = GetTypeSuffix(srcDirFile.second);
+	for(const auto& tgt: targets)
 	{
-		if (endsWithSzAr(tgt, ".bz2"))
+		auto& flags = GetFlags(tgt);
+		// not valid or it's us?
+		if(!flags.vfile_ondisk || tgt == srcPathRel)
+			continue;
+
+		auto tgtDirFile = SplitDirPath(tgt);
+		bool sameFolder = tgtDirFile.first == srcDirFile.first;
+
+		// that's for sure, no matter what filename is, "us" is filtered
+		if(sameFolder || !m_bByPath)
 		{
-			auto &fl = GetFlags(tgt);
-			if (fl.vfile_ondisk)
-			{
-				// needs a reference location to get the HTTP headers for, pickup something
-				if(sRefBz2Rel.empty())
-					sRefBz2Rel=tgt;
+			MTLOGDEBUG("Disabling use of " << tgt);
+			SetFlags(tgt).parseignore = true;
+		}
 
-				if (fl.uptodate)
-				{
-					sFreshBz2Rel = tgt;
-					goto inject_bz2s;
-				}
-
-				if(sFreshBz2Rel.empty())
-					sFreshBz2Rel = sPatchResRel+".bz2";
-
-				// continue searching, there might be a working version
-			}
+		if(!sameFolder && m_bByPath
+			&& srcDirFile.second == tgtDirFile.second)
+				//&& 0 == strcmp(srcType, GetTypeSuffix(targetDirFile.second)))
+		{
+			Inject(srcPathRel, tgt, true, 0, false);
 		}
 	}
-
-	// not skipped this code... needs recompression then?
-	if (sFreshBz2Rel.empty())
-		return;
-
-	// ok, it points to the temp file then, create it
-
-	if (!Bz2compressFile(SZABSPATH(sPatchResRel), SZABSPATH(sFreshBz2Rel))
-			|| !bz2fpr.CheckFile(SABSPATH(sFreshBz2Rel))
-	// fileitem implementation may nuke the data on errors... doesn't matter here
-			|| !GetAndCheckHead(sFreshBz2Rel, sRefBz2Rel, bz2fpr.size))
-	{
-		return;
-	}
-
-	if (m_bVerbose)
-		SendFmt << "Compressed into " << sFreshBz2Rel << "<br>\n";
-
-	inject_bz2s:
-	// use a recursive call to distribute bz2 versions
-
-	if(CheckStopSignal())
-		return;
-
-	if (!sFreshBz2Rel.empty())
-	{
-#ifdef DEBUG
-		SendFmt << "Recursive call to install the bz2 version from " << sFreshBz2Rel << "<br>";
-#endif
-		Propagate(sFreshBz2Rel, eqClasses, &eqClassIter);
-	}
-#endif
 }
 
 tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(const mstring& sPath)
@@ -2065,20 +1919,20 @@ bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFi
 		}
 		break;
 	case EIDX_DIFFIDX:
-		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_DIFFIDX, CSTYPES::CSTYPE_SHA1, true, "SHA1-Patches", byHashMode);
+		return ParseDebianRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_DIFFIDX, CSTYPES::CSTYPE_SHA256, "SHA256-Download", byHashMode);
 	case EIDX_SOURCES:
-		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_SOURCES, CSTYPES::CSTYPE_MD5, false, "Files", byHashMode);
+		return ParseDebianRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_SOURCES, CSTYPES::CSTYPE_MD5, "Files", byHashMode);
 	case EIDX_TRANSIDX:
-		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_TRANSIDX, CSTYPES::CSTYPE_SHA1, false, "SHA1", byHashMode);
+		return ParseDebianRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_TRANSIDX, CSTYPES::CSTYPE_SHA1, "SHA1", byHashMode);
 	case EIDX_RELEASE:
 		if(byHashMode)
-			return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-					EIDX_RELEASE, CSTYPES::CSTYPE_INVALID, false, "", true);
-		return ParseGenericRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_RELEASE, CSTYPES::CSTYPE_SHA256, false, "SHA256", false);
+			return ParseDebianRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+					EIDX_RELEASE, CSTYPES::CSTYPE_INVALID, "", true);
+		return ParseDebianRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
+				EIDX_RELEASE, CSTYPES::CSTYPE_SHA256, "SHA256", false);
 	default:
 		SendChunk("<span class=\"WARNING\">"
 				"WARNING: unable to read this file (unsupported format)</span>\n<br>\n");
@@ -2119,40 +1973,65 @@ bool tCacheOperation::CalculateBaseDirectories(cmstring& sPath, enumMetaType idx
 	return true;
 }
 
-bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
+void tCacheOperation::ParseGenericRfc822File(filereader& reader,
+		cmstring& sExtListFilter,
+		map<string, deque<string> >& contents)
+{
+	string sLine, key, val, lastKey;
+	deque<string>* pLastVal(nullptr);
+	while (reader.GetOneLine(sLine))
+	{
+		if (sLine.empty())
+			continue;
+
+		if (isspace((unsigned) (sLine[0])))
+		{
+			if (!pLastVal)
+				continue;
+
+			// also skip if a filter is set for extended lists on specific key
+			if (!sExtListFilter.empty() && sExtListFilter != lastKey)
+				continue;
+
+			trimFront(sLine);
+			pLastVal->push_back(sLine);
+		}
+		else if (ParseKeyValLine(sLine, key, val))
+		{
+			// override the old key if existing, we don't merge
+			auto ins = contents.insert(make_pair(key, deque<string>
+			{ val }));
+			lastKey = key;
+			pLastVal = &ins.first->second;
+		}
+	}
+}
+
+bool tCacheOperation::ParseDebianIndexLine(tRemoteFileInfo& info, cmstring& fline)
+{
+	info.sFileName.clear();
+	// ok, read "checksum size filename" into info and check the word count
+	tSplitWalk split(&fline);
+	if (!split.Next()
+			|| !info.fpr.SetCs(split, info.fpr.csType)
+			|| !split.Next())
+		return false;
+	string val(split);
+	info.fpr.size = atoofft((LPCSTR) val.c_str(), -2L);
+	if (info.fpr.size < 0 || !split.Next())
+		return false;
+	UrlUnescapeAppend(split, info.sFileName);
+	return true;
+}
+
+bool tCacheOperation::ParseDebianRfc822Index(filereader& reader,
 		std::function<void(const tRemoteFileInfo&)> &ret, cmstring& sBaseDir, cmstring& sPkgBaseDirConst,
-		enumMetaType origIdxType, CSTYPES csType, bool ixInflatedChecksum,
+		enumMetaType origIdxType, CSTYPES csType,
 		cmstring& sExtListFilter, bool byHashMode)
 {
 	// beam the whole file into our model
 	map< string,deque<string> > contents;
-	{
-		string sLine, key, val, lastKey;
-		deque<string> *pLastVal(nullptr);
-		mstring keyByHash("Acquire-By-Hash");
-		while (reader.GetOneLine(sLine))
-		{
-			if(sLine.empty())
-				continue;
-			if(isspace( (unsigned) sLine[0]))
-			{
-				if(!pLastVal)
-					continue;
-				// also skip if a filter is set for extended lists on specific key
-				if(!sExtListFilter.empty() && sExtListFilter != lastKey)
-					continue;
-				trimFront(sLine);
-				pLastVal->push_back(sLine);
-			}
-			else if(ParseKeyValLine(sLine, key, val))
-			{
-				// override the old key if existing, we don't merge
-				auto ins=contents.insert(make_pair(key, deque<string> {val}));
-				lastKey = key;
-				pLastVal = & ins.first->second;
-			}
-		}
-	}
+	ParseGenericRfc822File(reader, sExtListFilter, contents);
 	mstring sSubDir;
 	auto it = contents.find("Directory");
 	if (it != contents.end() && !it->second.empty())
@@ -2170,7 +2049,6 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 
 	tRemoteFileInfo info;
 	info.SetInvalid();
-	info.bInflateForCs = ixInflatedChecksum;
 	info.fpr.csType = csType;
 
 	mstring sPkgBaseDir;
@@ -2184,18 +2062,8 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 		{
 			if(!(checkFilter++ & 0xff) && CheckStopSignal())
 				return;
-
-			info.sFileName.clear();
-			// ok, read "checksum size filename" into info and check the word count
-			tSplitWalk split(&fline);
-			if (!split.Next() || !info.fpr.SetCs(split, info.fpr.csType) || !split.Next())
+			if(!ParseDebianIndexLine(info, fline))
 				continue;
-			string val(split);
-			info.fpr.size = atoofft((LPCSTR) val.c_str(), -2L);
-			if (info.fpr.size < 0 || !split.Next())
-				continue;
-			UrlUnescapeAppend(split, info.sFileName);
-
 			switch (origIdxType)
 			{
 			case EIDX_SOURCES:
@@ -2203,13 +2071,8 @@ bool tCacheOperation::ParseGenericRfc822Index(filereader& reader,
 				ret(info);
 				break;
 			case EIDX_TRANSIDX: // csum refers to the files as-is
-				info.sDirectory = sBaseDir + sSubDir;
-				ret(info);
-				break;
 			case EIDX_DIFFIDX:
 				info.sDirectory = sBaseDir + sSubDir;
-				ret(info);
-				info.sFileName += ".gz";
 				ret(info);
 				break;
 			case EIDX_RELEASE:
@@ -2296,10 +2159,12 @@ void tCacheOperation::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)>
 		}
 		else if(!m_bByPath)
 		{
-			MTLOGDEBUG("Marking siblings as processed");
 			att.alreadyparsed = true;
 			for(auto next = att.bro; next != &att; next = next->bro)
+			{
 				next->alreadyparsed = true;
+				MTLOGDEBUG("Marking sibling as processed");
+			}
 		}
 	}
 }
@@ -2408,7 +2273,7 @@ int parseidx_demo(LPCSTR file)
 			return !ParseAndProcessMetaFile([](const tRemoteFileInfo &entry) ->void {
 				cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
 									<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
-									<< endl << "ChecksumUncompressed: " << entry.bInflateForCs << endl <<endl;
+									<< endl;
 				}, file, GuessMetaTypeFromURL(file));
 		}
 		virtual bool ProcessRegular(const mstring &, const struct stat &) override {return true;}
@@ -2449,36 +2314,6 @@ void tCacheOperation::BuildCacheFileList()
 	IFileHandler::DirectoryWalk(acfg::cachedir, this);
 	//dump_proc_status();
 }
-
-#if 0
-bool tCacheOperation::UpgradeCacheForByHashStorage()
-{
-	bool ret = true;
-	auto stampPath = CACHE_BASE + acfg::privStoreRelSnapSufix + "/.upgrayedd";
-	if(access(stampPath.c_str(), F_OK))
-	{
-		for(const auto& kv: m_metaFilesRel)
-		{
-			if(!endsWithSzAr(kv.first, "Release"))
-				continue;
-
-			auto tgt = CACHE_BASE + acfg::privStoreRelSnapSufix + sPathSep + kv.first;
-			mkbasedir(tgt);
-			// probably optional but better have it there
-			//FileCopy(CACHE_BASE + kv.first + ".head", tgt + ".head");
-
-			if(FileCopy(CACHE_BASE + kv.first, tgt))
-				continue;
-			ret = false; // try to continue the mission, though
-			SendFmt << "Could not prepare cache for by-hash storage, error at " << kv.first <<
-					" or " << tgt << hendl;
-		}
-		if(ret)
-			xtouch(stampPath);
-	}
-	return ret;
-}
-#endif
 
 bool tCacheOperation::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cmstring& stripPrefix)
 {
@@ -2575,24 +2410,36 @@ bool tCacheOperation::FixMissingByHashLinks(std::unordered_set<std::string> &old
 
 tStrDeq tCacheOperation::GetGoodReleaseFiles()
 {
-	tStrDeq goodReleaseFiles;
+	tStrMap t;
 	for (const auto& kv : m_metaFilesRel)
 	{
+		bool inr;
+		if(endsWith(kv.first, inRelKey))
+			inr=true;
+		else if(endsWith(kv.first, relKey))
+			inr=false;
+		else
+			continue;
 		if(!kv.second.vfile_ondisk)
 			continue;
-		if(endsWithSzAr(kv.first, "/Release"))
+		auto df=SplitDirPath(kv.first);
+		string& fn = t[df.first];
+
+		if(inr) // always wins
 		{
-			if(!goodReleaseFiles.empty() &&
-					goodReleaseFiles.back().size() + 2 == kv.first.size()
-					&& 0 == kv.first.compare(0, kv.first.size()-7, goodReleaseFiles.back(), 0, kv.first.size()-7)
-					&& 0 == goodReleaseFiles.back().compare(kv.first.size()-7, 9, "InRelease"))
-			{
-				continue;
-			}
-			goodReleaseFiles.emplace_back(kv.first);
+			if(!fn.empty()) // there was Release already... crap
+				SetFlags(kv.first).parseignore = true;
+			fn = df.second;
 		}
-		else if(endsWithSzAr(kv.first, "/InRelease"))
-			goodReleaseFiles.emplace_back(kv.first);
+		else
+		{
+			if(fn.empty())
+				fn = df.second;
+			else
+				SetFlags(kv.first).parseignore = true;
+		}
 	}
-	return goodReleaseFiles;
+	tStrDeq ret;
+	for(const auto& kv: t) ret.emplace_back(kv.first+kv.second);
+	return ret;
 }

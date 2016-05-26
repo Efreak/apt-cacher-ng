@@ -16,8 +16,11 @@
 // #define USEDUPEFILTER
 
 class dlcon;
+
+// XXX: specific declarations, maybe move to a namespace
 class tDlJobHints;
 class tFileGroups;
+struct tContentKey;
 
 static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing, "
 		"aborting as requested.</span>");
@@ -95,6 +98,9 @@ protected:
 	// doing modification of the map
 	std::map<mstring,tIfileAttribs> m_metaFilesRel;
 	tIfileAttribs &SetFlags(cmstring &sPathRel);
+
+	// evil shortcut, might point to read-only dummy... to be used with care
+	tIfileAttribs &GetRWFlags(cmstring &sPathRel);
 	void UpdateVolatileFiles();
 	void _BusyDisplayLogs();
 	void _Usermsg(mstring m);
@@ -183,12 +189,31 @@ protected:
 
 private:
 
-	bool Propagate(cmstring &donorRel, tFileGroups& eqClasses, const void* eqClassIter,
-			cmstring *psTmpUnpackedAbs=nullptr);
-	void InstallBz2edPatchResult(tFileGroups& eqClasses, void* eqClassIter);
+	void ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups& ret, const tStrDeq& releaseFilesRel);
+	void FilterGroupData(tFileGroups& idxGroups);
+	void SortAndInterconnectGroupData(tFileGroups& idxGroups);
+
+	/**
+	 * Adjust the configuration of related paths (relative to updatePath) to prevent
+	 * smart downloads later, how exactly depends on current execution mode.
+	 *
+	 * If strict path checks are used the content may also be copied over.
+	 */
+	void SyncSiblings(cmstring &srcPathRel, const tStrDeq& targets);
+
 	tCacheOperation(const tCacheOperation&);
 	tCacheOperation& operator=(const tCacheOperation&);
+
 	dlcon *m_pDlcon = nullptr;
+	cmstring& GetFirstPresentPath(const tFileGroups& groups, const tContentKey& ckey);
+
+	/*
+	 * Analyze patch base candidate, fetch patch files as suggested by index, patch, distribute result
+	 */
+	void PatchOne(cmstring& pindexPathRel, const tStrDeq& patchBaseCandidates);
+	void ParseGenericRfc822File(filereader& reader, cmstring& sExtListFilter,
+			map<string, deque<string> >& contents);
+	bool ParseDebianIndexLine(tRemoteFileInfo& info, cmstring& fline);
 
 protected:
 	bool CalculateBaseDirectories(cmstring& sPath, enumMetaType idxType, mstring& sBaseDir, mstring& sBasePkgDir);
@@ -199,17 +224,22 @@ protected:
 	 * @param sExtListFilter If set to non-empty, will only extract value(s) for that key
 	 * @param byHashMode Return without calbacks if AcquireByHash is not set to yes. Not setting list filter also makes sense in this mode.
 	 */
-	bool ParseGenericRfc822Index(filereader& reader, std::function<void(const tRemoteFileInfo&)> &ret,
+	bool ParseDebianRfc822Index(filereader& reader, std::function<void(const tRemoteFileInfo&)> &ret,
 			cmstring& sCurFilesReferenceDirRel,
 			cmstring& sPkgBaseDir,
-			enumMetaType ixType, CSTYPES csType, bool ixInflatedChecksum,
+			enumMetaType ixType, CSTYPES csType,
 			cmstring& sExtListFilter,
 			bool byHashMode);
 	const tIfileAttribs attr_dummy_pure = tIfileAttribs();
 	tIfileAttribs attr_dummy;
 
+	/* Little helper to check existence of specific name on disk, either in cache or replacement directory, depending on what the srcPrefix defines */
 	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry,
 			cmstring& srcPrefix);
+
+	// "can return false negatives" thing
+	// to be implemented in subclasses
+	virtual bool _QuickCheckSolidFileOnDisk(cmstring& /* sFilePathRel */) { return false; }
 	void BuildCacheFileList();
 	/**
 	 * This is supposed to restore references to files that are no longer
