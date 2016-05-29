@@ -7,7 +7,6 @@
 #include "meta.h"
 
 class header {
-
    public:
       enum eHeadType {
          INVALID,
@@ -51,16 +50,6 @@ class header {
       static mstring GenInfoHeaders();
       static bool ParseDate(const char *, struct tm*);
 
-      /*!
-       * Read buffer to parse one string. Optional offset where to begin to
-       * scan.
-       * 
-       * return: 
-       * 0: incomplete, needs more data
-       * <0: error
-       * >0: length of the processed data
-       */
-      int LoadFromBuf(const char *src, unsigned length); 
       int LoadFromFile(const mstring & sPath);
       
       //! returns byte count or negative errno value
@@ -81,11 +70,19 @@ class header {
       
       tSS ToString() const;
       static std::vector<tPtrLen> GetKnownHeaders();
-
-      //@param pNotForUs unsorted map, key is header name, value is the rest of the line starting
-      // with colon and ending with \r\n. In case of multiline, extending lines are appended to
-      // the value string as-is
-      int Load(const char *src, unsigned length, tLPS *pNotForUs=nullptr);
+      /**
+       * Read buffer to parse one string. Optional offset where to begin to
+       * scan.
+       *
+       * @param src Pointer to raw input
+       * @param length Maximum considered input length
+       * @param unkFunc Optional callback for ignored headers (called with key name and rest of the line including CRLF)
+       * @return Length of processed data,
+       * 0: incomplete, needs more data
+       * <0: error
+       * >0: length of the processed data
+       */
+      int Load(const char *src, unsigned length, const std::function<void(cmstring&, cmstring&)> &unkFunc = std::function<void(cmstring&, cmstring&)>());
 };
 
 inline bool BODYFREECODE(int status)

@@ -268,7 +268,8 @@ void con::WorkLoop() {
 				if(!m_pTmpHead)
 					return; // no resources? whatever
 				
-				int nHeadBytes=m_pTmpHead->LoadFromBuf(inBuf.rptr(), inBuf.size());
+				m_pTmpHead->clear();
+				int nHeadBytes=m_pTmpHead->Load(inBuf.rptr(), inBuf.size());
 				ldbg("header parsed how? " << nHeadBytes);
 				if(nHeadBytes == 0)
 				{ // Either not enough data received, or buffer full; make space and retry
