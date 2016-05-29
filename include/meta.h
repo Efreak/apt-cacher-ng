@@ -442,7 +442,7 @@ typedef std::deque<std::pair<std::string, std::string>> tLPS;
 #define ifThereStoreThere(x,y,z) { auto itFind = (x).find(y); if(itFind != (x).end()) z = itFind->second; }
 #define ifThereStoreThereAndBreak(x,y,z) { auto itFind = (x).find(y); if(itFind != (x).end()) { z = itFind->second; break; } }
 
-bool scasecmp(cmstring& a, cmstring& b);
+bool scaseequals(cmstring& a, cmstring& b);
 
 #endif // _META_H
 

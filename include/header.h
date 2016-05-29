@@ -82,6 +82,7 @@ class header {
        * <0: error
        * >0: length of the processed data
        */
+      // XXX: maybe redesign the unkFunc to just use pointer and length instead of strings
       int Load(const char *src, unsigned length, const std::function<void(cmstring&, cmstring&)> &unkFunc = std::function<void(cmstring&, cmstring&)>());
 };
 

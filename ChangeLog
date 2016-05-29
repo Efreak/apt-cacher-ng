@@ -21,6 +21,10 @@ apt-cacher-ng (0.9.3) HAVE-SOME-LIGHT-BALLS; urgency=medium
       file (matching the latest InRelease's signature), the reference file
       contents is replaced with that correct version
     + correct handling for expiration with or without strict path checking
+  * WORKAROUND:
+    + detecting a situation when remote attempts to foist uncompressed version
+      on the proxy and returning a 500 code to user instead; otherwise that data
+      would be handled incorrectly and eventually poison the cache
 
  -- Eduard Bloch <blade@debian.org>  Thu, 19 May 2016 23:01:44 +0200
 

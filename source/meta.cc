@@ -866,7 +866,7 @@ unsigned FormatTime(char *buf, const time_t cur)
 	return 24;
 }
 
-bool scasecmp(cmstring& a, cmstring& b)
+bool scaseequals(cmstring& a, cmstring& b)
 {
     auto len = a.size();
     if (b.size() != len)

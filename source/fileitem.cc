@@ -310,7 +310,6 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		bool bForcedRestart, bool &bDoCleanRetry)
 {
 	LOGSTART("fileitem::DownloadStartedStoreHeader");
-#warning catch the case when a different filename is suggested, probably the crap with delivery of compressed version
 	auto SETERROR = [&](LPCSTR x) {
 		m_bAllowStoreData=false;
 		m_head.frontLine=mstring("HTTP/1.1 ")+x;

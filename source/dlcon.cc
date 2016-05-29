@@ -164,7 +164,7 @@ struct tDlJob
 			if(key.empty() && (m_extraHeaders.empty() || forbidden))
 				return;
 			forbidden = taboo.end() != std::find_if(taboo.begin(), taboo.end(),
-					[&key](cmstring &x){return scasecmp(x,key);});
+					[&key](cmstring &x){return scaseequals(x,key);});
 			if(!forbidden)
 				m_extraHeaders += key + rest;
 				}
@@ -463,7 +463,12 @@ struct tDlJob
 				bool bHotItem = (m_DlState == STATE_REGETHEADER);
 				dbgline;
 
-				auto hDataLen = h.Load(inBuf.rptr(), inBuf.size());
+				auto hDataLen = h.Load(inBuf.rptr(), inBuf.size(),
+						[&h](cmstring& key, cmstring& rest)
+						{ if(scaseequals(key, "Content-Location"))
+							h.frontLine = "HTTP/1.1 500 Apt-Cacher NG does not like that data";
+						});
+
 				if (0 == hDataLen)
 					return HINT_MORE;
 				if (hDataLen<0)
