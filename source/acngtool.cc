@@ -352,8 +352,15 @@ inline bool patchChunk(tPatchSequence& idx, LPCSTR pline, size_t len, tPatchSequ
 
 int maint_job()
 {
-   acfg::SetOption("proxy=", nullptr);
+	acfg::SetOption("proxy=", nullptr);
+
 	LPCSTR envh = getenv("HOSTNAME");
+	if(!envh)
+	{
+		static char buf[500];
+		if(0 == gethostname(buf, sizeof(buf)))
+			envh = buf;
+	}
 	if (!envh)
 		envh = "localhost";
 	LPCSTR req = getenv("ACNGREQ");
@@ -371,6 +378,10 @@ int maint_job()
 	if(acfg::reportpage[0] != '/')
 		urlPath << '/';
 	urlPath << acfg::reportpage << req;
+
+#ifdef DEBUG
+	cerr << "Constructed URL: " << (string) urlPath <<endl;
+#endif
 
 	CReportItemFactory fac;
 
