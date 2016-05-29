@@ -140,10 +140,11 @@ inline void trimString(mstring &s, LPCSTR junk=SPACECHARS)
 #define setIfNotEmpty(where, cand) { if(where.empty() && !cand.empty()) where = cand; }
 #define setIfNotEmpty2(where, cand, alt) { if(where.empty()) { if(!cand.empty()) where = cand; else where = alt; } }
 
-#define scontains(h,n) (h.find(n) != std::string::npos)
-
 mstring GetBaseName(cmstring &in);
 mstring GetDirPart(cmstring &in);
+std::pair<mstring, mstring> SplitDirPath(cmstring& in);
+
+LPCSTR GetTypeSuffix(cmstring& s);
 
 void trimProto(mstring & sUri);
 tStrPos findHostStart(const mstring & sUri);
@@ -277,15 +278,7 @@ bool CsEqual(LPCSTR a, uint8_t b[], unsigned short binLength);
 #endif
 
 // let the compiler optimize and keep best variant
-inline off_t atoofft(LPCSTR p)
-{
-	using namespace std;
-	if(sizeof(long long) == sizeof(off_t))
-		return atoll(p);
-	if(sizeof(int) == sizeof(off_t))
-		return atoi(p);
-	return atol(p);
-}
+off_t atoofft(LPCSTR p);
 
 inline off_t atoofft(LPCSTR p, off_t nDefVal)
 {
@@ -303,21 +296,10 @@ mstring UrlEscape(cmstring &s);
 void UrlEscapeAppend(cmstring &s, mstring &sTarget);
 bool UrlUnescapeAppend(cmstring &from, mstring & to);
 // Decode with result as return value, no error reporting
-inline mstring UrlUnescape(cmstring &from)
-{
-	mstring ret; // let the compiler optimize
-	UrlUnescapeAppend(from, ret);
-	return ret;
-}
+mstring UrlUnescape(cmstring &from);
 mstring DosEscape(cmstring &s);
 // just the bare minimum to make sure the string does not break HTML formating
-inline mstring html_sanitize(cmstring& in)
-{
-	mstring ret;
-	for(auto c:in)
-		ret += ( strchr("<>'\"&;", (unsigned) c) ? '_' : c);
-	return ret;
-}
+mstring html_sanitize(cmstring& in);
 
 #define pathTidy(s) { if(startsWithSz(s, "." SZPATHSEP)) s.erase(0, 2); tStrPos n(0); \
 	for(n=0;stmiss!=n;) { n=s.find(SZPATHSEP SZPATHSEP, n); if(stmiss!=n) s.erase(n, 1);}; \
@@ -329,62 +311,30 @@ inline mstring html_sanitize(cmstring& in)
 
 #define StrHas(haystack, needle) (haystack.find(needle) != stmiss)
 #define StrHasFrom(haystack, needle, startpos) (haystack.find(needle, startpos) != stmiss)
+#define StrEraseEnd(s,len) (s).erase((s).size() - len)
 
 off_t GetFileSize(cmstring & path, off_t defret);
 
-inline mstring offttos(off_t n)
-{
-	char buf[21];
-	int len=snprintf(buf, 21, OFF_T_FMT, n);
-	return mstring(buf, len);
-}
+mstring offttos(off_t n);
 
-inline mstring ltos(long n)
-{
-	char buf[21];
-	int len=snprintf(buf, 21, "%ld", n);
-	return mstring(buf, len);
-}
+mstring ltos(long n);
 
-inline mstring offttosH(off_t n)
-{
-	LPCSTR  pref[]={"", " KiB", " MiB", " GiB", " TiB", " PiB", " EiB"};
-	for(unsigned i=0;i<_countof(pref)-1; i++)
-	{
-		if(n<1024)
-			return ltos(n)+pref[i];
-		if(n<10000)
-			return ltos(n/1000)+"."+ltos((n%1000)/100)+pref[i+1];
-
-		n/=1024;
-	}
-	return "INF";
-}
-
-inline void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar)
-{
-	for(mstring::iterator p=s.begin();p!=s.end();p++)
-		for(LPCSTR b=szBadChars;*b;b++)
-			if(*b==*p)
-			{
-				*p=goodChar;
-				break;
-			}
-}
+mstring offttosH(off_t n);
+void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar);
 
 extern cmstring sEmptyString;
 
-//! split-and-extract helper for strings, for convenient use with for-loops
+//! iterator-like helper for string splitting, for convenient use with for-loops
 class tSplitWalk
 {
 	cmstring &s;
-	mstring::size_type start, len, oob;
+	mutable mstring::size_type start, len, oob;
 	LPCSTR m_seps;
 
 public:
 	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, unsigned begin=0)
 	: s(*line), start(begin), len(stmiss), oob(line->size()), m_seps(separators) {}
-	inline bool Next()
+	inline bool Next() const
 	{
 		if(len != stmiss) // not initial state, find the next position
 			start = start + len + 1;
@@ -411,9 +361,9 @@ public:
 
 		return true;
 	}
-	inline mstring str(){ return s.substr(start, len); }
-	inline operator mstring() { return str(); }
-	inline LPCSTR remainder() { return s.c_str() + start; }
+	inline mstring str() const { return s.substr(start, len); }
+	inline operator mstring() const { return str(); }
+	inline LPCSTR remainder() const { return s.c_str() + start; }
 };
 
 //bool CreateDetachedThread(void *(*threadfunc)(void *));
@@ -424,46 +374,9 @@ bool IsAbsolute(cmstring &dirToFix);
 
 
 
-inline char unEscape(const char p)
-{
-	switch (p)
-	{
-	case '0':
-		return '\0';
-	case 'a':
-		return '\a';
-	case 'b':
-		return '\b';
-	case 't':
-		return '\t';
-	case 'n':
-		return '\n';
-	case 'r':
-		return '\r';
-	case 'v':
-		return '\v';
-	case 'f':
-		return '\f';
-	default:
-		return p;
-	}
-}
+char unEscape(const char p);
 
-inline mstring unEscape(cmstring &s)
-{
-	mstring ret;
-	for(cmstring::const_iterator it=s.begin();it!=s.end();++it)
-	{
-		if(*it=='\\')
-		{
-			++it;
-			ret+=unEscape(*it);
-		}
-		else
-			ret+=*it;
-	}
-	return ret;
-}
+mstring unEscape(cmstring &s);
 
 std::string BytesToHexString(const uint8_t sum[], unsigned short lengthBin);
 //bool HexToString(const char *a, mstring& ret);
@@ -480,15 +393,7 @@ static inline time_t GetTime()
 
 static const time_t END_OF_TIME(MAX_VAL(time_t)-2);
 
-static inline unsigned FormatTime(char *buf, const time_t cur)
-{
-	struct tm tmp;
-	gmtime_r(&cur, &tmp);
-	asctime_r(&tmp, buf);
-	//memcpy(buf + 24, " GMT", 4); // wrong, only needed for rfc-822 format, not for asctime's
-	//return 28;
-	return 24;
-}
+unsigned FormatTime(char *buf, const time_t cur);
 
 struct tCurrentTime
 {
@@ -523,7 +428,7 @@ mstring EncodeBase64(LPCSTR data, unsigned len);
 bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData);
 #endif
 
-typedef std::vector<std::pair<std::string, std::string>> tLPS;
+typedef std::deque<std::pair<std::string, std::string>> tLPS;
 
 #ifdef __GNUC__
 #define AC_LIKELY(x)   __builtin_expect(!!(x), true)
@@ -533,7 +438,11 @@ typedef std::vector<std::pair<std::string, std::string>> tLPS;
 #define AC_UNLIKELY(x) x
 #endif
 
+// shortcut for the non-invasive lookup and copy of stuff from mapps
+#define ifThereStoreThere(x,y,z) { auto itFind = (x).find(y); if(itFind != (x).end()) z = itFind->second; }
+#define ifThereStoreThereAndBreak(x,y,z) { auto itFind = (x).find(y); if(itFind != (x).end()) { z = itFind->second; break; } }
 
+bool scaseequals(cmstring& a, cmstring& b);
 
 #endif // _META_H
 

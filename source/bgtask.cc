@@ -201,7 +201,7 @@ void tSpecOpDetachable::Run()
 
 			SendFmt << "Maintenance task <b>" << GetTaskName()
 					<< "</b>, apt-cacher-ng version: " ACVERSION;
-			string link = "http://" + GetHostname() + ":" + acfg::port + "/" + m_parms.cmd;
+			string link = "http://" + GetHostname() + ":" + acfg::port + "/" + acfg::reportpage;
 			SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
 					<< "\">Cancel</a>)"
 					<< "\n<!--\n"
@@ -210,10 +210,8 @@ void tSpecOpDetachable::Run()
 					<< maark << int(ControLineType::BeforeError)
 					<< "See file " << logPath << " for more details.\n"
 					<< maark << int(ControLineType::BeforeError)
-					<< "Server url: " << link
-					<< "\n-->\n"
-//					<< "<!--\n" << maark << int(ControLineType::Error) << "test\n-->\n"
-					;
+					<< "Server control address: " << link
+					<< "\n-->\n";
 			string xlink = "<br>\nServer link: <a href=\"" + link + "\">" + link + "</a><br>\n";
 			SendChunkLocalOnly(xlink.data(), xlink.size());
 			SendFmt << "<br>\n";

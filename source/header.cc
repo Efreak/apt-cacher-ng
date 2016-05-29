@@ -112,7 +112,7 @@ void header::del(eHeadPos i)
 }
 
 int header::Load(LPCSTR const in, unsigned maxlen,
-		std::vector<std::pair<std::string, std::string>> *pNotForUs)
+		const std::function<void(cmstring&, cmstring&)> &unkHandler)
 {
 	if(maxlen<9)
 		return 0;
@@ -172,12 +172,8 @@ int header::Load(LPCSTR const in, unsigned maxlen,
 
 			if(lastLineIdx == HEADPOS_NOTFORUS)
 			{
-				if(pNotForUs)
-				{
-					if(pNotForUs->empty()) // heh?
-						return -4;
-					pNotForUs->back().second.append(szBegin, nlen+2);
-				}
+				if(unkHandler)
+					unkHandler("", string(szBegin, nlen+2));
 				continue;
 			}
 			else if(lastLineIdx == HEADPOS_MAX || !h[lastLineIdx])
@@ -217,20 +213,11 @@ int header::Load(LPCSTR const in, unsigned maxlen,
 			h[xh.pos][l]='\0';
 			break;
 		}
-		if(pNotForUs && lastLineIdx == HEADPOS_NOTFORUS)
-			pNotForUs->emplace_back(string(key,keyLen),
+		if(unkHandler && lastLineIdx == HEADPOS_NOTFORUS)
+			unkHandler(string(key,keyLen),
 					string(szBegin+keyLen, end+2-(szBegin+keyLen)));
 	}
 	return -2;
-}
-
-int header::LoadFromBuf(const char * const in, unsigned maxlen)
-{
-	clear();
-	int ret=Load(in, maxlen);
-	if(ret<0)
-		clear();
-	return ret;
 }
 
 int header::LoadFromFile(const string &sPath)
@@ -243,7 +230,7 @@ int header::LoadFromFile(const string &sPath)
 	acbuf buf;
 	if(!buf.initFromFile(sPath.c_str()))
 		return -1;
-	return LoadFromBuf(buf.rptr(), buf.size());
+	return Load(buf.rptr(), buf.size());
 }
 
 

@@ -1504,17 +1504,6 @@ bool MatchUncacheable(const string & in, NOCACHE_PATTYPE type)
 
 } // namespace rechecks
 
-mstring GetDirPart(const string &in)
-{
-	if(in.empty())
-		return sEmptyString;
-
-	tStrPos end = in.find_last_of(CPATHSEP);
-	if(end == stmiss) // none? don't care then
-		return sEmptyString;
-
-	return in.substr(0, end+1);
-}
 
 #ifndef MINIBUILD
 LPCSTR ReTest(LPCSTR s)

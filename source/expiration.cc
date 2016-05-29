@@ -34,8 +34,10 @@ using namespace std;
 
 void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
-	LOGSTART2("expiration::_HandlePkgEntry:",
+#ifdef DEBUGSPAM
+	LOGSTART2("expiration::HandlePkgEntry:",
 			"\ndir:" << entry.sDirectory << "\nname: " << entry.sFileName << "\nsize: " << entry.fpr.size << "\ncsum: " << entry.fpr.GetCsAsString());
+#endif
 
 #define ECLASS "<span class=\"ERROR\">ERROR: "
 #define WCLASS "<span class=\"WARNING\">WARNING: "
@@ -113,15 +115,11 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			// Basic header checks. Skip if the file was forcibly updated/reconstructed before.
 			if (m_bSkipHeaderChecks || descHave.bNoHeaderCheck)
 			{
-				LOG("Skipped header check for " << sPathRel);
-			}
-			else if(entry.bInflateForCs)
-			{
-				LOG("Skipped header check for " << sPathRel << ", cannot compare sizes");
+//				LOG("Skipped header check for " << sPathRel);
 			}
 			else if(entry.fpr.size>=0)
 			{
-				LOG("Doing basic header checks");
+//				LOG("Doing basic header checks");
 				header h;
 				auto sHeadAbs(sPathAbs+".head");
 				if (0<h.LoadFromFile(sHeadAbs))
@@ -161,8 +159,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				// can check a bit more against directory info for most cases
 				// also shortcut without scanning
 
-				if( !entry.bInflateForCs &&
-						entry.fpr.size>=0)
+				if(entry.fpr.size>=0)
 				{
 					if(lenFromStat > entry.fpr.size) goto report_oversize;
 					if(lenFromStat < entry.fpr.size) goto handle_incomplete;
@@ -172,8 +169,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			if(!m_bByChecksum) return report_good(lenFromStat);
 
 			//knowing the expected and real size, try a shortcut without scanning
-			if(!entry.bInflateForCs// if we can check quickly with the file size
-					&& entry.fpr.size >= 0)
+			if(entry.fpr.size >= 0)
 			{
 				if(lenFromStat<0) lenFromStat=GetFileSize(sPathAbs, -123);
 				if(lenFromStat >=0 && lenFromStat < entry.fpr.size)
@@ -184,14 +180,11 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			}
 
 			if(entry.fpr.csType != descHave.fpr.csType &&
-					!descHave.fpr.ScanFile(sPathAbs, entry.fpr.csType, entry.bInflateForCs))
+					!descHave.fpr.ScanFile(sPathAbs, entry.fpr.csType))
 			{
 				// IO error? better keep it for now, not sure how to deal with it
 				SendFmt << ECLASS "An error occurred while checksumming "
 				<< sPathRel << ", leaving as-is for now.";
-				if(entry.bInflateForCs)
-					SendFmt << " NOTE: this can be caused by the incomplete compression"
-							" header if the download was not finished.";
 				aclog::err(tSS() << "Error reading " << sPathAbs );
 				AddDelCbox(sPathRel);
 				SendFmt<<CLASSEND;
@@ -537,7 +530,7 @@ void expiration::Action()
 		ParseAndProcessMetaFile(func, sPathRel, EIDX_RELEASE, true);
 	}
 
-	ProcessSeenMetaFiles([this](const tRemoteFileInfo &e) {
+	ProcessSeenIndexFiles([this](const tRemoteFileInfo &e) {
 		HandlePkgEntry(e); });
 
 	if(CheckAndReportError() || CheckStopSignal())
@@ -863,3 +856,12 @@ bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo&
 	return tCacheOperation::_checkSolidHashOnDisk(hexname, entry, srcPrefix);
 }
 
+bool expiration::_QuickCheckSolidFileOnDisk(cmstring& sPathRel)
+{
+	auto dir=GetDirPart(sPathRel);
+	auto nam=sPathRel.substr(dir.size());
+	auto it = m_trashFile2dir2Info.find(nam);
+	if(it == m_trashFile2dir2Info.end())
+		return false;
+	return it->second.find(dir) != it->second.end();
+}

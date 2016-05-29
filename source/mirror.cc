@@ -158,7 +158,7 @@ void pkgmirror::Action()
 		string base;
 		int nDeleted = 0;
 		cmstring* pMySuf=nullptr;
-		for(const auto& suf: compSuffixesAndEmpty)
+		for(const auto& suf: sfxXzBz2GzLzmaNone)
 		{
 			if(endsWith(mine, suf))
 			{
@@ -167,7 +167,7 @@ void pkgmirror::Action()
 				break;
 			}
 		}
-		for(const auto& suf : compSuffixesAndEmpty)
+		for(const auto& suf : sfxXzBz2GzLzmaNone)
 		{
 			if(&suf == pMySuf)
 				continue;
@@ -189,7 +189,7 @@ void pkgmirror::Action()
 	// now there may still be something like Sources and Sources.bz2 if they
 	// were added by Release file scan. Choose the preferred one simply by extension.
 	restart_clean2: // start over if the set changed while having a hot iterator
-	for (const auto& s: compSuffixesAndEmptyByRatio)
+	for (const auto& s: sfxXzBz2GzLzma)
 		for (const auto& src : srcs)
 			if (endsWith(src, s)&& delBros(src)) // this is the one
 				goto restart_clean2;

@@ -48,7 +48,7 @@ protected:
 
 	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry,
 			cmstring& srcPrefix) override;
-
+	virtual bool _QuickCheckSolidFileOnDisk(cmstring& /* sFilePathRel */) override;
 private:
 	int m_nPrevFailCount =0;
 	bool CheckAndReportError();

@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <atomic>
+#include <algorithm>
 
 #define LOCAL_DEBUG
 #include "debug.h"
@@ -26,6 +27,14 @@ using namespace std;
 #define MAX_RETRY 11
 
 static cmstring sGenericError("567 Unknown download error occured");
+
+// those are not allowed to be forwarded
+static const auto taboo =
+{
+	string("Host"), string("Cache-Control"),
+	string("Proxy-Authorization"), string("Accept"),
+	string("User-Agent")
+};
 
 std::atomic_uint g_nDlCons(0);
 
@@ -147,24 +156,19 @@ struct tDlJob
 		if(!reqHead)
 			return;
 		header h;
-		tLPS cheaders;
-		h.Load(reqHead, std::numeric_limits<int>::max(), &cheaders);
-		if(cheaders.empty())
-			return;
-		for(const auto& ch: cheaders)
-		{
-			// some headers are reserved (actually all starting with those prefixes
-			if(strncasecmp(ch.first.c_str(), WITHLEN("Host")) &&
-					strncasecmp(ch.first.c_str(), WITHLEN("Proxy-Authorization")) &&
-					strncasecmp(ch.first.c_str(), WITHLEN("Cache-Control")) &&
-					strncasecmp(ch.first.c_str(), WITHLEN("Accept")) &&
-					strncasecmp(ch.first.c_str(), WITHLEN("User-Agent"))
-					)
-			{
-				m_extraHeaders += ch.first;
-				m_extraHeaders += ch.second;
-			}
-		}
+		bool forbidden=false;
+		h.Load(reqHead, std::numeric_limits<int>::max(),
+				[this, &forbidden](cmstring& key, cmstring& rest)
+				{
+			// heh, continuation of ignored stuff or without start?
+			if(key.empty() && (m_extraHeaders.empty() || forbidden))
+				return;
+			forbidden = taboo.end() != std::find_if(taboo.begin(), taboo.end(),
+					[&key](cmstring &x){return scaseequals(x,key);});
+			if(!forbidden)
+				m_extraHeaders += key + rest;
+				}
+		);
 	}
 
 	inline string RemoteUri(bool bUrlEncoded)
@@ -459,7 +463,12 @@ struct tDlJob
 				bool bHotItem = (m_DlState == STATE_REGETHEADER);
 				dbgline;
 
-				auto hDataLen = h.LoadFromBuf(inBuf.rptr(), inBuf.size());
+				auto hDataLen = h.Load(inBuf.rptr(), inBuf.size(),
+						[&h](cmstring& key, cmstring& rest)
+						{ if(scaseequals(key, "Content-Location"))
+							h.frontLine = "HTTP/1.1 500 Apt-Cacher NG does not like that data";
+						});
+
 				if (0 == hDataLen)
 					return HINT_MORE;
 				if (hDataLen<0)

@@ -16,8 +16,11 @@
 // #define USEDUPEFILTER
 
 class dlcon;
+
+// XXX: specific declarations, maybe move to a namespace
 class tDlJobHints;
-struct foo;
+class tFileGroups;
+struct tContentKey;
 
 static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing, "
 		"aborting as requested.</span>");
@@ -25,12 +28,11 @@ static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing,
 static cmstring sIndex("Index");
 static cmstring sslIndex("/Index");
 
-struct tPatchEntry
-{
-	string patchName;
-	tFingerprint fprState, fprPatch;
-};
-typedef deque<tPatchEntry>::const_iterator tPListConstIt;
+static cmstring sfxXzBz2GzLzma[] = { ".xz", ".bz2", ".gz", ".lzma"};
+static cmstring sfxXzBz2GzLzmaNone[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
+
+bool CompDebVerLessThan(cmstring &s1, cmstring s2);
+extern time_t m_gMaintTimeNow;
 
 void DelTree(const string &what);
 
@@ -46,7 +48,7 @@ public:
 	enum enumMetaType
 		: uint8_t
 		{
-			EIDX_UNSUPPORTED = 0,
+			EIDX_NOTREFINDEX = 0,
 		EIDX_RELEASE,
 		EIDX_PACKAGES,
 		EIDX_SOURCES,
@@ -60,36 +62,51 @@ public:
 		EIDX_MD5DILIST,
 		EIDX_SHA256DILIST
 	};
-protected:
 	struct tIfileAttribs
 	{
 		bool vfile_ondisk:1, uptodate:1, parseignore:1, hideDlErrors:1,
-				forgiveDlErrors:1, alreadyparsed:1,
-				guessed:1; // file is not on disk, the name is pure calculation from pdiff mechanism
-		enumMetaType eIdxType = EIDX_UNSUPPORTED;
-		const tStrDeq *bros = nullptr;
+				forgiveDlErrors:1, alreadyparsed:1;
+		enumMetaType eIdxType = EIDX_NOTREFINDEX;
+		tIfileAttribs *bro; // point to a related descriptor, circled single-linked list
 		off_t space = 0;
 		inline tIfileAttribs() :
 				vfile_ondisk(false), uptodate(false),
 				parseignore(false), hideDlErrors(false),
-				forgiveDlErrors(false), alreadyparsed(false),
-				guessed(false)
-		{};
+				forgiveDlErrors(false), alreadyparsed(false)
+		{
+			bro = this;
+		};
+#ifdef DEBUG
+		inline tSS toString() const
+		{
+			return tSS() << alreadyparsed << "|"
+					<< forgiveDlErrors << "|"
+					<< hideDlErrors << "|"
+					<< parseignore << "|"
+					<< space << "|"
+					<< uptodate << "|"
+					<< vfile_ondisk;
+		}
+#endif
 	};
 
-	// this is not unordered because sometimes it might need modification
-	// while an iterator still works on it
-	std::map<mstring,tIfileAttribs> m_metaFilesRel;
 	// helpers to keep the code cleaner and more readable
 	const tIfileAttribs &GetFlags(cmstring &sPathRel) const;
+
+protected:
+	// this is not unordered because sometimes we make use of iterator references while
+	// doing modification of the map
+	std::map<mstring,tIfileAttribs> m_metaFilesRel;
 	tIfileAttribs &SetFlags(cmstring &sPathRel);
 
+	// evil shortcut, might point to read-only dummy... to be used with care
+	tIfileAttribs &GetRWFlags(cmstring &sPathRel);
 	void UpdateVolatileFiles();
 	void _BusyDisplayLogs();
 	void _Usermsg(mstring m);
 	bool AddIFileCandidate(const mstring &sFileRel);
 
-	// NOOP, implemented here for convinience
+	// NOOP, implemented here for convenience
 	bool ProcessOthers(const mstring &sPath, const struct stat &);
 	bool ProcessDirAfter(const mstring &sPath, const struct stat &);
 
@@ -104,7 +121,7 @@ protected:
 	 *   
 	 * */
 
-	void ProcessSeenMetaFiles(std::function<void(tRemoteFileInfo)> pkgHandler);
+	void ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHandler);
 
 	void StartDlder();
 
@@ -116,7 +133,7 @@ protected:
 	};
 	bool Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(),
-			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0);
+			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0, cmstring* sGuessedFrom = nullptr);
 #define DL_HINT_GUESS_REPLACEMENT 0x1
 
 	// common helper variables
@@ -149,10 +166,6 @@ protected:
 	void ProgTell();
 	void AddDelCbox(cmstring &sFileRel, bool bExtraFile = false);
 
-	typedef std::pair<tFingerprint,mstring> tContId;
-	struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
-	typedef std::map<tContId, tClassDesc> tContId2eqClass;
-
 	// add certain files to the kill bill, to be removed after the activity is done
 	virtual void MarkObsolete(cmstring&) {};
 
@@ -175,17 +188,32 @@ protected:
 	tStrSet m_managedDirs;
 
 private:
-	tContId2eqClass m_eqClasses;
 
-	bool Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
-			cmstring *psTmpUnpackedAbs=nullptr);
-	void InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter);
+	void ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups& ret, const tStrDeq& releaseFilesRel);
+	void FilterGroupData(tFileGroups& idxGroups);
+	void SortAndInterconnectGroupData(tFileGroups& idxGroups);
+
+	/**
+	 * Adjust the configuration of related paths (relative to updatePath) to prevent
+	 * smart downloads later, how exactly depends on current execution mode.
+	 *
+	 * If strict path checks are used the content may also be copied over.
+	 */
+	void SyncSiblings(cmstring &srcPathRel, const tStrDeq& targets);
+
 	tCacheOperation(const tCacheOperation&);
 	tCacheOperation& operator=(const tCacheOperation&);
-	bool PatchFile(cmstring &srcRel, cmstring &patchIdxLocation,
-			tPListConstIt pit, tPListConstIt itEnd,
-			const tFingerprint *verifData);
+
 	dlcon *m_pDlcon = nullptr;
+	cmstring& GetFirstPresentPath(const tFileGroups& groups, const tContentKey& ckey);
+
+	/*
+	 * Analyze patch base candidate, fetch patch files as suggested by index, patch, distribute result
+	 */
+	void PatchOne(cmstring& pindexPathRel, const tStrDeq& patchBaseCandidates);
+	void ParseGenericRfc822File(filereader& reader, cmstring& sExtListFilter,
+			map<string, deque<string> >& contents);
+	bool ParseDebianIndexLine(tRemoteFileInfo& info, cmstring& fline);
 
 protected:
 	bool CalculateBaseDirectories(cmstring& sPath, enumMetaType idxType, mstring& sBaseDir, mstring& sBasePkgDir);
@@ -196,17 +224,22 @@ protected:
 	 * @param sExtListFilter If set to non-empty, will only extract value(s) for that key
 	 * @param byHashMode Return without calbacks if AcquireByHash is not set to yes. Not setting list filter also makes sense in this mode.
 	 */
-	bool ParseGenericRfc822Index(filereader& reader, std::function<void(const tRemoteFileInfo&)> &ret,
+	bool ParseDebianRfc822Index(filereader& reader, std::function<void(const tRemoteFileInfo&)> &ret,
 			cmstring& sCurFilesReferenceDirRel,
 			cmstring& sPkgBaseDir,
-			enumMetaType ixType, CSTYPES csType, bool ixInflatedChecksum,
+			enumMetaType ixType, CSTYPES csType,
 			cmstring& sExtListFilter,
 			bool byHashMode);
 	const tIfileAttribs attr_dummy_pure = tIfileAttribs();
 	tIfileAttribs attr_dummy;
 
+	/* Little helper to check existence of specific name on disk, either in cache or replacement directory, depending on what the srcPrefix defines */
 	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry,
 			cmstring& srcPrefix);
+
+	// "can return false negatives" thing
+	// to be implemented in subclasses
+	virtual bool _QuickCheckSolidFileOnDisk(cmstring& /* sFilePathRel */) { return false; }
 	void BuildCacheFileList();
 	/**
 	 * This is supposed to restore references to files that are no longer
@@ -233,14 +266,5 @@ protected:
 	tStrDeq GetGoodReleaseFiles();
 };
 
-
-static cmstring compSuffixes[] = { ".xz", ".bz2", ".gz", ".lzma"};
-static cmstring compSuffixesAndEmpty[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
-static cmstring compSuffixesAndEmptyByLikelyhood[] = { "", ".xz", ".bz2", ".gz", ".lzma",};
-static cmstring compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
-static cmstring compSuffixesByRatio[] = { ".xz", ".lzma", ".bz2", ".gz"};
-
-bool CompDebVerLessThan(cmstring &s1, cmstring s2);
-extern time_t m_gMaintTimeNow;
 
 #endif /*_CACHEMAN_H_*/

@@ -115,8 +115,37 @@ struct tFingerprint {
 			return false;
 		size=newsize;
 		return true;
+
 	}
-	bool ScanFile(const mstring & path, const CSTYPES eCstype, bool bUnpack, FILE *fDump=nullptr)
+
+	/**
+	 * Reads first two tokens from splitter, first considered checksum, second the size.
+	 * Keeps the splitter pointed at last token, expects splitter be set at previous position.
+	 * @return false if data is crap or wantedType was set but does not fit what's in the first token.
+	 */
+	inline bool Set(const tSplitWalk & splitInput, CSTYPES wantedType = CSTYPE_INVALID)
+	{
+		if(!splitInput.Next())
+			return false;
+		if(!SetCs(splitInput.str(), wantedType))
+			return false;
+		if(!splitInput.Next())
+			return false;
+		size = atoofft(splitInput.str().c_str(), -1);
+		if(size < 0)
+			return false;
+		return true;
+	}
+#if 0
+	/**
+	 * Warning: this function only exists to work around C++ stupidity.
+	 * The const modifier is void, it will still modify splitter state.
+	 */
+	inline bool Set(const tSplitWalk & splitInput, CSTYPES wantedType = CSTYPE_INVALID)
+	{ return Set(std::move(splitInput), wantedType); }
+#endif
+
+	bool ScanFile(const mstring & path, const CSTYPES eCstype, bool bUnpack = false, FILE *fDump=nullptr)
 	{
 		if(! GetCSTypeLen(eCstype))
 			return false; // unsupported
@@ -172,14 +201,12 @@ struct tFingerprint {
 struct tRemoteFileInfo
 {
 	tFingerprint fpr;
-	bool bInflateForCs = false;
 	mstring sDirectory, sFileName;
 	inline void SetInvalid() {
 		sFileName.clear();
 		sDirectory.clear();
 		fpr.csType=CSTYPE_INVALID;
 		fpr.size=-1;
-		bInflateForCs = false;
 	}
 	inline bool IsUsable() {
 		return (!sFileName.empty() && fpr.csType!=CSTYPE_INVALID && fpr.size>0);
