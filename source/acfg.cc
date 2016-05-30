@@ -458,6 +458,9 @@ inline bool ParseOptionLine(const string &sLine, string &key, string &val)
 	if(key.empty())
 		return false; // weird
 
+	if(endsWithSzAr(val, "\\"))
+		cerr << "Warning: multilines are not supported, consider using \\n." <<endl;
+
 	return true;
 }
 

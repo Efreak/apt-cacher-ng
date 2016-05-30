@@ -376,10 +376,6 @@ void DelTree(cmstring &what);
 
 bool IsAbsolute(cmstring &dirToFix);
 
-
-
-char unEscape(const char p);
-
 mstring unEscape(cmstring &s);
 
 std::string BytesToHexString(const uint8_t sum[], unsigned short lengthBin);
