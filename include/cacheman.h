@@ -36,14 +36,14 @@ extern time_t m_gMaintTimeNow;
 
 void DelTree(const string &what);
 
-class tCacheOperation :
+class cacheman :
 	public IFileHandler,
 	public tSpecOpDetachable
 {
 
 public:
-	tCacheOperation(const tSpecialRequest::tRunParms& parms);
-	virtual ~tCacheOperation();
+	cacheman(const tSpecialRequest::tRunParms& parms);
+	virtual ~cacheman();
 
 	enum enumMetaType
 		: uint8_t
@@ -201,8 +201,8 @@ private:
 	 */
 	void SyncSiblings(cmstring &srcPathRel, const tStrDeq& targets);
 
-	tCacheOperation(const tCacheOperation&);
-	tCacheOperation& operator=(const tCacheOperation&);
+	cacheman(const cacheman&);
+	cacheman& operator=(const cacheman&);
 
 	dlcon *m_pDlcon = nullptr;
 	cmstring& GetFirstPresentPath(const tFileGroups& groups, const tContentKey& ckey);

@@ -29,6 +29,10 @@
 
 #define EXTREME_MEMORY_SAVING false
 
+#ifdef _MSC_VER
+#define __func__ __FUNCTION__
+#endif
+
 #if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
 #define COMPATGCC47
 #define EMPLACE_PAIR_COMPAT(M,K,V) if((M).find(K) == (M).end()) (M).insert(std::make_pair(K,V))

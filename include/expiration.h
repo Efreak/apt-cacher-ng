@@ -15,11 +15,11 @@ struct tDiskFileInfo
 	tFingerprint fpr;
 };
 
-class expiration : public tCacheOperation
+class expiration : public cacheman
 {
 public:
 	// XXX: g++ 4.7 is not there yet... using tCacheOperation::tCacheOperation;
-	inline expiration(const tRunParms& parms) : tCacheOperation(parms) {};
+	inline expiration(const tRunParms& parms) : cacheman(parms) {};
 
 protected:
 

@@ -853,7 +853,7 @@ bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo&
 {
 	if(m_trashFile2dir2Info.find(hexname) == m_trashFile2dir2Info.end())
 		return false;
-	return tCacheOperation::_checkSolidHashOnDisk(hexname, entry, srcPrefix);
+	return cacheman::_checkSolidHashOnDisk(hexname, entry, srcPrefix);
 }
 
 bool expiration::_QuickCheckSolidFileOnDisk(cmstring& sPathRel)
