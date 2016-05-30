@@ -397,7 +397,9 @@ struct tDlJob
 
 		head << acfg::requestapx
 				<< m_extraHeaders
-				<< "Accept: */*\r\nAccept-Encoding: identity\r\nConnection: "
+				<< "Accept: application/octet-stream\r\n"
+				"Accept-Encoding: identity\r\n"
+				"Connection: "
 				<< (acfg::persistoutgoing ? "keep-alive\r\n\r\n" : "close\r\n\r\n");
 
 #ifdef SPAM

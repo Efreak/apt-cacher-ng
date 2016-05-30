@@ -1,3 +1,13 @@
+apt-cacher-ng (0.9.4) AFFOGATO; urgency=low
+
+  * Extended workaround for the fake Content-Location "redirect", setting
+    "Accept: octet/stream" header which seems to be the only way to tell
+    Apache and nginx that we really want THAT data and not some compressed
+    version (no matter whether it's gzip or xz or cewwlCrzyCompression3000 or
+    whatever their authors consider suitable for everybody by default)
+
+ -- 
+
 apt-cacher-ng (0.9.3) HAVE-SOME-LIGHT-BALLS; urgency=medium
 
   * FIX: Cope with removal of SHA1 checksums from Debian/Ubuntu (In)Release files
