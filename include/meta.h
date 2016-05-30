@@ -448,5 +448,12 @@ typedef std::deque<std::pair<std::string, std::string>> tLPS;
 
 bool scaseequals(cmstring& a, cmstring& b);
 
+// dirty little RAII helper
+struct tDtorEx {
+	std::function<void(void)> _action;
+	inline tDtorEx(decltype(_action) action) : _action(action) {}
+	inline ~tDtorEx() { _action(); }
+};
+
 #endif // _META_H
 

@@ -51,19 +51,6 @@ private:
 	// counter. Originally written with some uber-protective considerations in mind like
 	// not letting a listener block the work of an operator by any means.
 
-	// notification of attached processes
-	class tProgressTracker : public base_with_condition
-	{
-	public:
-		off_t nEndSize;
-		time_t id;
-		tProgressTracker() : nEndSize(-1), id(0) {};
-		void SetEnd(off_t);
-	};
-	typedef SHARED_PTR<tProgressTracker> tProgTrackPtr;
-	static WEAK_PTR<tProgressTracker> g_pTracker;
-	tProgTrackPtr m_pTracker;
-
 	protected:
 	// value is an ID number assigned to the string (key) in the moment of adding it
 	struct errorEntry { mstring msg; unsigned id; };
@@ -71,8 +58,10 @@ private:
 	// generates a lookup blob as hidden form parameter
 	mstring BuildCompressedDelFileCatalog();
 
-	static acmutex g_abortMx;
+	static base_with_condition g_StateCv;
 	static bool g_sigTaskAbort;
+	// to watch the log file
+	int m_logFd = -1;
 };
 
 #ifdef DEBUG

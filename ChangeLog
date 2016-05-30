@@ -7,6 +7,8 @@ apt-cacher-ng (0.9.4) AFFOGATO; urgency=low
     whatever their authors consider suitable for everybody by default)
   * Better handling of error situations in expiration task, printing a summary
     at the bottom.
+  * FIX: attaching to monitor the output of background maintenance task in the
+    browser working properly
 
  -- 
 

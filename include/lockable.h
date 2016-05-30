@@ -27,6 +27,7 @@ struct lockuniq {
 	lockuniq(base_with_mutex* mbase) : _guard(mbase->m_obj_mutex) {}
 	void unLock() { _guard.unlock();}
 	void reLock() { _guard.lock(); }
+	void reLockSafe() { if(!_guard.owns_lock()) _guard.lock(); }
 };
 
 struct base_with_condition : public base_with_mutex

@@ -48,12 +48,8 @@ inline bool IsIndexDiff(const string & sPath)
 
 bool pkgimport::ProcessRegular(const mstring &sPath, const struct stat &stinfo)
 {
+	if(CheckStopSignal()) return false;
 
-	{
-		lockguard g(&g_abortMx);
-		if(g_sigTaskAbort)
-			return false;
-	}
 	if(endsWithSzAr(sPath, ".head"))
 		return true;
 
@@ -191,12 +187,7 @@ void pkgimport::Action()
 	m_bLookForIFiles=true;
 
 	BuildCacheFileList();
-
-	{
-		lockguard g(&g_abortMx);
-		if(g_sigTaskAbort)
-			return;
-	}
+	if(CheckStopSignal()) return;
 	
 	if(m_metaFilesRel.empty())
 	{
@@ -206,12 +197,7 @@ void pkgimport::Action()
 
 
 	UpdateVolatileFiles();
-
-	{
-		lockguard g(&g_abortMx);
-		if(g_sigTaskAbort)
-			return;
-	}
+	if(CheckStopSignal()) return;
 	
 	if(m_bErrAbort && m_nErrorCount>0)
 	{
@@ -222,12 +208,7 @@ void pkgimport::Action()
 	m_bLookForIFiles=false;
 	DBGQLOG("building contents map for " << m_sSrcPath);
 	DirectoryWalk(m_sSrcPath, this, true);
-
-	{
-		lockguard g(&g_abortMx);
-		if(g_sigTaskAbort)
-			return;
-	}
+	if(CheckStopSignal()) return;
 	
 	if(m_importMap.empty())
 	{
@@ -238,11 +219,7 @@ void pkgimport::Action()
 	ProcessSeenIndexFiles([this](const tRemoteFileInfo &e) {
 		HandlePkgEntry(e); });
 
-	{
-		lockguard g(&g_abortMx);
-		if(g_sigTaskAbort)
-			return;
-	}
+	if(CheckStopSignal()) return;
 
 	ofstream fList;
 	fList.open(SCACHEFILE.c_str(), ios::out | ios::trunc);
