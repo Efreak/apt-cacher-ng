@@ -56,11 +56,11 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				string sPathAbs(CACHE_BASE+sPathRel);
 
 				// end line ending starting from a class and add checkbox as needed
-				auto finish_bad = [&]()->bool
+				auto finish_bad = [&](cmstring& reason)->bool
 				{
 					if (m_damageList.is_open()) m_damageList << sPathRel << "\n";
 					SendChunk(" (treating as damaged file...) ");
-					AddDelCbox(sPathRel);
+					AddDelCbox(sPathRel, reason);
 					SendChunk(CLASSEND);
 					return true;
 				};
@@ -88,7 +88,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				if(m_bVerbose)
 				{
 					SendFmt << WCLASS << sPathRel << " (invalid but volatile, ignoring...) ";
-					AddDelCbox(sPathRel);
+					AddDelCbox(sPathRel, "Bad file state while containing volatile index data");
 					SendChunk(CLASSEND);
 				}
 				ADDSPACE(size);
@@ -128,9 +128,9 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 					if(lenFromHeader<0)
 					{
 						// better drop it, properly downloaded ones DO have the length
-						SendFmt << WCLASS "header file of "
-						<< sPathRel << " does not contain content length";
-						return finish_bad();
+						SendFmt << WCLASS << sPathRel << ": " <<
+								"header file does not contain content length";
+						return finish_bad("header file does not contain content length");
 					}
 					if (lenFromHeader < lenFromStat)
 					{
@@ -140,7 +140,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 						<< " reported too small file size (" << lenFromHeader <<
 						" vs. " << lenFromStat
 						<< "); invalidating file, removing header now";
-						return finish_bad();
+						return finish_bad("metadata reports incorrect file size");
 					}
 				}
 				else
@@ -186,7 +186,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				SendFmt << ECLASS "An error occurred while checksumming "
 				<< sPathRel << ", leaving as-is for now.";
 				aclog::err(tSS() << "Error reading " << sPathAbs );
-				AddDelCbox(sPathRel);
+				AddDelCbox(sPathRel, "IO error");
 				SendFmt<<CLASSEND;
 				return false;
 			}
@@ -196,7 +196,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			if(!descHave.fpr.csEquals(entry.fpr))
 			{
 				SendFmt << ECLASS << "checksum mismatch on " << sPathRel;
-				return finish_bad();
+				return finish_bad("checksum mismatch");
 			}
 
 			// good, or cannot check so must be good
@@ -219,7 +219,7 @@ repro: check by path, after a minor distro upgrade
 					return report_weird_volatile(lenFromStat);
 
 				SendFmt << ECLASS << "size mismatch on " << sPathRel;
-				return finish_bad();
+				return finish_bad("checksum mismatch");
 			}
 
 			// all remaining cases mean an incomplete download
@@ -231,7 +231,7 @@ repro: check by path, after a minor distro upgrade
 				{
 					SendFmt << WCLASS << sPathRel
 							<< " (incomplete download, ignoring...) ";
-					AddDelCbox(sPathRel);
+					AddDelCbox(sPathRel, "Incomplete download");
 					return finish_good(lenFromStat);
 				}
 				// just continue silently
@@ -253,7 +253,7 @@ repro: check by path, after a minor distro upgrade
 			}
 
 			SendFmt << ECLASS << " incomplete download, invalidating (as requested) "<< sPathRel;
-			return finish_bad();
+			return finish_bad("incomplete download");
 		};
 
 	auto rangeIt = m_trashFile2dir2Info.find(entry.sFileName);

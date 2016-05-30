@@ -66,7 +66,8 @@ private:
 
 	protected:
 	// value is an ID number assigned to the string (key) in the moment of adding it
-	std::map<mstring,unsigned> m_delCboxFilter;
+	struct errorEntry { mstring msg; unsigned id; };
+	std::map<mstring,errorEntry> m_delCboxFilter;
 	// generates a lookup blob as hidden form parameter
 	mstring BuildCompressedDelFileCatalog();
 

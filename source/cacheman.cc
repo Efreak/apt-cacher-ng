@@ -544,10 +544,12 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 				// XXX: this sucks a little bit since we don't want to show the checkbox
 				// when the fallback download succeeded... but on failures, the previous one
 				// already added a newline before
-				AddDelCbox(sFilePathRel, true);
+				AddDelCbox(sFilePathRel, sErr, true);
 				return false;
 			}
 		}
+		//else
+		//	AddDelCbox(sFilePathRel);
 
 		if (sErr.empty())
 			sErr = "Download error";
@@ -558,7 +560,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 #endif
 			{
 				SendFmt << "<span class=\"ERROR\">" << sErr << "</span>\n";
-				AddDelCbox(sFilePathRel);
+				AddDelCbox(sFilePathRel, sErr);
 			}
 		}
 	}
@@ -1084,9 +1086,9 @@ void cacheman::FilterGroupData(tFileGroups& idxGroups)
 			idxGroups.erase(it++);
 	}
 #ifdef DEBUGIDX
-	SendFmt << "Folders with checked stuff:<br>";
+	SendFmt << "Folders with checked stuff:" << hendl;
 	for(auto s : m_managedDirs)
-		SendFmt << s << "<br>";
+		SendFmt << s << hendl;
 #endif
 #ifdef EXPLICIT_INDEX_USE_CHECKING
 	// some preparation of patch index processing
@@ -1556,7 +1558,7 @@ void cacheman::UpdateVolatileFiles()
 				if(!endsWith(pathRel, sfxFilter))
 					continue;
 
-				auto &fl = GetFlags(pathRel);
+				auto &fl = GetRWFlags(pathRel);
 #ifdef DEBUGIDX
 				SendFmt << "Considering flags: " << pathRel << " " << fl.toString() << hendl;
 #endif
@@ -1564,8 +1566,17 @@ void cacheman::UpdateVolatileFiles()
 					continue;
 				if(fl.parseignore)
 					continue;
-
-				if(fl.uptodate || Download(pathRel, true, eMsgShow))
+				if(!fl.uptodate)
+				{
+					if(!Download(pathRel, true, eMsgShow))
+					{
+						fl.parseignore = true;
+						m_nErrorCount += !fl.forgiveDlErrors;
+						continue;
+					}
+					// a failed download will be caught separately but for now, another download attempt is pointless
+				}
+				if(fl.uptodate)
 					SyncSiblings(pathRel, groupKV.second.paths);
 			}
 		}
@@ -2152,7 +2163,7 @@ void cacheman::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHan
 			{
 				m_nErrorCount++;
 				SendChunk("<span class=\"ERROR\">An error occurred while reading this file, some contents may have been ignored.</span>\n");
-				AddDelCbox(path2att.first);
+				AddDelCbox(path2att.first, "Index data processing error");
 				SendChunk("<br>\n");
 			}
 			continue;
@@ -2169,12 +2180,12 @@ void cacheman::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHan
 	}
 }
 
-void cacheman::AddDelCbox(cmstring &sFileRel, bool bIsOptionalGuessedFile)
+void cacheman::AddDelCbox(cmstring &sFileRel, cmstring& reason, bool bIsOptionalGuessedFile)
 {
 	bool isNew;
-	auto fileParm = AddLookupGetKey(sFileRel, isNew);
-	if(!isNew)
-		return;
+	mstring fileParm = AddLookupGetKey(sFileRel, reason, isNew);
+	//if(!isNew)
+	//	return;
 
 	if(bIsOptionalGuessedFile)
 	{
@@ -2241,7 +2252,7 @@ void cacheman::PrintStats(cmstring &title)
 		{
 			bool xNew;
 			m_fmtHelper << "<tr><td><input type=\"checkbox\" class=\"xfile\""
-					<< AddLookupGetKey(*(it->second), xNew) << "></td>"
+					<< AddLookupGetKey(*(it->second), "", xNew) << "></td>"
 						"<td><b>" << html_sanitize(offttosH(it->first)) << "</b></td><td>"
 					<< *(it->second) << "</td></tr>\n";
 

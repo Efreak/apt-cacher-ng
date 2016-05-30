@@ -221,6 +221,32 @@ void tSpecOpDetachable::Run()
 
 			if (!m_delCboxFilter.empty())
 			{
+
+				bool unchint=false;
+
+				SendChunkRemoteOnly(WITHLEN(
+				"<br><b>Error summary:</b><br>"));
+				for(const auto& err: m_delCboxFilter)
+				{
+					unchint = unchint
+							||endsWithSzAr(err.first, "Packages")
+							||endsWithSzAr(err.first, "Sources");
+
+					SendFmtRemote << err.first << ": <label>"
+							<< err.second.msg
+							<<  "<input type=\"checkbox\" name=\"kf\" value=\""
+							<< tSS::hex << err.second.id << tSS::dec
+							<< "\"</label>" << hendl;
+				}
+
+				if(unchint)
+				{
+					SendChunkRemoteOnly(WITHLEN(
+					"<i>Note: some uncompressed index versions like Packages and Sources are no"
+					" longer offered by most mirrors and can be safely removed if a compressed version exists.</i>\n"
+							));
+				}
+
 				SendChunkRemoteOnly(WITHLEN(
 				"<br><b>Action(s):</b><br>"
 					"<input type=\"submit\" name=\"doDelete\""
@@ -305,7 +331,7 @@ mstring tSpecOpDetachable::BuildCompressedDelFileCatalog()
 	for(const auto& kv: m_delCboxFilter)
 	{
 		unsigned len=kv.first.size();
-		buf.add((const char*) &kv.second, sizeof(kv.second))
+		buf.add((const char*) &kv.second.id, sizeof(kv.second.id))
 		.add((const char*) &len, sizeof(len))
 		.add(kv.first.data(), kv.first.length());
 	}

@@ -5,6 +5,8 @@ apt-cacher-ng (0.9.4) AFFOGATO; urgency=low
     Apache and nginx that we really want THAT data and not some compressed
     version (no matter whether it's gzip or xz or cewwlCrzyCompression3000 or
     whatever their authors consider suitable for everybody by default)
+  * Better handling of error situations in expiration task, printing a summary
+    at the bottom.
 
  -- 
 
