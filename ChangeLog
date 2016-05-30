@@ -9,6 +9,8 @@ apt-cacher-ng (0.9.4) AFFOGATO; urgency=low
     at the bottom.
   * FIX: attaching to monitor the output of background maintenance task in the
     browser working properly
+  * extended metadata (changelogs) download filters for Tanglu
+  * Added documentation on how to use multilines with RequestAppendix option
 
  -- 
 
