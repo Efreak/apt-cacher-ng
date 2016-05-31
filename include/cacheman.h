@@ -135,6 +135,7 @@ protected:
 			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(),
 			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0, cmstring* sGuessedFrom = nullptr);
 #define DL_HINT_GUESS_REPLACEMENT 0x1
+#define DL_HINT_NOTAG 0x2
 
 	// common helper variables
 	bool m_bErrAbort, m_bVerbose, m_bForceDownload, m_bSkipIxUpdate = false;

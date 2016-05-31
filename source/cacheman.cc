@@ -555,12 +555,11 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			sErr = "Download error";
 		if (NEEDED_VERBOSITY_EVERYTHING || m_bVerbose)
 		{
-#ifndef DEBUG
 			if(!flags.hideDlErrors)
-#endif
 			{
 				SendFmt << "<span class=\"ERROR\">" << sErr << "</span>\n";
-				AddDelCbox(sFilePathRel, sErr);
+				if(0 == (hints&DL_HINT_NOTAG))
+					AddDelCbox(sFilePathRel, sErr);
 			}
 		}
 	}
@@ -1266,8 +1265,10 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 			string patchPathRel(pindexPathRel.substr(0, pindexPathRel.size()-5) +
 					pname + ".gz");
 			if(!Download(patchPathRel, false, eDlMsgPrio::eMsgHideErrors,
-					tFileItemPtr(), 0, 0, &pindexPathRel))
+					tFileItemPtr(), nullptr, DL_HINT_NOTAG, &pindexPathRel))
+			{
 				return false;
+			}
 			SetFlags(patchPathRel).parseignore = true; // static stuff, hands off!
 
 			// append context to combined diff while unpacking
