@@ -1,4 +1,4 @@
-apt-cacher-ng (0.9.4) AFFOGATO; urgency=low
+apt-cacher-ng (0.9.4) KLENDATHU-AIRLINES-FLIGHT-94; urgency=low
 
   * Extended workaround for the fake Content-Location "redirect", setting
     "Accept: octet/stream" header which seems to be the only way to tell
