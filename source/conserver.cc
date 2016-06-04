@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <list>
 #include <map>
+#include <unordered_set>
 #include <iostream>
 #include <algorithm>    // std::min_element, std::max_element
 
@@ -257,13 +258,21 @@ void Setup()
 
 		    struct addrinfo *res, *p;
 		    if(0!=getaddrinfo(addi, port.c_str(), &hints, &res))
-			   {
-			    perror("Error resolving address for binding");
-			    return;
-			   }
-		    
+		    {
+		    	perror("Error resolving address for binding");
+		    	return;
+		    }
+
+		    std::unordered_set<std::string> dedup;
 		    for(p=res; p; p=p->ai_next)
 		    {
+		    	if(p->ai_family != AF_INET6 && p->ai_family != AF_INET)
+		    		continue;
+
+		    	// processed before?
+		    	if(!dedup.insert(std::string((LPCSTR)p->ai_addr, p->ai_addrlen)).second)
+		    		continue;
+
 		    	int nSockFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
 				if (nSockFd<0)
 					goto error_socket;
