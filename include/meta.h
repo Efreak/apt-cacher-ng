@@ -393,13 +393,13 @@ static inline time_t GetTime()
 
 static const time_t END_OF_TIME(MAX_VAL(time_t)-2);
 
-unsigned FormatTime(char *buf, const time_t cur);
+unsigned FormatTime(char *buf, size_t bufLen, const time_t cur);
 
 struct tCurrentTime
 {
 	char buf[30];
 	unsigned len;
-	inline tCurrentTime() { len=FormatTime(buf, time(nullptr)); }
+	inline tCurrentTime() { len=FormatTime(buf, sizeof(buf), time(nullptr)); }
 	inline operator mstring() { return mstring(buf, len); }
 };
 

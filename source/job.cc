@@ -235,7 +235,7 @@ job::~job()
 }
 
 
-inline void job::HandleLocalDownload(const string &visPath,
+inline void job::PrepareLocalDownload(const string &visPath,
 		const string &fsBase, const string &fsSubpath)
 {
 	string absPath = fsBase+SZPATHSEP+fsSubpath;
@@ -396,6 +396,9 @@ inline void job::HandleLocalDownload(const string &visPath,
 			m_head.type=header::ANSWER;
 			m_head.frontLine="HTTP/1.1 200 OK";
 			m_head.set(header::CONTENT_LENGTH, stdata.st_size);
+			m_head.prep(header::LAST_MODIFIED, 26);
+			if(m_head.h[header::LAST_MODIFIED])
+				FormatTime(m_head.h[header::LAST_MODIFIED], 26, stdata.st_mtim.tv_sec);
 			cmstring &sMimeType=acfg::GetMimeType(sLocalPath);
 			if(!sMimeType.empty())
 				m_head.set(header::CONTENT_TYPE, sMimeType);
@@ -549,7 +552,8 @@ void job::PrepareDownload(LPCSTR headBuf) {
 			tStrMap::const_iterator it = acfg::localdirs.find(theUrl.sHost);
 			if (it != acfg::localdirs.end())
 			{
-				HandleLocalDownload(sReqPath, it->second, theUrl.sPath);
+				PrepareLocalDownload(sReqPath, it->second, theUrl.sPath);
+				ParseRange();
 				return;
 			}
 		}

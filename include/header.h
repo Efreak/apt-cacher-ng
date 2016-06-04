@@ -59,6 +59,7 @@ class header {
       void set(eHeadPos, const char *val);
       void set(eHeadPos, const char *s, size_t len);
       void set(eHeadPos, off_t nValue);
+      void prep(eHeadPos, size_t length);
       void del(eHeadPos);
       inline void copy(const header &src, eHeadPos pos) { set(pos, src.h[pos]); };
 
