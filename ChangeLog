@@ -1,5 +1,8 @@
-apt-cacher-ng (0.9.4) KLENDATHU-AIRLINES-FLIGHT-94; urgency=low
+apt-cacher-ng (0.9.3.1) KLENDATHU-AIRLINES-FLIGHT-931; urgency=low
 
+  * This is a minor bugfix release, there are more changes to expect soon
+  * FIX: attaching to monitor the output of background maintenance task in the
+    browser working properly
   * Extended workaround for the fake Content-Location "redirect", setting
     "Accept: octet/stream" header which seems to be the only way to tell
     Apache and nginx that we really want THAT data and not some compressed
@@ -7,12 +10,10 @@ apt-cacher-ng (0.9.4) KLENDATHU-AIRLINES-FLIGHT-94; urgency=low
     whatever their authors consider suitable for everybody by default)
   * Better handling of error situations in expiration task, printing a summary
     at the bottom.
-  * FIX: attaching to monitor the output of background maintenance task in the
-    browser working properly
   * extended metadata (changelogs) download filters for Tanglu
   * Added documentation on how to use multilines with RequestAppendix option
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Wed, 08 Jun 2016 23:07:52 +0200
 
 apt-cacher-ng (0.9.3) HAVE-SOME-LIGHT-BALLS; urgency=medium
 
