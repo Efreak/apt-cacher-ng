@@ -27,24 +27,21 @@ using namespace std;
 "</style></head><body>"
 #define LOG_DECO_END "</body></html>"
 
+// for start/stop and abort hint
+base_with_condition tSpecOpDetachable::g_StateCv;
 bool tSpecOpDetachable::g_sigTaskAbort=false;
-acmutex tSpecOpDetachable::g_abortMx;
-
+// not zero if a task is active
+time_t nBgTimestamp = 0;
 
 tSpecOpDetachable::~tSpecOpDetachable()
 {
-	if(m_pTracker)
-		m_pTracker->SetEnd(m_reportStream.is_open() ? off_t(m_reportStream.tellp()) : off_t(0));
-
 	if(m_reportStream.is_open())
 	{
 		m_reportStream << LOG_DECO_END;
 		m_reportStream.close();
 	}
+	checkforceclose(m_logFd);
 }
-
-// the obligatory definition of static members :-(
-WEAK_PTR<tSpecOpDetachable::tProgressTracker> tSpecOpDetachable::g_pTracker;
 
 cmstring& GetFooter()
 {
@@ -67,8 +64,9 @@ void tSpecOpDetachable::Run()
 
 	if (m_parms.cmd.find("&sigabort")!=stmiss)
 	{
-		lockguard g(&g_abortMx);
+		lockguard g(g_StateCv);
 		g_sigTaskAbort=true;
+		g_StateCv.notifyAll();
 		tStrPos nQuest=m_parms.cmd.find("?");
 		if(nQuest!=stmiss)
 		{
@@ -106,67 +104,59 @@ void tSpecOpDetachable::Run()
 
 	tSS logPath;
 
-	tProgTrackPtr pTracked;
+	time_t other_id=0;
 
 	{ // this is locked just to make sure that only one can register as master
-		lockguard guard(&g_abortMx);
-		pTracked=g_pTracker.lock();
-		if(!pTracked) // ok, not running yet -> become the log source then
+		lockguard guard(g_StateCv);
+		if(0 == nBgTimestamp) // ok, not running yet -> become the log source then
 		{
-			m_pTracker = make_shared<tProgressTracker>();
-			time_t nMaintId=time(0);
+			auto id = time(0);
 
 			logPath.clear();
-			logPath<<acfg::logdir<<CPATHSEP<< MAINT_PFX << nMaintId << ".log.html";
+			logPath<<acfg::logdir<<CPATHSEP<< MAINT_PFX << id << ".log.html";
 			m_reportStream.open(logPath.c_str(), ios::out);
 			if(m_reportStream.is_open())
 			{
 				m_reportStream << LOG_DECO_START;
 				m_reportStream.flush();
-				m_pTracker->id = nMaintId;
-				g_pTracker=m_pTracker;
+				nBgTimestamp = id;
 			}
 			else
 			{
+				nBgTimestamp = 0;
 				SendChunk("Failed to create the log file, aborting.");
 				return;
 			}
 		}
+		else other_id = nBgTimestamp;
 	}
 
-	if(pTracked)
+	if(other_id)
 	{
 		SendChunkSZ("<font color=\"blue\">A maintenance task is already running!</font>\n");
 		SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
 				<< "\">Cancel</a>)";
 		SendChunkSZ("<br>Attempting to attach to the log output... <br>\n");
 
-		off_t nSent(0);
-		int fd(0);
-		acbuf xx;
+		tSS sendbuf(4096);
+		lockuniq g(g_StateCv);
 
 		for(;;)
 		{
-			lockuniq g(*pTracked);
-
-			if(!pTracked->id && pTracked->nEndSize==off_t(-1))
-				break; // error? source is gone but end mark not set?
-			// otherwise: end known OR sorce active
-
-			if(nSent==pTracked->nEndSize)
-				break; // DONE!
-
-			if(!fd)
+			if(other_id != nBgTimestamp)
+			{
+				// task is gone or replaced by another?
+				SendChunkSZ("<br><b>End of log output. Please reload to run again.</b>\n");
+				goto finish_action;
+			}
+			if(m_logFd < 0)
 			{
 				logPath.clear();
-				logPath<<acfg::logdir<<CPATHSEP<<MAINT_PFX << pTracked->id << ".log.html";
-				fd=open(logPath.c_str(), O_RDONLY);
+				logPath<<acfg::logdir<<CPATHSEP<<MAINT_PFX << other_id << ".log.html";
+				m_logFd=open(logPath.c_str(), O_RDONLY|O_NONBLOCK);
 
-				if(fd>=0)
-				{
-					set_nb(fd);
+				if(m_logFd>=0)
 					SendChunk("ok:<br>\n");
-				}
 				else
 				{
 					SendChunk("Failed to open log output, please retry later.<br>\n");
@@ -174,19 +164,21 @@ void tSpecOpDetachable::Run()
 				}
 
 			}
-			tSS msg;
-			msg.sysread(fd); // can be more than tracker reported. checks need to consider this
-			SendChunk(msg.data(), msg.length());
-			nSent+=msg.length();
-			msg.clear();
-
-			/* when file is truncated (disk full), the end size might be unreachable
-			 * -> detect the time out
-			 */
-			if(pTracked->wait_for(g, 33, 1))
-				break;
+			while(true)
+			{
+				int r = sendbuf.sysread(m_logFd);
+				if(r < 0)
+					goto finish_action;
+				if(r == 0)
+				{
+					g_StateCv.wait_for(g, 10, 1);
+					break;
+				}
+				SendChunkRemoteOnly(sendbuf.rptr(), sendbuf.size());
+				sendbuf.clear();
+			}
 		}
-		checkforceclose(fd);
+		// unreachable
 		goto finish_action;
 	}
 	else
@@ -194,10 +186,10 @@ void tSpecOpDetachable::Run()
 			/*****************************************************
 			 * This is the worker part
 			 *****************************************************/
-			{
-				lockguard g(&g_abortMx);
-				g_sigTaskAbort=false;
-			}
+			lockuniq g(&g_StateCv);
+			g_sigTaskAbort=false;
+			tDtorEx cleaner([&](){g.reLockSafe(); nBgTimestamp = 0; g_StateCv.notifyAll();});
+			g.unLock();
 
 			SendFmt << "Maintenance task <b>" << GetTaskName()
 					<< "</b>, apt-cacher-ng version: " ACVERSION;
@@ -221,6 +213,32 @@ void tSpecOpDetachable::Run()
 
 			if (!m_delCboxFilter.empty())
 			{
+
+				bool unchint=false;
+
+				SendChunkRemoteOnly(WITHLEN(
+				"<br><b>Error summary:</b><br>"));
+				for(const auto& err: m_delCboxFilter)
+				{
+					unchint = unchint
+							||endsWithSzAr(err.first, "Packages")
+							||endsWithSzAr(err.first, "Sources");
+
+					SendFmtRemote << err.first << ": <label>"
+							<< err.second.msg
+							<<  "<input type=\"checkbox\" name=\"kf\" value=\""
+							<< tSS::hex << err.second.id << tSS::dec
+							<< "\"</label>" << hendl;
+				}
+
+				if(unchint)
+				{
+					SendChunkRemoteOnly(WITHLEN(
+					"<i>Note: some uncompressed index versions like Packages and Sources are no"
+					" longer offered by most mirrors and can be safely removed if a compressed version exists.</i>\n"
+							));
+				}
+
 				SendChunkRemoteOnly(WITHLEN(
 				"<br><b>Action(s):</b><br>"
 					"<input type=\"submit\" name=\"doDelete\""
@@ -246,20 +264,9 @@ void tSpecOpDetachable::Run()
 		SendChunkRemoteOnly(deco.c_str(), deco.size());
 }
 
-void tSpecOpDetachable::tProgressTracker::SetEnd(off_t endSize)
-{
-	lockguard g(this);
-	//lockguard g2(&abortMx); // the master may go out of scope, protect weak_ptr
-	nEndSize=endSize;
-	if(time(0) == id)
-		::sleep(1); // just to make sure that the next id good
-	id=0;
-	notifyAll();
-}
-
 bool tSpecOpDetachable::CheckStopSignal()
 {
-	lockguard g(&g_abortMx);
+	lockguard g(&g_StateCv);
 	return g_sigTaskAbort;
 }
 
@@ -284,16 +291,14 @@ void tSpecOpDetachable::SendChunkLocalOnly(const char *data, size_t len)
 	{
 		m_reportStream.write(data, len);
 		m_reportStream.flush();
-		if(m_pTracker)
-			m_pTracker->notifyAll();
+		g_StateCv.notifyAll();
 	}
 }
 
 time_t tSpecOpDetachable::GetTaskId()
 {
-	lockguard guard(&g_abortMx);
-	tProgTrackPtr pTracked = g_pTracker.lock();
-	return pTracked ? pTracked->id : 0;
+	lockguard guard(&g_StateCv);
+	return nBgTimestamp;
 }
 
 #ifdef HAVE_ZLIB
@@ -305,7 +310,7 @@ mstring tSpecOpDetachable::BuildCompressedDelFileCatalog()
 	for(const auto& kv: m_delCboxFilter)
 	{
 		unsigned len=kv.first.size();
-		buf.add((const char*) &kv.second, sizeof(kv.second))
+		buf.add((const char*) &kv.second.id, sizeof(kv.second.id))
 		.add((const char*) &len, sizeof(len))
 		.add(kv.first.data(), kv.first.length());
 	}

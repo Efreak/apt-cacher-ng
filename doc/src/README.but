@@ -178,7 +178,8 @@ subject to change after first appearance on the server.
 
 \b "Configuration line":
 one single line in the configuration file. Some examples in this chapter may
-contain wrapped lines but should be stored as a single line in the configuration.
+be displayed as wrapped lines but should be stored as a single line in the configuration.
+Some variables (like \c{RequestAppendix}) support multiline data which needs to be separated with \\n delimiter.
 
 \H{cfgfiles} Configuration file types
 

@@ -8,13 +8,13 @@
 #include <cstring>
 #include "csmapping.h"
 
-class pkgimport : public tCacheOperation
+class pkgimport : public cacheman
 {
 
 public:
 	// XXX: c++11 using tCacheOperation::tCacheOperation;
 	inline pkgimport(const tSpecialRequest::tRunParms& parms)
-	: tCacheOperation(parms) {};
+	: cacheman(parms) {};
 
 	void Action() override;
 	

@@ -77,7 +77,7 @@ class job {
       const char * BuildAndEnqueHeader(const fileitem::FiStatus &fistate, const off_t &nGooddataSize, header& respHead);
       fileitem::FiStatus _SwitchToPtItem();
       void SetErrorResponse(const char * errorLine, const char *szLocation=nullptr, const char *bodytext=nullptr);
-      void HandleLocalDownload(const mstring &visPath,
+      void PrepareLocalDownload(const mstring &visPath,
     			const mstring &fsBase, const mstring &fsSubpath);
 
       bool ParseRange();

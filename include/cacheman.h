@@ -36,14 +36,14 @@ extern time_t m_gMaintTimeNow;
 
 void DelTree(const string &what);
 
-class tCacheOperation :
+class cacheman :
 	public IFileHandler,
 	public tSpecOpDetachable
 {
 
 public:
-	tCacheOperation(const tSpecialRequest::tRunParms& parms);
-	virtual ~tCacheOperation();
+	cacheman(const tSpecialRequest::tRunParms& parms);
+	virtual ~cacheman();
 
 	enum enumMetaType
 		: uint8_t
@@ -135,6 +135,7 @@ protected:
 			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(),
 			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0, cmstring* sGuessedFrom = nullptr);
 #define DL_HINT_GUESS_REPLACEMENT 0x1
+#define DL_HINT_NOTAG 0x2
 
 	// common helper variables
 	bool m_bErrAbort, m_bVerbose, m_bForceDownload, m_bSkipIxUpdate = false;
@@ -164,21 +165,21 @@ protected:
 	mstring m_processedIfile;
 
 	void ProgTell();
-	void AddDelCbox(cmstring &sFileRel, bool bExtraFile = false);
+	void AddDelCbox(cmstring &sFileRel, cmstring& reason, bool bExtraFile = false);
 
 	// add certain files to the kill bill, to be removed after the activity is done
 	virtual void MarkObsolete(cmstring&) {};
 
 	// for compressed map of special stuff
-	inline mstring AddLookupGetKey(cmstring &sFilePathRel, bool& isNew)
+	inline mstring AddLookupGetKey(cmstring &sFilePathRel, cmstring& reason, bool& isNew)
 	{
 		unsigned id = m_delCboxFilter.size();
 		auto it = m_delCboxFilter.find(sFilePathRel);
 		isNew = it==m_delCboxFilter.end();
 		if(isNew)
-			m_delCboxFilter[sFilePathRel] = id;
+			m_delCboxFilter[sFilePathRel] = {reason, id};
 		else
-			id = it->second;
+			id = it->second.id;
 		char buf[30];
 		return mstring(buf, snprintf(buf, sizeof(buf), " name=\"kf\" value=\"%x\"", id));
 	}
@@ -201,8 +202,8 @@ private:
 	 */
 	void SyncSiblings(cmstring &srcPathRel, const tStrDeq& targets);
 
-	tCacheOperation(const tCacheOperation&);
-	tCacheOperation& operator=(const tCacheOperation&);
+	cacheman(const cacheman&);
+	cacheman& operator=(const cacheman&);
 
 	dlcon *m_pDlcon = nullptr;
 	cmstring& GetFirstPresentPath(const tFileGroups& groups, const tContentKey& ckey);

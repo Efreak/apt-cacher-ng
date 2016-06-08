@@ -23,6 +23,7 @@
 #define dbgline
 #define ASSERT(x)
 #define LOG(x)
+#define LOGSTARTFUNC
 #define LOGSTART(x)
 #define LOGSTARTs(x)
 #define LOGSTART2(x,y)
@@ -36,6 +37,7 @@ inline void dump_proc_status(){}; // strip away
 #define LOGLVL(n, x) if(acfg::debug&n){ __logobj.GetFmter() << x; __logobj.Write(__FILE__,__LINE__); }
 #define LOG(x) LOGLVL(LOG_DEBUG, x)
 
+#define LOGSTARTFUNC t_logger __logobj(__func__, this);
 #define LOGSTART(x) t_logger __logobj(x, this);
 #define LOGSTARTs(x) t_logger __logobj(x, nullptr);
 #define LOGSTART2(x, y) t_logger __logobj(x, this); LOGLVL(LOG_DEBUG, y /* << "@" __FILE__ ":" << __LINE__  */ )

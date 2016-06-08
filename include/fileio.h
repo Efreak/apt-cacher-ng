@@ -70,6 +70,7 @@ inline void checkForceFclose(FILE* &fh)
 	}
 }
 
+// more efficient than tDtorEx with lambda
 struct FILE_RAII
 {
 	FILE *p = nullptr;

@@ -74,11 +74,9 @@
          needed when Stable system distribution is used by the clients, but use of
          unstable branches with high fluctuation requires to clean up the local
          cache from time to time. ACNG includes helper code to identify
-         unreferenced files automatically (executed with the button below).
-         <br>
-         <b>Warning:</b> this operation may redownload all index files. The current
-         implementation does not support delta-based reconstruction of index files
-         ("pdiff" mechanism).
+         unreferenced files automatically and optionally check the cache and
+         verify data against file information in the index files, where
+         available.
          </p>
             <p>
             <h3>Scan and semi-automatic expiration</h3>

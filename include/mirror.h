@@ -10,12 +10,12 @@
 
 #include "cacheman.h"
 
-class pkgmirror: public tCacheOperation
+class pkgmirror: public cacheman
 {
 public:
 	// XXX: for c++11... using tCacheOperation::tCacheOperation;
 	inline pkgmirror(const tSpecialRequest::tRunParms& parms)
-	: tCacheOperation(parms) {};
+	: cacheman(parms) {};
 
 	virtual ~pkgmirror() {};
 	void Action() override;

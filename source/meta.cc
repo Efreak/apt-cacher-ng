@@ -815,28 +815,30 @@ void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar)
 			}
 }
 
-char unEscape(const char p)
+void addUnEscaped(mstring& s, const char p)
 {
 	switch (p)
 	{
 	case '0':
-		return '\0';
+		s += '\0'; break;
 	case 'a':
-		return '\a';
+		s += '\a'; break;
 	case 'b':
-		return '\b';
+		s += '\b'; break;
 	case 't':
-		return '\t';
+		s += '\t'; break;
 	case 'n':
-		return '\n';
+		s += '\n'; break;
 	case 'r':
-		return '\r';
+		s += '\r'; break;
 	case 'v':
-		return '\v';
+		s += '\v'; break;
 	case 'f':
-		return '\f';
+		s += '\f'; break;
+	case '\\':
+		s += '\\'; break;
 	default:
-		return p;
+		s += '\\'; s += p; break;
 	}
 }
 
@@ -844,25 +846,24 @@ mstring unEscape(cmstring &s)
 {
 	mstring ret;
 	for(cmstring::const_iterator it=s.begin();it!=s.end();++it)
-	{
-		if(*it=='\\')
-		{
-			++it;
-			ret+=unEscape(*it);
-		}
-		else
-			ret+=*it;
-	}
+        {
+           if(*it != '\\') ret+= *it;
+           else if(++it == s.end()) { ret+='\\'; break; }
+           else addUnEscaped(ret, *it);
+        }
 	return ret;
 }
 
-unsigned FormatTime(char *buf, const time_t cur)
+unsigned FormatTime(char *buf, size_t bufLen, const time_t cur)
 {
+	if(bufLen < 26)
+		return 0;
 	struct tm tmp;
 	gmtime_r(&cur, &tmp);
 	asctime_r(&tmp, buf);
 	//memcpy(buf + 24, " GMT", 4); // wrong, only needed for rfc-822 format, not for asctime's
 	//return 28;
+	buf[24]=0;
 	return 24;
 }
 

@@ -171,8 +171,10 @@ Chapter 4: Advanced Server Configuration
            after first appearance on the server.
 
         -  "Configuration line": one single line in the configuration file.
-           Some examples in this chapter may contain wrapped lines but
-           should be stored as a single line in the configuration.
+           Some examples in this chapter may be displayed as wrapped lines
+           but should be stored as a single line in the configuration. Some
+           variables (like `RequestAppendix') support multiline data which
+           needs to be separated with \n delimiter.
 
    4.2 Configuration file types
 

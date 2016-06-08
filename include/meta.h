@@ -29,6 +29,10 @@
 
 #define EXTREME_MEMORY_SAVING false
 
+#ifdef _MSC_VER
+#define __func__ __FUNCTION__
+#endif
+
 #if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
 #define COMPATGCC47
 #define EMPLACE_PAIR_COMPAT(M,K,V) if((M).find(K) == (M).end()) (M).insert(std::make_pair(K,V))
@@ -372,10 +376,6 @@ void DelTree(cmstring &what);
 
 bool IsAbsolute(cmstring &dirToFix);
 
-
-
-char unEscape(const char p);
-
 mstring unEscape(cmstring &s);
 
 std::string BytesToHexString(const uint8_t sum[], unsigned short lengthBin);
@@ -393,13 +393,13 @@ static inline time_t GetTime()
 
 static const time_t END_OF_TIME(MAX_VAL(time_t)-2);
 
-unsigned FormatTime(char *buf, const time_t cur);
+unsigned FormatTime(char *buf, size_t bufLen, const time_t cur);
 
 struct tCurrentTime
 {
 	char buf[30];
 	unsigned len;
-	inline tCurrentTime() { len=FormatTime(buf, time(nullptr)); }
+	inline tCurrentTime() { len=FormatTime(buf, sizeof(buf), time(nullptr)); }
 	inline operator mstring() { return mstring(buf, len); }
 };
 
@@ -443,6 +443,13 @@ typedef std::deque<std::pair<std::string, std::string>> tLPS;
 #define ifThereStoreThereAndBreak(x,y,z) { auto itFind = (x).find(y); if(itFind != (x).end()) { z = itFind->second; break; } }
 
 bool scaseequals(cmstring& a, cmstring& b);
+
+// dirty little RAII helper
+struct tDtorEx {
+	std::function<void(void)> _action;
+	inline tDtorEx(decltype(_action) action) : _action(action) {}
+	inline ~tDtorEx() { _action(); }
+};
 
 #endif // _META_H
 

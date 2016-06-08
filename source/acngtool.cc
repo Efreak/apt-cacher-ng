@@ -603,8 +603,12 @@ void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 	tStrVec non_opt_args;
 
 	for(auto& keyval : validargs)
+	{
+		acfg::g_bQuiet = true;
 		if(!acfg::SetOption(keyval, 0))
 			nonoptions.emplace_back(keyval);
+		acfg::g_bQuiet = false;
+	}
 
 	acfg::PostProcConfig();
 
@@ -786,7 +790,7 @@ int main(int argc, const char **argv)
 		aOffset=0;
 		argv[0] = "maint";
 	}
-	acfg::g_bQuiet = true;
+	acfg::g_bQuiet = false;
 	acfg::g_bNoComplex = true; // no DB for just single variables
 
   parm* parm = nullptr;

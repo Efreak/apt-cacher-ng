@@ -269,6 +269,11 @@ void header::set(eHeadPos key, const mstring &value)
 		memcpy(h[key], value.c_str(), l);
 }
 
+void header::prep(eHeadPos key, size_t len)
+{
+	h[key]=(char*) malloc(len);
+}
+
 void header::set(eHeadPos key, off_t nValue)
 {	
 	char buf[3*sizeof(off_t)];

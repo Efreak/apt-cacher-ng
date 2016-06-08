@@ -84,7 +84,7 @@ struct tFileGroup {
 #endif
 };
 class tFileGroups : public std::map<tContentKey, tFileGroup> {};
-cmstring& tCacheOperation::GetFirstPresentPath(const tFileGroups& groups, const tContentKey& ckey)
+cmstring& cacheman::GetFirstPresentPath(const tFileGroups& groups, const tContentKey& ckey)
 {
 	auto it = groups.find(ckey);
 	if(it == groups.end())
@@ -97,7 +97,7 @@ cmstring& tCacheOperation::GetFirstPresentPath(const tFileGroups& groups, const 
 	return sEmptyString;
 }
 
-tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
+cacheman::cacheman(const tSpecialRequest::tRunParms& parms) :
 	tSpecOpDetachable(parms),
 	m_bErrAbort(false), m_bVerbose(false), m_bForceDownload(false),
 	m_bScanInternals(false), m_bByPath(false), m_bByChecksum(false), m_bSkipHeaderChecks(false),
@@ -119,26 +119,26 @@ tCacheOperation::tCacheOperation(const tSpecialRequest::tRunParms& parms) :
 
 }
 
-tCacheOperation::~tCacheOperation()
+cacheman::~cacheman()
 {
 	delete m_pDlcon;
 	m_pDlcon=nullptr;
 }
 
-bool tCacheOperation::ProcessOthers(const string &, const struct stat &)
+bool cacheman::ProcessOthers(const string &, const struct stat &)
 {
 	// NOOP
 	return true;
 }
 
-bool tCacheOperation::ProcessDirAfter(const string &, const struct stat &)
+bool cacheman::ProcessDirAfter(const string &, const struct stat &)
 {
 	// NOOP
 	return true;
 }
 
 
-bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
+bool cacheman::AddIFileCandidate(const string &sPathRel)
 {
 
  	if(sPathRel.empty())
@@ -159,29 +159,29 @@ bool tCacheOperation::AddIFileCandidate(const string &sPathRel)
 }
 
 // defensive getter/setter methods, don't create non-existing entries
-const tCacheOperation::tIfileAttribs & tCacheOperation::GetFlags(cmstring &sPathRel) const
+const cacheman::tIfileAttribs & cacheman::GetFlags(cmstring &sPathRel) const
 {
 	auto it=m_metaFilesRel.find(sPathRel);
 	if(m_metaFilesRel.end()==it)
 		return attr_dummy_pure;
 	return it->second;
 }
-tCacheOperation::tIfileAttribs &tCacheOperation::SetFlags(cmstring &sPathRel)
+cacheman::tIfileAttribs &cacheman::SetFlags(cmstring &sPathRel)
 {
 	ASSERT(!sPathRel.empty());
 	return sPathRel.empty() ? attr_dummy : m_metaFilesRel[sPathRel];
 }
 
-tCacheOperation::tIfileAttribs & tCacheOperation::GetRWFlags(cmstring &sPathRel)
+cacheman::tIfileAttribs & cacheman::GetRWFlags(cmstring &sPathRel)
 {
 	auto it=m_metaFilesRel.find(sPathRel);
 	if(m_metaFilesRel.end()==it)
-		return const_cast<tCacheOperation::tIfileAttribs&>(attr_dummy_pure);
+		return const_cast<cacheman::tIfileAttribs&>(attr_dummy_pure);
 	return it->second;
 }
 
 // detects when an architecture has been removed entirely from the Debian archive
-bool tCacheOperation::IsDeprecatedArchFile(cmstring &sFilePathRel)
+bool cacheman::IsDeprecatedArchFile(cmstring &sFilePathRel)
 {
 	tStrPos pos = sFilePathRel.rfind("/dists/");
 	if(pos == stmiss)
@@ -244,8 +244,8 @@ mstring FindCommonPath(cmstring& a, cmstring& b)
 }
 */
 
-bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
-		tCacheOperation::eDlMsgPrio msgVerbosityLevel,
+bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
+		cacheman::eDlMsgPrio msgVerbosityLevel,
 		tFileItemPtr pFi, const tHttpUrl * pForcedURL, unsigned hints,
 		cmstring* sGuessedFrom)
 {
@@ -544,21 +544,22 @@ bool tCacheOperation::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 				// XXX: this sucks a little bit since we don't want to show the checkbox
 				// when the fallback download succeeded... but on failures, the previous one
 				// already added a newline before
-				AddDelCbox(sFilePathRel, true);
+				AddDelCbox(sFilePathRel, sErr, true);
 				return false;
 			}
 		}
+		//else
+		//	AddDelCbox(sFilePathRel);
 
 		if (sErr.empty())
 			sErr = "Download error";
 		if (NEEDED_VERBOSITY_EVERYTHING || m_bVerbose)
 		{
-#ifndef DEBUG
 			if(!flags.hideDlErrors)
-#endif
 			{
 				SendFmt << "<span class=\"ERROR\">" << sErr << "</span>\n";
-				AddDelCbox(sFilePathRel);
+				if(0 == (hints&DL_HINT_NOTAG))
+					AddDelCbox(sFilePathRel, sErr);
 			}
 		}
 	}
@@ -615,8 +616,8 @@ void DelTree(const string &what)
 #if 0
 struct lessThanByAvailability
 {
-	tCacheOperation& m_cman;
-	lessThanByAvailability(tCacheOperation &cman) :
+	cacheman& m_cman;
+	lessThanByAvailability(cacheman &cman) :
 		m_cman(cman)
 	{
 	}
@@ -738,7 +739,7 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 
 
 
-bool tCacheOperation::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sReferencePathRel,
+bool cacheman::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sReferencePathRel,
 		off_t nWantedSize)
 {
 
@@ -777,7 +778,7 @@ bool tCacheOperation::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sRefere
 
 
 
-bool tCacheOperation::Inject(cmstring &fromRel, cmstring &toRel,
+bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 		bool bSetIfileFlags, const header *pHead, bool bTryLink)
 {
 	LOGSTART("tCacheMan::Inject");
@@ -910,13 +911,13 @@ bool tCacheOperation::Inject(cmstring &fromRel, cmstring &toRel,
 	return bOK;
 }
 
-void tCacheOperation::StartDlder()
+void cacheman::StartDlder()
 {
 	if (!m_pDlcon)
 		m_pDlcon = new dlcon(true);
 }
 
-void tCacheOperation::ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups& idxGroups,
+void cacheman::ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups& idxGroups,
 		const tStrDeq& releaseFilesRel)
 {
 	for(auto& sPathRel : releaseFilesRel)
@@ -1050,7 +1051,7 @@ void tCacheOperation::ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups&
 * And keep track of some folders for expiration.
 */
 
-void tCacheOperation::FilterGroupData(tFileGroups& idxGroups)
+void cacheman::FilterGroupData(tFileGroups& idxGroups)
 {
 	for(auto it=idxGroups.begin(); it!=idxGroups.end();)
 	{
@@ -1084,9 +1085,9 @@ void tCacheOperation::FilterGroupData(tFileGroups& idxGroups)
 			idxGroups.erase(it++);
 	}
 #ifdef DEBUGIDX
-	SendFmt << "Folders with checked stuff:<br>";
+	SendFmt << "Folders with checked stuff:" << hendl;
 	for(auto s : m_managedDirs)
-		SendFmt << s << "<br>";
+		SendFmt << s << hendl;
 #endif
 #ifdef EXPLICIT_INDEX_USE_CHECKING
 	// some preparation of patch index processing
@@ -1125,7 +1126,7 @@ void tCacheOperation::FilterGroupData(tFileGroups& idxGroups)
 #endif
 
 }
-void tCacheOperation::SortAndInterconnectGroupData(tFileGroups& idxGroups)
+void cacheman::SortAndInterconnectGroupData(tFileGroups& idxGroups)
 {
 
 	for(auto& it: idxGroups)
@@ -1169,7 +1170,7 @@ void tCacheOperation::SortAndInterconnectGroupData(tFileGroups& idxGroups)
 	}
 }
 
-void tCacheOperation::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
+void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 {
 //	cmstring* pBest = nullptr;
 //	const tIfileAttribs* pBestAttr = nullptr;
@@ -1264,8 +1265,10 @@ void tCacheOperation::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 			string patchPathRel(pindexPathRel.substr(0, pindexPathRel.size()-5) +
 					pname + ".gz");
 			if(!Download(patchPathRel, false, eDlMsgPrio::eMsgHideErrors,
-					tFileItemPtr(), 0, 0, &pindexPathRel))
+					tFileItemPtr(), nullptr, DL_HINT_NOTAG, &pindexPathRel))
+			{
 				return false;
+			}
 			SetFlags(patchPathRel).parseignore = true; // static stuff, hands off!
 
 			// append context to combined diff while unpacking
@@ -1399,9 +1402,9 @@ void tCacheOperation::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 	}
 }
 
-void tCacheOperation::UpdateVolatileFiles()
+void cacheman::UpdateVolatileFiles()
 {
-	LOGSTART("expiration::UpdateVolatileFiles()");
+	LOGSTARTFUNC
 
 	string sErr; // for download error output
 
@@ -1556,7 +1559,7 @@ void tCacheOperation::UpdateVolatileFiles()
 				if(!endsWith(pathRel, sfxFilter))
 					continue;
 
-				auto &fl = GetFlags(pathRel);
+				auto &fl = GetRWFlags(pathRel);
 #ifdef DEBUGIDX
 				SendFmt << "Considering flags: " << pathRel << " " << fl.toString() << hendl;
 #endif
@@ -1564,8 +1567,17 @@ void tCacheOperation::UpdateVolatileFiles()
 					continue;
 				if(fl.parseignore)
 					continue;
-
-				if(fl.uptodate || Download(pathRel, true, eMsgShow))
+				if(!fl.uptodate)
+				{
+					if(!Download(pathRel, true, eMsgShow))
+					{
+						fl.parseignore = true;
+						m_nErrorCount += !fl.forgiveDlErrors;
+						continue;
+					}
+					// a failed download will be caught separately but for now, another download attempt is pointless
+				}
+				if(fl.uptodate)
 					SyncSiblings(pathRel, groupKV.second.paths);
 			}
 		}
@@ -1591,7 +1603,7 @@ void tCacheOperation::UpdateVolatileFiles()
 	}
 }
 
-void tCacheOperation::SyncSiblings(cmstring &srcPathRel,const tStrDeq& targets)
+void cacheman::SyncSiblings(cmstring &srcPathRel,const tStrDeq& targets)
 {
 	auto srcDirFile = SplitDirPath(srcPathRel);
 	//auto srcType = GetTypeSuffix(srcDirFile.second);
@@ -1621,7 +1633,7 @@ void tCacheOperation::SyncSiblings(cmstring &srcPathRel,const tStrDeq& targets)
 	}
 }
 
-tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(const mstring& sPath)
+cacheman::enumMetaType cacheman::GuessMetaTypeFromURL(const mstring& sPath)
 {
 	tStrPos pos = sPath.rfind(SZPATHSEP);
 	string sPureIfileName = (stmiss == pos) ? sPath : sPath.substr(pos + 1);
@@ -1664,7 +1676,7 @@ tCacheOperation::enumMetaType tCacheOperation::GuessMetaTypeFromURL(const mstrin
 	return EIDX_NOTREFINDEX;
 }
 
-bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> ret,
+bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> ret,
 		const std::string &sPath,
 		enumMetaType idxType, bool byHashMode)
 {
@@ -1941,7 +1953,7 @@ bool tCacheOperation::ParseAndProcessMetaFile(std::function<void(const tRemoteFi
 	return reader.CheckGoodState(false);
 }
 
-bool tCacheOperation::CalculateBaseDirectories(cmstring& sPath, enumMetaType idxType, mstring& sBaseDir, mstring& sPkgBaseDir)
+bool cacheman::CalculateBaseDirectories(cmstring& sPath, enumMetaType idxType, mstring& sBaseDir, mstring& sPkgBaseDir)
 {
 
 	// full path of the directory of the processed index file with trailing slash
@@ -1973,7 +1985,7 @@ bool tCacheOperation::CalculateBaseDirectories(cmstring& sPath, enumMetaType idx
 	return true;
 }
 
-void tCacheOperation::ParseGenericRfc822File(filereader& reader,
+void cacheman::ParseGenericRfc822File(filereader& reader,
 		cmstring& sExtListFilter,
 		map<string, deque<string> >& contents)
 {
@@ -2007,7 +2019,7 @@ void tCacheOperation::ParseGenericRfc822File(filereader& reader,
 	}
 }
 
-bool tCacheOperation::ParseDebianIndexLine(tRemoteFileInfo& info, cmstring& fline)
+bool cacheman::ParseDebianIndexLine(tRemoteFileInfo& info, cmstring& fline)
 {
 	info.sFileName.clear();
 	// ok, read "checksum size filename" into info and check the word count
@@ -2024,7 +2036,7 @@ bool tCacheOperation::ParseDebianIndexLine(tRemoteFileInfo& info, cmstring& flin
 	return true;
 }
 
-bool tCacheOperation::ParseDebianRfc822Index(filereader& reader,
+bool cacheman::ParseDebianRfc822Index(filereader& reader,
 		std::function<void(const tRemoteFileInfo&)> &ret, cmstring& sBaseDir, cmstring& sPkgBaseDirConst,
 		enumMetaType origIdxType, CSTYPES csType,
 		cmstring& sExtListFilter, bool byHashMode)
@@ -2110,9 +2122,9 @@ bool tCacheOperation::ParseDebianRfc822Index(filereader& reader,
 	return reader.CheckGoodState(false);
 }
 
-void tCacheOperation::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHandler)
+void cacheman::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHandler)
 {
-	LOGSTART("tCacheOperation::ProcessSeenMetaFiles");
+	LOGSTARTFUNC
 	for(auto& path2att: m_metaFilesRel)
 	{
 		if(CheckStopSignal())
@@ -2152,7 +2164,7 @@ void tCacheOperation::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)>
 			{
 				m_nErrorCount++;
 				SendChunk("<span class=\"ERROR\">An error occurred while reading this file, some contents may have been ignored.</span>\n");
-				AddDelCbox(path2att.first);
+				AddDelCbox(path2att.first, "Index data processing error");
 				SendChunk("<br>\n");
 			}
 			continue;
@@ -2169,12 +2181,12 @@ void tCacheOperation::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)>
 	}
 }
 
-void tCacheOperation::AddDelCbox(cmstring &sFileRel, bool bIsOptionalGuessedFile)
+void cacheman::AddDelCbox(cmstring &sFileRel, cmstring& reason, bool bIsOptionalGuessedFile)
 {
 	bool isNew;
-	auto fileParm = AddLookupGetKey(sFileRel, isNew);
-	if(!isNew)
-		return;
+	mstring fileParm = AddLookupGetKey(sFileRel, reason, isNew);
+	//if(!isNew)
+	//	return;
 
 	if(bIsOptionalGuessedFile)
 	{
@@ -2189,14 +2201,14 @@ void tCacheOperation::AddDelCbox(cmstring &sFileRel, bool bIsOptionalGuessedFile
 			"\n<!--\n" maark << int(ControLineType::Error) << "Problem with "
 			<< html_sanitize(sFileRel) << "\n-->\n";
 }
-void tCacheOperation::TellCount(unsigned nCount, off_t nSize)
+void cacheman::TellCount(unsigned nCount, off_t nSize)
 {
 	SendFmt << "<br>\n" << nCount <<" package file(s) marked "
 			"for removal in few days. Estimated disk space to be released: "
 			<< offttosH(nSize) << ".<br>\n<br>\n";
 }
 
-void tCacheOperation::PrintStats(cmstring &title)
+void cacheman::PrintStats(cmstring &title)
 {
 	multimap<off_t, cmstring*> sorted;
 	off_t total=0;
@@ -2241,7 +2253,7 @@ void tCacheOperation::PrintStats(cmstring &title)
 		{
 			bool xNew;
 			m_fmtHelper << "<tr><td><input type=\"checkbox\" class=\"xfile\""
-					<< AddLookupGetKey(*(it->second), xNew) << "></td>"
+					<< AddLookupGetKey(*(it->second), "", xNew) << "></td>"
 						"<td><b>" << html_sanitize(offttosH(it->first)) << "</b></td><td>"
 					<< *(it->second) << "</td></tr>\n";
 
@@ -2264,10 +2276,10 @@ void tCacheOperation::PrintStats(cmstring &title)
 int parseidx_demo(LPCSTR file)
 {
 
-	class tParser : public tCacheOperation
+	class tParser : public cacheman
 	{
 	public:
-		tParser() : tCacheOperation({2, tSpecialRequest::workIMPORT, "doImport="}) {};
+		tParser() : cacheman({2, tSpecialRequest::workIMPORT, "doImport="}) {};
 		inline int demo(LPCSTR file)
 		{
 			return !ParseAndProcessMetaFile([](const tRemoteFileInfo &entry) ->void {
@@ -2288,7 +2300,7 @@ int parseidx_demo(LPCSTR file)
 #endif
 
 
-void tCacheOperation::ProgTell()
+void cacheman::ProgTell()
 {
 	if (++m_nProgIdx == m_nProgTell)
 	{
@@ -2298,7 +2310,7 @@ void tCacheOperation::ProgTell()
 	}
 }
 
-bool tCacheOperation::_checkSolidHashOnDisk(cmstring& hexname,
+bool cacheman::_checkSolidHashOnDisk(cmstring& hexname,
 		const tRemoteFileInfo &entry,
 		cmstring& srcPrefix
 		)
@@ -2308,14 +2320,14 @@ bool tCacheOperation::_checkSolidHashOnDisk(cmstring& hexname,
 	return ! ::access(solidPath.c_str(), F_OK);
 }
 
-void tCacheOperation::BuildCacheFileList()
+void cacheman::BuildCacheFileList()
 {
 	//dump_proc_status();
 	IFileHandler::DirectoryWalk(acfg::cachedir, this);
 	//dump_proc_status();
 }
 
-bool tCacheOperation::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cmstring& stripPrefix)
+bool cacheman::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cmstring& stripPrefix)
 {
 	int errors = 0;
 	return ParseAndProcessMetaFile([this, &errors, &stripPrefix](const tRemoteFileInfo &entry) -> void
@@ -2383,7 +2395,7 @@ bool tCacheOperation::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePath
 	stripPrefix + releasePathRel, enumMetaType::EIDX_RELEASE, true) && errors == 0;
 }
 
-bool tCacheOperation::FixMissingByHashLinks(std::unordered_set<std::string> &oldReleaseFiles)
+bool cacheman::FixMissingByHashLinks(std::unordered_set<std::string> &oldReleaseFiles)
 {
 	bool ret = true;
 
@@ -2408,7 +2420,7 @@ bool tCacheOperation::FixMissingByHashLinks(std::unordered_set<std::string> &old
 	return ret;
 }
 
-tStrDeq tCacheOperation::GetGoodReleaseFiles()
+tStrDeq cacheman::GetGoodReleaseFiles()
 {
 	tStrMap t;
 	for (const auto& kv : m_metaFilesRel)
