@@ -30,7 +30,7 @@ override_dh_install:
 	test -r debian/apt-cacher-ng/etc/apt-cacher-ng/backends_ubuntu.default || mv debian/apt-cacher-ng/usr/lib/apt-cacher-ng/backends_ubuntu.default debian/apt-cacher-ng/etc/apt-cacher-ng/
 
 override_dh_installinit:
-	dh_installinit -- defaults 18
+	dh_installinit --no-restart-on-upgrade --restart-after-upgrade -- defaults 18
 
 override_dh_compress:
 	dh_compress -X.pdf
