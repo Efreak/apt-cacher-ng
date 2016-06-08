@@ -1,6 +1,8 @@
 apt-cacher-ng (0.9.3.1-1) unstable; urgency=low
 
   * New upstream version
+  * Sync with standards 0.9.8
+  * Not stopping daemon on upgrade (closes: #825154)
 
  -- Eduard Bloch <blade@debian.org>  Wed, 08 Jun 2016 23:34:30 +0200
 
