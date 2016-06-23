@@ -1038,7 +1038,8 @@ void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 		for(const auto& x: mapUrl2pVname)
 			nUrls+=x.second.size();
 
-		cerr << "Loaded " << repoparms.size() << " backend descriptors\nLoaded mappings for "
+		if(debug&6)
+			cerr << "Loaded " << repoparms.size() << " backend descriptors\nLoaded mappings for "
 				<< mapUrl2pVname.size() << " hosts and " << nUrls<<" paths\n";
 	}
 }
