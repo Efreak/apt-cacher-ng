@@ -92,32 +92,40 @@ guess_ubuntu_mirrors() {
       fi
    fi
 
+   check_sane_data="grep -q http:// $tmpfile"
+
    # may hit a local mirror which also hosts Debian, use it then
    sed -e 's,\([a-z]\)/.*,\1,' < $CFG/backends_debian | xargs -n1 -i grep "{}" $DDIR/ubuntu_mirrors > $tmpfile || true
 
    # mirror suggestions from Ubuntu's service might be a good candidate
-   if ! test -s $tmpfile ; then
+   if ! $check_sane_data ; then
       mirurl=http://mirrors.ubuntu.com/mirrors.txt
-      wget -q -O- $mirurl >> $tmpfile 2>/dev/null || curl -s $mirurl >> $tmpfile 2>/dev/null || $TOOL curl $mirurl $BINPATH >> $tmpfile 2>/dev/null || true
+      if which wget > /dev/null 2>&1 ; then
+         wget --timeout=15 -q -O- $mirurl >> $tmpfile 2>/dev/null || true
+      elif which curl > /dev/null 2>&1 ; then
+         curl -m 15 --fail -s $mirurl >> $tmpfile 2>/dev/null || true
+      else
+         $TOOL NetworkTimeout:15 curl $mirurl $BINPATH >> $tmpfile 2>/dev/null || true
+      fi
    fi
 
    # still nothing. Sneak more information from Debian backend configuration?
-   if ! test -s $tmpfile ; then # ok, go by Debian TLD
+   if ! $check_sane_data ; then # ok, go by Debian TLD
       grep debian.org/ /etc/apt-cacher-ng/backends_debian | \
          sed -e 's,^http://ftp[2-3]\?\.\([a-z][a-z]\).*,http://\1.archive.ubuntu.com/,' | \
          sort -u | xargs -n1 -i grep "{}" $DDIR/ubuntu_mirrors > $tmpfile || true
    fi
 
-   if ! test -s $tmpfile ; then # ok, then try just any TLD
+   if ! $check_sane_data ; then # ok, then try just any TLD
       sed -e 's,^http://\([^\/]\+\).*,\1,;s,.*\.\(.*\),http://\1.archive.ubuntu.com/,' < $CFG/backends_debian | \
          sort -u | xargs -n1 -i grep "{}" $DDIR/ubuntu_mirrors > $tmpfile || true
    fi
 
-   if ! test -s $tmpfile ; then
+   if ! $check_sane_data ; then
       echo http://archive.ubuntu.com/ubuntu/ > $tmpfile || true
    fi
 
-   if test -s $tmpfile ; then
+   if $check_sane_data ; then
       echo "$def_file_header" > $udefault
       cat $tmpfile >> $udefault
    fi

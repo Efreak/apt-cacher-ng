@@ -1,3 +1,13 @@
+apt-cacher-ng (0.9.3.1-2) unstable; urgency=low
+
+  * Better sanity check of data retrieved when looking for Ubuntu mirrors and
+    correct checking of curl return code (prevents accidental inclusion of
+    garbage from error messages of intermediate proxies into backend mirror
+    configuration). Also sets shorter timeouts when fetching mirrors.txt
+    (which closes: #827721 even while upgrading from very old versions).
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 29 Jun 2016 20:25:55 +0200
+
 apt-cacher-ng (0.9.3.1-1) unstable; urgency=low
 
   * New upstream version
