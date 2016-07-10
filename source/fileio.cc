@@ -194,5 +194,6 @@ void mkdirhier(cmstring& path)
 	{
 		pos = path.find('/', pos);
 		mkdir(path.substr(0,pos).c_str(), acfg::dirperms);
+		if(pos == stmiss) break;
 	}
 }
