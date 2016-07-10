@@ -4,7 +4,15 @@ apt-cacher-ng (0.9.3.1-2) unstable; urgency=low
     correct checking of curl return code (prevents accidental inclusion of
     garbage from error messages of intermediate proxies into backend mirror
     configuration). Also sets shorter timeouts when fetching mirrors.txt
-    (which closes: #827721 even while upgrading from very old versions).
+    (which closes: #827721 even while upgrading from very old versions)
+  * In postinst, dropped some "smart" code which was trying to setup the
+    default cache directory in case when clueless user deleted the related
+    configuration line. That guessing was probably helping less often than it
+    might have broken things; it contained a bug which (only on the very first
+    installation) could incorrectly add a forced setting of CacheDir
+    (closes: #830578)
+  * Giving the question about pass-through higher debconf priority since some
+    people seem to care a lot about HTTPS forwarding (#813359)
 
  -- Eduard Bloch <blade@debian.org>  Wed, 29 Jun 2016 20:25:55 +0200
 

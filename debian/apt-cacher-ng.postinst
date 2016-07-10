@@ -145,20 +145,7 @@ if [ "$1" = "configure" ]; then
    db_get $NAME/cachedir
    case "$RET" in
       keep|"")
-         # but making sure that it's really set to something sensible in the
-         # config, otherwise replace with the default
-         if ! TESTPATH=$($TOOL printvar CacheDir -c $CFG 2>/dev/null) ; then
-            # ok, some IO trouble is bad but in this case just behave like it
-            # did in the former times with a static /v/c/a-c-n folder setting
-            CDIR=/var/cache/$NAME
-            CDIRCONF="# CacheDir not set, having trouble reading config files"
-         elif test -d "$TESTPATH" ; then
-            CDIR="$TESTPATH"
-            CDIRCONF="# CacheDir not set by debconf"
-         else
-            CDIR=/var/cache/$NAME
-            CDIRCONF="CacheDir: $CDIR # default or overridden since '$TESTPATH' directory didn't exist"
-         fi
+         # maybe never displayed to user
          ;;
       *)
          # ok, configured by debconf, will be created as needed
@@ -167,6 +154,11 @@ if [ "$1" = "configure" ]; then
          ;;
    esac
 
+   if ! TESTPATH=$($TOOL printvar CacheDir -c $CFG 2>/dev/null) ; then
+      # unlikely... but even if PEBCAK, prepare the correct folder now
+      CDIR=/var/cache/$NAME
+   fi
+
    # user should exist. adduser sometimes fails (system range issue) but that's ok
    adduser --quiet --system --group --no-create-home --home "$CDIR" $NAME || id $NAME
    # also setup permissions ASAP
@@ -174,7 +166,6 @@ if [ "$1" = "configure" ]; then
       dpkg-statoverride --update --add root $NAME 640 $CFG/security.conf
    fi
 
-   # be sure about that even if the user messed it up
    for x in "$CDIR" $LDIR ; do 
       if [ ! -d "$x" ]; then
          install -d -g $NAME -o $NAME -m2755 "$x"
@@ -215,7 +206,7 @@ if [ "$1" = "configure" ]; then
    if [ x"$BINDADDRESS" = x"all" ] ; then # just for backwards compatibility
       BINDADDRESS='BindAddress: '
    elif [ x"$BINDADDRESS" = x"keep" ] ; then
-      BINDADDRESS='# BindAddress is set by other config file(s)'
+      BINDADDRESS='# BindAddress set to "keep", not overriding here'
    else
       BINDADDRESS="BindAddress: $BINDADDRESS"
    fi
@@ -223,7 +214,7 @@ if [ "$1" = "configure" ]; then
    db_get $NAME/port
    PORT="$RET"
    if [ x"$PORT" = x"keep" ] || [ x"$PORT" = x ] ; then
-      PORT='# Port is set by other config file(s)'
+      PORT='# Port set to "keep", not overriding here'
    else
       PORT="Port: $PORT"
    fi
@@ -233,7 +224,7 @@ if [ "$1" = "configure" ]; then
    if [ x"$PROXY" = x ] ; then
       PROXY='Proxy:'
    elif [ x"$PROXY" = x"keep" ] ; then
-      PROXY='# Proxy set by other config files(s)'
+      PROXY='# Proxy set to "keep", not overriding here'
    else
       if echo "$PROXY" |grep -q '@' ; then
          # well, there are credentials which is bad. This better goes into a file with restricted permissions.
