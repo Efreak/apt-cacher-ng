@@ -1,5 +1,7 @@
-apt-cacher-ng (0.9.3.1-2) unstable; urgency=low
+apt-cacher-ng (0.9.3.2-1) unstable; urgency=low
 
+  * New upstream version
+    + Fix FTBFS with non-Linux kernels (closes: #830736)
   * Better sanity check of data retrieved when looking for Ubuntu mirrors and
     correct checking of curl return code (prevents accidental inclusion of
     garbage from error messages of intermediate proxies into backend mirror
@@ -14,7 +16,7 @@ apt-cacher-ng (0.9.3.1-2) unstable; urgency=low
   * Giving the question about pass-through higher debconf priority since some
     people seem to care a lot about HTTPS forwarding (#813359)
 
- -- Eduard Bloch <blade@debian.org>  Wed, 29 Jun 2016 20:25:55 +0200
+ -- Eduard Bloch <blade@debian.org>  Tue, 12 Jul 2016 22:03:27 +0200
 
 apt-cacher-ng (0.9.3.1-1) unstable; urgency=low
 
