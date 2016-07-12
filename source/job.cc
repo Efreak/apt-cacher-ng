@@ -589,6 +589,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 			m_sFileLoc=theUrl.sHost+theUrl.sPath;
 
 		bForceFreshnessChecks = ( ! acfg::offlinemode && m_type == FILE_VOLATILE);
+
 		m_pItem.PrepareRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
 
 	}
@@ -602,6 +603,9 @@ void job::PrepareDownload(LPCSTR headBuf) {
     	USRDBG("Error creating file item for " << m_sFileLoc);
     	goto report_overload;
     }
+
+    if(acfg::degraded)
+       goto report_degraded;
     
     fistate = m_pItem.get()->Setup(bForceFreshnessChecks);
 	LOG("Got initial file status: " << fistate);
@@ -702,6 +706,10 @@ report_offlineconf:
 report_invpath:
 	SetErrorResponse("403 Invalid path specification");
     return ;
+
+report_degraded:
+	SetErrorResponse("403 Cache server in degraded mode");
+	return ;
 
 report_invport:
 	SetErrorResponse("403 Configuration error (confusing proxy mode) or prohibited port (see AllowUserPorts)");

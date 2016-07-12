@@ -324,6 +324,9 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 
 void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd)
 {
+	if(acfg::degraded && jobType != workSTYLESHEET)
+		jobType = workUSERINFO;
+
 	MYTRY {
 		SHARED_PTR<tSpecialRequest> p;
 		p.reset(MakeMaintWorker({fd, jobType, cmd}));
