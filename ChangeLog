@@ -1,3 +1,18 @@
+apt-cacher-ng (0.9.3.2) PAINT-IT-AEROGLAZE-Z306; urgency=low
+
+  * FIX: avoid endless looping on startup when a new (not existing) directory
+    was specified as CacheDir
+  * FIX: build failure on non-Linux POSIX systems (Debian bug #830736, now
+    moved namespace tag to general scope)
+  * FIX: Stop printing bogus "error" summary on the end of every maintenance
+    task execution
+  * NEW: allow for omission of CacheDir setting; continues operation in
+    degraded mode with only harmless features which are not needing local
+    storage (HTTPS pass-through, local web server)
+  * Mirror database update
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 12 Jul 2016 21:56:15 +0200
+
 apt-cacher-ng (0.9.3.1) KLENDATHU-AIRLINES-FLIGHT-931; urgency=low
 
   * This is a minor bugfix release, there are more changes to expect soon

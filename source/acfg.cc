@@ -1038,7 +1038,8 @@ void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 		for(const auto& x: mapUrl2pVname)
 			nUrls+=x.second.size();
 
-		cerr << "Loaded " << repoparms.size() << " backend descriptors\nLoaded mappings for "
+		if(debug&6)
+			cerr << "Loaded " << repoparms.size() << " backend descriptors\nLoaded mappings for "
 				<< mapUrl2pVname.size() << " hosts and " << nUrls<<" paths\n";
 	}
 }
@@ -1083,8 +1084,10 @@ void PostProcConfig()
 #endif
 	
    if(cachedir.empty() || cachedir[0] != CPATHSEP)
-	   BARF("Cache directory unknown or not absolute, terminating...");
-   
+   {
+	   cerr << "Warning: Cache directory unknown or not absolute, running in degraded mode!" << endl;
+	   degraded=true;
+   }
    if(!rechecks::CompileExpressions())
 	   BARF("An error occurred while compiling file type regular expression!");
    
@@ -1118,7 +1121,7 @@ void PostProcConfig()
 	   mkbasedir(acfg::pidfile);
 
    if(nettimeout < 5) {
-	   cerr << "Warning, NetworkTimeout value too small, using: 5." << endl;
+	   cerr << "Warning: NetworkTimeout value too small, using: 5." << endl;
 	   nettimeout = 5;
    }
 

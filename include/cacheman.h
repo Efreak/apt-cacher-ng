@@ -171,13 +171,12 @@ protected:
 	virtual void MarkObsolete(cmstring&) {};
 
 	// for compressed map of special stuff
-	inline mstring AddLookupGetKey(cmstring &sFilePathRel, cmstring& reason, bool& isNew)
+	inline mstring AddLookupGetKey(cmstring &sFilePathRel, cmstring& errorReason)
 	{
-		unsigned id = m_delCboxFilter.size();
-		auto it = m_delCboxFilter.find(sFilePathRel);
-		isNew = it==m_delCboxFilter.end();
-		if(isNew)
-			m_delCboxFilter[sFilePathRel] = {reason, id};
+		unsigned id = m_pathMemory.size();
+		auto it = m_pathMemory.find(sFilePathRel);
+		if(it==m_pathMemory.end())
+			m_pathMemory[sFilePathRel] = {errorReason, id};
 		else
 			id = it->second.id;
 		char buf[30];

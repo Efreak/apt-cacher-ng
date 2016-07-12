@@ -251,6 +251,10 @@ static void usage(int retCode) {
 static void SetupCacheDir()
 {
 	using namespace acfg;
+
+	if(acfg::cachedir.empty())
+		return;	// warning was printed
+
 	auto xstore(cacheDirSlash + "_xstore");
 	mkdirhier(xstore);
 	if(!Cstat(xstore))
