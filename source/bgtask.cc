@@ -211,15 +211,24 @@ void tSpecOpDetachable::Run()
 
 			Action();
 
-			if (!m_delCboxFilter.empty())
+
+			if (!m_pathMemory.empty())
 			{
-
 				bool unchint=false;
+				bool ehprinted=false;
 
-				SendChunkRemoteOnly(WITHLEN(
-				"<br><b>Error summary:</b><br>"));
-				for(const auto& err: m_delCboxFilter)
+				for(const auto& err: m_pathMemory)
 				{
+					if(err.second.msg.empty())
+						continue;
+
+					if(!ehprinted)
+					{
+						ehprinted=true;
+						SendChunkRemoteOnly(WITHLEN(
+								"<br><b>Error summary:</b><br>"));
+					}
+
 					unchint = unchint
 							||endsWithSzAr(err.first, "Packages")
 							||endsWithSzAr(err.first, "Sources");
@@ -307,7 +316,7 @@ mstring tSpecOpDetachable::BuildCompressedDelFileCatalog()
 	mstring ret;
 	tSS buf;
 	//auto hm = m_delCboxFilter.size();
-	for(const auto& kv: m_delCboxFilter)
+	for(const auto& kv: m_pathMemory)
 	{
 		unsigned len=kv.first.size();
 		buf.add((const char*) &kv.second.id, sizeof(kv.second.id))

@@ -2183,10 +2183,7 @@ void cacheman::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHan
 
 void cacheman::AddDelCbox(cmstring &sFileRel, cmstring& reason, bool bIsOptionalGuessedFile)
 {
-	bool isNew;
-	mstring fileParm = AddLookupGetKey(sFileRel, reason, isNew);
-	//if(!isNew)
-	//	return;
+	mstring fileParm = AddLookupGetKey(sFileRel, reason.empty() ? mstring(" ") : reason);
 
 	if(bIsOptionalGuessedFile)
 	{
@@ -2251,9 +2248,8 @@ void cacheman::PrintStats(cmstring &title)
 				"<th colspan=2>" << title << "</th></tr></thead>\n<tbody>";
 		for(auto it=sorted.rbegin(); it!=sorted.rend(); ++it)
 		{
-			bool xNew;
 			m_fmtHelper << "<tr><td><input type=\"checkbox\" class=\"xfile\""
-					<< AddLookupGetKey(*(it->second), "", xNew) << "></td>"
+					<< AddLookupGetKey(*(it->second), "") << "></td>"
 						"<td><b>" << html_sanitize(offttosH(it->first)) << "</b></td><td>"
 					<< *(it->second) << "</td></tr>\n";
 
@@ -2261,7 +2257,7 @@ void cacheman::PrintStats(cmstring &title)
 		}
 		SendFmt << "</tbody></table>";
 
-		if(m_delCboxFilter.empty())
+		if(m_pathMemory.empty())
 		{
 			SendFmtRemote << "<br><b>Action(s):</b><br>"
 							"<input type=\"submit\" name=\"doDelete\""

@@ -4,6 +4,8 @@ apt-cacher-ng (0.9.3.2) PAINT-IT-PRUSSIAN-BLUE; urgency=low
     was specified as CacheDir
   * FIX: build failure on non-Linux POSIX systems (Debian bug #830736, now
     moved namespace tag to general scope)
+  * FIX: Stop printing bogus "error" summary on the end of every maintenance
+    task execution
 
  -- 
 
