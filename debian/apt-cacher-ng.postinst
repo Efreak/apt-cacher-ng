@@ -154,9 +154,12 @@ if [ "$1" = "configure" ]; then
          ;;
    esac
 
-   if ! TESTPATH=$($TOOL printvar CacheDir -c $CFG 2>/dev/null) ; then
-      # unlikely... but even if PEBCAK, prepare the correct folder now
-      CDIR=/var/cache/$NAME
+   if test -z "$CDIR" ; then
+      CDIR=$($TOOL printvar CacheDir -c $CFG 2>/dev/null)
+      if test -z "$CDIR" ; then
+         # unlikely... but even if PEBCAK, prepare the correct folder now
+         CDIR=/var/cache/$NAME
+      fi
    fi
 
    # user should exist. adduser sometimes fails (system range issue) but that's ok
