@@ -2,8 +2,10 @@ apt-cacher-ng (0.9.3.2) PAINT-IT-PRUSSIAN-BLUE; urgency=low
 
   * FIX: avoid endless looping on startup when a new (not existing) directory
     was specified as CacheDir
+  * FIX: build failure on non-Linux POSIX systems (Debian bug #830736, now
+    moved namespace tag to general scope)
 
- -- Eduard Bloch <blade@debian.org>  Wed, 08 Jun 2016 23:07:52 +0200
+ -- 
 
 apt-cacher-ng (0.9.3.1) KLENDATHU-AIRLINES-FLIGHT-931; urgency=low
 

@@ -8,11 +8,12 @@
 #include "acbuf.h"
 #include "acfg.h"
 
-#ifdef HAVE_LINUX_FALLOCATE
-#include <linux/falloc.h>
 #include <fcntl.h>
 
 using namespace std;
+
+#ifdef HAVE_LINUX_FALLOCATE
+#include <linux/falloc.h>
 
 int falloc_helper(int fd, off_t start, off_t len)
 {
@@ -165,7 +166,7 @@ bool xtouch(cmstring &wanted)
 	return true;
 }
 
-void mkbasedir(const string & path)
+void mkbasedir(cmstring & path)
 {
 	if(0==mkdir(GetDirPart(path).c_str(), acfg::dirperms) || EEXIST == errno)
 		return; // should succeed in most cases
@@ -190,7 +191,7 @@ void mkdirhier(cmstring& path)
 		return; // should succeed in most cases
 	if(path.empty())
 		return;
-	for(string::size_type pos = path[0] == '/' ? 1 : 0;pos < path.size();pos++)
+	for(cmstring::size_type pos = path[0] == '/' ? 1 : 0;pos < path.size();pos++)
 	{
 		pos = path.find('/', pos);
 		mkdir(path.substr(0,pos).c_str(), acfg::dirperms);
