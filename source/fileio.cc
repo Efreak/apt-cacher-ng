@@ -126,7 +126,9 @@ ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count)
 		return -1;
 	while(count>0)
 	{
-		auto readcount=read(in_fd, buf, std::min(count, sizeof(buf)));
+		auto maxlen=sizeof(buf);
+		if(count<maxlen) maxlen=count;
+		auto readcount=read(in_fd, buf, maxlen);
 		if(readcount<=0)
 		{
 			if(errno==EINTR || errno==EAGAIN)
