@@ -125,7 +125,19 @@ ReportPage: acng-report.html
 # available for some days (mirror downtime) then there is a risk of removal of
 # still useful package files.
 #
-ExTreshold: 4
+ExThreshold: 4
+
+# For certain usecases, if the expiration is run daily, it sometimes does not
+# make sense to execute it because the cacher was not used enough, so the extra
+# amount of fetched (meta) data would not justify the results (i.e. deletion of
+# expired files). The idea behind the following setting is: compare the overall
+# transferred data size against a fixed value or against the data size observed
+# in the previous expiration run and continue only if that value resp. rate
+# was reached.
+# The number can have a suffix (for relative: % for percents, compared against
+# data size used in expiration; for absolute: k,K,m,M for Kb,KiB,Mb,MiB)
+#
+# ExStartTradeOff: 300%
 
 # Stop expiration when a critical problem appears, issue like a failed update
 # of an index file in the preparation step.
@@ -140,7 +152,7 @@ ExTreshold: 4
 # before the (day) count is reached. Might be useful with whacky internet
 # connections.
 #
-# Default: a guessed value, 1 if ExTreshold is 5 or more, 0 otherwise.
+# Default: a guessed value, 1 if ExThreshold is 5 or more, 0 otherwise.
 #
 # ExSuppressAdminNotification: 1
 
@@ -214,7 +226,7 @@ ExTreshold: 4
 # log writing. Non-zero value triggers at least faster log file flushing.
 #
 # Some higher bits only working with a special debug build of apt-cacher-ng,
-# see the manual for details. The setting has an alias named UnbufferLogs.
+# see the manual for details.
 #
 # WARNING: this can write significant amount of data into apt-cacher.err logfile.
 #

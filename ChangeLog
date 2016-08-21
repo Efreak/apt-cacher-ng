@@ -1,3 +1,15 @@
+apt-cacher-ng (1) LOGAN-VS-BLADE-RUNNER-3D; urgency=low
+
+  * The version numbers change to plain integer. The minor numbers were
+    already hardly used for differentiation between bugfix and feature
+    releases. If this becomes ever needed, the version might be extended to
+    x.y scheme.
+  * FIX: typo in option name ExThreshold, and also hiding obsolete options
+    in configuration dump
+     
+
+ -- 
+
 apt-cacher-ng (0.9.3.2) PAINT-IT-AEROGLAZE-Z306; urgency=low
 
   * FIX: avoid endless looping on startup when a new (not existing) directory

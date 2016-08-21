@@ -59,6 +59,7 @@ struct MapNameToInt
 {
 	const char *name; int *ptr;
 	const char *warn; uint8_t base;
+	uint8_t hidden;	// just a hint
 };
 
 struct tProperty
@@ -119,46 +120,47 @@ MapNameToString n2sTbl[] = {
 };
 
 MapNameToInt n2iTbl[] = {
-		{   "Debug",                             &debug,            nullptr,    10}
-		,{  "OfflineMode",                       &offlinemode,      nullptr,    10}
-		,{  "ForeGround",                        &foreground,       nullptr,    10}
-		,{  "ForceManaged",                      &forcemanaged,     nullptr,    10}
-		,{  "StupidFs",                          &stupidfs,         nullptr,    10}
-		,{  "VerboseLog",                        &verboselog,       nullptr,    10}
-		,{  "ExTreshold",                        &extreshhold,      nullptr,    10}
-		,{  "MaxStandbyConThreads",              &tpstandbymax,     nullptr,    10}
-		,{  "MaxConThreads",                     &tpthreadmax,      nullptr,    10}
-		,{  "DnsCacheSeconds",                   &dnscachetime,     nullptr,    10}
-		,{  "UnbufferLogs",                      &debug,            nullptr,    10}
-		,{  "ExAbortOnProblems",                 &exfailabort,      nullptr,    10}
-		,{  "ExposeOrigin",                      &exporigin,        nullptr,    10}
-		,{  "LogSubmittedOrigin",                &logxff,           nullptr,    10}
-		,{  "RecompBz2",                         &recompbz2,        nullptr,    10}
-		,{  "NetworkTimeout",                    &nettimeout,       nullptr,    10}
-		,{  "MinUpdateInterval",                 &updinterval,      nullptr,    10}
-		,{  "ForwardBtsSoap",                    &forwardsoap,      nullptr,    10}
-		,{  "KeepExtraVersions",                 &keepnver,         nullptr,    10}
-		,{  "UseWrap",                           &usewrap,          nullptr,    10}
-		,{  "FreshIndexMaxAge",                  &maxtempdelay,     nullptr,    10}
-		,{  "RedirMax",                          &redirmax,         nullptr,    10}
-		,{  "VfileUseRangeOps",                  &vrangeops,        nullptr,    10}
-		,{  "ResponseFreezeDetectTime",          &stucksecs,        nullptr,    10}
-		,{  "ReuseConnections",                  &persistoutgoing,  nullptr,    10}
-		,{  "PipelineDepth",                     &pipelinelen,      nullptr,    10}
-		,{  "ExSuppressAdminNotification",       &exsupcount,       nullptr,    10}
-		,{  "OptProxyTimeout",                   &optproxytimeout,  nullptr,    10}
-		,{  "MaxDlSpeed",                        &maxdlspeed,       nullptr,    10}
-		,{  "MaxInresponsiveDlSize",             &maxredlsize,      nullptr,    10}
-		,{  "OptProxyCheckInterval",             &optProxyCheckInt, nullptr,    10}
+		{   "Debug",                             &debug,            nullptr,    10, false}
+		,{  "OfflineMode",                       &offlinemode,      nullptr,    10, false}
+		,{  "ForeGround",                        &foreground,       nullptr,    10, false}
+		,{  "ForceManaged",                      &forcemanaged,     nullptr,    10, false}
+		,{  "StupidFs",                          &stupidfs,         nullptr,    10, false}
+		,{  "VerboseLog",                        &verboselog,       nullptr,    10, false}
+		,{  "ExThreshold",                       &extreshhold,      nullptr,    10, false}
+		,{  "ExTreshold",                        &extreshhold,      nullptr,    10, true} // wrong spelling :-(
+		,{  "MaxStandbyConThreads",              &tpstandbymax,     nullptr,    10, false}
+		,{  "MaxConThreads",                     &tpthreadmax,      nullptr,    10, false}
+		,{  "DnsCacheSeconds",                   &dnscachetime,     nullptr,    10, false}
+		,{  "UnbufferLogs",                      &debug,            nullptr,    10, false}
+		,{  "ExAbortOnProblems",                 &exfailabort,      nullptr,    10, false}
+		,{  "ExposeOrigin",                      &exporigin,        nullptr,    10, false}
+		,{  "LogSubmittedOrigin",                &logxff,           nullptr,    10, false}
+		,{  "RecompBz2",                         &recompbz2,        nullptr,    10, false}
+		,{  "NetworkTimeout",                    &nettimeout,       nullptr,    10, false}
+		,{  "MinUpdateInterval",                 &updinterval,      nullptr,    10, false}
+		,{  "ForwardBtsSoap",                    &forwardsoap,      nullptr,    10, false}
+		,{  "KeepExtraVersions",                 &keepnver,         nullptr,    10, false}
+		,{  "UseWrap",                           &usewrap,          nullptr,    10, false}
+		,{  "FreshIndexMaxAge",                  &maxtempdelay,     nullptr,    10, false}
+		,{  "RedirMax",                          &redirmax,         nullptr,    10, false}
+		,{  "VfileUseRangeOps",                  &vrangeops,        nullptr,    10, false}
+		,{  "ResponseFreezeDetectTime",          &stucksecs,        nullptr,    10, false}
+		,{  "ReuseConnections",                  &persistoutgoing,  nullptr,    10, false}
+		,{  "PipelineDepth",                     &pipelinelen,      nullptr,    10, false}
+		,{  "ExSuppressAdminNotification",       &exsupcount,       nullptr,    10, false}
+		,{  "OptProxyTimeout",                   &optproxytimeout,  nullptr,    10, false}
+		,{  "MaxDlSpeed",                        &maxdlspeed,       nullptr,    10, false}
+		,{  "MaxInresponsiveDlSize",             &maxredlsize,      nullptr,    10, false}
+		,{  "OptProxyCheckInterval",             &optProxyCheckInt, nullptr,    10, false}
 		// octal base interpretation of UNIX file permissions
-		,{  "DirPerms",                          &dirperms,         nullptr,    8}
-		,{  "FilePerms",                         &fileperms,        nullptr,    8}
+		,{  "DirPerms",                          &dirperms,         nullptr,    8, false}
+		,{  "FilePerms",                         &fileperms,        nullptr,    8, false}
 
-		,{ "Verbose", 			nullptr,		"Option is deprecated, ignoring the value." , 10}
-		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10}
-		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
-		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10}
-		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10}
+		,{ "Verbose", 			nullptr,		"Option is deprecated, ignoring the value." , 10, true}
+		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10, true}
+		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10, true}
+		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10, false}
+		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10, false}
 };
 
 
@@ -1205,7 +1207,7 @@ void dump_config(bool includeDelicate)
 	}
 
 	for (const auto& n2i : n2iTbl)
-		if (n2i.ptr)
+		if (n2i.ptr && !n2i.hidden)
 			cmine << n2i.name << " = " << *n2i.ptr << endl;
 
 	for (const auto& x : n2pTbl)

@@ -60,7 +60,7 @@ void transfer(char cLogType, uint64_t nCount, const char *szClient, const char *
 	fStat << time(0) << '|' << cLogType << '|' << nCount;
 	if(acfg::verboselog)
 		fStat << '|' << szClient << '|' << szPath;
-	fStat << '\n';
+	fStat << '\n'; // not endl, it might flush
 	if(acfg::debug&LOG_FLUSH) fStat.flush();
 }
 
