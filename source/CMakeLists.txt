@@ -8,6 +8,7 @@ LIST(APPEND MAINSRCS
 LIST(APPEND SHAREDSRCS
         "${CMAKE_CURRENT_SOURCE_DIR}/acbuf.cc"
         "${CMAKE_CURRENT_SOURCE_DIR}/acfg.cc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/dirwalk.cc"
         "${CMAKE_CURRENT_SOURCE_DIR}/dlcon.cc"
         "${CMAKE_CURRENT_SOURCE_DIR}/tcpconnect.cc"
         "${CMAKE_CURRENT_SOURCE_DIR}/header.cc"
