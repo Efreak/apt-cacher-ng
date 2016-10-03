@@ -35,7 +35,7 @@ public:
 	void WorkLoop();
 	void Stop();
 
-	enum eType
+	enum eType : char
 	{
 		TYPE_EXFILEITEM, TYPE_ACFGHOOKS, TYPE_EXDNS, TYPE_EXCONNS,
 		ETYPE_MAX

@@ -19,7 +19,7 @@ class fileitem : public base_with_condition
 public:
 
 	// Life cycle (process states) of a file description item
-	enum FiStatus
+	enum FiStatus : char
 	{
 
 	FIST_FRESH, FIST_INITED, FIST_DLPENDING, FIST_DLGOTHEAD, FIST_DLRECEIVING,

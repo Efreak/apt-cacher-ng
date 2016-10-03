@@ -9,7 +9,7 @@
 // XXX: allocate this dynamically?
 #define MAXCSLEN 64
 
-typedef enum {
+typedef enum : char {
    CSTYPE_INVALID=0,
    CSTYPE_MD5=1,
    CSTYPE_SHA1=2,
