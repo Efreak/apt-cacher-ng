@@ -517,3 +517,10 @@ LocalDirs: acng-doc @DOCDIR@
 # differrent meaning in the future.
 #
 # NoSSLChecks: 0
+
+# Setting this value means: on file downloads from/via cache, tag relevant
+# files. And when acngtool runs the shrink command, it will look at the day
+# when the file was retrieved from cache last time (and not when it was
+# originally downloaded).
+#
+# TrackFileUse: 0

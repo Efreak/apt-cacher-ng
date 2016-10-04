@@ -234,9 +234,20 @@ int wcat(LPCSTR url, LPCSTR proxy, IFitemFactory*, IDlConFactory *pdlconfa = &g_
 
 LPCSTR ReTest(LPCSTR);
 
-static void usage(int retCode = 0)
+static void usage(int retCode = 0, LPCSTR cmd = nullptr)
 {
-	(retCode ? cout : cerr) <<
+	if(cmd)
+	{
+		if(0 == strcmp(cmd, "shrink"))
+			cerr << "USAGE: acngtool shrink numberX [-f | -n] [-x] [-v] [variable assignments...]" <<endl <<
+			"-f: delete files"<< endl <<
+			"-n: dry run, display results" << endl <<
+			"-v: move verbosity" << endl <<
+			"-x: also drop index files (can be dangerous)" <<endl <<
+			"Suffix X can be k,K,m,M,g,G (for kb,KiB,mb,MiB,gb,GiB)" << endl;
+	}
+	else
+		(retCode ? cout : cerr) <<
 		"Usage: acngtool command parameter... [options]\n\n"
 			"command := { printvar, cfgdump, retest, patch, curl, encb64, maint, shrink }\n"
 			"parameter := (specific to command)\n"
@@ -266,7 +277,7 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 {
 	if(!dryrun && !apply)
 	{
-		cerr << "Error: needs -f or -n options (-f to delete files, -n to test, optional: -v for verbose, -x to also drop index files" <<endl;
+		cerr << "Error: needs -f or -n options" << endl;
 		return 97;
 	}
 	if(dryrun && apply)
@@ -283,6 +294,7 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 	IFileHandler::FindFiles(acfg::cachedir,
 			[&delQ, &totalSize, &related, &incIfiles](cmstring & path, const struct stat& finfo) -> bool
 			{
+		// reference date used in the prioqueue heap
 		auto dateLatest = max(finfo.st_ctim.tv_sec, finfo.st_mtim.tv_sec);
 		auto isHead = endsWithSzAr(path, ".head");
 		string pkgPath, otherName;
@@ -313,14 +325,17 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 		}
 
 		auto other = related.find(otherName);
-//		cout << "wo ist " << otherName << " - " << (other==related.end()) << endl;
 		if(other == related.end())
 		{
 			// the related file will appear soon
 			related.insert(make_pair(path, make_pair(dateLatest, finfo.st_size)));
 			return true;
 		}
-		dateLatest = max(dateLatest, other->second.first);
+		// care only about stamps on .head files (track mode)
+		// or ONLY about data file's timestamp (not-track mode)
+		if( (acfg::trackfileuse && !isHead) || (!acfg::trackfileuse && isHead))
+			dateLatest = other->second.first;
+
 		auto bothSize = (finfo.st_size + other->second.second);
 		related.erase(other);
 
@@ -958,7 +973,7 @@ int main(int argc, const char **argv)
 	if(!xargCount) // should run the code at least once?
 	{
 		if(parm->minArg) // uh... needs argument(s)
-			usage(4);
+			usage(4, mode);
 		parm->f(nullptr);
 	}
 	else if(parm->maxArg == UINT_MAX) // or needs to terminate it?

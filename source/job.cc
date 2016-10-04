@@ -591,7 +591,6 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		bForceFreshnessChecks = ( ! acfg::offlinemode && m_type == FILE_VOLATILE);
 
 		m_pItem.PrepareRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
-
 	}
 	MYCATCH(std::out_of_range&) // better safe...
 	{
@@ -614,6 +613,10 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		fistate = _SwitchToPtItem();
 
 	ParseRange();
+
+	// might need to update the filestamp because nothing else would trigger it
+	if(acfg::trackfileuse && fistate >= fileitem::FIST_DLGOTHEAD && fistate < fileitem::FIST_DLERROR)
+		m_pItem.get()->UpdateHeadTimestamp();
 
 	if(fistate==fileitem::FIST_COMPLETE)
 		return; // perfect, done here

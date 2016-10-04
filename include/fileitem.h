@@ -72,6 +72,8 @@ public:
 	/// mark the item as complete as-is, assuming that sizeseen is correct
 	void SetupComplete();
 
+	void UpdateHeadTimestamp();
+
 	uint64_t m_nIncommingCount;
 	off_t m_nSizeSeen;
 	off_t m_nRangeLimit;

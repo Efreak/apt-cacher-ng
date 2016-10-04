@@ -16,6 +16,7 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/time.h>
 
 using namespace std;
 
@@ -284,6 +285,13 @@ void fileitem::SetupComplete()
 	notifyAll();
 	m_nSizeChecked = m_nSizeSeen;
 	m_status = FIST_COMPLETE;
+}
+
+void fileitem::UpdateHeadTimestamp()
+{
+	if(m_sPathRel.empty())
+		return;
+	utimes(SZABSPATH(m_sPathRel + ".head"), nullptr);
 }
 
 fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)

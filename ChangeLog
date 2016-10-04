@@ -10,12 +10,9 @@ apt-cacher-ng (1) LOGAN-VS-BLADE-RUNNER-3D; urgency=low
     the wanted size of the cache directory is reached (considering file type
     and creation dates). The default strategy is keeping least recently
     downloaded files in cache.
-### FIXME: add the unlink calls and dry-run mode
-  * optional tagging of used package files which can influence the
+  * NEW: optional tagging of used package files which can influence the
     "shrink" command operation to keep least recently USED files instead of
     least recently downloaded files.
-### IMPLEMENTME (add utime() calls on .head files, add check in acngtool
-    to ignore .head files timestamps, add option like TagFileUse)
 
  -- 
 
