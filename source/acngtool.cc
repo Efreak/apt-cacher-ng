@@ -249,7 +249,7 @@ static void usage(int retCode = 0, LPCSTR cmd = nullptr)
 			cerr << "USAGE: acngtool shrink numberX [-f | -n] [-x] [-v] [variable assignments...]" <<endl <<
 			"-f: delete files"<< endl <<
 			"-n: dry run, display results" << endl <<
-			"-v: move verbosity" << endl <<
+			"-v: more verbosity" << endl <<
 			"-x: also drop index files (can be dangerous)" <<endl <<
 			"Suffix X can be k,K,m,M,g,G (for kb,KiB,mb,MiB,gb,GiB)" << endl;
 	}
@@ -373,7 +373,7 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 		if(todel && apply)
 		{
 			unlink(delpath.c_str());
-			unlink((delpath + ".head").c_str());
+			unlink(mstring(delpath + ".head").c_str());
 		}
 		delQ.pop();
 	}

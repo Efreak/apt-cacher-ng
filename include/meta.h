@@ -29,6 +29,7 @@
 
 #define EXTREME_MEMORY_SAVING false
 
+
 #ifdef _MSC_VER
 #define __func__ __FUNCTION__
 #endif
@@ -40,11 +41,16 @@
 #define EMPLACE_PAIR_COMPAT(M,K,V) (M).emplace(K,V)
 #endif
 
+
 class acbuf;
 
 typedef std::string mstring;
 typedef const std::string cmstring;
 
+typedef std::pair<mstring, mstring> tStrPair;
+typedef std::vector<mstring> tStrVec;
+typedef std::set<mstring> tStrSet;
+typedef std::deque<mstring> tStrDeq;
 typedef mstring::size_type tStrPos;
 const static tStrPos stmiss(cmstring::npos);
 typedef unsigned short USHORT;
@@ -146,7 +152,7 @@ inline void trimString(mstring &s, LPCSTR junk=SPACECHARS)
 
 mstring GetBaseName(cmstring &in);
 mstring GetDirPart(cmstring &in);
-std::pair<mstring, mstring> SplitDirPath(cmstring& in);
+tStrPair SplitDirPath(cmstring& in);
 
 LPCSTR GetTypeSuffix(cmstring& s);
 
@@ -169,10 +175,6 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
             return pWhere;
    return nullptr;
 }
-
-typedef std::vector<mstring> tStrVec;
-typedef std::set<mstring> tStrSet;
-typedef std::deque<mstring> tStrDeq;
 
 // Sometimes I miss Perl...
 tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
@@ -455,6 +457,9 @@ struct tDtorEx {
 	inline tDtorEx(decltype(_action) action) : _action(action) {}
 	inline ~tDtorEx() { _action(); }
 };
+
+// from bgtask.cc
+cmstring GetFooter();
 
 #endif // _META_H
 

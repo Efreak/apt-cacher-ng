@@ -43,16 +43,11 @@ tSpecOpDetachable::~tSpecOpDetachable()
 	checkforceclose(m_logFd);
 }
 
-cmstring& GetFooter()
+cmstring GetFooter()
 {
-	static mstring footer;
-	if(footer.empty())
-	{
-		footer = string("<hr><address>Server: ") + acfg::agentname +
-		"&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">Flattr this!"
-    "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
-	}
-	return footer;
+        return mstring("<hr><address>Server: ") + acfg::agentname
+                + "&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">Flattr this!"
+                "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
 }
 
 /*

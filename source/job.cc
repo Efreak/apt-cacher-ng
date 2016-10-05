@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <stdexcept>
 #include <limits>
+#include <queue>
 using namespace std;
 
 #include "conn.h"
@@ -238,7 +239,7 @@ job::~job()
 inline void job::PrepareLocalDownload(const string &visPath,
 		const string &fsBase, const string &fsSubpath)
 {
-	string absPath = fsBase+SZPATHSEP+fsSubpath;
+	mstring absPath = fsBase+SZPATHSEP+fsSubpath;
 	Cstat stbuf(absPath);
 	if (!stbuf)
 	{
@@ -322,7 +323,8 @@ inline void job::PrepareLocalDownload(const string &visPath,
 		m_pItem.RegisterFileitemLocalOnly(p); // assign to smart pointer ASAP, operations might throw
 		tSS & page = p->m_data;
 
-		page << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>Index of " << visPath << "</title></head>"
+		page << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>Index of "
+				<< visPath << "</title></head>"
 		"<body><h1>Index of " << visPath << "</h1>"
 		"<table><tr><th>&nbsp;</th><th>Name</th><th>Last modified</th><th>Size</th></tr>"
 		"<tr><th colspan=\"4\"><hr></th></tr>";
@@ -332,12 +334,11 @@ inline void job::PrepareLocalDownload(const string &visPath,
 			page<<"ERROR READING DIRECTORY";
 		else
 		{
-			// quick hack, good enough
-			tStrMap sortMap;
-			for(struct dirent dp, *pEndTest;
-					0==readdir_r(dir, &dp, &pEndTest) && pEndTest; )
+			// quick hack with sorting by custom keys, good enough here
+			priority_queue<tStrPair, std::vector<tStrPair>, std::greater<tStrPair>> sortHeap;
+			for(struct dirent *pdp(0);0!=(pdp=readdir(dir));)
 			{
-				if (0!=::stat((absPath+SZPATHSEP+dp.d_name).c_str(), &stbuf))
+				if (0!=::stat(mstring(absPath+SZPATHSEP+pdp->d_name).c_str(), &stbuf))
 					continue;
 
 				bool bDir=S_ISDIR(stbuf.st_mode);
@@ -347,29 +348,35 @@ inline void job::PrepareLocalDownload(const string &visPath,
 				strftime(datestr, sizeof(datestr)-1,
 						"%d-%b-%Y %H:%M", localtime_r(&stbuf.st_mtime, &tmtimebuf));
 
-				tSS line;
+				string line;
 				if(bDir)
-					line << "[DIR]";
-				else if(startsWithSz(acfg::GetMimeType(dp.d_name), "image/"))
-					line << "[IMG]";
+					line += "[DIR]";
+				else if(startsWithSz(acfg::GetMimeType(pdp->d_name), "image/"))
+					line += "[IMG]";
 				else
-					line << "[&nbsp;&nbsp;&nbsp;]";
-				line <<  "</td><td><a href=\"" << dp.d_name <<	+(bDir? "/\">" : "\">" ) << dp.d_name
-						<< "</a></td><td>" << datestr << "</td><td align=\"right\">";
-				if(bDir)
-					line << "-";
-				else
-					line << offttosH(stbuf.st_size);
-				sortMap[string(bDir?"a":"b")+dp.d_name] = line;
+					line += "[&nbsp;&nbsp;&nbsp;]";
+				line += string("</td><td><a href=\"") + pdp->d_name
+						+ (bDir? "/\">" : "\">" )
+						+ pdp->d_name
+						+"</a></td><td>"
+						+ datestr
+						+ "</td><td align=\"right\">"
+						+ (bDir ? string("-") : offttosH(stbuf.st_size));
+				sortHeap.push(make_pair(string(bDir?"a":"b")+pdp->d_name, line));
+				//dbgprint((mstring)line);
 			}
 			closedir(dir);
-			for(tStrMap::const_iterator it=sortMap.begin(); it!=sortMap.end(); it++)
-				page << "<tr><td valign=\"top\">" << it->second << "</td></tr>\r\n";
+			while(!sortHeap.empty())
+			{
+				page.add(WITHLEN("<tr><td valign=\"top\">"));
+				page << sortHeap.top().second;
+				page.add(WITHLEN("</td></tr>\r\n"));
+				sortHeap.pop();
+			}
+
 		}
-		cmstring& GetFooter();
-		page << "<tr><td colspan=\"4\">"
-		<<GetFooter()
-		<< page << "</td></tr></table></body></html>";
+		page << "<tr><td colspan=\"4\">" <<GetFooter();
+		page << "</td></tr></table></body></html>";
 		p->seal();
 		return;
 	}

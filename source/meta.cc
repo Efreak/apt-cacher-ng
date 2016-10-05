@@ -765,7 +765,7 @@ mstring UrlUnescape(cmstring &from)
 	UrlUnescapeAppend(from, ret);
 	return ret;
 }
-mstring DosEscape(cmstring &s);
+//mstring DosEscape(cmstring &s);
 // just the bare minimum to make sure the string does not break HTML formating
 mstring html_sanitize(cmstring& in)
 {

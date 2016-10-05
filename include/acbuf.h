@@ -135,6 +135,4 @@ protected:
 	inline tSS & appDosNL() { return add("\r\n", 2);}
 };
 
-cmstring& GetFooter();
-
 #endif
