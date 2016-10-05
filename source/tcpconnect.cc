@@ -32,9 +32,15 @@ atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 #endif
 
 #ifdef HAVE_SSL
-#include <openssl/bio.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
+#include <openssl/evp.h>
+#include "openssl/bio.h"
+#include "openssl/ssl.h"
+#include "openssl/err.h"
+#include <openssl/rand.h>
+#include <openssl/sha.h>
+#include <openssl/crypto.h>
+#include <openssl/x509_vfy.h>
+#include <openssl/x509v3.h>
 #endif
 
 std::atomic_uint dl_con_factory::g_nconns(0);
@@ -494,7 +500,17 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	if(!ssl)
 		goto ssl_init_fail;
 
+	// for SNI
 	SSL_set_tlsext_host_name(ssl, sHostname.c_str());
+
+	{
+		auto param = SSL_get0_param(ssl);
+		/* Enable automatic hostname checks */
+		X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+		X509_VERIFY_PARAM_set1_host(param, sHostname.c_str(), 0);
+		/* Configure a non-zero callback if desired */
+		SSL_set_verify(ssl, SSL_VERIFY_PEER, 0);
+	}
 
 	// mark it connected and prepare for non-blocking mode
  	SSL_set_connect_state(ssl);
@@ -588,6 +604,21 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	return false;
 }
 
+//! Global initialization helper (might be non-reentrant)
+void globalSslInit()
+{
+	static bool inited=false;
+	if(inited)
+		return;
+	inited = true;
+	SSL_load_error_strings();
+	ERR_load_BIO_strings();
+	ERR_load_crypto_strings();
+	ERR_load_SSL_strings();
+	OpenSSL_add_all_algorithms();
+	SSL_library_init();
+}
+
 #endif
 
 bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
@@ -664,5 +695,4 @@ bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 	}
 	return true;
 }
-
 

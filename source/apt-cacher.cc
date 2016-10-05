@@ -32,16 +32,6 @@ using namespace std;
 #include <signal.h>
 #include <errno.h>
 
-#ifdef HAVE_SSL
-#include <openssl/evp.h>
-#include "openssl/bio.h"
-#include "openssl/ssl.h"
-#include "openssl/err.h"
-#include <openssl/rand.h>
-#include <openssl/sha.h>
-#include <openssl/crypto.h>
-#endif
-
 #include "filereader.h"
 #include "csmapping.h"
 #ifdef DEBUG
@@ -165,14 +155,9 @@ void setup_sighandler()
 
 int main(int argc, const char **argv)
 {
-
 #ifdef HAVE_SSL
-	SSL_load_error_strings();
-	ERR_load_BIO_strings();
-	ERR_load_crypto_strings();
-	ERR_load_SSL_strings();
-	OpenSSL_add_all_algorithms();
-	SSL_library_init();
+	void globalSslInit();
+	globalSslInit();
 #endif
 
 	bool bRunCleanup=false;

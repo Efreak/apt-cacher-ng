@@ -42,13 +42,13 @@
 using namespace std;
 
 #ifdef HAVE_SSL
-/* OpenSSL headers */
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
 #include "openssl/err.h"
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 #include <openssl/crypto.h>
+void globalSslInit();
 #endif
 
 #include "filereader.h"
@@ -73,6 +73,8 @@ struct CPrintItemFactory : public IFitemFactory
 {
 	virtual SHARED_PTR<fileitem> Create()
 	{
+		globalSslInit();
+
 		class tPrintItem : public fileitem
 		{
 		public:
@@ -92,6 +94,9 @@ struct CPrintItemFactory : public IFitemFactory
 					bool, bool&) override
 			{
 				m_head = h;
+				auto opt_dbg=getenv("ACNGTOOL_DEBUG_DOWNLOAD");
+				if(opt_dbg && *opt_dbg)
+					std::cerr << (std::string) h.ToString() << std::endl;
 				return true;
 			}
 			virtual bool StoreFileData(const char *data, unsigned int size) override
@@ -142,6 +147,8 @@ struct CReportItemFactory : public IFitemFactory
 {
 	virtual SHARED_PTR<fileitem> Create()
 	{
+		globalSslInit();
+
 		class tRepItem : public fileitem
 		{
 			acbuf lineBuf;
@@ -1002,22 +1009,22 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	auto fi=fac->Create();
 	dl.AddJob(fi, &url, nullptr, nullptr, 0);
 	dl.WorkLoop();
-	if(fi->GetStatus() == fileitem::FIST_COMPLETE)
-	{
-		auto hh=fi->GetHeaderUnlocked();
-		auto st=hh.getStatus();
-		if(st == 200)
-			return EXIT_SUCCESS;
-		// don't reveal passwords
-		auto xpos=xurl.find('@');
-		if(xpos!=stmiss)
-			xurl.erase(0, xpos+1);
-		cerr << "Error: cannot fetch " << xurl <<", "  << hh.frontLine << endl;
-		if (st>=500)
-			return EIO;
-		if (st>=400)
-			return EACCES;
-	}
+	auto fistatus = fi->GetStatus();
+	header hh = fi->GetHeader();
+	int st=hh.getStatus();
+
+	if(fistatus == fileitem::FIST_COMPLETE && st == 200)
+		return EXIT_SUCCESS;
+
+	// don't reveal passwords
+	auto xpos=xurl.find('@');
+	if(xpos!=stmiss)
+		xurl.erase(0, xpos+1);
+	cerr << "Error: cannot fetch " << xurl <<", "  << hh.frontLine << endl;
+	if (st>=500)
+		return EIO;
+	if (st>=400)
+		return EACCES;
 
 	return EXIT_FAILURE;
 }

@@ -6,6 +6,9 @@ apt-cacher-ng (1) LOGAN-VS-BLADE-RUNNER-3D; urgency=low
     x.y scheme.
   * FIX: typo in option name ExThreshold, and also hiding obsolete options
     in configuration dump
+  * FIX: correct display of errors in acngtool curl operation
+  * FIX: strict SSL hostname validation even with peers not supporting SNI
+    (Debian bug #839751)
   * NEW: special command in acngtool ("shrink") to files until
     the wanted size of the cache directory is reached (considering file type
     and creation dates). The default strategy is keeping least recently
