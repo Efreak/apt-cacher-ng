@@ -20,6 +20,8 @@
 
 using namespace std;
 
+namespace acng
+{
 struct eHeadPos2label
 {
 	header::eHeadPos pos;
@@ -296,7 +298,7 @@ int header::StoreToFile(cmstring &sPath) const
 {
 	int nByteCount(0);
 	const char *szPath=sPath.c_str();
-	int fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, acfg::fileperms);
+	int fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, cfg::fileperms);
 	if(fd<0)
 	{
 		fd=-errno;
@@ -304,7 +306,7 @@ int header::StoreToFile(cmstring &sPath) const
 		if(::unlink(szPath))
 			return fd;
 
-		fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, acfg::fileperms);
+		fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, cfg::fileperms);
 		if(fd<0)
 			return -errno;
 	}
@@ -363,4 +365,6 @@ bool header::ParseDate(const char *s, struct tm *tm)
 			return true;
 
 	return false;
+}
+
 }

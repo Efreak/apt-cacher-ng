@@ -4,6 +4,9 @@
 #include <mutex>
 #include <condition_variable>
 
+namespace acng
+{
+
 typedef std::mutex acmutex;
 
 struct base_with_mutex
@@ -40,5 +43,7 @@ struct base_with_condition : public base_with_mutex
 };
 
 #define setLockGuard std::lock_guard<std::mutex> local_helper_lockguard(m_obj_mutex);
+
+}
 
 #endif

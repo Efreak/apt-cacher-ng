@@ -9,6 +9,9 @@
 #include "header.h"
 #include <unordered_map>
 
+namespace acng
+{
+
 class fileitem;
 typedef std::shared_ptr<fileitem> tFileItemPtr;
 typedef std::unordered_multimap<mstring, tFileItemPtr> tFiGlobMap;
@@ -117,7 +120,7 @@ public:
 
 	inline static mstring NormalizePath(cmstring &sPathRaw)
 	{
-		return acfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
+		return cfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
 	}
 protected:
 	int MoveRelease2Sidestore();
@@ -167,7 +170,5 @@ private:
 #define fileItemMgmt void
 #endif // not MINIBUILD
 
+}
 #endif
-
-
-

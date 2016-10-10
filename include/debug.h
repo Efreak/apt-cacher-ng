@@ -8,9 +8,14 @@
 
 #include <fstream>
 #include <iostream>
-
 #ifdef DEBUG
 #include <assert.h>
+#endif
+
+namespace acng
+{
+
+#ifdef DEBUG
 #define ASSERT(x) assert(x)
 #else
 #define ASSERT(x)
@@ -34,7 +39,7 @@ inline void dump_proc_status(){}; // strip away
 
 #else
 
-#define LOGLVL(n, x) if(acfg::debug&n){ __logobj.GetFmter() << x; __logobj.Write(__FILE__,__LINE__); }
+#define LOGLVL(n, x) if(acng::cfg::debug&n){ __logobj.GetFmter() << x; __logobj.Write(__FILE__,__LINE__); }
 #define LOG(x) LOGLVL(LOG_DEBUG, x)
 
 #define LOGSTARTFUNC t_logger __logobj(__func__, this);
@@ -48,7 +53,7 @@ inline void dump_proc_status(){}; // strip away
 #define ldbg(x) LOG(x)
 
 #define dbgline ldbg("mark")
-#define DBGQLOG(x) {aclog::err(tSS()<< x);}
+#define DBGQLOG(x) {log::err(tSS()<< x);}
 #define dump_proc_status dump_proc_status_always
 
 #endif
@@ -66,5 +71,6 @@ inline void dump_proc_status_always()
 	}
 };
 
+}
 
 #endif // __DEBUG_H__

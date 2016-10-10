@@ -40,6 +40,9 @@ using namespace std;
 
 #include "maintenance.h"
 
+namespace acng
+{
+
 static void usage(int nRetCode=0);
 static void SetupCacheDir();
 void sig_handler(int signum);
@@ -47,6 +50,8 @@ void log_handler(int signum);
 void dump_handler(int signum);
 void handle_sigbus();
 void check_algos();
+
+extern mstring sReplDir;
 
 typedef struct sigaction tSigAct;
 
@@ -113,16 +118,16 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 	}
 
 	if(szCfgDir)
-		acfg::ReadConfigDirectory(szCfgDir, !ignoreCfgErrors);
+		cfg::ReadConfigDirectory(szCfgDir, !ignoreCfgErrors);
 
 	for(auto& keyval : cmdvars)
-		if(!acfg::SetOption(keyval, 0))
+		if(!cfg::SetOption(keyval, 0))
 			usage(EXIT_FAILURE);
 
-	acfg::PostProcConfig();
+	cfg::PostProcConfig();
 
 	if(bExtraVerb)
-		acfg::debug |= (LOG_DEBUG|LOG_MORE);
+		cfg::debug |= (LOG_DEBUG|LOG_MORE);
 
 }
 
@@ -153,63 +158,6 @@ void setup_sighandler()
 #endif
 }
 
-int main(int argc, const char **argv)
-{
-#ifdef HAVE_SSL
-	void globalSslInit();
-	globalSslInit();
-#endif
-
-	bool bRunCleanup=false;
-
-	parse_options(argc, argv, bRunCleanup);
-
-	if(!aclog::open())
-	{
-		cerr << "Problem creating log files. Check permissions of the log directory, "
-			<< acfg::logdir<<endl;
-		exit(EXIT_FAILURE);
-	}
-
-	check_algos();
-	setup_sighandler();
-
-	SetupCacheDir();
-
-	extern mstring sReplDir;
-	DelTree(acfg::cacheDirSlash+sReplDir);
-
-	conserver::Setup();
-
-	if (bRunCleanup)
-	{
-		tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
-				acfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
-				fileno(stdout));
-		exit(0);
-	}
-
-	if (!acfg::foreground && !fork_away())
-	{
-		tErrnoFmter ef("Failed to change to daemon mode");
-		cerr << ef << endl;
-		exit(43);
-	}
-
-	if (!acfg::pidfile.empty())
-	{
-		mkbasedir(acfg::pidfile);
-		FILE *PID_FILE = fopen(acfg::pidfile.c_str(), "w");
-		if (PID_FILE != nullptr)
-		{
-			fprintf(PID_FILE, "%d", getpid());
-			checkForceFclose(PID_FILE);
-		}
-	}
-	return conserver::Run();
-
-}
-
 static void usage(int retCode) {
 	cout <<"Usage: apt-cacher-ng [options] [ -c configdir ] <var=value ...>\n\n"
 		"Options:\n"
@@ -235,9 +183,9 @@ static void usage(int retCode) {
 
 static void SetupCacheDir()
 {
-	using namespace acfg;
+	using namespace cfg;
 
-	if(acfg::cachedir.empty())
+	if(cfg::cachedir.empty())
 		return;	// warning was printed
 
 	auto xstore(cacheDirSlash + "_xstore");
@@ -268,7 +216,7 @@ static void SetupCacheDir()
 
 void log_handler(int)
 {
-	aclog::close(true);
+	log::close(true);
 }
 
 void sig_handler(int signum)
@@ -283,15 +231,15 @@ void sig_handler(int signum)
 		 * just hope that systemd will restart the daemon.
 		 */
 		handle_sigbus();
-		aclog::flush();
+		log::flush();
 		//no break
 	case (SIGTERM):
 	case (SIGINT):
 	case (SIGQUIT): {
 		g_victor.Stop();
-		aclog::close(false);
-    if (!acfg::pidfile.empty())
-       unlink(acfg::pidfile.c_str());
+		log::close(false);
+    if (!cfg::pidfile.empty())
+       unlink(cfg::pidfile.c_str());
 		// and then terminate, resending the signal to default handler
 		tSigAct act = tSigAct();
 		sigfillset(&act.sa_mask);
@@ -303,4 +251,62 @@ void sig_handler(int signum)
 	default:
 		return;
 	}
+}
+
+}
+
+int main(int argc, const char **argv)
+{
+	using namespace acng;
+#ifdef HAVE_SSL
+	acng::globalSslInit();
+#endif
+
+	bool bRunCleanup=false;
+
+	parse_options(argc, argv, bRunCleanup);
+
+	if(!log::open())
+	{
+		cerr << "Problem creating log files. Check permissions of the log directory, "
+			<< cfg::logdir<<endl;
+		exit(EXIT_FAILURE);
+	}
+
+	check_algos();
+	setup_sighandler();
+
+	SetupCacheDir();
+
+	DelTree(cfg::cacheDirSlash+sReplDir);
+
+	conserver::Setup();
+
+	if (bRunCleanup)
+	{
+		tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
+				cfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
+				fileno(stdout));
+		exit(0);
+	}
+
+	if (!cfg::foreground && !fork_away())
+	{
+		tErrnoFmter ef("Failed to change to daemon mode");
+		cerr << ef << endl;
+		exit(43);
+	}
+
+	if (!cfg::pidfile.empty())
+	{
+		mkbasedir(cfg::pidfile);
+		FILE *PID_FILE = fopen(cfg::pidfile.c_str(), "w");
+		if (PID_FILE != nullptr)
+		{
+			fprintf(PID_FILE, "%d", getpid());
+			checkForceFclose(PID_FILE);
+		}
+	}
+	return conserver::Run();
+
 }

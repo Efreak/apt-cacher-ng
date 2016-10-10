@@ -18,6 +18,8 @@
 
 #define MAINT_PFX "maint_"
 
+namespace acng
+{
 class tSpecialRequest
 {
 public:
@@ -124,5 +126,7 @@ public:
 protected:
 	static tSpecialRequest* MakeMaintWorker(const tRunParms& parms);
 };
+
+}
 
 #endif /*MAINTENANCE_H_*/

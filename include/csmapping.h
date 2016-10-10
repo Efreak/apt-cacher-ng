@@ -9,6 +9,9 @@
 // XXX: allocate this dynamically?
 #define MAXCSLEN 64
 
+namespace acng
+{
+
 typedef enum : char {
    CSTYPE_INVALID=0,
    CSTYPE_MD5=1,
@@ -271,5 +274,6 @@ struct ltCacheKeyComp
 
 typedef std::map<tImpFileInfo, tFingerprint, ltCacheKeyComp> tFprCacheMap;
 
+}
 
 #endif /*CSMAPPING_H_*/

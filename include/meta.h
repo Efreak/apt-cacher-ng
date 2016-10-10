@@ -41,6 +41,8 @@
 #define EMPLACE_PAIR_COMPAT(M,K,V) (M).emplace(K,V)
 #endif
 
+namespace acng
+{
 
 class acbuf;
 
@@ -92,11 +94,6 @@ extern cmstring FAKEDATEMARK;
 
 #ifndef O_NONBLOCK
 #error "Unknown how to configure non-blocking mode (O_NONBLOCK) on this system"
-#endif
-
-#include <sys/socket.h>
-#ifndef SO_MAXCONN
-#define SO_MAXCONN 250
 #endif
 
 //#define PATHSEP "/"
@@ -177,7 +174,7 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
 }
 
 // Sometimes I miss Perl...
-tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
+tStrVec::size_type Tokenize(cmstring &in, const char* sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
 /*inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
 {out.clear(); if(tokens.empty()) return; for(const auto& tok: tokens)out+=(sep + tok);}
 */
@@ -460,6 +457,8 @@ struct tDtorEx {
 
 // from bgtask.cc
 cmstring GetFooter();
+
+}
 
 #endif // _META_H
 

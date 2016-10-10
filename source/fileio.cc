@@ -7,13 +7,17 @@
 #include "fileio.h"
 #include "acbuf.h"
 #include "acfg.h"
-
 #include <fcntl.h>
+#ifdef HAVE_LINUX_FALLOCATE
+#include <linux/falloc.h>
+#endif
 
 using namespace std;
 
+namespace acng
+{
+
 #ifdef HAVE_LINUX_FALLOCATE
-#include <linux/falloc.h>
 
 int falloc_helper(int fd, off_t start, off_t len)
 {
@@ -161,7 +165,7 @@ ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count)
 bool xtouch(cmstring &wanted)
 {
 	mkbasedir(wanted);
-	int fd = open(wanted.c_str(), O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK, acfg::fileperms);
+	int fd = open(wanted.c_str(), O_WRONLY|O_CREAT|O_NOCTTY|O_NONBLOCK, cfg::fileperms);
 	if(fd == -1)
 		return false;
 	checkforceclose(fd);
@@ -170,33 +174,35 @@ bool xtouch(cmstring &wanted)
 
 void mkbasedir(cmstring & path)
 {
-	if(0==mkdir(GetDirPart(path).c_str(), acfg::dirperms) || EEXIST == errno)
+	if(0==mkdir(GetDirPart(path).c_str(), cfg::dirperms) || EEXIST == errno)
 		return; // should succeed in most cases
 
 	// assuming the cache folder is already there, don't start from /, if possible
 	unsigned pos=0;
-	if(startsWith(path, acfg::cacheDirSlash))
+	if(startsWith(path, cfg::cacheDirSlash))
 	{
-		// pos=acfg::cachedir.size();
-		pos=path.find("/", acfg::cachedir.size()+1);
+		// pos=acng::cfg:cachedir.size();
+		pos=path.find("/", cfg::cachedir.size()+1);
 	}
     for(; pos<path.size(); pos=path.find(SZPATHSEP, pos+1))
     {
         if(pos>0)
-            mkdir(path.substr(0,pos).c_str(), acfg::dirperms);
+            mkdir(path.substr(0,pos).c_str(), cfg::dirperms);
     }
 }
 
 void mkdirhier(cmstring& path)
 {
-	if(0==mkdir(path.c_str(), acfg::dirperms) || EEXIST == errno)
+	if(0==mkdir(path.c_str(), cfg::dirperms) || EEXIST == errno)
 		return; // should succeed in most cases
 	if(path.empty())
 		return;
 	for(cmstring::size_type pos = path[0] == '/' ? 1 : 0;pos < path.size();pos++)
 	{
 		pos = path.find('/', pos);
-		mkdir(path.substr(0,pos).c_str(), acfg::dirperms);
+		mkdir(path.substr(0,pos).c_str(), cfg::dirperms);
 		if(pos == stmiss) break;
 	}
+}
+
 }

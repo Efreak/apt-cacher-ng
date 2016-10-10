@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include "meta.h"
 
+namespace acng
+{
+
 /*! \brief Helper class to maintain a memory buffer, i.e. a continuous block of bytes.
  * It also encapsulates some typical operations on it.
  */
@@ -134,5 +137,7 @@ protected:
 	}
 	inline tSS & appDosNL() { return add("\r\n", 2);}
 };
+
+}
 
 #endif

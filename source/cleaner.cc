@@ -21,6 +21,9 @@ using namespace std;
 
 #define TERM_VAL (time_t(-1))
 
+namespace acng
+{
+
 cleaner::cleaner() : m_thr(0)
 {
 	Init();
@@ -73,8 +76,8 @@ void cleaner::WorkLoop()
 		switch(what)
 		{
 		case TYPE_ACFGHOOKS:
-			time_nextcand = acfg::BackgroundCleanup();
-			USRDBG("acfg::ExecutePostponed, nextRunTime now: " << time_nextcand);
+			time_nextcand = cfg::BackgroundCleanup();
+			USRDBG("acng::cfg:ExecutePostponed, nextRunTime now: " << time_nextcand);
 			break;
 
 		case TYPE_EXCONNS:
@@ -98,7 +101,7 @@ void cleaner::WorkLoop()
 
 		if(time_nextcand <= now || time_nextcand < 1)
 		{
-			aclog::err(tSS() << "ERROR: looping bug candidate on " << what
+			log::err(tSS() << "ERROR: looping bug candidate on " << what
 					<< ", value: " << time_nextcand);
 			time_nextcand=GetTime()+60;
 		}
@@ -162,7 +165,7 @@ void cleaner::dump_status()
 	msg << "Cleanup schedule:\n";
 	for(int i=0; i<cleaner::ETYPE_MAX; ++i)
 		msg << stamps[i] << " (in " << (stamps[i]-GetTime()) << " seconds)\n";
-	aclog::err(msg);
+	log::err(msg);
 }
 
 
@@ -170,6 +173,8 @@ void dump_handler(int) {
 	fileItemMgmt::dump_status();
 	g_victor.dump_status();
 	g_tcp_con_factory.dump_status();
-	acfg::dump_trace();
+	cfg::dump_trace();
 }
 
+
+}

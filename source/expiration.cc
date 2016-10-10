@@ -24,13 +24,16 @@ using namespace std;
 #warning Unlinking parts defused
 #endif
 
-#define TIMEEXPIRED(t) (t < (m_gMaintTimeNow-acfg::extreshhold*86400))
-#define TIME_AGONY (m_gMaintTimeNow-acfg::extreshhold*86400)
+#define TIMEEXPIRED(t) (t < (m_gMaintTimeNow-acng::cfg::extreshhold*86400))
+#define TIME_AGONY (m_gMaintTimeNow-acng::cfg::extreshhold*86400)
 
 #define FNAME_PENDING "_expending_dat"
 #define FNAME_DAMAGED "_expending_damaged"
 #define sFAIL_INI SABSPATH("_exfail_cnt")
 #define FAIL_INI sFAIL_INI.c_str()
+
+namespace acng
+{
 
 void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
@@ -185,7 +188,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				// IO error? better keep it for now, not sure how to deal with it
 				SendFmt << ECLASS "An error occurred while checksumming "
 				<< sPathRel << ", leaving as-is for now.";
-				aclog::err(tSS() << "Error reading " << sPathAbs );
+				log::err(tSS() << "Error reading " << sPathAbs );
 				AddDelCbox(sPathRel, "IO error");
 				SendFmt<<CLASSEND;
 				return false;
@@ -215,7 +218,7 @@ ERROR: size mismatch on debrep/dists/jessie/contrib/i18n/Translation-en.bz2 (add
 repro: check by path, after a minor distro upgrade
 				 */
 				// don't really care but let the user truncate
-				if(rechecks::GetFiletype(sPathRel) == rechecks::FILE_VOLATILE)
+				if(rex::GetFiletype(sPathRel) == rex::FILE_VOLATILE)
 					return report_weird_volatile(lenFromStat);
 
 				SendFmt << ECLASS << "size mismatch on " << sPathRel;
@@ -275,7 +278,7 @@ repro: check by path, after a minor distro upgrade
 	// and in general, all kinds of index files shall be checked at the particular location since
 	// there are too many identical names spread between different repositories
 	bool byPath = (m_bByPath || entry.sFileName == sIndex ||
-			rechecks::Match(entry.sDirectory + entry.sFileName, rechecks::FILE_VOLATILE));
+			rex::Match(entry.sDirectory + entry.sFileName, rex::FILE_VOLATILE));
 	if(byPath)
 	{
 		// compare full paths (physical vs. remote) with their real paths
@@ -297,12 +300,12 @@ repro: check by path, after a minor distro upgrade
 // of gaps in the "package history" when proceeded in linear fashion.
 inline void expiration::DropExceptionalVersions()
 {
-    if(m_trashFile2dir2Info.empty() || !acfg::keepnver)
+    if(m_trashFile2dir2Info.empty() || !cfg::keepnver)
     	return;
     if(system("dpkg --version >/dev/null 2>&1"))
 	{
 		SendFmt << "dpkg not available on this system, cannot identify latest versions to keep "
-				"only " << acfg::keepnver << " of them.";
+				"only " << cfg::keepnver << " of them.";
 		return;
     }
     struct tPkgId
@@ -344,9 +347,9 @@ inline void expiration::DropExceptionalVersions()
     auto procGroup = [&]()
 		{
     	// if more than allowed, keep the highest versions for sure, others are expired as usual
-    	if(version2trashGroup.size() > (uint) acfg::keepnver)
+    	if(version2trashGroup.size() > (uint) cfg::keepnver)
         	std::sort(version2trashGroup.begin(), version2trashGroup.end());
-    	for(unsigned i=0; i<version2trashGroup.size() && i<uint(acfg::keepnver); i++)
+    	for(unsigned i=0; i<version2trashGroup.size() && i<uint(cfg::keepnver); i++)
     		for(auto& j: * version2trashGroup[i].group)
     			j.second.nLostAt=m_gMaintTimeNow;
     	version2trashGroup.clear();
@@ -404,7 +407,7 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 			string sPathRel = dir_props.first + fileGroup.first;
 			auto& desc = dir_props.second;
 			DBGQLOG("Checking " << sPathRel);
-			using namespace rechecks;
+			using namespace rex;
 
 			if (ContHas(m_forceKeepInTrash, sPathRel))
 			{
@@ -650,13 +653,13 @@ void expiration::HandleDamagedFiles()
 
 void expiration::PurgeMaintLogs()
 {
-	tStrDeq logs = ExpandFilePattern(acfg::logdir + SZPATHSEP MAINT_PFX "*.log*");
+	tStrDeq logs = ExpandFilePattern(cfg::logdir + SZPATHSEP MAINT_PFX "*.log*");
 	if (logs.size() > 2)
 		SendChunk(WITHLEN(
 				"Found required cleanup tasks: purging maintenance logs...<br>\n"));
 	for (const auto &s: logs)
 	{
-		time_t id = atoofft(s.c_str() + acfg::logdir.size() + 7);
+		time_t id = atoofft(s.c_str() + cfg::logdir.size() + 7);
 		//cerr << "id ist: "<< id<<endl;
 		if (id == GetTaskId())
 			continue;
@@ -726,7 +729,7 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		attr.space += stinfo.st_size;
 		attr.forgiveDlErrors = endsWith(sPathRel, sslIndex);
 	}
-	else if (rechecks::Match(sPathRel, rechecks::FILE_VOLATILE))
+	else if (rex::Match(sPathRel, rex::FILE_VOLATILE))
 		return true; // cannot check volatile files properly so don't care
 
 	// ok, split to dir/file and add to the list
@@ -746,9 +749,9 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 void expiration::LoadHints()
 {
 	filereader reader;
-	if(!reader.OpenFile(acfg::confdir+SZPATHSEP+"ignore_list"))
+	if(!reader.OpenFile(cfg::confdir+SZPATHSEP+"ignore_list"))
 	{
-		if(acfg::suppdir.empty() || !reader.OpenFile(acfg::suppdir+SZPATHSEP+"ignore_list"))
+		if(cfg::suppdir.empty() || !reader.OpenFile(cfg::suppdir+SZPATHSEP+"ignore_list"))
 				return;
 	}
 	string sTmp;
@@ -818,8 +821,8 @@ void expiration::LoadPreviousData(bool bForceInsert)
 		char buf[200];
 
 		// map to to wait
-		int nMax=acfg::extreshhold-((now-oldest)/86400);
-		int nMin=acfg::extreshhold-((now-newest)/86400);
+		int nMax=cfg::extreshhold-((now-oldest)/86400);
+		int nMin=cfg::extreshhold-((now-newest)/86400);
 
 		snprintf(buf, _countof(buf), "Previously detected: %lu rotten package file(s), "
 				"to be deleted in about %d-%d day(s)<br>\n",
@@ -836,7 +839,7 @@ inline bool expiration::CheckAndReportError()
 	if (m_nErrorCount > 0 && m_bErrAbort)
 	{
 		SendFmt << sAbortMsg;
-		if(m_nPrevFailCount+(m_nErrorCount>0) > acfg::exsupcount)
+		if(m_nPrevFailCount+(m_nErrorCount>0) > cfg::exsupcount)
 			SendFmt << "\n<!--\n" maark << int(ControLineType::Error) << "Errors found, aborting expiration...\n-->\n";
 		return true;
 	}
@@ -864,4 +867,6 @@ bool expiration::_QuickCheckSolidFileOnDisk(cmstring& sPathRel)
 	if(it == m_trashFile2dir2Info.end())
 		return false;
 	return it->second.find(dir) != it->second.end();
+}
+
 }

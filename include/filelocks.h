@@ -8,6 +8,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+namespace acng
+{
+
 struct TFileShrinkGuard
 {
 	static std::unique_ptr<TFileShrinkGuard> Acquire(const struct stat&);
@@ -19,5 +22,6 @@ private:
 	TFileShrinkGuard() =default;
 };
 
+}
 
 #endif /* FILELOCKS_H_ */

@@ -22,6 +22,9 @@
 
 // added in Makefile... #define _FILE_OFFSET_BITS 64
 
+namespace acng
+{
+
 #define SHARED_PTR std::shared_ptr
 #define INTRUSIVE_PTR std::intrusive_ptr
 #define WEAK_PTR std::weak_ptr
@@ -53,4 +56,5 @@
 #define SSL_OPT_ARG(x)
 #endif
 
+}
 #endif // __CONFIG_H

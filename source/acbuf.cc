@@ -7,7 +7,10 @@
 #include "acbuf.h"
 #include "fileio.h"
 #include <unistd.h>
+#include "sockio.h"
 
+namespace acng
+{
 bool acbuf::setsize(unsigned int c) {
 	if(m_nCapacity==c)
 		return true;
@@ -95,7 +98,7 @@ bool tSS::send(int nConFd, mstring* sErrorStatus)
 		{
 			if (EINTR == errno || EAGAIN == errno)
 			{
-				struct timeval tv{acfg::nettimeout, 0};
+				struct timeval tv{cfg::nettimeout, 0};
 				fd_set wfds;
 				FD_ZERO(&wfds);
 				FD_SET(nConFd, &wfds);
@@ -125,7 +128,7 @@ bool tSS::send(int nConFd, mstring* sErrorStatus)
 bool tSS::recv(int nConFd, mstring* sErrorStatus)
 {
 	struct timeval tv
-	{ acfg::nettimeout, 0 };
+	{ cfg::nettimeout, 0 };
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(nConFd, &rfds);
@@ -176,3 +179,5 @@ tSS & tSS::addEscaped(const char *fmt)
 	return *this;
 }
 */
+
+}

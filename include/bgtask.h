@@ -13,6 +13,9 @@
 #include <iostream>
 #include <fstream>
 
+namespace acng
+{
+
 class tSpecOpDetachable : public tSpecialRequest
 {
 public:
@@ -76,5 +79,7 @@ public:
 	void Action() override;
 };
 #endif // DEBUG
+
+}
 
 #endif /* BGTASK_H_ */

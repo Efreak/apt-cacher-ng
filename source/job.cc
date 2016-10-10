@@ -28,18 +28,22 @@ using namespace std;
 #define CHUNKDEFAULT false
 #endif
 
+
+namespace acng
+{
+
 mstring sHttp11("HTTP/1.1");
 
 #define SPECIAL_FD -42
 inline bool IsValidFD(int fd) { return fd>=0 || SPECIAL_FD == fd; }
 
 tTraceData traceData;
-void acfg::dump_trace()
+void cfg::dump_trace()
 {
-	aclog::err("Paths with uncertain content types:");
+	log::err("Paths with uncertain content types:");
 	lockguard g(traceData);
 	for (const auto& s : traceData)
-		aclog::err(s);
+		log::err(s);
 }
 tTraceData& tTraceData::getInstance()
 {
@@ -212,7 +216,7 @@ job::job(header *h, con *pParent) :
 	m_nCurrentRangeLast(MAX_VAL(off_t)-1),
 	m_nAllDataCount(0),
 	m_nChunkRemainingBytes(0),
-	m_type(rechecks::FILE_INVALID),
+	m_type(rex::FILE_INVALID),
 	m_nReqRangeFrom(-1), m_nReqRangeTo(-1)
 {
 	LOGSTART2("job::job", "job creating, " << m_pReqHead->frontLine << " and this: " << uintptr_t(this));
@@ -351,7 +355,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 				string line;
 				if(bDir)
 					line += "[DIR]";
-				else if(startsWithSz(acfg::GetMimeType(pdp->d_name), "image/"))
+				else if(startsWithSz(cfg::GetMimeType(pdp->d_name), "image/"))
 					line += "[IMG]";
 				else
 					line += "[&nbsp;&nbsp;&nbsp;]";
@@ -406,7 +410,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 			m_head.prep(header::LAST_MODIFIED, 26);
 			if(m_head.h[header::LAST_MODIFIED])
 				FormatTime(m_head.h[header::LAST_MODIFIED], 26, stdata.st_mtim.tv_sec);
-			cmstring &sMimeType=acfg::GetMimeType(sLocalPath);
+			cmstring &sMimeType=cfg::GetMimeType(sLocalPath);
 			if(!sMimeType.empty())
 				m_head.set(header::CONTENT_TYPE, sMimeType);
 		};
@@ -462,15 +466,15 @@ void job::PrepareDownload(LPCSTR headBuf) {
     LOGSTART("job::PrepareDownload");
     
 #ifdef DEBUGLOCAL
-    acfg::localdirs["stuff"]="/tmp/stuff";
-    aclog::err(m_pReqHead->ToString());
+    cfg::localdirs["stuff"]="/tmp/stuff";
+    log::err(m_pReqHead->ToString());
 #endif
 
     string sReqPath, sPathResidual;
     tHttpUrl theUrl; // parsed URL
 
 	// resolve to an internal repo location and maybe backends later
-	acfg::tRepoResolvResult repoMapping;
+	cfg::tRepoResolvResult repoMapping;
 
     fileitem::FiStatus fistate(fileitem::FIST_FRESH);
     bool bPtMode(false);
@@ -495,7 +499,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		m_bClientWants2Close = !strncasecmp(m_pReqHead->h[header::CONNECTION], "close", 5);
 
     // "clever" file system browsing attempt?
-	if(rechecks::Match(sReqPath, rechecks::NASTY_PATH)
+	if(rex::Match(sReqPath, rex::NASTY_PATH)
 			|| stmiss != sReqPath.find(MAKE_PTR_0_LEN("/_actmp"))
 			|| startsWithSz(sReqPath, "/_"))
 		goto report_notallowed;
@@ -526,9 +530,9 @@ void job::PrepareDownload(LPCSTR headBuf) {
 				goto report_invport;
 		}
 
-		if(acfg::pUserPorts)
+		if(cfg::pUserPorts)
 		{
-			if(!acfg::pUserPorts->test(nPort))
+			if(!cfg::pUserPorts->test(nPort))
 				goto report_invport;
 		}
 		else if(nPort != 80)
@@ -538,11 +542,11 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		for(tStrPos pos=0; stmiss != (pos = theUrl.sPath.find("//", pos, 2)); )
 			theUrl.sPath.erase(pos, 1);
 
-		bPtMode=rechecks::MatchUncacheable(theUrl.ToURI(false), rechecks::NOCACHE_REQ);
+		bPtMode=rex::MatchUncacheable(theUrl.ToURI(false), rex::NOCACHE_REQ);
 
 		LOG("input uri: "<<theUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode);
 
-		if(!acfg::reportpage.empty() || theUrl.sHost == "style.css")
+		if(!cfg::reportpage.empty() || theUrl.sHost == "style.css")
 		{
 			m_eMaintWorkType = tSpecialRequest::DispatchMaintWork(sReqPath,
 					m_pReqHead->h[header::AUTHORIZATION]);
@@ -553,11 +557,11 @@ void job::PrepareDownload(LPCSTR headBuf) {
 			}
 		}
 
-		using namespace rechecks;
+		using namespace rex;
 
 		{
-			tStrMap::const_iterator it = acfg::localdirs.find(theUrl.sHost);
-			if (it != acfg::localdirs.end())
+			tStrMap::const_iterator it = cfg::localdirs.find(theUrl.sHost);
+			if (it != cfg::localdirs.end())
 			{
 				PrepareLocalDownload(sReqPath, it->second, theUrl.sPath);
 				ParseRange();
@@ -577,7 +581,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 		if ( m_type == FILE_INVALID )
 		{
-			if(!acfg::patrace)
+			if(!cfg::patrace)
 				goto report_notallowed;
 
 			// ok, collect some information helpful to the user
@@ -589,13 +593,13 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		// got something valid, has type now, trace it
 		USRDBG("Processing new job, "<<m_pReqHead->frontLine);
 
-		acfg::GetRepNameAndPathResidual(theUrl, repoMapping);
+		cfg::GetRepNameAndPathResidual(theUrl, repoMapping);
 		if(repoMapping.psRepoName && !repoMapping.psRepoName->empty())
 			m_sFileLoc=*repoMapping.psRepoName+SZPATHSEP+repoMapping.sRestPath;
 		else
 			m_sFileLoc=theUrl.sHost+theUrl.sPath;
 
-		bForceFreshnessChecks = ( ! acfg::offlinemode && m_type == FILE_VOLATILE);
+		bForceFreshnessChecks = ( ! cfg::offlinemode && m_type == FILE_VOLATILE);
 
 		m_pItem.PrepareRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
 	}
@@ -610,7 +614,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
     	goto report_overload;
     }
 
-    if(acfg::degraded)
+    if(cfg::degraded)
        goto report_degraded;
     
     fistate = m_pItem.get()->Setup(bForceFreshnessChecks);
@@ -622,7 +626,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 	ParseRange();
 
 	// might need to update the filestamp because nothing else would trigger it
-	if(acfg::trackfileuse && fistate >= fileitem::FIST_DLGOTHEAD && fistate < fileitem::FIST_DLERROR)
+	if(cfg::trackfileuse && fistate >= fileitem::FIST_DLGOTHEAD && fistate < fileitem::FIST_DLERROR)
 		m_pItem.get()->UpdateHeadTimestamp();
 
 	if(fistate==fileitem::FIST_COMPLETE)
@@ -644,7 +648,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		}
 	}
 
-    if(acfg::offlinemode) { // make sure there will be no problems later in SendData or prepare a user message
+    if(cfg::offlinemode) { // make sure there will be no problems later in SendData or prepare a user message
     	// error or needs download but freshness check was disabled, so it's really not complete.
     	goto report_offlineconf;
     }
@@ -663,7 +667,7 @@ MYTRY
 		{
     		auto bHaveRedirects=(repoMapping.repodata && !repoMapping.repodata->m_backends.empty());
 
-    		if (acfg::forcemanaged && !bHaveRedirects)
+    		if (cfg::forcemanaged && !bHaveRedirects)
 						goto report_notallowed;
 
 				if (!bPtMode)
@@ -673,7 +677,7 @@ MYTRY
 							? repoMapping.repodata->m_backends.front().ToURI(false)
 									+ repoMapping.sRestPath
 							: theUrl.ToURI(false);
-					if (rechecks::MatchUncacheable(testUri, rechecks::NOCACHE_TGT))
+					if (rex::MatchUncacheable(testUri, rex::NOCACHE_TGT))
 						fistate = _SwitchToPtItem();
 				}
 
@@ -1028,7 +1032,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 			const char *pLastMo = respHead.h[header::LAST_MODIFIED];
 
 			// consider contents "fresh" for non-volatile data, or when "our" special client is there, or the client simply doesn't care
-			bool bDataIsFresh = (m_type != rechecks::FILE_VOLATILE
+			bool bDataIsFresh = (m_type != rex::FILE_VOLATILE
 				|| m_pReqHead->h[header::ACNGFSMARK] || !pIfmo);
 
 			auto tm1=tm(), tm2=tm();
@@ -1055,7 +1059,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 					bool bPermitPartialStart = (
 							fistate >= fileitem::FIST_DLGOTHEAD
 							&& fistate <= fileitem::FIST_COMPLETE
-							&& nGooddataSize >= ( m_nReqRangeFrom - acfg::maxredlsize));
+							&& nGooddataSize >= ( m_nReqRangeFrom - cfg::maxredlsize));
 
 					/*
 					 * make sure that our client doesn't just hang here while the download thread is
@@ -1166,4 +1170,6 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation, const
 	m_pItem.RegisterFileitemLocalOnly(p);
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
 	m_state=STATE_SEND_MAIN_HEAD;
+}
+
 }

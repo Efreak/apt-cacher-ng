@@ -9,6 +9,9 @@
 #include "fileitem.h"
 #include "maintenance.h"
 
+namespace acng
+{
+
 class con;
 
 class job {
@@ -69,7 +72,7 @@ class job {
       off_t m_nAllDataCount;
       
       unsigned long m_nChunkRemainingBytes;
-      rechecks::eMatchType m_type;
+      rex::eMatchType m_type;
       
       job(const job&);
       job & operator=(const job&);
@@ -90,5 +93,7 @@ class tTraceData: public tStrSet, public base_with_mutex {
 public:
 	static tTraceData& getInstance();
 };
+
+}
 
 #endif

@@ -12,6 +12,9 @@
 #include <ctime>
 #include <limits>
 
+namespace acng
+{
+
 /**
  * @brief Primitive task scheduler for internal helper functions
  *
@@ -50,5 +53,7 @@ private:
 };
 
 extern cleaner g_victor; // ... down to the nap
+
+}
 
 #endif /* CLEANER_H_ */

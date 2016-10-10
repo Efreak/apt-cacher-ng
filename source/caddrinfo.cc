@@ -11,6 +11,9 @@
 
 using namespace std;
 
+namespace acng
+{
+
 static class : public unordered_map<string, CAddrInfo::SPtr>, public base_with_mutex {} mapDnsCache;
 
 bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
@@ -28,8 +31,8 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 			0, nullptr, nullptr, nullptr };
 
 	// if only one family is specified, filter on this earlier
-	if(acfg::conprotos[0] != PF_UNSPEC && acfg::conprotos[1] == PF_UNSPEC)
-		hints.ai_family = acfg::conprotos[0];
+	if(cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC)
+		hints.ai_family = cfg::conprotos[0];
 
 	if (m_resolvedInfo)
 	{
@@ -74,7 +77,7 @@ CAddrInfo::~CAddrInfo()
 
 CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sPort, string &sErrorMsgBuf)
 {
-	//time_t timeExpired=time(nullptr)+acfg::dnscachetime;
+	//time_t timeExpired=time(nullptr)+acng::cfg:dnscachetime;
 	time_t now(time(0));
 	mstring dnsKey=sHostname+":"+sPort;
 
@@ -82,7 +85,7 @@ CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string 
 	{
 		lockguard g(mapDnsCache);
 		SPtr localEntry;
-		SPtr & cand = acfg::dnscachetime>0 ? mapDnsCache[dnsKey] : localEntry;
+		SPtr & cand = cfg::dnscachetime>0 ? mapDnsCache[dnsKey] : localEntry;
 		if(cand && cand->m_nExpTime >= now)
 			return cand;
 		cand.reset(new CAddrInfo);
@@ -96,7 +99,7 @@ CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string 
 
 	if (p->Resolve(sHostname, sPort, sErrorMsgBuf))
 	{
-		p->m_nExpTime = time(0) + acfg::dnscachetime;
+		p->m_nExpTime = time(0) + cfg::dnscachetime;
 #ifndef MINIBUILD
 		g_victor.ScheduleFor(p->m_nExpTime, cleaner::TYPE_EXDNS);
 #endif
@@ -104,7 +107,7 @@ CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string 
 	}
 	else // not good, remove from the cache again
 	{
-		aclog::err( (tSS()<<"Error resolving "<<dnsKey<<": " <<sErrorMsgBuf).c_str());
+		log::err( (tSS()<<"Error resolving "<<dnsKey<<": " <<sErrorMsgBuf).c_str());
 		lockguard g(mapDnsCache);
 		mapDnsCache.erase(dnsKey);
 		p->m_obj_mutex.unlock();
@@ -141,4 +144,6 @@ void DropDnsCache()
 {
 	lockguard g(mapDnsCache);
 	mapDnsCache.clear();
+}
+
 }

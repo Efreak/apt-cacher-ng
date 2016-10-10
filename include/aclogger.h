@@ -9,6 +9,8 @@
 #define LOG_MORE 2
 #define LOG_DEBUG 4
 
+namespace acng
+{
 
 #ifdef DEBUG
 
@@ -31,11 +33,11 @@ private:
 #define USRDBG(msg) LOG(msg)
 #else
 // print some extra things when user wants debug with non-debug build
-#define USRDBG(msg) { if(acfg::debug & LOG_DEBUG) {aclog::err( tSS()<<msg); } }
+#define USRDBG(msg) { if(acng::cfg::debug & LOG_DEBUG) {log::err( tSS()<<msg); } }
 #endif
 
 
-namespace aclog
+namespace log
 {
 
       bool open();
@@ -76,7 +78,6 @@ namespace aclog
 //#define TIMEFORMAT "%a %d/%m"
 #define TIMEFORMAT "%Y-%m-%d %H:%M"
 
+}
 
 #endif
-
-

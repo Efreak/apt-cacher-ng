@@ -16,6 +16,9 @@
 
 #endif
 
+namespace acng
+{
+
 class CAddrInfo;
 
 class CAddrInfo : public base_with_mutex
@@ -44,5 +47,6 @@ private:
 
 };
 
+}
 
 #endif /*CADDRINFO_H_*/

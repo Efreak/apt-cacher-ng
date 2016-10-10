@@ -7,12 +7,15 @@
 #include <bitset>
 #include <atomic>
 
-static const int RESERVED_DEFVAL = -4223;
 #define NUM_PBKDF2_ITERATIONS 1
 // 1757961
 #define ACNG_DEF_PORT "3142"
 
 #define ACFG_REDIRMAX_DEFAULT 5
+
+namespace acng
+{
+static const int RESERVED_DEFVAL = -4223;
 
 struct ltstring {
 	bool operator()(const mstring &s1, const mstring &s2) const {
@@ -22,7 +25,7 @@ struct ltstring {
 
 typedef std::map<mstring, mstring, ltstring> NoCaseStringMap;
 
-namespace acfg
+namespace cfg
 {
 
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
@@ -110,7 +113,7 @@ static const cmstring privStoreRelSnapSufix("_xstore/rsnap");
 
 } // namespace acfg
 
-namespace rechecks
+namespace rex
 {
 
 enum NOCACHE_PATTYPE : bool
@@ -136,7 +139,7 @@ bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat);
 bool CompileExpressions();
 }
 
-#define CACHE_BASE (acfg::cacheDirSlash)
+#define CACHE_BASE (acng::cfg::cacheDirSlash)
 #define CACHE_BASE_LEN (CACHE_BASE.length()) // where the relative paths begin
 #define SZABSPATH(x) (CACHE_BASE+(x)).c_str()
 #define SABSPATH(x) (CACHE_BASE+(x))
@@ -151,5 +154,7 @@ enum ControLineType : uint8_t
 	Error = 2
 };
 #define maark "41d_a6aeb8-26dfa" // random enough to not match anything existing *g*
+
+}
 
 #endif

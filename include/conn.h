@@ -10,6 +10,9 @@
 
 #define RBUFLEN 16384
 
+namespace acng
+{
+
 class dlcon;
 class job;
 class header;
@@ -72,5 +75,7 @@ class con // : public tRunable
       unsigned m_nProcessedJobs;
 #endif
 };
+
+}
 
 #endif

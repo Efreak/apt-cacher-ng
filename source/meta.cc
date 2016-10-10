@@ -18,8 +18,11 @@
 #ifdef HAVE_TOMCRYPT
 #include <tomcrypt.h>
 #endif
+
 using namespace std;
 
+namespace acng
+{
 cmstring sPathSep(SZPATHSEP);
 cmstring sPathSepUnix(SZPATHSEPUNIX);
 #ifndef MINIBUILD
@@ -206,7 +209,7 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 	else if(0==strncasecmp(url.c_str(), "https://", 8))
 	{
 #ifndef HAVE_SSL
-	aclog::err("E_NOTIMPLEMENTED: SSL");
+	log::err("E_NOTIMPLEMENTED: SSL");
 	return false;
 #else
 		hStart=8;
@@ -900,4 +903,6 @@ bool scaseequals(cmstring& a, cmstring& b)
         if (tolower((unsigned) a[i]) != tolower((unsigned)b[i]))
             return false;
     return true;
+}
+
 }

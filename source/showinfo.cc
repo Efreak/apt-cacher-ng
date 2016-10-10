@@ -22,6 +22,10 @@ using namespace std;
 #undef SendFmtRemote
 #endif
 
+
+namespace acng
+{
+
 static cmstring sReportButton("<tr><td class=\"colcont\"><form action=\"#stats\" method=\"get\">"
 					"<input type=\"submit\" name=\"doCount\" value=\"Count Data\"></form>"
 					"</td><td class=\"colcont\" colspan=8 valign=top><font size=-2>"
@@ -48,8 +52,8 @@ void tMarkupFileSend::Run()
 	const char *pr(nullptr), *pend(nullptr);
 	if(!m_bFatalError)
 	{
-		m_bFatalError = ! ( fr.OpenFile(acfg::confdir+SZPATHSEP+m_sFileName, true) ||
-			(!acfg::suppdir.empty() && fr.OpenFile(acfg::suppdir+SZPATHSEP+m_sFileName, true)));
+		m_bFatalError = ! ( fr.OpenFile(cfg::confdir+SZPATHSEP+m_sFileName, true) ||
+			(!cfg::suppdir.empty() && fr.OpenFile(cfg::suppdir+SZPATHSEP+m_sFileName, true)));
 	}
 	if(m_bFatalError)
 	{
@@ -198,7 +202,7 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 	for(const auto& path : filePaths)
 	{
 		if(path.find_first_of(BADCHARS)!=stmiss  // what the f..., XSS attempt?
-		 || rechecks::Match(path, rechecks::NASTY_PATH))
+		 || rex::Match(path, rex::NASTY_PATH))
 		{
 			m_bFatalError=true;
 			return;
@@ -222,7 +226,7 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 			{ "", ".head" })
 			{
 				sHidParms << (del ? "Deleting " : "Truncating ") << path << suf << "<br>\n";
-				auto p = acfg::cacheDirSlash + path + suf;
+				auto p = cfg::cacheDirSlash + path + suf;
 				int r = del ? unlink(p.c_str()) : truncate(p.c_str(), 0);
 				if (r && errno != ENOENT)
 				{
@@ -239,9 +243,9 @@ tMaintPage::tMaintPage(const tRunParms& parms)
 {
 
 	if(StrHas(parms.cmd, "doTraceStart"))
-		acfg::patrace=true;
+		cfg::patrace=true;
 	else if(StrHas(parms.cmd, "doTraceStop"))
-		acfg::patrace=false;
+		cfg::patrace=false;
 	else if(StrHas(parms.cmd, "doTraceClear"))
 	{
 		auto& tr(tTraceData::getInstance());
@@ -260,11 +264,11 @@ inline int tMarkupFileSend::CheckCondition(LPCSTR id, size_t len)
 	if(PFXCMP(id, len, "cfg:"))
 	{
 		string key(id+4, len-4);
-		auto p=acfg::GetIntPtr(key.c_str());
+		auto p=cfg::GetIntPtr(key.c_str());
 		if(p)
 			return ! *p;
     if(key == "degraded")
-       return acfg::degraded.load();
+       return cfg::degraded.load();
 		return -1;
 	}
 	if(RAWEQ(id, len, "delConfirmed"))
@@ -303,11 +307,11 @@ void tMaintPage::SendProp(cmstring &key)
 	{
 		if(!StrHas(m_parms.cmd, "doCount"))
 			return SendChunk(sReportButton);
-		return SendChunk(aclog::GetStatReport());
+		return SendChunk(log::GetStatReport());
 	}
 	static cmstring defStringChecked("checked");
 	if(key == "aOeDefaultChecked")
-		return SendChunk(acfg::exfailabort ? defStringChecked : sEmptyString);
+		return SendChunk(cfg::exfailabort ? defStringChecked : sEmptyString);
 	if(key == "curPatTraceCol")
 	{
 		m_fmtHelper.clear();
@@ -349,10 +353,10 @@ void tMarkupFileSend::SendProp(cmstring &key)
 	if (startsWithSz(key, "cfg:"))
 	{
 		auto ckey=key.c_str() + 4;
-		auto ps(acfg::GetStringPtr(ckey));
+		auto ps(cfg::GetStringPtr(ckey));
 		if(ps)
 			return SendChunk(*ps);
-		auto pi(acfg::GetIntPtr(ckey));
+		auto pi(cfg::GetIntPtr(ckey));
 		if(pi)
 			return SendChunk(m_fmtHelper.clean() << *pi);
 		return;
@@ -371,4 +375,6 @@ void tMarkupFileSend::SendProp(cmstring &key)
 	}
 	if(key=="random")
 		return SendChunk(m_fmtHelper.clean() << rand());
+}
+
 }

@@ -22,7 +22,9 @@
 
 using namespace std;
 
-namespace aclog
+namespace acng
+{
+namespace log
 {
 
 ofstream fErr, fStat;
@@ -33,10 +35,10 @@ bool open()
 	// only called in the beginning or when reopening, already locked...
 	// lockguard g(&mx);
 
-	if(acfg::logdir.empty())
+	if(cfg::logdir.empty())
 		return true;
 	
-	string apath(acfg::logdir+"/apt-cacher.log"), epath(acfg::logdir+"/apt-cacher.err");
+	string apath(cfg::logdir+"/apt-cacher.log"), epath(cfg::logdir+"/apt-cacher.err");
 	
 	mkbasedir(apath);
 
@@ -58,10 +60,10 @@ void transfer(char cLogType, uint64_t nCount, const char *szClient, const char *
 	if(!fStat.is_open())
 		return;
 	fStat << time(0) << '|' << cLogType << '|' << nCount;
-	if(acfg::verboselog)
+	if(cfg::verboselog)
 		fStat << '|' << szClient << '|' << szPath;
 	fStat << '\n'; // not endl, it might flush
-	if(acfg::debug&LOG_FLUSH) fStat.flush();
+	if(cfg::debug&LOG_FLUSH) fStat.flush();
 }
 
 void misc(const string & sLine, const char cLogType)
@@ -72,7 +74,7 @@ void misc(const string & sLine, const char cLogType)
 
 	fStat << time(0) << '|' << cLogType << '|' << sLine << '\n';
 	
-	if(acfg::debug&LOG_FLUSH)
+	if(cfg::debug&LOG_FLUSH)
 		fStat.flush();
 }
 
@@ -99,11 +101,11 @@ void err(const char *msg, const char *client)
 	fErr << msg << '\n';
 
 #ifdef DEBUG
-	if(acfg::debug & LOG_DEBUG)
+	if(cfg::debug & LOG_DEBUG)
 		cerr << buf << msg <<endl;
 #endif
 
-	if(acfg::debug & LOG_DEBUG)
+	if(cfg::debug & LOG_DEBUG)
 		fErr.flush();
 }
 
@@ -117,11 +119,11 @@ void flush()
 void close(bool bReopen)
 {
 	lockguard g(mx);
-	if(acfg::debug>=LOG_MORE) cerr << (bReopen ? "Reopening logs...\n" : "Closing logs...\n");
+	if(cfg::debug>=LOG_MORE) cerr << (bReopen ? "Reopening logs...\n" : "Closing logs...\n");
 	fErr.close();
 	fStat.close();
 	if(bReopen)
-		aclog::open();
+		log::open();
 }
 
 
@@ -131,7 +133,7 @@ void close(bool bReopen)
 #ifndef MINIBUILD
 inline deque<tRowData> GetStats()
 {
-	string sDataFile=acfg::cachedir+SZPATHSEP"_stats_dat";
+	string sDataFile=cfg::cachedir+SZPATHSEP"_stats_dat";
 	deque<tRowData> out;
 	
 	time_t now = time(nullptr);
@@ -144,14 +146,14 @@ inline deque<tRowData> GetStats()
 		out.emplace_back(d);
 	}
 
-	for (auto& log : ExpandFilePattern(acfg::logdir + SZPATHSEP "apt-cacher*.log", false))
+	for (auto& log : ExpandFilePattern(cfg::logdir + SZPATHSEP "apt-cacher*.log", false))
 	{
-		if (acfg::debug >= LOG_MORE)
+		if (cfg::debug >= LOG_MORE)
 			cerr << "Reading log file: " << log << endl;
 		filereader reader;
 		if (!reader.OpenFile(log))
 		{
-			aclog::err("Error opening a log file");
+			log::err("Error opening a log file");
 			continue;
 		}
 		string sLine;
@@ -200,7 +202,7 @@ string GetStatReport()
 {
 	string ret;
 	vector<char> buf(1024);
-	for (auto& entry : aclog::GetStats())
+	for (auto& entry : log::GetStats())
 	{
 		auto reqMax = std::max(entry.reqIn, entry.reqOut);
 		auto dataMax = std::max(entry.byteIn, entry.byteOut);
@@ -337,7 +339,9 @@ void t_logger::Write(const char *pFile, unsigned int nLine)
 		m_strm << " [T:" << m_id << " S:" << pFile << ":" << tSS::dec << nLine
 				<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	}
-	aclog::err(m_strm.c_str());
+	log::err(m_strm.c_str());
 }
 
 #endif
+
+}

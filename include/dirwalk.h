@@ -6,6 +6,9 @@
 
 #include <sys/stat.h>
 
+namespace acng
+{
+
 class IFileHandler
 {
 public:
@@ -23,5 +26,6 @@ public:
 			bool bFollowSymlinks=true);
 };
 
+}
 
 #endif /*DIRWALK_H_*/

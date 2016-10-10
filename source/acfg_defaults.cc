@@ -5,10 +5,13 @@
 #include "config.h"
 #include "meta.h"
 #include "acfg.h"
+#include "sockio.h"
 
 using namespace std;
 
-namespace acfg
+namespace acng
+{
+namespace cfg
 {
 
 string cachedir("/var/tmp"), logdir("/var/tmp"), fifopath, pidfile, reportpage,
@@ -128,5 +131,7 @@ string cacheDirSlash; // guaranteed to have a trailing path separator
 int conprotos[2] = { PF_UNSPEC, PF_UNSPEC };
 
 std::atomic_bool degraded(false);
+
+}
 
 }

@@ -39,8 +39,6 @@
 #include "fileio.h"
 #include "fileitem.h"
 
-using namespace std;
-
 #ifdef HAVE_SSL
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
@@ -48,20 +46,26 @@ using namespace std;
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 #include <openssl/crypto.h>
-void globalSslInit();
 #endif
 
 #include "filereader.h"
 #include "csmapping.h"
 #include "cleaner.h"
 
+using namespace std;
+using namespace acng;
+
 bool g_bVerbose = false;
 
-// dummies to satisfy references to cleaner callbacks
+// dummies to satisfy references
+namespace acng
+{
+LPCSTR ReTest(LPCSTR);
 cleaner::cleaner() : m_thr(pthread_t()) {}
 cleaner::~cleaner() {}
 void cleaner::ScheduleFor(time_t, cleaner::eType) {}
 cleaner g_victor;
+}
 
 struct IFitemFactory
 {
@@ -73,8 +77,6 @@ struct CPrintItemFactory : public IFitemFactory
 {
 	virtual SHARED_PTR<fileitem> Create()
 	{
-		globalSslInit();
-
 		class tPrintItem : public fileitem
 		{
 		public:
@@ -147,8 +149,6 @@ struct CReportItemFactory : public IFitemFactory
 {
 	virtual SHARED_PTR<fileitem> Create()
 	{
-		globalSslInit();
-
 		class tRepItem : public fileitem
 		{
 			acbuf lineBuf;
@@ -239,8 +239,6 @@ struct CReportItemFactory : public IFitemFactory
 
 int wcat(LPCSTR url, LPCSTR proxy, IFitemFactory*, IDlConFactory *pdlconfa = &g_tcp_con_factory);
 
-LPCSTR ReTest(LPCSTR);
-
 static void usage(int retCode = 0, LPCSTR cmd = nullptr)
 {
 	if(cmd)
@@ -298,7 +296,7 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 
 	off_t totalSize = 0;
 
-	IFileHandler::FindFiles(acfg::cachedir,
+	IFileHandler::FindFiles(cfg::cachedir,
 			[&delQ, &totalSize, &related, &incIfiles](cmstring & path, const struct stat& finfo) -> bool
 			{
 		// reference date used in the prioqueue heap
@@ -315,19 +313,19 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 			pkgPath = path;
 			otherName = path + ".head";
 		}
-		auto ftype = rechecks::GetFiletype(pkgPath);
+		auto ftype = rex::GetFiletype(pkgPath);
 		switch(ftype)
 		{
-		case rechecks::eMatchType::FILE_VOLATILE:
-		case rechecks::eMatchType::FILE_SPECIAL_VOLATILE:
+		case rex::eMatchType::FILE_VOLATILE:
+		case rex::eMatchType::FILE_SPECIAL_VOLATILE:
 			if(!incIfiles)
 				return true;
 			break;
 		// case rechecks::eMatchType::FILE_WHITELIST:
 		default:
 			return true;
-		case rechecks::eMatchType::FILE_SOLID:
-		case rechecks::eMatchType::FILE_SPECIAL_SOLID:
+		case rex::eMatchType::FILE_SOLID:
+		case rex::eMatchType::FILE_SPECIAL_SOLID:
 			break; // ok
 		}
 
@@ -340,7 +338,7 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 		}
 		// care only about stamps on .head files (track mode)
 		// or ONLY about data file's timestamp (not-track mode)
-		if( (acfg::trackfileuse && !isHead) || (!acfg::trackfileuse && isHead))
+		if( (cfg::trackfileuse && !isHead) || (!cfg::trackfileuse && isHead))
 			dateLatest = other->second.first;
 
 		auto bothSize = (finfo.st_size + other->second.second);
@@ -483,7 +481,7 @@ inline bool patchChunk(tPatchSequence& idx, LPCSTR pline, size_t len, tPatchSequ
 
 int maint_job()
 {
-	acfg::SetOption("proxy=", nullptr);
+	cfg::SetOption("proxy=", nullptr);
 
 	LPCSTR envh = getenv("HOSTNAME");
 	if(!envh)
@@ -500,15 +498,15 @@ int maint_job()
 
 	tSS urlPath;
 	urlPath << "http://";
-	if(!acfg::adminauth.empty())
-		urlPath << acfg::adminauth << "@";
-	urlPath << envh << ":" << acfg::port;
+	if(!cfg::adminauth.empty())
+		urlPath << cfg::adminauth << "@";
+	urlPath << envh << ":" << cfg::port;
 
-	if(acfg::reportpage.empty())
+	if(cfg::reportpage.empty())
 		return -1;
-	if(acfg::reportpage[0] != '/')
+	if(cfg::reportpage[0] != '/')
 		urlPath << '/';
-	urlPath << acfg::reportpage << req;
+	urlPath << cfg::reportpage << req;
 
 #ifdef DEBUG
 	cerr << "Constructed URL: " << (string) urlPath <<endl;
@@ -517,18 +515,18 @@ int maint_job()
 	CReportItemFactory fac;
 
 	int s = -1;
-	if (!acfg::fifopath.empty())
+	if (!cfg::fifopath.empty())
 	{
 #ifdef DEBUG
-		cerr << "Socket path: " << acfg::fifopath << endl;
+		cerr << "Socket path: " << cfg::fifopath << endl;
 #endif
 		s = socket(PF_UNIX, SOCK_STREAM, 0);
 		if (s >= 0)
 		{
 			struct sockaddr_un addr;
 			addr.sun_family = PF_UNIX;
-			strcpy(addr.sun_path, acfg::fifopath.c_str());
-			socklen_t adlen = acfg::fifopath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
+			strcpy(addr.sun_path, cfg::fifopath.c_str());
+			socklen_t adlen = cfg::fifopath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
 			if (0 != connect(s, (struct sockaddr*) &addr, adlen))
 			{
 				s = -1;
@@ -557,7 +555,7 @@ int maint_job()
 			void RecycleIdleConnection(tDlStreamHandle & handle) override
 			{}
 			virtual tDlStreamHandle CreateConnected(cmstring &, cmstring &, mstring &, bool *,
-					acfg::tRepoData::IHookHandler *, bool, int, bool) override
+					cfg::tRepoData::IHookHandler *, bool, int, bool) override
 			{
 				struct udsconnection : public tcpconnect
 				{
@@ -570,7 +568,7 @@ int maint_job()
 #endif
 						// must match the URL parameters
 						m_sHostName = "localhost";
-						m_sPort = acfg::port;
+						m_sPort = cfg::port;
 
 					}
 				};
@@ -728,20 +726,20 @@ void parse_options(int argc, const char **argv, function<void (LPCSTR)> f)
 		if(!info || !S_ISDIR(info.st_mode))
 			g_missingCfgDir = szCfgDir;
 		else
-			acfg::ReadConfigDirectory(szCfgDir, ignoreCfgErrors);
+			cfg::ReadConfigDirectory(szCfgDir, ignoreCfgErrors);
 	}
 
 	tStrVec non_opt_args;
 
 	for(auto& keyval : validargs)
 	{
-		acfg::g_bQuiet = true;
-		if(!acfg::SetOption(keyval, 0))
+		cfg::g_bQuiet = true;
+		if(!cfg::SetOption(keyval, 0))
 			nonoptions.emplace_back(keyval);
-		acfg::g_bQuiet = false;
+		cfg::g_bQuiet = false;
 	}
 
-	acfg::PostProcConfig();
+	cfg::PostProcConfig();
 
 	for(const auto& x: nonoptions)
 		f(x);
@@ -841,7 +839,7 @@ std::unordered_map<string, parm> parms = {
 			"cfgdump",
 			{ 0, 0, [](LPCSTR p) {
 				warn_cfgdir();
-						     acfg::dump_config(false);
+						     cfg::dump_config(false);
 					     }
 			}
 		}
@@ -878,9 +876,9 @@ std::unordered_map<string, parm> parms = {
 				1, 1, [](LPCSTR p)
 				{
 					warn_cfgdir();
-					auto ps(acfg::GetStringPtr(p));
+					auto ps(cfg::GetStringPtr(p));
 					if(ps) { cout << *ps << endl; return; }
-					auto pi(acfg::GetIntPtr(p));
+					auto pi(cfg::GetIntPtr(p));
 					if(pi) {
 						cout << *pi << endl;
 						return;
@@ -942,6 +940,8 @@ std::unordered_map<string, parm> parms = {
 
 int main(int argc, const char **argv)
 {
+	using namespace acng;
+
 	string exe(argv[0]);
 	unsigned aOffset=1;
 	if(endsWithSzAr(exe, "expire-caller.pl"))
@@ -949,8 +949,8 @@ int main(int argc, const char **argv)
 		aOffset=0;
 		argv[0] = "maint";
 	}
-	acfg::g_bQuiet = false;
-	acfg::g_bNoComplex = true; // no DB for just single variables
+	cfg::g_bQuiet = false;
+	cfg::g_bNoComplex = true; // no DB for just single variables
 
   parm* parm = nullptr;
   LPCSTR mode = nullptr;
@@ -990,13 +990,13 @@ int main(int argc, const char **argv)
 
 int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac)
 {
-	acfg::dnscachetime=0;
-	acfg::persistoutgoing=0;
-	acfg::badredmime.clear();
-	acfg::redirmax=10;
+	cfg::dnscachetime=0;
+	cfg::persistoutgoing=0;
+	cfg::badredmime.clear();
+	cfg::redirmax=10;
 
 	if(proxy)
-		if(acfg::SetOption(string("proxy:")+proxy, nullptr))
+		if(cfg::SetOption(string("proxy:")+proxy, nullptr))
 			return -1;
 	tHttpUrl url;
 	if(!surl)
@@ -1041,7 +1041,7 @@ void do_stuff_before_config()
 	if (argc < 2)
 		return -1;
 
-	acfg::tHostInfo hi;
+	acng::cfg:tHostInfo hi;
 	cout << "Parsing " << argv[1] << ", result: " << hi.SetUrl(argv[1]) << endl;
 	cout << "Host: " << hi.sHost << ", Port: " << hi.sPort << ", Path: "
 			<< hi.sPath << endl;
@@ -1141,18 +1141,18 @@ void do_stuff_before_config()
 	if (cmd == "benchmark")
 	{
 		dump_proc_status_always();
-		acfg::g_bQuiet = true;
-		acfg::g_bNoComplex = false;
+		cfg::g_bQuiet = true;
+		cfg::g_bNoComplex = false;
 		parse_options(argc - 2, argv + 2, true);
-		acfg::PostProcConfig();
+		cfg::PostProcConfig();
 		string s;
 		tHttpUrl u;
 		int res=0;
 /*
-		acfg::tRepoResolvResult hm;
+		acng::cfg:tRepoResolvResult hm;
 		tHttpUrl wtf;
 		wtf.SetHttpUrl(non_opt_args.front());
-		acfg::GetRepNameAndPathResidual(wtf, hm);
+		acng::cfg:GetRepNameAndPathResidual(wtf, hm);
 */
 		while(cin)
 		{
@@ -1160,8 +1160,8 @@ void do_stuff_before_config()
 			s += "/xtest.deb";
 			if(u.SetHttpUrl(s))
 			{
-				acfg::tRepoResolvResult xdata;
-				acfg::GetRepNameAndPathResidual(u, xdata);
+				cfg::tRepoResolvResult xdata;
+				cfg::GetRepNameAndPathResidual(u, xdata);
 				cout << s << " -> "
 						<< (xdata.psRepoName ? "matched" : "not matched")
 						<< endl;
