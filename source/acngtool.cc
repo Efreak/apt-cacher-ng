@@ -4,6 +4,7 @@
 
 #include <acbuf.h>
 #include <aclogger.h>
+#include <dirwalk.h>
 #include <fcntl.h>
 
 #ifdef HAVE_SSL
@@ -31,6 +32,7 @@
 #include <fstream>
 #include <string>
 #include <list>
+#include <queue>
 
 #include "debug.h"
 #include "dlcon.h"
@@ -236,7 +238,7 @@ static void usage(int retCode = 0)
 {
 	(retCode ? cout : cerr) <<
 		"Usage: acngtool command parameter... [options]\n\n"
-			"command := { printvar, cfgdump, retest, patch, curl, encb64, maint }\n"
+			"command := { printvar, cfgdump, retest, patch, curl, encb64, maint, shrink }\n"
 			"parameter := (specific to command)\n"
 			"options := (see apt-cacher-ng options)\n"
 			"extra options := -h, --verbose\n"
@@ -248,6 +250,76 @@ static void usage(int retCode = 0)
 			exit(retCode);
 }
 
+struct pkgEntry
+{
+	std::string path;
+	time_t lastDate;
+	off_t size;
+	// for prio.queue, oldest shall be on top
+	bool operator<(const pkgEntry &other) const
+	{
+		return lastDate > other.lastDate;
+	}
+};
+int shrink(off_t wantedSize)
+{
+//	cout << "wanted: " << wantedSize << endl;
+	std::priority_queue<pkgEntry/*, vector<pkgEntry>, cmpLessDate */ > delQ;
+	std::unordered_map<string, pair<time_t,off_t> > related;
+
+	off_t totalSize = 0;
+
+	IFileHandler::FindFiles(acfg::cachedir,
+			[&delQ, &totalSize, &related](cmstring & path, const struct stat& finfo) -> bool
+			{
+		auto dateLatest = max(finfo.st_ctim.tv_sec, finfo.st_mtim.tv_sec);
+		auto isHead = endsWithSzAr(path, ".head");
+		string pkgPath, otherName;
+		if(isHead)
+		{
+			pkgPath = path.substr(0, path.length()-5);
+			otherName = pkgPath;
+		}
+		else
+		{
+			pkgPath = path;
+			otherName = path + ".head";
+		}
+#warning check regex on pkgPath, shall be PFILE otherwise continue
+
+		auto other = related.find(otherName);
+//		cout << "wo ist " << otherName << " - " << (other==related.end()) << endl;
+		if(other == related.end())
+		{
+			// the related file will appear soon
+			related.insert(make_pair(path, make_pair(dateLatest, finfo.st_size)));
+			return true;
+		}
+		dateLatest = max(dateLatest, other->second.first);
+		auto bothSize = (finfo.st_size + other->second.second);
+		related.erase(other);
+
+		totalSize += bothSize;
+		delQ.push({pkgPath, dateLatest, bothSize});
+
+		return true;
+			}
+	, true, false);
+
+	// there might be some unmatched remains...
+	for(auto kv: related)
+		delQ.push({kv.first, kv.second.first, kv.second.second});
+	related.clear();
+
+	while(!delQ.empty() && totalSize > wantedSize)
+	{
+		totalSize -= delQ.top().size;
+#warning add real unlinking and also dry-run mode
+		cout << "Delete: " << delQ.top().path << " and " << delQ.top().path << ".head" << endl;
+		delQ.pop();
+	}
+	return 0;
+}
 
 #if SUPPWHASH
 
@@ -779,6 +851,17 @@ std::unordered_map<string, parm> parms = {
 				}
 			}
 		}
+   ,
+   {
+   			"shrink",
+   			{
+   				1, 1, [](LPCSTR p)
+   				{
+   					g_exitCode += shrink(strsizeToOfft(p));
+   				}
+   			}
+   		}
+
 };
 
 int main(int argc, const char **argv)

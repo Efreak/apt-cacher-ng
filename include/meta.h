@@ -324,6 +324,11 @@ mstring offttos(off_t n);
 mstring ltos(long n);
 
 mstring offttosH(off_t n);
+
+//template<typename charp>
+off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeString, charp *next)
+
+
 void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar);
 
 extern cmstring sEmptyString;

@@ -804,6 +804,30 @@ mstring offttosH(off_t n)
 	return "INF";
 }
 
+//template<typename charp>
+off_t strsizeToOfft(const char *sizeString) // XXX: if needed... charp sizeString, charp *next)
+{
+	char *inext(0);
+	auto val = strtoull(sizeString, &inext, 10);
+	if(!val) return 0;
+	if(!*inext) return val; // full length
+	// trim
+	while(*inext && isspace((unsigned)*inext)) ++inext;
+	switch(*inext)
+	{
+	case 'k': return val * 1000;
+	case 'm': return val * 1000000;
+	case 'g': return val * 1000000*1000;
+	case 'p': return val * 1000000*1000000;
+
+	case 'K': return val * 1024;
+	case 'M': return val * 1024*1024;
+	case 'G': return val * 1024*1024*1024;
+	case 'P': return val * 1024*1024*1024*1024;
+	}
+	return val;
+}
+
 void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar)
 {
 	for(mstring::iterator p=s.begin();p!=s.end();p++)

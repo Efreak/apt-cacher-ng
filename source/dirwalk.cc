@@ -58,7 +58,7 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 						*/
 			return true; // slight risk of missing information here... bug ignoring is safer
 		}
-		// dangling symlink?
+		// yeah, and we ignore symlinks here
 		if(S_ISLNK(m_stinfo.st_mode))
 			return true;
 	}
