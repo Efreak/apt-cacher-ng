@@ -21,7 +21,7 @@
 class tSpecialRequest
 {
 public:
-	enum eMaintWorkType : int
+	enum eMaintWorkType : char
 	{
 		workNotSpecial =0,
 

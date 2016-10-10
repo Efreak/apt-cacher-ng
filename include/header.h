@@ -8,7 +8,8 @@
 
 class header {
    public:
-      enum eHeadType {
+      enum eHeadType : char
+	  {
          INVALID,
          HEAD,
          GET,
@@ -16,7 +17,8 @@ class header {
          CONNECT,
          ANSWER
       };
-      enum eHeadPos {
+      enum eHeadPos : char
+	  {
     	  CONNECTION,			// 0
     	  CONTENT_LENGTH,
     	  IF_MODIFIED_SINCE,

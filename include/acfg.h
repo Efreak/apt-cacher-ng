@@ -119,7 +119,7 @@ enum NOCACHE_PATTYPE : bool
 	NOCACHE_TGT
 };
 
-enum eMatchType
+enum eMatchType : int8_t
 {
 	FILE_INVALID = -1,
 	FILE_SOLID = 0, FILE_VOLATILE, FILE_WHITELIST,
@@ -144,7 +144,7 @@ bool CompileExpressions();
 bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
 
 // XXX: find a better place for this, shared between server and acngtool
-enum ControLineType
+enum ControLineType : uint8_t
 {
 	NotForUs = 0,
 	BeforeError = 1,

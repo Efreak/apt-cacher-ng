@@ -98,7 +98,7 @@ struct tDlJob
 		return m_pRepoDesc ? m_pRepoDesc->m_pHooks : nullptr;
 	}
 
-	typedef enum
+	typedef enum : char
 	{
 		STATE_GETHEADER, STATE_REGETHEADER, STATE_PROCESS_DATA,
 		STATE_GETCHUNKHEAD, STATE_PROCESS_CHUNKDATA, STATE_GET_CHUNKTRAILER,

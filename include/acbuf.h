@@ -96,7 +96,7 @@ public:
 	inline tSS & operator<<(void* val) __tss_nbrfmt("ptr:%llu", "ptr:0x%llx", (long long unsigned) val);
 #endif
 
-    enum fmtflags {	hex, dec };
+    enum fmtflags : bool { hex, dec };
     inline tSS & operator<<(fmtflags mode) { m_fmtmode=mode; return *this;}
 
     operator mstring() const { return mstring(rptr(), size()); }

@@ -16,12 +16,12 @@ class job {
 
    public:
 
-	   typedef enum
+	   typedef enum : char
 	{
 		R_DONE = 0, R_AGAIN = 1, R_DISCON = 2, R_NOTFORUS = 3
 	} eJobResult;
 
-	   typedef enum {
+	   typedef enum : char {
 	   	STATE_SEND_MAIN_HEAD,
 	   	STATE_HEADER_SENT,
 	   	STATE_SEND_PLAIN_DATA,
