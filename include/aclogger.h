@@ -5,10 +5,6 @@
 #include "meta.h"
 #include "acbuf.h"
 
-#define LOG_FLUSH 1
-#define LOG_MORE 2
-#define LOG_DEBUG 4
-
 namespace acng
 {
 
@@ -33,16 +29,33 @@ private:
 #define USRDBG(msg) LOG(msg)
 #else
 // print some extra things when user wants debug with non-debug build
-#define USRDBG(msg) { if(acng::cfg::debug & LOG_DEBUG) {log::err( tSS()<<msg); } }
+#define USRDBG(msg) { if(cfg::debug & log::LOG_DEBUG) {log::err( tSS()<<msg); } }
 #endif
 
 
 namespace log
 {
 
+enum ETransferType : char {
+	INDATA = 'I',
+	OUTDATA = 'O',
+	ERRORRQ = 'E'
+};
+
+enum ELogFlags : uint8_t
+{
+	LOG_FLUSH = 1,
+	LOG_MORE = 2,
+	LOG_DEBUG = 4
+};
+
+
       bool open();
       void close(bool bReopen);
-      void transfer(char cLogType, uint64_t nCount, const char *szClient, const char *szPath);
+      void transfer(uint64_t bytesIn,
+      		uint64_t bytesOut,
+      		cmstring& sClient,
+      		cmstring& sPath);
       void err(const char *msg, const char *client=nullptr);
       void misc(const mstring & sLine, const char cLogType='M');
       inline void err(cmstring &msg) { err(msg.c_str()); }

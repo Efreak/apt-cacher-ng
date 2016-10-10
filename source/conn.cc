@@ -52,7 +52,7 @@ con::~con() {
 	for (jit=m_jobs2send.begin(); jit!=m_jobs2send.end(); jit++)
 		delete *jit;
 
-	logstuff.write();
+	writeAnotherLogRecord(sEmptyString, sEmptyString);
 
 	if(m_pDlClient)
 	{
@@ -440,19 +440,9 @@ bool con::SetupDownloader(const char *pszOrigin)
 	return false;
 }
 
-void con::__tlogstuff::write()
+void con::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
+		off_t nNewOut)
 {
-	if (sumIn>0)
-		log::transfer('I', sumIn, client.c_str(), file.c_str());
-
-	if(sumOut>0)
-		log::transfer(bFileIsError ? 'E' : 'O', sumOut, client.c_str(), file.c_str());
-}
-
-void con::LogDataCounts(const std::string & sFile, const char *xff, off_t nNewIn,
-		off_t nNewOut, bool bFileIsError)
-{
-	LOGSTART("con::LogDataCounts");
 	string sClient;
 	if (!cfg::logxff || !xff) // not to be logged or not available
 		sClient=m_sClientHost;
@@ -464,24 +454,20 @@ void con::LogDataCounts(const std::string & sFile, const char *xff, off_t nNewIn
 		if (pos!=stmiss)
 			sClient.erase(0, pos+1);
 	}
-	if(sFile != logstuff.file || sClient != logstuff.client)
-	{
-		logstuff.write();
-		logstuff.reset(sFile, sClient, bFileIsError);
-	}
-	LOG("heh? state now: " << logstuff.sumIn << " " << logstuff.sumOut);
-	logstuff.sumIn+=nNewIn;
-	logstuff.sumOut+=nNewOut;
+	if(sFile != logFile || sClient != logClient)
+		writeAnotherLogRecord(sFile, sClient);
+	fileTransferIn += nNewIn;
+	fileTransferOut += nNewOut;
 
 }
 
-void con::__tlogstuff::reset(const std::string &pNewFile, const std::string &pNewClient, bool bIsError)
+// sends the stats to logging and replaces file/client identities with the new context
+void con::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient)
 {
-	bFileIsError=bIsError;
-	file=pNewFile;
-	client=pNewClient;
-	sumIn=0;
-	sumOut=0;
+		log::transfer(fileTransferIn, fileTransferOut, logClient, logFile);
+		fileTransferIn = fileTransferOut = 0;
+		logFile = pNewFile;
+		logClient = pNewClient;
 }
 
 }

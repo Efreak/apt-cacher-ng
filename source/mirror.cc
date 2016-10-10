@@ -224,7 +224,7 @@ void pkgmirror::Action()
 		for (auto& src : srcs)
 		{
 #ifdef DEBUG
-			if(LOG_MORE&cfg::debug)
+			if(log::LOG_MORE & cfg::debug)
 				SendFmt << "mirror check: " << src;
 #endif
 			off_t needBefore=(m_totalSize-m_totalHave);
@@ -284,7 +284,7 @@ inline bool pkgmirror::ConfigDelta(cmstring &sPathRel)
 		vname.resize(m_repCutLen);
 		const cfg::tRepoData *pRepo = cfg::GetRepoData(vname);
 #ifdef DEBUG
-		if(cfg::debug & LOG_MORE)
+		if(cfg::debug & log::LOG_MORE)
 		{
 			if(!pRepo)
 				SendFmt << "hm, no delta provider for " << sPathRel;

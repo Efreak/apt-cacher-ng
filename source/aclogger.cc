@@ -30,6 +30,10 @@ namespace log
 ofstream fErr, fStat;
 static acmutex mx;
 
+bool logIsEnabled = false;
+
+std::atomic<off_t> totalIn(0), totalOut(0);
+
 bool open()
 {
 	// only called in the beginning or when reopening, already locked...
@@ -38,6 +42,8 @@ bool open()
 	if(cfg::logdir.empty())
 		return true;
 	
+	logIsEnabled = true;
+
 	string apath(cfg::logdir+"/apt-cacher.log"), epath(cfg::logdir+"/apt-cacher.err");
 	
 	mkbasedir(apath);
@@ -53,33 +59,60 @@ bool open()
 	return fStat.is_open() && fErr.is_open();
 }
 
-
-void transfer(char cLogType, uint64_t nCount, const char *szClient, const char *szPath)
+void transfer(uint64_t bytesIn,
+		uint64_t bytesOut,
+		cmstring& sClient,
+		cmstring& sPath)
 {
+	totalIn.fetch_add(bytesIn);
+	totalOut.fetch_add(bytesOut);
+
+	if(!logIsEnabled)
+		return;
+
 	lockguard g(&mx);
+
 	if(!fStat.is_open())
 		return;
-	fStat << time(0) << '|' << cLogType << '|' << nCount;
-	if(cfg::verboselog)
-		fStat << '|' << szClient << '|' << szPath;
-	fStat << '\n'; // not endl, it might flush
-	if(cfg::debug&LOG_FLUSH) fStat.flush();
+	auto tNow=GetTime();
+	if (bytesIn)
+	{
+		fStat << tNow << "|I|" << bytesIn;
+		if (cfg::verboselog)
+			fStat << '|' << sClient << '|' << sPath;
+		fStat << '\n'; // not endl, it might flush
+	}
+	if (bytesOut)
+	{
+		fStat << tNow << "|O|" << bytesOut;
+		if (cfg::verboselog)
+			fStat << '|' << sClient << '|' << sPath;
+		fStat << '\n'; // not endl, it might flush
+	}
+
+	if(cfg::debug & LOG_FLUSH) fStat.flush();
 }
 
 void misc(const string & sLine, const char cLogType)
 {
+	if(!logIsEnabled)
+		return;
+
 	lockguard g(&mx);
 	if(!fStat.is_open())
 		return;
 
 	fStat << time(0) << '|' << cLogType << '|' << sLine << '\n';
 	
-	if(cfg::debug&LOG_FLUSH)
+	if(cfg::debug & LOG_FLUSH)
 		fStat.flush();
 }
 
 void err(const char *msg, const char *client)
 {
+	if(!logIsEnabled)
+		return;
+
 	lockguard g(&mx);
 
 	if(!fErr.is_open())
@@ -101,16 +134,19 @@ void err(const char *msg, const char *client)
 	fErr << msg << '\n';
 
 #ifdef DEBUG
-	if(cfg::debug & LOG_DEBUG)
+	if(cfg::debug & log::LOG_DEBUG)
 		cerr << buf << msg <<endl;
 #endif
 
-	if(cfg::debug & LOG_DEBUG)
+	if(cfg::debug & log::LOG_DEBUG)
 		fErr.flush();
 }
 
 void flush()
 {
+	if(!logIsEnabled)
+		return;
+
 	lockguard g(mx);
 	if(fErr.is_open()) fErr.flush();
 	if(fStat.is_open()) fStat.flush();
@@ -118,8 +154,10 @@ void flush()
 
 void close(bool bReopen)
 {
+	if(!logIsEnabled)return;
+
 	lockguard g(mx);
-	if(cfg::debug>=LOG_MORE) cerr << (bReopen ? "Reopening logs...\n" : "Closing logs...\n");
+	if(cfg::debug >= LOG_MORE) cerr << (bReopen ? "Reopening logs...\n" : "Closing logs...\n");
 	fErr.close();
 	fStat.close();
 	if(bReopen)

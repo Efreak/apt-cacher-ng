@@ -483,7 +483,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 	{
 		if(value.empty())
 			return;
-		if (cfg::debug&LOG_FLUSH)
+		if (cfg::debug & log::LOG_FLUSH)
 			cerr << "Fatal keyfile for " <<repname<<": "<<value <<endl;
 
 		where.m_keyfiles.emplace_back(value);
@@ -874,7 +874,7 @@ unsigned ReadBackendsFile(const string & sFile, const string &sRepName)
 	
 	while(itor.Next())
 	{
-		if(debug & LOG_DEBUG)
+		if(debug & log::LOG_DEBUG)
 			cerr << "Backend URL: " << itor.sLine <<endl;
 
 		trimBack(itor.sLine);
@@ -1038,7 +1038,7 @@ void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bReadErrorIsFatal);
 #endif
 	dump_proc_status();
-	if(debug & LOG_DEBUG)
+	if(debug & log::LOG_DEBUG)
 	{
 		unsigned nUrls=0;
 		for(const auto& x: mapUrl2pVname)
@@ -1190,7 +1190,7 @@ void dump_config(bool includeDelicate)
 		if (n2s.ptr)
 			cmine << n2s.name << " = " << *n2s.ptr << endl;
 
-	if (cfg::debug >= LOG_DEBUG)
+	if (cfg::debug >= log::LOG_DEBUG)
 	{
 		cerr << "escaped version:" << endl;
 		for (const auto& n2s : n2sTbl)
@@ -1222,7 +1222,7 @@ void dump_config(bool includeDelicate)
 	}
 
 #ifndef DEBUG
-	if (cfg::debug >= LOG_DEBUG)
+	if (cfg::debug >= log::LOG_DEBUG)
 		cerr << "\n\nAdditional debugging information not compiled in.\n\n";
 #endif
 
@@ -1276,9 +1276,9 @@ time_t BackgroundCleanup()
 		{
 			if (hooks.downTimeNext <= now) // time to execute
 			{
-				if(cfg::debug&LOG_MORE)
+				if(cfg::debug & log::LOG_MORE)
 					log::misc(hooks.cmdRel, 'X');
-				if(cfg::debug & LOG_FLUSH)
+				if(cfg::debug & log::LOG_FLUSH)
 					log::flush();
 
 				if(system(hooks.cmdRel.c_str()))

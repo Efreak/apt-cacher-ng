@@ -233,7 +233,7 @@ job::~job()
 			( bErr ? (m_pItem ? m_pItem.get()->GetHttpMsg() : miscError ) : m_sFileLoc ),
 			m_pReqHead->h[header::XFORWARDEDFOR],
 			(m_pItem ? m_pItem.get()->GetTransferCount() : 0),
-			m_nAllDataCount, bErr);
+			m_nAllDataCount);
 	
 	checkforceclose(m_filefd);
 	delete m_pReqHead;

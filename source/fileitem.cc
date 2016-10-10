@@ -91,7 +91,7 @@ void fileitem::DecDlRefCount(const string &sReason)
 		m_head.frontLine=string("HTTP/1.1 ")+sReason;
 		m_head.type=header::ANSWER;
 
-		if (cfg::debug&LOG_MORE)
+		if (cfg::debug&log::LOG_MORE)
 			log::misc(string("Download of ")+m_sPathRel+" aborted");
 	}
 	checkforceclose(m_filefd);
@@ -481,7 +481,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 					char c;
 					if(1 == read(fd, &c, 1) && c == *pNextData)
 					{
-						if(cfg::debug & LOG_DEBUG)
+						if(cfg::debug & log::LOG_DEBUG)
 							log::err(tSS() << "known data hit, don't write to: "<< m_sPathRel);
 						m_bAllowStoreData=false;
 						m_nSizeChecked=mylen;
@@ -535,7 +535,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		}
 	}
 
-	if(cfg::debug&LOG_MORE)
+	if(cfg::debug & log::LOG_MORE)
 		log::misc(string("Download of ")+m_sPathRel+" started");
 
 	if(m_bAllowStoreData)
@@ -672,7 +672,7 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 			m_status = FIST_COMPLETE;
 			m_nTimeDlDone=GetTime();
 
-			if (cfg::debug & LOG_MORE)
+			if (cfg::debug & log::LOG_MORE)
 				log::misc(tSS() << "Download of " << m_sPathRel << " finished");
 
 			// we are done! Fix header from chunked transfers?

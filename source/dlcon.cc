@@ -966,7 +966,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 			}
 			if( fakeFail-- < 0)
 			{
-//				LOGLVL(LOG_DEBUG, "\n#################\nFAKING A FAILURE\n###########\n");
+//				LOGLVL(log::LOG_DEBUG, "\n#################\nFAKING A FAILURE\n###########\n");
 				r=0;
 				fakeFail=rand()%123;
 				errno = EROFS;

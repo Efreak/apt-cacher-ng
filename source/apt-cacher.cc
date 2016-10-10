@@ -127,7 +127,7 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 	cfg::PostProcConfig();
 
 	if(bExtraVerb)
-		cfg::debug |= (LOG_DEBUG|LOG_MORE);
+		cfg::debug |= (log::LOG_DEBUG|log::LOG_MORE);
 
 }
 
