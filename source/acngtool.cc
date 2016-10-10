@@ -261,8 +261,19 @@ struct pkgEntry
 		return lastDate > other.lastDate;
 	}
 };
-int shrink(off_t wantedSize)
+
+int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfiles)
 {
+	if(!dryrun && !apply)
+	{
+		cerr << "Error: needs -f or -n options (-f to delete files, -n to test, optional: -v for verbose, -x to also drop index files" <<endl;
+		return 97;
+	}
+	if(dryrun && apply)
+	{
+		cerr << "Error: -f and -n are mutually exclusive" <<endl;
+		return 107;
+	}
 //	cout << "wanted: " << wantedSize << endl;
 	std::priority_queue<pkgEntry/*, vector<pkgEntry>, cmpLessDate */ > delQ;
 	std::unordered_map<string, pair<time_t,off_t> > related;
@@ -270,7 +281,7 @@ int shrink(off_t wantedSize)
 	off_t totalSize = 0;
 
 	IFileHandler::FindFiles(acfg::cachedir,
-			[&delQ, &totalSize, &related](cmstring & path, const struct stat& finfo) -> bool
+			[&delQ, &totalSize, &related, &incIfiles](cmstring & path, const struct stat& finfo) -> bool
 			{
 		auto dateLatest = max(finfo.st_ctim.tv_sec, finfo.st_mtim.tv_sec);
 		auto isHead = endsWithSzAr(path, ".head");
@@ -285,7 +296,21 @@ int shrink(off_t wantedSize)
 			pkgPath = path;
 			otherName = path + ".head";
 		}
-#warning check regex on pkgPath, shall be PFILE otherwise continue
+		auto ftype = rechecks::GetFiletype(pkgPath);
+		switch(ftype)
+		{
+		case rechecks::eMatchType::FILE_VOLATILE:
+		case rechecks::eMatchType::FILE_SPECIAL_VOLATILE:
+			if(!incIfiles)
+				return true;
+			break;
+		// case rechecks::eMatchType::FILE_WHITELIST:
+		default:
+			return true;
+		case rechecks::eMatchType::FILE_SOLID:
+		case rechecks::eMatchType::FILE_SPECIAL_SOLID:
+			break; // ok
+		}
 
 		auto other = related.find(otherName);
 //		cout << "wo ist " << otherName << " - " << (other==related.end()) << endl;
@@ -311,11 +336,23 @@ int shrink(off_t wantedSize)
 		delQ.push({kv.first, kv.second.first, kv.second.second});
 	related.clear();
 
-	while(!delQ.empty() && totalSize > wantedSize)
+	if(verbose)
+		cout << "Found " << totalSize << " bytes of relevant data, reducing to " << wantedSize << endl;
+	while(!delQ.empty())
 	{
+		bool todel = (totalSize > wantedSize);
 		totalSize -= delQ.top().size;
-#warning add real unlinking and also dry-run mode
-		cout << "Delete: " << delQ.top().path << " and " << delQ.top().path << ".head" << endl;
+		const char *msg = 0;
+		if(verbose || dryrun)
+			msg = (todel ? "Delete: " : "Keep: " );
+		auto& delpath(delQ.top().path);
+		if(msg)
+			cout << msg << delpath << endl << msg << delpath << ".head" << endl;
+		if(todel && apply)
+		{
+			unlink(delpath.c_str());
+			unlink((delpath + ".head").c_str());
+		}
 		delQ.pop();
 	}
 	return 0;
@@ -623,7 +660,7 @@ int patch_file(string sBase, string sPatch, string sResult)
 
 
 struct parm {
-	unsigned minArg, maxArg;
+	unsigned minArg, maxArg; // if maxArg is UINT_MAX, there will be a final call with NULL argument
 	std::function<void(LPCSTR)> f;
 };
 
@@ -791,6 +828,9 @@ std::unordered_map<string, parm> parms = {
 			"curl",
 			{ 1, UINT_MAX, [](LPCSTR p)
 				{
+					if(!p)
+						return;
+
 					CPrintItemFactory fac;
 					auto ret=wcat(p, getenv("http_proxy"), &fac);
 					if(!g_exitCode)
@@ -853,15 +893,29 @@ std::unordered_map<string, parm> parms = {
 		}
    ,
    {
-   			"shrink",
-   			{
-   				1, 1, [](LPCSTR p)
-   				{
-   					g_exitCode += shrink(strsizeToOfft(p));
-   				}
-   			}
-   		}
-
+		   "shrink",
+		   {
+				   1, UINT_MAX, [](LPCSTR p)
+				   {
+					   static bool dryrun(false), apply(false), verbose(false), incIfiles(false);
+					   static off_t wantedSize(0);
+					   if(!p)
+						   g_exitCode += shrink(wantedSize, dryrun, apply, verbose, incIfiles);
+					   else if(*p > '0' && *p<='9')
+						   wantedSize = strsizeToOfft(p);
+					   else if(*p == '-')
+					   {
+						   for(++p;*p;++p)
+						   {
+							   if(*p == 'f') apply = true;
+							   else if(*p == 'n') dryrun = true;
+							   else if (*p == 'x') incIfiles = true;
+							   else if (*p == 'v') verbose = true;
+						   }
+					   }
+				   }
+		   }
+   }
 };
 
 int main(int argc, const char **argv)
@@ -907,6 +961,8 @@ int main(int argc, const char **argv)
 			usage(4);
 		parm->f(nullptr);
 	}
+	else if(parm->maxArg == UINT_MAX) // or needs to terminate it?
+		parm->f(nullptr);
 	return g_exitCode;
 }
 
