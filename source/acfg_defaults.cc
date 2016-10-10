@@ -7,6 +7,8 @@
 #include "acfg.h"
 #include "sockio.h"
 
+#include <atomic>
+
 using namespace std;
 
 namespace acng

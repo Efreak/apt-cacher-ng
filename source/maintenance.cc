@@ -325,7 +325,7 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 
 void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd)
 {
-	if(cfg::degraded && jobType != workSTYLESHEET)
+	if(cfg::DegradedMode() && jobType != workSTYLESHEET)
 		jobType = workUSERINFO;
 
 	MYTRY {

@@ -614,7 +614,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
     	goto report_overload;
     }
 
-    if(cfg::degraded)
+    if(cfg::DegradedMode())
        goto report_degraded;
     
     fistate = m_pItem.get()->Setup(bForceFreshnessChecks);

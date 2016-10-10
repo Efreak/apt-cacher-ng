@@ -22,6 +22,8 @@ using namespace std;
 #undef SendFmtRemote
 #endif
 
+#define SCALEFAC 300
+
 
 namespace acng
 {
@@ -267,9 +269,9 @@ inline int tMarkupFileSend::CheckCondition(LPCSTR id, size_t len)
 		auto p=cfg::GetIntPtr(key.c_str());
 		if(p)
 			return ! *p;
-    if(key == "degraded")
-       return cfg::degraded.load();
-		return -1;
+		if(key == "degraded")
+			return cfg::DegradedMode();
+    	return -1;
 	}
 	if(RAWEQ(id, len, "delConfirmed"))
 		return m_parms.type != workDELETE && m_parms.type != workTRUNCATE;
@@ -375,6 +377,29 @@ void tMarkupFileSend::SendProp(cmstring &key)
 	}
 	if(key=="random")
 		return SendChunk(m_fmtHelper.clean() << rand());
+	if(key=="dataInHuman")
+	{
+		//return SendChunk(offttosH(log::GetTotalIn()));
+		auto stats = log::GetCurrentCountersInOut();
+		return SendChunk(offttosH(stats.first));
+	}
+	if(key=="dataOutHuman")
+	{
+		//return SendChunk(offttosH(log::GetTotalIn()));
+		auto stats = log::GetCurrentCountersInOut();
+		return SendChunk(offttosH(stats.second));
+	}
+	if(key=="dataIn")
+	{
+		auto stats = log::GetCurrentCountersInOut();
+		auto pixels = stats.second ? (stats.first * SCALEFAC / stats.second) : 0;
+		return SendChunk(m_fmtHelper.clean() << pixels);
+	}
+	if(key=="dataOut")
+	{
+		return SendChunk(m_fmtHelper.clean() << SCALEFAC);
+	}
+
 }
 
 }

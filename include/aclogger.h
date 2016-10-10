@@ -49,6 +49,8 @@ enum ELogFlags : uint8_t
 	LOG_DEBUG = 4
 };
 
+// access internal counters
+std::pair<off_t,off_t> GetCurrentCountersInOut();
 
       bool open();
       void close(bool bReopen);

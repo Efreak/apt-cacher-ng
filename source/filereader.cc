@@ -16,6 +16,7 @@
 #include "debug.h"
 
 #include <iostream>
+#include <atomic>
 
 #ifdef HAVE_SSL
 #include <openssl/sha.h>

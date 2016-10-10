@@ -17,7 +17,7 @@
 #include <algorithm>
 #include <list>
 #include <unordered_map>
-
+#include <atomic>
 
 using namespace std;
 
@@ -40,6 +40,8 @@ bool CompileExpressions();
 namespace cfg {
 
 bool g_bQuiet=false, g_bNoComplex=false;
+
+extern std::atomic_bool degraded;
 
 // internal stuff:
 string sPopularPath("/debian/");
@@ -394,6 +396,11 @@ inline bool qgrep(cmstring &needle, cmstring &file)
 		if(StrHas(itor.sLine, needle))
 			return true;
 	return false;
+}
+
+bool DegradedMode()
+{
+	return degraded.load();
 }
 
 inline void _FixPostPreSlashes(string &val)

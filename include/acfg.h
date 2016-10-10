@@ -5,7 +5,6 @@
 #include "config.h"
 #include "meta.h"
 #include <bitset>
-#include <atomic>
 
 #define NUM_PBKDF2_ITERATIONS 1
 // 1757961
@@ -49,14 +48,14 @@ extern mstring agentheader;
 
 extern int conprotos[2];
 
-extern std::atomic_bool degraded;
-
 bool SetOption(const mstring &line, NoCaseStringMap *pDupeChecker);
 void dump_config(bool includingDelicateValues=false);
 void ReadConfigDirectory(const char*, bool bReadErrorIsFatal=true);
 
 //! Prepare various things resulting from variable combinations, etc.
 void PostProcConfig();
+
+bool DegradedMode();
 
 struct tRepoData
 {

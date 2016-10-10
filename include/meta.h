@@ -16,7 +16,6 @@
 #include <vector>
 #include <deque>
 #include <limits>
-#include <atomic>
 #include <cstdio>
 #include <ctime>
 #include <cstring>

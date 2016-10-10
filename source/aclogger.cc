@@ -19,6 +19,7 @@
 #include <string.h>
 #include <iostream>
 #include <fstream>
+#include <atomic>
 
 using namespace std;
 
@@ -33,6 +34,11 @@ static acmutex mx;
 bool logIsEnabled = false;
 
 std::atomic<off_t> totalIn(0), totalOut(0);
+
+std::pair<off_t,off_t> GetCurrentCountersInOut()
+		{
+	return std::make_pair(totalIn.load(), totalOut.load());
+		}
 
 bool open()
 {
