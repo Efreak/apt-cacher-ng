@@ -22,7 +22,7 @@ using namespace std;
 #undef SendFmtRemote
 #endif
 
-#define SCALEFAC 300
+#define SCALEFAC 250
 
 
 namespace acng
@@ -395,25 +395,34 @@ void tMarkupFileSend::SendProp(cmstring &key)
 	}
 	if(key=="dataOut")
 	{
-		return SendChunk(m_fmtHelper.clean() << SCALEFAC);
+		auto stats = log::GetCurrentCountersInOut();
+		auto pixels = stats.second ? SCALEFAC : 0;
+		return SendChunk(m_fmtHelper.clean() << pixels);
 	}
 
-	if(key=="dataHistInHuman")
-		{
-			auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
-			return SendChunk(offttosH(stats.first));
-		}
-		if(key=="dataHistOutHuman")
-		{
-			auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
-			return SendChunk(offttosH(stats.second));
-		}
-		if(key=="dataHistIn")
-		{
-			auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
-			auto pixels = stats.second ? (stats.first * SCALEFAC / stats.second) : 0;
-			return SendChunk(m_fmtHelper.clean() << pixels);
-		}
+	if (key == "dataHistInHuman")
+	{
+		auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
+		return SendChunk(offttosH(stats.first));
+	}
+	if (key == "dataHistOutHuman")
+	{
+		auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
+		return SendChunk(offttosH(stats.second));
+	}
+	if (key == "dataHistIn")
+	{
+		auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
+		auto pixels = stats.second ? (stats.first * SCALEFAC / stats.second) : 0;
+		return SendChunk(m_fmtHelper.clean() << pixels);
+	}
+	if (key == "dataHistOut")
+	{
+		auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
+		auto pixels = stats.second ? SCALEFAC : 0;
+		return SendChunk(m_fmtHelper.clean() << pixels);
+	}
+
 
 }
 
