@@ -27,7 +27,7 @@ struct dnode
 	typedef set<tPairDevIno> tDupeFilter;
 	
 	dnode(dnode *parent) : m_parent(parent) {};
-	bool Walk(IFileHandler *, tDupeFilter*, bool bFollowSymlinks, bool bReportLinks);
+	bool Walk(IFileHandler *, tDupeFilter*, bool bFollowSymlinks);
 
 	std::string sPath;
 	dnode *m_parent;
@@ -42,8 +42,7 @@ private:
 };
 
 
-bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymlinks,
-		bool bReportSymlinks)
+bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymlinks)
 {
 //	bool bNix=StrHas(sPath, "somehost");
 
@@ -63,13 +62,9 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 						*/
 			return true; // slight risk of missing information here... bug ignoring is safer
 		}
-		// yeah, and we ignore symlinks here?
+		// yeah, and we ignore symlinks here
 		if(S_ISLNK(m_stinfo.st_mode))
-		{
-			if(bReportSymlinks)
-				return h->ProcessLink(sPath, m_stinfo);
 			return true;
-		}
 	}
 	
 	if(S_ISREG(m_stinfo.st_mode)
@@ -123,7 +118,7 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 				UrlUnescapeAppend(dp->d_name, childbuf.sPath);
 			else
 				childbuf.sPath+=dp->d_name;
-			bRet=childbuf.Walk(h, pFilter, bFollowSymlinks, bReportSymlinks);
+			bRet=childbuf.Walk(h, pFilter, bFollowSymlinks);
 			if(!bRet)
 				goto stop_walk;
 		}
@@ -141,12 +136,12 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 
 
 bool IFileHandler::DirectoryWalk(const string & sRoot, IFileHandler *h, bool bFilterDoubleDirVisit,
-		bool bFollowSymlinks, bool bReportLinks)
+		bool bFollowSymlinks)
 {
 	dnode root(nullptr);
 	dnode::tDupeFilter filter;
 	root.sPath=sRoot; 
-	return root.Walk(h, bFilterDoubleDirVisit ? &filter : nullptr, bFollowSymlinks, bReportLinks);
+	return root.Walk(h, bFilterDoubleDirVisit ? &filter : nullptr, bFollowSymlinks);
 }
 
 // XXX: create some shortcut? wasting CPU cycles for virtual call PLUS std::function wrapper

@@ -379,13 +379,11 @@ void tMarkupFileSend::SendProp(cmstring &key)
 		return SendChunk(m_fmtHelper.clean() << rand());
 	if(key=="dataInHuman")
 	{
-		//return SendChunk(offttosH(log::GetTotalIn()));
 		auto stats = log::GetCurrentCountersInOut();
 		return SendChunk(offttosH(stats.first));
 	}
 	if(key=="dataOutHuman")
 	{
-		//return SendChunk(offttosH(log::GetTotalIn()));
 		auto stats = log::GetCurrentCountersInOut();
 		return SendChunk(offttosH(stats.second));
 	}
@@ -399,6 +397,23 @@ void tMarkupFileSend::SendProp(cmstring &key)
 	{
 		return SendChunk(m_fmtHelper.clean() << SCALEFAC);
 	}
+
+	if(key=="dataHistInHuman")
+		{
+			auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
+			return SendChunk(offttosH(stats.first));
+		}
+		if(key=="dataHistOutHuman")
+		{
+			auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
+			return SendChunk(offttosH(stats.second));
+		}
+		if(key=="dataHistIn")
+		{
+			auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
+			auto pixels = stats.second ? (stats.first * SCALEFAC / stats.second) : 0;
+			return SendChunk(m_fmtHelper.clean() << pixels);
+		}
 
 }
 

@@ -51,6 +51,7 @@ enum ELogFlags : uint8_t
 
 // access internal counters
 std::pair<off_t,off_t> GetCurrentCountersInOut();
+std::pair<off_t,off_t> GetOldCountersInOut();
 
       bool open();
       void close(bool bReopen);

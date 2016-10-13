@@ -1,22 +1,21 @@
 
 #include "meta.h"
 
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/time.h>
+#include <dirent.h>
 
 #include "debug.h"
-
 #include "aclogger.h"
 #include "acfg.h"
 #include "lockable.h"
 #include "filereader.h"
-
 #include "fileio.h"
-#include <unistd.h>
 
 #include <vector>
 #include <deque>
-#include <string.h>
 #include <iostream>
 #include <fstream>
 #include <atomic>
@@ -39,6 +38,51 @@ std::pair<off_t,off_t> GetCurrentCountersInOut()
 		{
 	return std::make_pair(totalIn.load(), totalOut.load());
 		}
+
+std::pair<off_t,off_t> oldCounters(0,0);
+
+decltype(oldCounters) GetOldCountersInOut()
+{
+#ifndef MINIBUILD
+	// needs to do first reading of old stats?
+	char lbuf[600];
+	// safe some cycles an snprintf
+	auto xl=(CACHE_BASE.size() + cfg::privStoreRelQstatsSfx.size());
+	if(xl > 550)
+		return oldCounters; // heh?
+	memcpy(lbuf, CACHE_BASE.data(), CACHE_BASE.size());
+	memcpy(lbuf+CACHE_BASE.size(), cfg::privStoreRelQstatsSfx.data(), cfg::privStoreRelQstatsSfx.size());
+	if (!oldCounters.first && !oldCounters.second)
+	{
+		auto rfunc = [&lbuf, xl](off_t& pRet, char foldNam)
+		{
+			lbuf[xl]=0;
+			auto xoff=sprintf(lbuf+xl, "/%c/", foldNam);
+			auto lptr = lbuf+xl+xoff;
+			auto dirp = opendir(lbuf);
+			if(!dirp)
+				return;
+			char buf[30];
+			while(true)
+			{
+				auto ent = readdir(dirp);
+				if(!ent) break;
+				auto llen=strlen(ent->d_name);
+				if(llen > 25 || llen<4) continue;
+				memcpy(lptr, ent->d_name, llen+1);
+				auto tpos=readlink(lbuf, buf, _countof(buf)-1);
+				if(tpos < 1) continue;
+				buf[tpos]=0;
+				pRet += acng::strsizeToOfft(buf);
+			}
+			closedir(dirp);
+		};
+		rfunc(oldCounters.first, 'i');
+		rfunc(oldCounters.second, 'o');
+	}
+#endif
+	return oldCounters;
+}
 
 bool open()
 {
@@ -160,7 +204,19 @@ void flush()
 
 void close(bool bReopen)
 {
-	if(!logIsEnabled)return;
+	auto snapIn = offttos(totalIn.exchange(0));
+	auto snapOut = offttos(totalOut.exchange(0));
+	timeval tp;
+	gettimeofday(&tp, 0);
+	auto inLinkPath = CACHE_BASE + cfg::privStoreRelQstatsSfx + "/i/"
+			+ acng::offttos(tp.tv_sec) + "." + acng::ltos(tp.tv_usec);
+	auto outLinkPath = CACHE_BASE + cfg::privStoreRelQstatsSfx + "/o/"
+			+ acng::offttos(tp.tv_sec) + "." + acng::ltos(tp.tv_usec);
+	symlink(snapIn.c_str(), inLinkPath.c_str());
+	symlink(snapOut.c_str(), outLinkPath.c_str());
+
+	if(!logIsEnabled)
+		return;
 
 	lockguard g(mx);
 	if(cfg::debug >= LOG_MORE) cerr << (bReopen ? "Reopening logs...\n" : "Closing logs...\n");

@@ -318,9 +318,7 @@ mstring html_sanitize(cmstring& in);
 off_t GetFileSize(cmstring & path, off_t defret);
 
 mstring offttos(off_t n);
-
 mstring ltos(long n);
-
 mstring offttosH(off_t n);
 
 //template<typename charp>
@@ -456,6 +454,12 @@ struct tDtorEx {
 
 // from bgtask.cc
 cmstring GetFooter();
+
+template<typename T>
+std::pair<T,T> pairSum(const std::pair<T,T>& a, const std::pair<T,T>& b)
+{
+	return std::pair<T,T>(a.first+b.first, a.second + b.second);
+}
 
 }
 

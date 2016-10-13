@@ -544,7 +544,8 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 		bPtMode=rex::MatchUncacheable(theUrl.ToURI(false), rex::NOCACHE_REQ);
 
-		LOG("input uri: "<<theUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode);
+		LOG("input uri: "<<theUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode
+				<< ", admin-page: " << cfg::reportpage);
 
 		if(!cfg::reportpage.empty() || theUrl.sHost == "style.css")
 		{

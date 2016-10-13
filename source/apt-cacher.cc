@@ -188,14 +188,15 @@ static void SetupCacheDir()
 	if(cfg::cachedir.empty())
 		return;	// warning was printed
 
-	auto xstore(cacheDirSlash + "_xstore");
+	auto xstore(cacheDirSlash + cfg::privStoreRelSnapSufix);
 	mkdirhier(xstore);
 	if(!Cstat(xstore))
 	{
 		cerr << "Error: Cannot create any directory in " << cacheDirSlash << endl;
 		exit(EXIT_FAILURE);
 	}
-
+	mkdirhier(cacheDirSlash + cfg::privStoreRelQstatsSfx + "/i");
+	mkdirhier(cacheDirSlash + cfg::privStoreRelQstatsSfx + "/o");
 	struct timeval tv;
 	gettimeofday(&tv, nullptr);
 	tSS buf;
