@@ -918,7 +918,7 @@ std::unordered_map<string, parm> parms = {
 				   1, UINT_MAX, [](LPCSTR p)
 				   {
 					   static bool dryrun(false), apply(false), verbose(false), incIfiles(false);
-					   static off_t wantedSize(0);
+					   static off_t wantedSize(4000000000);
 					   if(!p)
 						   g_exitCode += shrink(wantedSize, dryrun, apply, verbose, incIfiles);
 					   else if(*p > '0' && *p<='9')

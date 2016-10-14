@@ -449,6 +449,15 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	rep_dlresult:
 
+	if(pFi)
+	{
+		auto dlCount = pFi->GetTransferCount();
+		static cmstring sInternal("[INTERNAL:");
+		// need to account both, this traffic as officially tracked traffic, and also keep the count
+		// separately for expiration about trade-off calculation
+		log::transfer(dlCount, 0, sInternal + GetTaskName() + "]", sFilePathRel);
+	}
+
 	if (bSuccess && bIsVolatileFile)
 		SetFlags(sFilePathRel).uptodate = true;
 
