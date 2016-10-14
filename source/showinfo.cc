@@ -390,13 +390,15 @@ void tMarkupFileSend::SendProp(cmstring &key)
 	if(key=="dataIn")
 	{
 		auto stats = log::GetCurrentCountersInOut();
-		auto pixels = stats.second ? (stats.first * SCALEFAC / stats.second) : 0;
+		auto statsMax = std::max(stats.first, stats.second);
+		auto pixels = statsMax ? (stats.first * SCALEFAC / statsMax) : 0;
 		return SendChunk(m_fmtHelper.clean() << pixels);
 	}
 	if(key=="dataOut")
 	{
 		auto stats = log::GetCurrentCountersInOut();
-		auto pixels = stats.second ? SCALEFAC : 0;
+		auto statsMax = std::max(stats.second, stats.first);
+		auto pixels = statsMax ? (SCALEFAC * stats.second / statsMax) : 0;
 		return SendChunk(m_fmtHelper.clean() << pixels);
 	}
 
@@ -413,13 +415,15 @@ void tMarkupFileSend::SendProp(cmstring &key)
 	if (key == "dataHistIn")
 	{
 		auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
-		auto pixels = stats.second ? (stats.first * SCALEFAC / stats.second) : 0;
+		auto statsMax = std::max(stats.second, stats.first);
+		auto pixels = statsMax ? (stats.first * SCALEFAC / statsMax) : 0;
 		return SendChunk(m_fmtHelper.clean() << pixels);
 	}
 	if (key == "dataHistOut")
 	{
 		auto stats = pairSum(log::GetCurrentCountersInOut(), log::GetOldCountersInOut());
-		auto pixels = stats.second ? SCALEFAC : 0;
+		auto statsMax = std::max(stats.second, stats.first);
+		auto pixels = statsMax ? (SCALEFAC * stats.second/statsMax) : 0;
 		return SendChunk(m_fmtHelper.clean() << pixels);
 	}
 

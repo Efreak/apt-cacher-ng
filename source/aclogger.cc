@@ -41,7 +41,43 @@ std::pair<off_t,off_t> GetCurrentCountersInOut()
 
 std::pair<off_t,off_t> oldCounters(0,0);
 
-decltype(oldCounters) GetOldCountersInOut()
+void ResetOldCounters()
+{
+	char lbuf[600];
+	// safe some cycles an snprintf
+	auto xl = (CACHE_BASE.size() + cfg::privStoreRelQstatsSfx.size());
+	if (xl > 550)
+		return; // heh?
+	memcpy(lbuf, CACHE_BASE.data(), CACHE_BASE.size());
+	memcpy(lbuf + CACHE_BASE.size(), cfg::privStoreRelQstatsSfx.data(),
+			cfg::privStoreRelQstatsSfx.size());
+
+	for (char foldNam :
+	{ 'i', 'o' })
+	{
+		lbuf[xl] = 0;
+		auto xoff = sprintf(lbuf + xl, "/%c/", foldNam);
+		auto lptr = lbuf + xl + xoff;
+		auto dirp = opendir(lbuf);
+		if (!dirp)
+			continue;
+		while (true)
+		{
+			auto ent = readdir(dirp);
+			if (!ent)
+				break;
+			auto llen = strlen(ent->d_name);
+			if (llen > 25 || llen < 4)
+				continue;
+			memcpy(lptr, ent->d_name, llen + 1);
+			unlink(lbuf);
+		}
+		closedir(dirp);
+	}
+	oldCounters = decltype(oldCounters)();
+}
+
+decltype(oldCounters) GetOldCountersInOut(bool calcIncomming, bool calcOutgoing)
 {
 #ifndef MINIBUILD
 	// needs to do first reading of old stats?
@@ -77,8 +113,10 @@ decltype(oldCounters) GetOldCountersInOut()
 			}
 			closedir(dirp);
 		};
-		rfunc(oldCounters.first, 'i');
-		rfunc(oldCounters.second, 'o');
+		if(calcIncomming)
+			rfunc(oldCounters.first, 'i');
+		if(calcOutgoing)
+			rfunc(oldCounters.second, 'o');
 	}
 #endif
 	return oldCounters;

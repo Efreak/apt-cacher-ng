@@ -35,6 +35,10 @@ using namespace std;
 namespace acng
 {
 
+// represents the session's current incomming data count at the moment when expr. was run last time
+// it's needed to correct the considerations based on the active session's download stats
+off_t lastCurrentDlCount(0);
+
 void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
 #ifdef DEBUGSPAM
@@ -479,6 +483,25 @@ void expiration::Action()
 		return;
 	}
 
+	bool tradeOffCheck = cfg::exstarttradeoff && !StrHas(m_parms.cmd, "ignoreTradeOff") && !m_bByChecksum;
+
+	off_t newLastIncommingOffset = 0;
+
+	if(tradeOffCheck)
+	{
+		newLastIncommingOffset = log::GetCurrentCountersInOut().first;
+
+		auto haveIncomming = newLastIncommingOffset - lastCurrentDlCount
+				+ log::GetOldCountersInOut(true).first;
+		if(haveIncomming < cfg::exstarttradeoff)
+		{
+			SendFmt << "Expiration suppressed due to costs-vs.-benefit considerations "
+					"(see exStartTradeOff setting, " << offttosH(haveIncomming) <<
+					" vs. " << offttosH(cfg::exstarttradeoff) << "\n";
+			return;
+		}
+	}
+
 	m_bIncompleteIsDamaged=StrHas(m_parms.cmd, "incomAsDamaged");
 	m_bScanVolatileContents=StrHas(m_parms.cmd, "scanVolatile");
 
@@ -551,6 +574,12 @@ void expiration::Action()
 	PrintStats("Allocated disk space");
 
 	SendChunk("<br>Done.<br>");
+
+	if(tradeOffCheck)
+	{
+		lastCurrentDlCount = newLastIncommingOffset;
+		log::ResetOldCounters();
+	}
 
 	save_fail_count:
 
