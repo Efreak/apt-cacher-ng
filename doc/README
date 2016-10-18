@@ -858,14 +858,14 @@ Chapter 8: HOWTOs and FAQ
 
         2. Store copies of your .debs, .orig.tar.gz, ... somewhere in the
            `_import' subdirectory in the cache, ie. in `/var/cache/apt-
-           cacher/_import/'. The files may be links or symlinks, does not
-           matter. When done, apt-cacher will move those files to its own
-           internal locations. Example:
+           cacher-ng/_import/'. The files may be links or symlinks, it does
+           not matter. When done, apt-cacher will move those files to its
+           own internal locations. Example:
 
              cd /var/cache
              mkdir apt-cacher-ng/_import
              cp -laf apt-proxy apt-cacher /var/cache/apt-cacher-ng/_import
-             chown -R apt-cacher-ng apt-cacher-ng/_import
+             chown -R apt-cacher-ng:apt-cacher-ng apt-cacher-ng/_import
 
         3. Visit the report page and trigger the import action there. Check
            the results, look for (red) error messages.
