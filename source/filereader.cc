@@ -16,6 +16,7 @@
 #include "debug.h"
 
 #include <iostream>
+#include <atomic>
 
 #ifdef HAVE_SSL
 #include <openssl/sha.h>
@@ -41,6 +42,8 @@
 
 using namespace std;
 
+namespace acng
+{
 // to make sure not to deal with incomplete operations from a signal handler
 class tMmapEntry
 {
@@ -431,18 +434,18 @@ std::atomic_int g_nThreadsToKill;
 
 void handle_sigbus()
 {
-	if (!acfg::sigbuscmd.empty())
+	if (!cfg::sigbuscmd.empty())
 	{
 		/*static char buf[21];
 		 sprintf(buf, "%u", (unsigned) getpid());
 		 setenv("ACNGPID", buf, 1);
 		 */
-		::ignore_value(system(acfg::sigbuscmd.c_str()));
+		acng::ignore_value(system(cfg::sigbuscmd.c_str()));
 	}
 	else
 	{
 
-		aclog::err(
+		log::err(
 				"FATAL ERROR: apparently an IO error occurred, while reading files. "
 						"Please check your system logs for related errors reports. Also consider "
 						"using the BusAction option, see Apt-Cacher NG Manual for details");
@@ -454,7 +457,7 @@ void handle_sigbus()
 	{
 		if (!x.valid.load())
 			continue;
-		aclog::err(string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
+		log::err(string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
 			+x.path+" . Please check your system logs for related errors.");
 	}
 #endif
@@ -475,7 +478,7 @@ void handle_sigbus()
 	{
 		if (!x.valid.load())
 			continue;
-		aclog::err(
+		log::err(
 				string("FATAL ERROR: probably IO error occurred, probably while reading the file ")
 						+ x.path + " . Please check your system logs for related errors.");
 
@@ -491,7 +494,7 @@ void handle_sigbus()
 	if (!metoo)
 		return;
 
-	suicid: aclog::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
+	suicid: log::err("FATAL ERROR: SIGBUS, probably caused by an IO error. "
 			"Please check your system logs for related errors.");
 
 	g_nThreadsToKill.fetch_add(-1);
@@ -818,3 +821,5 @@ bool Bz2compressFile(const char *pathIn, const char*pathOut)
 }
 
 #endif
+
+}

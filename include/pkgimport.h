@@ -8,6 +8,8 @@
 #include <cstring>
 #include "csmapping.h"
 
+namespace acng
+{
 class pkgimport : public cacheman
 {
 
@@ -48,5 +50,5 @@ private:
 		
 };
 
-
+}
 #endif /*PKGIMPORT_H_*/

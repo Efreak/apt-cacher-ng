@@ -38,6 +38,8 @@
 
 using namespace std;
 
+namespace acng
+{
 
 static cmstring dis("/binary-");
 static cmstring oldStylei18nIdx("/i18n/Index");
@@ -145,7 +147,7 @@ bool cacheman::AddIFileCandidate(const string &sPathRel)
  		return false;
 
 	enumMetaType t;
-	if ( (rechecks::FILE_VOLATILE == rechecks::GetFiletype(sPathRel)
+	if ( (rex::FILE_VOLATILE == rex::GetFiletype(sPathRel)
 	// SUSE stuff, not volatile but also contains file index data
 	|| endsWithSzAr(sPathRel, ".xml.gz") )
 	&& (t=GuessMetaTypeFromURL(sPathRel)))
@@ -271,7 +273,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 #define GOTOREPMSG(x) {sErr = x; bSuccess=false; goto rep_dlresult; }
 
-	const acfg::tRepoData *pRepoDesc=nullptr;
+	const cfg::tRepoData *pRepoDesc=nullptr;
 	mstring sRemoteSuffix, sFilePathAbs(SABSPATH(sFilePathRel));
 
 	fileItemMgmt fiaccess;
@@ -286,7 +288,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	if(!pFi)
 	{
 		fiaccess.PrepareRegisteredFileItemWithStorage(sFilePathRel, false);
-		pFi=fiaccess.get();
+		pFi=fiaccess.getFiPtr();
 	}
 	if (!pFi)
 	{
@@ -342,8 +344,8 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		ldbg("Find backend for " << sFilePathRel << " parsed as host: "  << parserPath.sHost
 				<< " and path: " << parserPath.sPath << ", ok? " << bCachePathAsUriPlausible);
 
-		if(!acfg::stupidfs && bCachePathAsUriPlausible
-				&& 0 != (pRepoDesc = acfg::GetRepoData(parserPath.sHost))
+		if(!cfg::stupidfs && bCachePathAsUriPlausible
+				&& 0 != (pRepoDesc = cfg::GetRepoData(parserPath.sHost))
 				&& !pRepoDesc->m_backends.empty())
 		{
 			ldbg("will use backend mode, subdirectory is path suffix relative to backend uri");
@@ -400,8 +402,8 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	// might still need a repo data description
 	if (pResolvedDirectUrl)
 	{
-		acfg::tRepoResolvResult repinfo;
-		acfg::GetRepNameAndPathResidual(*pResolvedDirectUrl, repinfo);
+		cfg::tRepoResolvResult repinfo;
+		cfg::GetRepNameAndPathResidual(*pResolvedDirectUrl, repinfo);
 		auto hereDesc = repinfo.repodata;
 		if(repinfo.repodata && !repinfo.repodata->m_backends.empty())
 		{
@@ -446,6 +448,15 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	}
 
 	rep_dlresult:
+
+	if(pFi)
+	{
+		auto dlCount = pFi->GetTransferCount();
+		static cmstring sInternal("[INTERNAL:");
+		// need to account both, this traffic as officially tracked traffic, and also keep the count
+		// separately for expiration about trade-off calculation
+		log::transfer(dlCount, 0, sInternal + GetTaskName() + "]", sFilePathRel, false);
+	}
 
 	if (bSuccess && bIsVolatileFile)
 		SetFlags(sFilePathRel).uptodate = true;
@@ -1251,7 +1262,7 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 			// ok, first patch of the sequence found
 			if(!pf.p)
 			{
-				::mkbasedir(sPatchCombinedAbs);
+				acng::mkbasedir(sPatchCombinedAbs);
 				// append mode!
 				pf.p=fopen(sPatchCombinedAbs.c_str(), "w");
 				if(!pf.p)
@@ -1303,8 +1314,8 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 
 			tSS cmd;
 			cmd << "cd '" << CACHE_BASE << "_actmp' && ";
-			auto act = acfg::suppdir + SZPATHSEP "acngtool";
-			if(!acfg::suppdir.empty() && 0==access(act.c_str(), X_OK))
+			auto act = cfg::suppdir + SZPATHSEP "acngtool";
+			if(!cfg::suppdir.empty() && 0==access(act.c_str(), X_OK))
 				cmd << "'" << act << "' patch patch.base " << sPatchCombinedAbs << " patch.result";
 			else
 				cmd << " red --silent patch.base < " << sPatchCombinedAbs;
@@ -1341,7 +1352,7 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 
 			FILE_RAII df;
 			DelTree(SABSPATH("_actmp"));
-			::mkbasedir(sPatchInputAbs);
+			acng::mkbasedir(sPatchInputAbs);
 			df.p = fopen(sPatchInputAbs.c_str(), "w");
 			if(!df.p)
 			{
@@ -1492,7 +1503,7 @@ void cacheman::UpdateVolatileFiles()
 
 	{
 		std::unordered_set<std::string> oldReleaseFiles;
-		auto baseFolder = acfg::cacheDirSlash + acfg::privStoreRelSnapSufix;
+		auto baseFolder = cfg::cacheDirSlash + cfg::privStoreRelSnapSufix;
 		IFileHandler::FindFiles(baseFolder, [&baseFolder, &oldReleaseFiles, this](cmstring &sPath, const struct stat &st)
 				-> bool {
 			oldReleaseFiles.emplace(sPath.substr(baseFolder.size() + 1));
@@ -2319,7 +2330,7 @@ bool cacheman::_checkSolidHashOnDisk(cmstring& hexname,
 void cacheman::BuildCacheFileList()
 {
 	//dump_proc_status();
-	IFileHandler::DirectoryWalk(acfg::cachedir, this);
+	IFileHandler::DirectoryWalk(cfg::cachedir, this);
 	//dump_proc_status();
 }
 
@@ -2396,7 +2407,7 @@ bool cacheman::FixMissingByHashLinks(std::unordered_set<std::string> &oldRelease
 	bool ret = true;
 
 	// path of side store with trailing slash relativ to cache folder
-	auto srcPrefix(acfg::privStoreRelSnapSufix + sPathSep);
+	auto srcPrefix(cfg::privStoreRelSnapSufix + sPathSep);
 
 	for(const auto& snapPathInXstore: oldReleaseFiles)
 	{
@@ -2450,4 +2461,6 @@ tStrDeq cacheman::GetGoodReleaseFiles()
 	tStrDeq ret;
 	for(const auto& kv: t) ret.emplace_back(kv.first+kv.second);
 	return ret;
+}
+
 }

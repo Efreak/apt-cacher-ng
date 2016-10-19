@@ -20,6 +20,9 @@
 using namespace std;
 
 
+namespace acng
+{
+
 con::con(int fdId, const char *c) :
 			m_confd(fdId),
 			m_bStopActivity(false),
@@ -49,7 +52,7 @@ con::~con() {
 	for (jit=m_jobs2send.begin(); jit!=m_jobs2send.end(); jit++)
 		delete *jit;
 
-	logstuff.write();
+	writeAnotherLogRecord(sEmptyString, sEmptyString);
 
 	if(m_pDlClient)
 	{
@@ -64,7 +67,7 @@ con::~con() {
 		delete m_pTmpHead;
 		m_pTmpHead=nullptr;
 	}
-	aclog::flush();
+	log::flush();
 }
 
 namespace RawPassThrough
@@ -101,19 +104,19 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 	tHttpUrl url;
 	if (!url.SetHttpUrl(uri))
 		return;
-	auto proxy = acfg::GetProxyInfo();
+	auto proxy = cfg::GetProxyInfo();
 	if (!proxy)
 	{
 		direct_connect:
 		m_spOutCon = g_tcp_con_factory.CreateConnected(url.sHost, url.GetPort(), sErr, 0, 0,
-				false, acfg::nettimeout, true);
+				false, cfg::nettimeout, true);
 	}
 	else
 	{
 		// switch to HTTPS tunnel in order to get a direct connection through the proxy
 		m_spOutCon = g_tcp_con_factory.CreateConnected(proxy->sHost, proxy->GetPort(),
-				sErr, 0, 0, false, acfg::optproxytimeout > 0 ?
-						acfg::optproxytimeout : acfg::nettimeout,
+				sErr, 0, 0, false, cfg::optproxytimeout > 0 ?
+						cfg::optproxytimeout : cfg::nettimeout,
 						true);
 
 		if (m_spOutCon)
@@ -124,9 +127,9 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 				m_spOutCon.reset();
 			}
 		}
-		else if(acfg::optproxytimeout > 0) // ok... try without
+		else if(cfg::optproxytimeout > 0) // ok... try without
 		{
-			acfg::MarkProxyFailure();
+			cfg::MarkProxyFailure();
 			goto direct_connect;
 		}
 	}
@@ -224,7 +227,7 @@ void con::WorkLoop() {
 		ldbg("select con");
 
 		struct timeval tv;
-		tv.tv_sec = acfg::nettimeout;
+		tv.tv_sec = cfg::nettimeout;
 		tv.tv_usec = 23;
 		int ready = select(maxfd+1, &rfds, &wfds, nullptr, &tv);
 
@@ -285,7 +288,7 @@ void con::WorkLoop() {
 				// also must be identified before
 				if (m_pTmpHead->type == header::POST)
 				{
-					if (acfg::forwardsoap && !m_sClientHost.empty())
+					if (cfg::forwardsoap && !m_sClientHost.empty())
 					{
 						if (RawPassThrough::CheckListbugs(*m_pTmpHead))
 						{
@@ -313,7 +316,7 @@ void con::WorkLoop() {
 					if(iter.Next() && iter.Next())
 					{
 						cmstring tgt(iter);
-						if(rechecks::Match(tgt, rechecks::PASSTHROUGH))
+						if(rex::Match(tgt, rex::PASSTHROUGH))
 							RawPassThrough::PassThrough(inBuf, m_confd, tgt);
 						else
 						{
@@ -405,7 +408,7 @@ bool con::SetupDownloader(const char *pszOrigin)
 
 	MYTRY
 	{
-		if(acfg::exporigin)
+		if(cfg::exporigin)
 		{
 			string sXff;
 			if(pszOrigin)
@@ -437,21 +440,11 @@ bool con::SetupDownloader(const char *pszOrigin)
 	return false;
 }
 
-void con::__tlogstuff::write()
+void con::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
+		off_t nNewOut, bool bAsError)
 {
-	if (sumIn>0)
-		aclog::transfer('I', sumIn, client.c_str(), file.c_str());
-
-	if(sumOut>0)
-		aclog::transfer(bFileIsError ? 'E' : 'O', sumOut, client.c_str(), file.c_str());
-}
-
-void con::LogDataCounts(const std::string & sFile, const char *xff, off_t nNewIn,
-		off_t nNewOut, bool bFileIsError)
-{
-	LOGSTART("con::LogDataCounts");
 	string sClient;
-	if (!acfg::logxff || !xff) // not to be logged or not available
+	if (!cfg::logxff || !xff) // not to be logged or not available
 		sClient=m_sClientHost;
 	else if (xff)
 	{
@@ -461,22 +454,21 @@ void con::LogDataCounts(const std::string & sFile, const char *xff, off_t nNewIn
 		if (pos!=stmiss)
 			sClient.erase(0, pos+1);
 	}
-	if(sFile != logstuff.file || sClient != logstuff.client)
-	{
-		logstuff.write();
-		logstuff.reset(sFile, sClient, bFileIsError);
-	}
-	LOG("heh? state now: " << logstuff.sumIn << " " << logstuff.sumOut);
-	logstuff.sumIn+=nNewIn;
-	logstuff.sumOut+=nNewOut;
-
+	if(sFile != logFile || sClient != logClient)
+		writeAnotherLogRecord(sFile, sClient);
+	fileTransferIn += nNewIn;
+	fileTransferOut += nNewOut;
+	if(bAsError) m_bLogAsError = true;
 }
 
-void con::__tlogstuff::reset(const std::string &pNewFile, const std::string &pNewClient, bool bIsError)
+// sends the stats to logging and replaces file/client identities with the new context
+void con::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient)
 {
-	bFileIsError=bIsError;
-	file=pNewFile;
-	client=pNewClient;
-	sumIn=0;
-	sumOut=0;
+		log::transfer(fileTransferIn, fileTransferOut, logClient, logFile, m_bLogAsError);
+		fileTransferIn = fileTransferOut = 0;
+		m_bLogAsError = false;
+		logFile = pNewFile;
+		logClient = pNewClient;
+}
+
 }

@@ -1,6 +1,10 @@
 
 TODO:
 
+Raw pass-throough of Location: addresses as long as they follow the minimum
+safety rules, for web services that apply strange rules WRT validation of such
+redirections (https://bugs.launchpad.net/bugs/1625928)
+
 Move signal handler to signalfd (on Linux) or a pipe fed from a basic signal
 handler (replacement for non-Linux). Current solution still has potential for dead-locking.
 

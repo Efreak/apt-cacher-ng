@@ -9,6 +9,9 @@
 #include "header.h"
 #include <unordered_map>
 
+namespace acng
+{
+
 class fileitem;
 typedef std::shared_ptr<fileitem> tFileItemPtr;
 typedef std::unordered_multimap<mstring, tFileItemPtr> tFiGlobMap;
@@ -19,7 +22,7 @@ class fileitem : public base_with_condition
 public:
 
 	// Life cycle (process states) of a file description item
-	enum FiStatus
+	enum FiStatus : char
 	{
 
 	FIST_FRESH, FIST_INITED, FIST_DLPENDING, FIST_DLGOTHEAD, FIST_DLRECEIVING,
@@ -72,6 +75,8 @@ public:
 	/// mark the item as complete as-is, assuming that sizeseen is correct
 	void SetupComplete();
 
+	void UpdateHeadTimestamp();
+
 	uint64_t m_nIncommingCount;
 	off_t m_nSizeSeen;
 	off_t m_nRangeLimit;
@@ -115,7 +120,7 @@ public:
 
 	inline static mstring NormalizePath(cmstring &sPathRaw)
 	{
-		return acfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
+		return cfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
 	}
 protected:
 	int MoveRelease2Sidestore();
@@ -147,7 +152,7 @@ public:
 	// when copied around, invalidates the original reference
 	~fileItemMgmt();
 	inline fileItemMgmt() {}
-	inline tFileItemPtr get() {return m_ptr;}
+	inline tFileItemPtr getFiPtr() {return m_ptr;}
 	inline operator bool() const {return (bool) m_ptr;}
 
 
@@ -165,7 +170,5 @@ private:
 #define fileItemMgmt void
 #endif // not MINIBUILD
 
+}
 #endif
-
-
-

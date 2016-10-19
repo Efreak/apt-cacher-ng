@@ -27,6 +27,9 @@ using namespace std;
 "</style></head><body>"
 #define LOG_DECO_END "</body></html>"
 
+namespace acng
+{
+
 // for start/stop and abort hint
 base_with_condition tSpecOpDetachable::g_StateCv;
 bool tSpecOpDetachable::g_sigTaskAbort=false;
@@ -43,16 +46,11 @@ tSpecOpDetachable::~tSpecOpDetachable()
 	checkforceclose(m_logFd);
 }
 
-cmstring& GetFooter()
+cmstring GetFooter()
 {
-	static mstring footer;
-	if(footer.empty())
-	{
-		footer = string("<hr><address>Server: ") + acfg::agentname +
-		"&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">Flattr this!"
-    "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
-	}
-	return footer;
+        return mstring("<hr><address>Server: ") + cfg::agentname
+                + "&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">Flattr this!"
+                "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
 }
 
 /*
@@ -83,9 +81,9 @@ void tSpecOpDetachable::Run()
 	tSS deco;
 	const char *mark(nullptr);
 	if(m_szDecoFile &&
-			( deco.initFromFile((acfg::confdir+SZPATHSEP+m_szDecoFile).c_str())
-					|| (!acfg::suppdir.empty() &&
-							deco.initFromFile((acfg::suppdir+SZPATHSEP+m_szDecoFile).c_str()))))
+			( deco.initFromFile((cfg::confdir+SZPATHSEP+m_szDecoFile).c_str())
+					|| (!cfg::suppdir.empty() &&
+							deco.initFromFile((cfg::suppdir+SZPATHSEP+m_szDecoFile).c_str()))))
 	{
 		mark=::strchr(deco.rptr(), '~');
 		if(mark)
@@ -113,7 +111,7 @@ void tSpecOpDetachable::Run()
 			auto id = time(0);
 
 			logPath.clear();
-			logPath<<acfg::logdir<<CPATHSEP<< MAINT_PFX << id << ".log.html";
+			logPath<<cfg::logdir<<CPATHSEP<< MAINT_PFX << id << ".log.html";
 			m_reportStream.open(logPath.c_str(), ios::out);
 			if(m_reportStream.is_open())
 			{
@@ -152,7 +150,7 @@ void tSpecOpDetachable::Run()
 			if(m_logFd < 0)
 			{
 				logPath.clear();
-				logPath<<acfg::logdir<<CPATHSEP<<MAINT_PFX << other_id << ".log.html";
+				logPath<<cfg::logdir<<CPATHSEP<<MAINT_PFX << other_id << ".log.html";
 				m_logFd=open(logPath.c_str(), O_RDONLY|O_NONBLOCK);
 
 				if(m_logFd>=0)
@@ -193,7 +191,7 @@ void tSpecOpDetachable::Run()
 
 			SendFmt << "Maintenance task <b>" << GetTaskName()
 					<< "</b>, apt-cacher-ng version: " ACVERSION;
-			string link = "http://" + GetHostname() + ":" + acfg::port + "/" + acfg::reportpage;
+			string link = "http://" + GetHostname() + ":" + cfg::port + "/" + cfg::reportpage;
 			SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
 					<< "\">Cancel</a>)"
 					<< "\n<!--\n"
@@ -260,7 +258,7 @@ void tSpecOpDetachable::Run()
 				SendChunkRemoteOnly(blob.data(), blob.size());
 			}
 
-			SendFmtRemote << "<br>\n<a href=\"/"<< acfg::reportpage<<"\">Return to main page</a>"
+			SendFmtRemote << "<br>\n<a href=\"/"<< cfg::reportpage<<"\">Return to main page</a>"
 					"</form>";
 			auto& f(GetFooter());
 						SendChunkRemoteOnly(f.data(), f.size());
@@ -286,8 +284,8 @@ void tSpecOpDetachable::DumpLog(time_t id)
 	if (id<=0)
 		return;
 
-	tSS path(acfg::logdir.length()+24);
-	path<<acfg::logdir<<CPATHSEP<<MAINT_PFX << id << ".log.html";
+	tSS path(cfg::logdir.length()+24);
+	path<<cfg::logdir<<CPATHSEP<<MAINT_PFX << id << ".log.html";
 	if (!reader.OpenFile(path))
 		SendChunkRemoteOnly(WITHLEN("Log not available"));
 	else
@@ -359,3 +357,5 @@ void tBgTester::Action()
 }
 
 #endif // DEBUG
+
+}

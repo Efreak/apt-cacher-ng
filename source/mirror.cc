@@ -21,6 +21,8 @@
 
 using namespace std;
 
+namespace acng
+{
 bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &)
 {
 	if (endsWithSzAr(sPath, ".head"))
@@ -62,7 +64,7 @@ bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &)
 
 void pkgmirror::Action()
 {
-	if(acfg::mirrorsrcs.empty())
+	if(cfg::mirrorsrcs.empty())
 	{
 		SendChunk("<b>PrecacheFor not set, check configuration!</b><br>\n");
 		return;
@@ -114,7 +116,7 @@ void pkgmirror::Action()
 	// prepare wildcard matching and collecting
 	tStrSet srcs;
 	tStrVec matchList;
-	Tokenize(acfg::mirrorsrcs, SPACECHARS, matchList);
+	Tokenize(cfg::mirrorsrcs, SPACECHARS, matchList);
 	auto TryAdd = [&matchList, &srcs](cmstring &s)
 			{
 				for(const auto& match : matchList)
@@ -222,7 +224,7 @@ void pkgmirror::Action()
 		for (auto& src : srcs)
 		{
 #ifdef DEBUG
-			if(LOG_MORE&acfg::debug)
+			if(log::LOG_MORE & cfg::debug)
 				SendFmt << "mirror check: " << src;
 #endif
 			off_t needBefore=(m_totalSize-m_totalHave);
@@ -280,9 +282,9 @@ inline bool pkgmirror::ConfigDelta(cmstring &sPathRel)
 	if (m_repCutLen != stmiss)
 	{
 		vname.resize(m_repCutLen);
-		const acfg::tRepoData *pRepo = acfg::GetRepoData(vname);
+		const cfg::tRepoData *pRepo = cfg::GetRepoData(vname);
 #ifdef DEBUG
-		if(acfg::debug & LOG_MORE)
+		if(cfg::debug & log::LOG_MORE)
 		{
 			if(!pRepo)
 				SendFmt << "hm, no delta provider for " << sPathRel;
@@ -471,4 +473,6 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 			}
 		}
 	}
+}
+
 }

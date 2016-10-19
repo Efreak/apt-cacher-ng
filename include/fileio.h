@@ -24,6 +24,9 @@
 #define O_BINARY 0 // ignore on Unix
 #endif
 
+namespace acng
+{
+
 int falloc_helper(int fd, off_t start, off_t len);
 
 ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count);
@@ -100,5 +103,7 @@ public:
 	off_t GetSpace() const;
 };
 */
+
+}
 
 #endif /* FILEIO_H_ */

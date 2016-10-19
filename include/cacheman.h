@@ -15,6 +15,9 @@
 
 // #define USEDUPEFILTER
 
+namespace acng
+{
+
 class dlcon;
 
 // XXX: specific declarations, maybe move to a namespace
@@ -266,5 +269,6 @@ protected:
 	tStrDeq GetGoodReleaseFiles();
 };
 
+}
 
 #endif /*_CACHEMAN_H_*/

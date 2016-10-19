@@ -18,10 +18,12 @@
 
 #define MAINT_PFX "maint_"
 
+namespace acng
+{
 class tSpecialRequest
 {
 public:
-	enum eMaintWorkType : int
+	enum eMaintWorkType : char
 	{
 		workNotSpecial =0,
 
@@ -124,5 +126,7 @@ public:
 protected:
 	static tSpecialRequest* MakeMaintWorker(const tRunParms& parms);
 };
+
+}
 
 #endif /*MAINTENANCE_H_*/

@@ -1,3 +1,31 @@
+apt-cacher-ng (1) LOGAN-VS-BLADE-RUNNER-3D; urgency=low
+
+  * The version numbers change to plain integer. The minor numbers were
+    already hardly used for differentiation between bugfix and feature
+    releases. If this becomes ever needed, the version might be extended to
+    x.y scheme.
+  * FIX: typo in option name ExThreshold, and also hiding obsolete options
+    in configuration dump
+  * FIX: correct display of errors in acngtool curl operation
+  * FIX: strict SSL hostname validation even with peers not supporting SNI
+    (Debian bug #839751)
+  * NEW: simple "live" download statistics display on the maintenance page
+  * NEW: storage of simple download statistics across service restart (until
+    the expiration run)
+  * NEW: default method to abort expiration runs if not much data has been
+    downloaded though the proxy since the last expiration run.
+  * NEW: special command in acngtool ("shrink") to files until
+    the wanted size of the cache directory is reached (considering file type
+    and creation dates). The default strategy is keeping least recently
+    downloaded files in cache.
+  * NEW: optional tagging of used package files which can influence the
+    "shrink" command operation to keep least recently USED files instead of
+    least recently downloaded files.
+  * CHANGE: remote errors now printed as E states in the logging code
+  * Database update
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 19 Oct 2016 22:07:06 +0200
+
 apt-cacher-ng (0.9.3.2) PAINT-IT-AEROGLAZE-Z306; urgency=low
 
   * FIX: avoid endless looping on startup when a new (not existing) directory

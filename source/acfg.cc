@@ -5,6 +5,7 @@
 #include "meta.h"
 #include "filereader.h"
 #include "fileio.h"
+#include "sockio.h"
 #include "lockable.h"
 #include "cleaner.h"
 
@@ -16,10 +17,12 @@
 #include <algorithm>
 #include <list>
 #include <unordered_map>
-
+#include <atomic>
 
 using namespace std;
 
+namespace acng
+{
 // hint to use the main configuration excluding the complex directives
 //bool g_testMode=false;
 
@@ -28,15 +31,17 @@ bool bIsHashedPwd=false;
 #define BARF(x) {if(!g_bQuiet) { cerr << x << endl;} exit(EXIT_FAILURE); }
 #define BADSTUFF_PATTERN "\\.\\.($|%|/)"
 
-namespace rechecks
+namespace rex
 {
 bool CompileExpressions();
 }
 
 
-namespace acfg {
+namespace cfg {
 
 bool g_bQuiet=false, g_bNoComplex=false;
+
+extern std::atomic_bool degraded;
 
 // internal stuff:
 string sPopularPath("/debian/");
@@ -59,6 +64,7 @@ struct MapNameToInt
 {
 	const char *name; int *ptr;
 	const char *warn; uint8_t base;
+	uint8_t hidden;	// just a hint
 };
 
 struct tProperty
@@ -119,46 +125,49 @@ MapNameToString n2sTbl[] = {
 };
 
 MapNameToInt n2iTbl[] = {
-		{   "Debug",                             &debug,            nullptr,    10}
-		,{  "OfflineMode",                       &offlinemode,      nullptr,    10}
-		,{  "ForeGround",                        &foreground,       nullptr,    10}
-		,{  "ForceManaged",                      &forcemanaged,     nullptr,    10}
-		,{  "StupidFs",                          &stupidfs,         nullptr,    10}
-		,{  "VerboseLog",                        &verboselog,       nullptr,    10}
-		,{  "ExTreshold",                        &extreshhold,      nullptr,    10}
-		,{  "MaxStandbyConThreads",              &tpstandbymax,     nullptr,    10}
-		,{  "MaxConThreads",                     &tpthreadmax,      nullptr,    10}
-		,{  "DnsCacheSeconds",                   &dnscachetime,     nullptr,    10}
-		,{  "UnbufferLogs",                      &debug,            nullptr,    10}
-		,{  "ExAbortOnProblems",                 &exfailabort,      nullptr,    10}
-		,{  "ExposeOrigin",                      &exporigin,        nullptr,    10}
-		,{  "LogSubmittedOrigin",                &logxff,           nullptr,    10}
-		,{  "RecompBz2",                         &recompbz2,        nullptr,    10}
-		,{  "NetworkTimeout",                    &nettimeout,       nullptr,    10}
-		,{  "MinUpdateInterval",                 &updinterval,      nullptr,    10}
-		,{  "ForwardBtsSoap",                    &forwardsoap,      nullptr,    10}
-		,{  "KeepExtraVersions",                 &keepnver,         nullptr,    10}
-		,{  "UseWrap",                           &usewrap,          nullptr,    10}
-		,{  "FreshIndexMaxAge",                  &maxtempdelay,     nullptr,    10}
-		,{  "RedirMax",                          &redirmax,         nullptr,    10}
-		,{  "VfileUseRangeOps",                  &vrangeops,        nullptr,    10}
-		,{  "ResponseFreezeDetectTime",          &stucksecs,        nullptr,    10}
-		,{  "ReuseConnections",                  &persistoutgoing,  nullptr,    10}
-		,{  "PipelineDepth",                     &pipelinelen,      nullptr,    10}
-		,{  "ExSuppressAdminNotification",       &exsupcount,       nullptr,    10}
-		,{  "OptProxyTimeout",                   &optproxytimeout,  nullptr,    10}
-		,{  "MaxDlSpeed",                        &maxdlspeed,       nullptr,    10}
-		,{  "MaxInresponsiveDlSize",             &maxredlsize,      nullptr,    10}
-		,{  "OptProxyCheckInterval",             &optProxyCheckInt, nullptr,    10}
+		{   "Debug",                             &debug,            nullptr,    10, false}
+		,{  "OfflineMode",                       &offlinemode,      nullptr,    10, false}
+		,{  "ForeGround",                        &foreground,       nullptr,    10, false}
+		,{  "ForceManaged",                      &forcemanaged,     nullptr,    10, false}
+		,{  "StupidFs",                          &stupidfs,         nullptr,    10, false}
+		,{  "VerboseLog",                        &verboselog,       nullptr,    10, false}
+		,{  "ExThreshold",                       &extreshhold,      nullptr,    10, false}
+		,{  "ExTreshold",                        &extreshhold,      nullptr,    10, true} // wrong spelling :-(
+		,{  "MaxStandbyConThreads",              &tpstandbymax,     nullptr,    10, false}
+		,{  "MaxConThreads",                     &tpthreadmax,      nullptr,    10, false}
+		,{  "DnsCacheSeconds",                   &dnscachetime,     nullptr,    10, false}
+		,{  "UnbufferLogs",                      &debug,            nullptr,    10, false}
+		,{  "ExAbortOnProblems",                 &exfailabort,      nullptr,    10, false}
+		,{  "ExposeOrigin",                      &exporigin,        nullptr,    10, false}
+		,{  "LogSubmittedOrigin",                &logxff,           nullptr,    10, false}
+		,{  "RecompBz2",                         &recompbz2,        nullptr,    10, false}
+		,{  "NetworkTimeout",                    &nettimeout,       nullptr,    10, false}
+		,{  "MinUpdateInterval",                 &updinterval,      nullptr,    10, false}
+		,{  "ForwardBtsSoap",                    &forwardsoap,      nullptr,    10, false}
+		,{  "KeepExtraVersions",                 &keepnver,         nullptr,    10, false}
+		,{  "UseWrap",                           &usewrap,          nullptr,    10, false}
+		,{  "FreshIndexMaxAge",                  &maxtempdelay,     nullptr,    10, false}
+		,{  "RedirMax",                          &redirmax,         nullptr,    10, false}
+		,{  "VfileUseRangeOps",                  &vrangeops,        nullptr,    10, false}
+		,{  "ResponseFreezeDetectTime",          &stucksecs,        nullptr,    10, false}
+		,{  "ReuseConnections",                  &persistoutgoing,  nullptr,    10, false}
+		,{  "PipelineDepth",                     &pipelinelen,      nullptr,    10, false}
+		,{  "ExSuppressAdminNotification",       &exsupcount,       nullptr,    10, false}
+		,{  "OptProxyTimeout",                   &optproxytimeout,  nullptr,    10, false}
+		,{  "MaxDlSpeed",                        &maxdlspeed,       nullptr,    10, false}
+		,{  "MaxInresponsiveDlSize",             &maxredlsize,      nullptr,    10, false}
+		,{  "OptProxyCheckInterval",             &optProxyCheckInt, nullptr,    10, false}
+		,{  "TrackFileUse",		             	 &trackfileuse,		nullptr,    10, false}
+		,{  "ExStartTradeOff",                   &exstarttradeoff,  nullptr,    10, false}
 		// octal base interpretation of UNIX file permissions
-		,{  "DirPerms",                          &dirperms,         nullptr,    8}
-		,{  "FilePerms",                         &fileperms,        nullptr,    8}
+		,{  "DirPerms",                          &dirperms,         nullptr,    8, false}
+		,{  "FilePerms",                         &fileperms,        nullptr,    8, false}
 
-		,{ "Verbose", 			nullptr,		"Option is deprecated, ignoring the value." , 10}
-		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10}
-		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10}
-		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10}
-		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10}
+		,{ "Verbose", 			nullptr,		"Option is deprecated, ignoring the value." , 10, true}
+		,{ "MaxSpareThreadSets",&tpstandbymax, 	"Deprecated option name, mapped to MaxStandbyConThreads", 10, true}
+		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10, true}
+		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10, false}
+		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10, false}
 };
 
 
@@ -384,10 +393,15 @@ struct tCfgIter
 
 inline bool qgrep(cmstring &needle, cmstring &file)
 {
-	for(acfg::tCfgIter itor(file); itor.Next();)
+	for(cfg::tCfgIter itor(file); itor.Next();)
 		if(StrHas(itor.sLine, needle))
 			return true;
 	return false;
+}
+
+bool DegradedMode()
+{
+	return degraded.load();
 }
 
 inline void _FixPostPreSlashes(string &val)
@@ -477,7 +491,7 @@ inline void AddRemapFlag(const string & token, const string &repname)
 	{
 		if(value.empty())
 			return;
-		if (acfg::debug&LOG_FLUSH)
+		if (cfg::debug & log::LOG_FLUSH)
 			cerr << "Fatal keyfile for " <<repname<<": "<<value <<endl;
 
 		where.m_keyfiles.emplace_back(value);
@@ -607,14 +621,14 @@ struct tHookHandler: public tRepoData::IHookHandler, public base_with_mutex
 			if(downTimeNext) // huh, already ticking? reset
 				downTimeNext=0;
 			else if(system(cmdCon.c_str()))
-				aclog::err(tSS() << "Warning: " << cmdCon << " returned with error code.");
+				log::err(tSS() << "Warning: " << cmdCon << " returned with error code.");
 		}
 	}
 };
 
 inline void _AddHooksFile(cmstring& vname)
 {
-	tCfgIter itor(acfg::confdir+"/"+vname+".hooks");
+	tCfgIter itor(cfg::confdir+"/"+vname+".hooks");
 	if(!itor)
 		return;
 
@@ -706,9 +720,9 @@ cmstring & GetMimeType(cmstring &path)
 	tStrPos dpos = path.find_last_of('.');
 	if (dpos != stmiss)
 	{
-		NoCaseStringMap::const_iterator it = acfg::mimemap.find(path.substr(
+		NoCaseStringMap::const_iterator it = cfg::mimemap.find(path.substr(
 				dpos + 1));
-		if (it != acfg::mimemap.end())
+		if (it != cfg::mimemap.end())
 			return it->second;
 	}
 	// try some educated guess... assume binary if we are sure, text if we are almost sure
@@ -868,7 +882,7 @@ unsigned ReadBackendsFile(const string & sFile, const string &sRepName)
 	
 	while(itor.Next())
 	{
-		if(debug & LOG_DEBUG)
+		if(debug & log::LOG_DEBUG)
 			cerr << "Backend URL: " << itor.sLine <<endl;
 
 		trimBack(itor.sLine);
@@ -1032,7 +1046,7 @@ void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bReadErrorIsFatal);
 #endif
 	dump_proc_status();
-	if(debug & LOG_DEBUG)
+	if(debug & log::LOG_DEBUG)
 	{
 		unsigned nUrls=0;
 		for(const auto& x: mapUrl2pVname)
@@ -1088,11 +1102,11 @@ void PostProcConfig()
 	   cerr << "Warning: Cache directory unknown or not absolute, running in degraded mode!" << endl;
 	   degraded=true;
    }
-   if(!rechecks::CompileExpressions())
+   if(!rex::CompileExpressions())
 	   BARF("An error occurred while compiling file type regular expression!");
    
-   if(acfg::tpthreadmax < 0)
-	   acfg::tpthreadmax = MAX_VAL(int);
+   if(cfg::tpthreadmax < 0)
+	   cfg::tpthreadmax = MAX_VAL(int);
 	   
    // get rid of duplicated and trailing slash(es)
 	for(tStrPos pos; stmiss != (pos = cachedir.find(SZPATHSEP SZPATHSEP )); )
@@ -1103,22 +1117,22 @@ void PostProcConfig()
    if(!pidfile.empty() && pidfile.at(0) != CPATHSEP)
 	   BARF("Pid file path must be absolute, terminating...");
    
-   if(!acfg::agentname.empty())
-	   acfg::agentheader=string("User-Agent: ")+acfg::agentname + "\r\n";
+   if(!cfg::agentname.empty())
+	   cfg::agentheader=string("User-Agent: ")+cfg::agentname + "\r\n";
 
-   stripPrefixChars(acfg::reportpage, '/');
+   stripPrefixChars(cfg::reportpage, '/');
 
-   trimString(acfg::requestapx);
-   if(!acfg::requestapx.empty())
-	   acfg::requestapx = unEscape(acfg::requestapx);
+   trimString(cfg::requestapx);
+   if(!cfg::requestapx.empty())
+	   cfg::requestapx = unEscape(cfg::requestapx);
 
    // create working paths before something else fails somewhere
    if(!fifopath.empty())
-	   mkbasedir(acfg::fifopath);
+	   mkbasedir(cfg::fifopath);
    if(!cachedir.empty())
-	   mkbasedir(acfg::cachedir);
+	   mkbasedir(cfg::cachedir);
    if(! pidfile.empty())
-	   mkbasedir(acfg::pidfile);
+	   mkbasedir(cfg::pidfile);
 
    if(nettimeout < 5) {
 	   cerr << "Warning: NetworkTimeout value too small, using: 5." << endl;
@@ -1137,9 +1151,9 @@ void PostProcConfig()
 	numcores = (int) sysconf(_SC_NPROC_ONLN);
 #endif
 
-   if(!rechecks::CompileUncExpressions(rechecks::NOCACHE_REQ,
+   if(!rex::CompileUncExpressions(rex::NOCACHE_REQ,
 		   tmpDontcacheReq.empty() ? tmpDontcache : tmpDontcacheReq)
-   || !rechecks::CompileUncExpressions(rechecks::NOCACHE_TGT,
+   || !rex::CompileUncExpressions(rex::NOCACHE_TGT,
 		   tmpDontcacheTgt.empty() ? tmpDontcache : tmpDontcacheTgt))
    {
 	   BARF("An error occurred while compiling regular expression for non-cached paths!");
@@ -1184,7 +1198,7 @@ void dump_config(bool includeDelicate)
 		if (n2s.ptr)
 			cmine << n2s.name << " = " << *n2s.ptr << endl;
 
-	if (acfg::debug >= LOG_DEBUG)
+	if (cfg::debug >= log::LOG_DEBUG)
 	{
 		cerr << "escaped version:" << endl;
 		for (const auto& n2s : n2sTbl)
@@ -1205,7 +1219,7 @@ void dump_config(bool includeDelicate)
 	}
 
 	for (const auto& n2i : n2iTbl)
-		if (n2i.ptr)
+		if (n2i.ptr && !n2i.hidden)
 			cmine << n2i.name << " = " << *n2i.ptr << endl;
 
 	for (const auto& x : n2pTbl)
@@ -1216,7 +1230,7 @@ void dump_config(bool includeDelicate)
 	}
 
 #ifndef DEBUG
-	if (acfg::debug >= LOG_DEBUG)
+	if (cfg::debug >= log::LOG_DEBUG)
 		cerr << "\n\nAdditional debugging information not compiled in.\n\n";
 #endif
 
@@ -1270,13 +1284,13 @@ time_t BackgroundCleanup()
 		{
 			if (hooks.downTimeNext <= now) // time to execute
 			{
-				if(acfg::debug&LOG_MORE)
-					aclog::misc(hooks.cmdRel, 'X');
-				if(acfg::debug & LOG_FLUSH)
-					aclog::flush();
+				if(cfg::debug & log::LOG_MORE)
+					log::misc(hooks.cmdRel, 'X');
+				if(cfg::debug & log::LOG_FLUSH)
+					log::flush();
 
 				if(system(hooks.cmdRel.c_str()))
-					aclog::err(tSS() << "Warning: " << hooks.cmdRel << " returned with error code.");
+					log::err(tSS() << "Warning: " << hooks.cmdRel << " returned with error code.");
 				hooks.downTimeNext = 0;
 			}
 			else // in future, use the soonest time
@@ -1290,7 +1304,7 @@ acmutex authLock;
 
 int CheckAdminAuth(LPCSTR auth)
 {
-	if(acfg::adminauthB64.empty())
+	if(cfg::adminauthB64.empty())
 		return 0;
 	if(!auth || !*auth)
 		return 1; // request it from user
@@ -1378,7 +1392,7 @@ void MarkProxyFailure()
 
 } // namespace acfg
 
-namespace rechecks
+namespace rex
 {
 	// this has the exact order of the "regular" types in the enum
 	struct { regex_t *pat=nullptr, *extra=nullptr; } rex[ematchtype_max];
@@ -1403,7 +1417,7 @@ bool CompileExpressions()
 			std::cerr << buf << ": " << ps << std::endl;
 			return false;
 		};
-	using namespace acfg;
+	using namespace cfg;
 	return (compat(rex[FILE_SOLID].pat, pfilepat.c_str())
 			&& compat(rex[FILE_VOLATILE].pat, vfilepat.c_str())
 			&& compat(rex[FILE_WHITELIST].pat, wfilepat.c_str())
@@ -1465,10 +1479,10 @@ inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool 
 	}
 	else if(!bRecursiveCall) // don't go further than one level
 	{
-		tStrDeq srcs = acfg::ExpandFileTokens(token);
+		tStrDeq srcs = cfg::ExpandFileTokens(token);
 		for(const auto& src: srcs)
 		{
-			acfg::tCfgIter itor(src);
+			cfg::tCfgIter itor(src);
 			if(!itor)
 			{
 				cerr << "Error opening pattern file: " << src <<endl;
@@ -1514,16 +1528,18 @@ bool MatchUncacheable(const string & in, NOCACHE_PATTYPE type)
 #ifndef MINIBUILD
 LPCSTR ReTest(LPCSTR s)
 {
-	static LPCSTR names[rechecks::ematchtype_max] =
+	static LPCSTR names[rex::ematchtype_max] =
 	{
 				"FILE_SOLID", "FILE_VOLATILE",
 				"FILE_WHITELIST",
 				"NASTY_PATH", "PASSTHROUGH",
 				"FILE_SPECIAL_SOLID"
 	};
-	auto t = rechecks::GetFiletype(s);
-	if(t<0 || t>=rechecks::ematchtype_max)
+	auto t = rex::GetFiletype(s);
+	if(t<0 || t>=rex::ematchtype_max)
 		return "NOMATCH";
 	return names[t];
 }
 #endif
+
+}

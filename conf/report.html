@@ -14,6 +14,30 @@
       <div class="visarea maxwid" style="text-align:left">
          <h2>Transfer statistics</h2>
          <table border=0 cellpadding=2 cellspacing=1 bgcolor="black">
+                 <tr>
+                         <td class="coltitle"> </td>
+                         <td class="coltitle">Since startup</td>
+                         <td class="coltitle">Recent history</td>
+                 </tr>
+                 <tr>
+                         <td class="coltitle" style="text-align:left">Data fetched:</td>
+                         <td class="colcont" style="text-align:left"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA
+                         B3RJTUUH4AoKFBQ7exd8OgAAAAxJREFUCNdjUDC/DwABsQE3XXYqIQAAAABJRU5ErkJggg==" width=${dataIn} height=11> ${dataInHuman}</td>
+                         <td class="colcont" style="text-align:left"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA
+                         B3RJTUUH4AoKFBQ7exd8OgAAAAxJREFUCNdjUDC/DwABsQE3XXYqIQAAAABJRU5ErkJggg==" width=${dataHistIn} height=11> ${dataHistInHuman}</td>
+                 </tr>
+                 <tr>
+                         <td class="coltitle" style="text-align:left">Data served:</td>
+                         <td class="colcont" style="text-align:left"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA
+B3RJTUUH4AoKFBIl10Lm3wAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUH
+AAAADElEQVQI12MQVSgBAAD3AKpQhOaUAAAAAElFTkSuQmCC" width=${dataOut} height=11> ${dataOutHuman}</td>
+                         <td class="colcont" style="text-align:left"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA
+B3RJTUUH4AoKFBIl10Lm3wAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUH
+AAAADElEQVQI12MQVSgBAAD3AKpQhOaUAAAAAElFTkSuQmCC" width=${dataHistOut} height=11> ${dataHistOutHuman}</td>
+                 </tr>
+         </table>
+         <h3>Log analysis</h3>
+         <table border=0 cellpadding=2 cellspacing=1 bgcolor="black">
             <tr>
                <td class="coltitle" rowspan=3>Period</td>
                <td class="coltitle" colspan=8>Cache efficiency</td>
@@ -93,6 +117,8 @@
          </tr>
          <tr>
             <td valign=top-->
+               <label><input type="checkbox" name="ignoreTradeOff" value="iTO"> Ignore the threshold that aborts early when there is probably not much to do</label>
+               <br>
                <label><input type="checkbox" name="skipHeadChecks" value="sHC"> Skip header checks (faster, not detecting bad metadata)</label>
                <br>
                <label><input type="checkbox" name="byPath" value="bP" id="idBP" onChange="endis();"> <i>Validate by file name AND file directory (use with care),</i></label>

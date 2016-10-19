@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include "meta.h"
 
+namespace acng
+{
+
 /*! \brief Helper class to maintain a memory buffer, i.e. a continuous block of bytes.
  * It also encapsulates some typical operations on it.
  */
@@ -96,7 +99,7 @@ public:
 	inline tSS & operator<<(void* val) __tss_nbrfmt("ptr:%llu", "ptr:0x%llx", (long long unsigned) val);
 #endif
 
-    enum fmtflags {	hex, dec };
+    enum fmtflags : bool { hex, dec };
     inline tSS & operator<<(fmtflags mode) { m_fmtmode=mode; return *this;}
 
     operator mstring() const { return mstring(rptr(), size()); }
@@ -135,6 +138,6 @@ protected:
 	inline tSS & appDosNL() { return add("\r\n", 2);}
 };
 
-cmstring& GetFooter();
+}
 
 #endif

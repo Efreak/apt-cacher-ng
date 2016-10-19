@@ -5,10 +5,15 @@
 #include "config.h"
 #include "meta.h"
 #include "acfg.h"
+#include "sockio.h"
+
+#include <atomic>
 
 using namespace std;
 
-namespace acfg
+namespace acng
+{
+namespace cfg
 {
 
 string cachedir("/var/tmp"), logdir("/var/tmp"), fifopath, pidfile, reportpage,
@@ -95,7 +100,8 @@ int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
 logxff(false), oldupdate(false), recompbz2(false), nettimeout(60), updinterval(0),
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(10), exsupcount(RESERVED_DEFVAL),
-optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false);
+optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false),
+trackfileuse(false), exstarttradeoff(500000000);
 
 int maxdlspeed(RESERVED_DEFVAL);
 
@@ -128,5 +134,7 @@ string cacheDirSlash; // guaranteed to have a trailing path separator
 int conprotos[2] = { PF_UNSPEC, PF_UNSPEC };
 
 std::atomic_bool degraded(false);
+
+}
 
 }

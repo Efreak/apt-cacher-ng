@@ -5,6 +5,9 @@
 #include <list>
 #include <unordered_map>
 
+namespace acng
+{
+
 // caching all relevant file identity data and helper flags in such entries
 struct tDiskFileInfo
 {
@@ -56,5 +59,7 @@ private:
 	void HandleDamagedFiles();
 	void ListExpiredFiles();
 };
+
+}
 
 #endif /*EXPIRATION_H_*/
