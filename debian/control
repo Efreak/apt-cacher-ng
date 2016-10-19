@@ -10,7 +10,7 @@ Vcs-Browser: https://alioth.debian.org/plugins/scmgit/cgi-bin/gitweb.cgi?p=apt-c
 
 Package: apt-cacher-ng
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, lsb-base (>= 3.0-6)
 Pre-Depends: dpkg (>= 1.15.6)
 Conflicts: logrotate (<< 3.8.0)
 Suggests: doc-base, libfuse2 (>= 2.5), avahi-daemon
