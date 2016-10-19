@@ -152,7 +152,7 @@ public:
 	// when copied around, invalidates the original reference
 	~fileItemMgmt();
 	inline fileItemMgmt() {}
-	inline tFileItemPtr get() {return m_ptr;}
+	inline tFileItemPtr getFiPtr() {return m_ptr;}
 	inline operator bool() const {return (bool) m_ptr;}
 
 

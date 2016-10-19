@@ -150,7 +150,8 @@ bool open()
 void transfer(uint64_t bytesIn,
 		uint64_t bytesOut,
 		cmstring& sClient,
-		cmstring& sPath)
+		cmstring& sPath,
+		bool bAsError)
 {
 	totalIn.fetch_add(bytesIn);
 	totalOut.fetch_add(bytesOut);
@@ -172,7 +173,7 @@ void transfer(uint64_t bytesIn,
 	}
 	if (bytesOut)
 	{
-		fStat << tNow << "|O|" << bytesOut;
+		fStat << tNow << (bAsError ? "|E|" : "|O|") << bytesOut;
 		if (cfg::verboselog)
 			fStat << '|' << sClient << '|' << sPath;
 		fStat << '\n'; // not endl, it might flush

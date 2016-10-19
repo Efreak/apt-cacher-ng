@@ -222,18 +222,21 @@ job::job(header *h, con *pParent) :
 	LOGSTART2("job::job", "job creating, " << m_pReqHead->frontLine << " and this: " << uintptr_t(this));
 }
 
-string miscError("(HTTP error page)");
+static const string miscError(" [HTTP error, code: ");
 
 job::~job()
 {
 	LOGSTART("job::~job");
+	int stcode = 200;
+	if(m_pItem) stcode = m_pItem.getFiPtr()->GetHeader().getStatus();
 
-	bool bErr=m_sFileLoc.empty();
+	bool bErr=m_sFileLoc.empty() || stcode >= 400;
+
 	m_pParentCon->LogDataCounts(
-			( bErr ? (m_pItem ? m_pItem.get()->GetHttpMsg() : miscError ) : m_sFileLoc ),
+			m_sFileLoc + (bErr ? (miscError + ltos(stcode) + ']') : sEmptyString),
 			m_pReqHead->h[header::XFORWARDEDFOR],
-			(m_pItem ? m_pItem.get()->GetTransferCount() : 0),
-			m_nAllDataCount);
+			(m_pItem ? m_pItem.getFiPtr()->GetTransferCount() : 0),
+			m_nAllDataCount, bErr);
 	
 	checkforceclose(m_filefd);
 	delete m_pReqHead;
@@ -618,7 +621,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
     if(cfg::DegradedMode())
        goto report_degraded;
     
-    fistate = m_pItem.get()->Setup(bForceFreshnessChecks);
+    fistate = m_pItem.getFiPtr()->Setup(bForceFreshnessChecks);
 	LOG("Got initial file status: " << fistate);
 
 	if (bPtMode && fistate != fileitem::FIST_COMPLETE)
@@ -628,7 +631,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 	// might need to update the filestamp because nothing else would trigger it
 	if(cfg::trackfileuse && fistate >= fileitem::FIST_DLGOTHEAD && fistate < fileitem::FIST_DLERROR)
-		m_pItem.get()->UpdateHeadTimestamp();
+		m_pItem.getFiPtr()->UpdateHeadTimestamp();
 
 	if(fistate==fileitem::FIST_COMPLETE)
 		return; // perfect, done here
@@ -639,9 +642,9 @@ void job::PrepareDownload(LPCSTR headBuf) {
 	if((m_nReqRangeFrom>=0 && m_nReqRangeTo>=0)
 			|| (m_pReqHead->type==header::HEAD && 0!=(m_nReqRangeTo=-1)))
 	{
-		auto p(m_pItem.get());
+		auto p(m_pItem.getFiPtr());
 		lockguard g(p.get());
-		if(m_pItem.get()->CheckUsableRange_unlocked(m_nReqRangeTo))
+		if(m_pItem.getFiPtr()->CheckUsableRange_unlocked(m_nReqRangeTo))
 		{
 			LOG("Got a partial request for incomplete download; range is available");
 			m_bNoDownloadStarted=true;
@@ -682,7 +685,7 @@ MYTRY
 						fistate = _SwitchToPtItem();
 				}
 
-					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.get(),
+					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.getFiPtr(),
 							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
 							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
 									(LPCSTR) ( bPtMode ? headBuf : nullptr)))
@@ -757,16 +760,16 @@ job::eJobResult job::SendData(int confd)
 
 	if (m_pItem)
 	{
-		lockuniq g(m_pItem.get().get());
+		lockuniq g(m_pItem.getFiPtr().get());
 		
 		for(;;)
 		{
-			fistate=m_pItem.get()->GetStatusUnlocked(nGoodDataSize);
+			fistate=m_pItem.getFiPtr()->GetStatusUnlocked(nGoodDataSize);
 			
 			LOG(fistate);
 			if (fistate > fileitem::FIST_COMPLETE)
 			{
-				const header &h = m_pItem.get()->GetHeaderUnlocked();
+				const header &h = m_pItem.getFiPtr()->GetHeaderUnlocked();
 				g.unLock(); // item lock must be released in order to replace it!
 				if(m_nAllDataCount)
 					return R_DISCON;
@@ -797,12 +800,12 @@ job::eJobResult job::SendData(int confd)
 				break;
 			
 			dbgline;
-			m_pItem.get()->wait(g);
+			m_pItem.getFiPtr()->wait(g);
 			
 			dbgline;
 		}
 		
-		respHead = m_pItem.get()->GetHeaderUnlocked();
+		respHead = m_pItem.getFiPtr()->GetHeaderUnlocked();
 
 		if(respHead.h[header::XORIG])
 			m_sOrigUrl=respHead.h[header::XORIG];
@@ -842,7 +845,7 @@ job::eJobResult job::SendData(int confd)
 						return R_AGAIN;
 					}
 
-					m_filefd=m_pItem.get()->GetFileFd();
+					m_filefd=m_pItem.getFiPtr()->GetFileFd();
 					if(!IsValidFD(m_filefd)) THROW_ERROR("503 IO error");
 
 					m_state=m_bChunkMode ? STATE_SEND_CHUNK_HEADER : STATE_SEND_PLAIN_DATA;
@@ -865,7 +868,7 @@ job::eJobResult job::SendData(int confd)
 
 					size_t nMax2SendNow=min(nGoodDataSize-m_nSendPos, m_nCurrentRangeLast+1-m_nSendPos);
 					ldbg("~sendfile: on "<< m_nSendPos << " up to : " << nMax2SendNow);
-					int n = m_pItem.get()->SendData(confd, m_filefd, m_nSendPos, nMax2SendNow);
+					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd, m_nSendPos, nMax2SendNow);
 					ldbg("~sendfile: " << n << " new m_nSendPos: " << m_nSendPos);
 
 					if(n>0)
@@ -903,7 +906,7 @@ job::eJobResult job::SendData(int confd)
 
 					if(m_nChunkRemainingBytes==0)
 						GOTOENDE; // done
-					int n = m_pItem.get()->SendData(confd, m_filefd, m_nSendPos, m_nChunkRemainingBytes);
+					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd, m_nSendPos, m_nChunkRemainingBytes);
 					if(n<0)
 						THROW_ERROR("400 Client error");
 					m_nChunkRemainingBytes-=n;
@@ -1142,7 +1145,7 @@ fileitem::FiStatus job::_SwitchToPtItem()
 	LOGSTART("job::_SwitchToPtItem");
 	// exception-safe sequence
 	m_pItem.RegisterFileitemLocalOnly(new tPassThroughFitem(m_sFileLoc));
-	return m_pItem.get()->Setup(true);
+	return m_pItem.getFiPtr()->Setup(true);
 }
 
 

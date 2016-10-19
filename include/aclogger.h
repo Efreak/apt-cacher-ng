@@ -54,7 +54,8 @@ std::pair<off_t, off_t> GetOldCountersInOut(bool calcIncomming = true, bool calc
 
 bool open();
 void close(bool bReopen);
-void transfer(uint64_t bytesIn, uint64_t bytesOut, cmstring& sClient, cmstring& sPath);
+void transfer(uint64_t bytesIn, uint64_t bytesOut, cmstring& sClient, cmstring& sPath,
+		bool bAsError);
 void err(const char *msg, const char *client = nullptr);
 void misc(const mstring & sLine, const char cLogType = 'M');
 inline void err(cmstring &msg)

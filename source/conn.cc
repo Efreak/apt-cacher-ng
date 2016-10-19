@@ -441,7 +441,7 @@ bool con::SetupDownloader(const char *pszOrigin)
 }
 
 void con::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
-		off_t nNewOut)
+		off_t nNewOut, bool bAsError)
 {
 	string sClient;
 	if (!cfg::logxff || !xff) // not to be logged or not available
@@ -458,14 +458,15 @@ void con::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
 		writeAnotherLogRecord(sFile, sClient);
 	fileTransferIn += nNewIn;
 	fileTransferOut += nNewOut;
-
+	if(bAsError) m_bLogAsError = true;
 }
 
 // sends the stats to logging and replaces file/client identities with the new context
 void con::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient)
 {
-		log::transfer(fileTransferIn, fileTransferOut, logClient, logFile);
+		log::transfer(fileTransferIn, fileTransferOut, logClient, logFile, m_bLogAsError);
 		fileTransferIn = fileTransferOut = 0;
+		m_bLogAsError = false;
 		logFile = pNewFile;
 		logClient = pNewClient;
 }
