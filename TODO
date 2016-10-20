@@ -5,6 +5,21 @@ Raw pass-throough of Location: addresses as long as they follow the minimum
 safety rules, for web services that apply strange rules WRT validation of such
 redirections (https://bugs.launchpad.net/bugs/1625928)
 
+Add a special cleanup page (or just a special mode of Expiration task which
+does not abort on errors and does not remove stuff) which focuses on the
+expiration issue.
+
+Try to reduce thread count: use same thread for connection and downloader with
+more async. IO (probably offload DNS operations to the background thread,
+though).
+Or maybe do even more massive AIO (via libevent or Boost::ASIO or plain ASIO)
+and run as many threads as cores available and do everything (except for DNS)
+in shared threads.
+
+Maybe use lockfree queues for some internal item passing,
+https://github.com/cameron314/concurrentqueue . For example for logging, doing
+actual log writting via the background thread.
+
 Move signal handler to signalfd (on Linux) or a pipe fed from a basic signal
 handler (replacement for non-Linux). Current solution still has potential for dead-locking.
 
