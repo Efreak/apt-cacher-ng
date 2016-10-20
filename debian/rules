@@ -11,11 +11,18 @@ include /usr/share/dpkg/buildflags.mk
 CFLAGS += $(CPPFLAGS)
 CXXFLAGS += $(CPPFLAGS)
 
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+
+# libatomic provides 8-bytes atomic operation for 32-bit MIPS
+ifneq (,$(filter $(DEB_HOST_ARCH), mips mipsel))
+ EXTRA_LIBS="-DEXTRA_LIBS_ACNG=-latomic"
+endif
+
 %:
 	dh $@ --parallel --with systemd
 
 override_dh_auto_configure:
-	dh_auto_configure -- -DSDINSTALL=on
+	dh_auto_configure -- -DSDINSTALL=on $(EXTRA_LIBS)
 
 # needs extra build deps and internet -> ignore
 override_dh_auto_test:
