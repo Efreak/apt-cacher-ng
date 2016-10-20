@@ -3,6 +3,9 @@ apt-cacher-ng (1-2) unstable; urgency=low
   [ Dejan Latinovic <Dejan.Latinovic@imgtec.com> ]
   * Fixing FTBFS on MIPS (extra libatomic dependency, closes: #841431)
 
+  [Eduard Bloch]
+  * Extended mips/mipsel FTBFS patch to powerpcspe and m68k
+
  -- Eduard Bloch <blade@debian.org>  Thu, 20 Oct 2016 20:25:39 +0200
 
 apt-cacher-ng (1-1) unstable; urgency=low
