@@ -171,6 +171,12 @@ if(HAVE_SOCKETLIB)
    LIST(APPEND BaseNetworkLibs socket nsl)
 endif(HAVE_SOCKETLIB)
 
+FIND_LIBRARY(HAVE_ATOMICLIB atomic) # needed for global atomic vars on some 32bit architectures
+if(HAVE_ATOMICLIB)
+        MESSAGE("-- Found libatomic development files, will link libatomic")
+        LIST(APPEND BaseNetworkLibs atomic)
+endif()
+
 # explicit linking needed for global locks in dlcon
 list(APPEND BaseNetworkLibs pthread)
 
