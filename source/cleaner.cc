@@ -64,8 +64,10 @@ void cleaner::WorkLoop()
 		auto now=GetTime();
 		if(when > now)
 		{
-			// work around buggy STL, add some years on top and hope it will be fixed everywhere by then
-			wait_until(g, when == END_OF_TIME ? (now | 0x3ffffffe) : when, 111);
+			// work around buggy STL: add some years on top and hope it will be fixed then
+			if(when == END_OF_TIME)
+				when = now | 0x3ffffffe;
+			wait_until(g, when, 111);
 			continue;
 		}
 		stamps[what] = END_OF_TIME;
