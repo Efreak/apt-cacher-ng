@@ -431,8 +431,8 @@ tErrnoFmter::tErrnoFmter(const char *prefix)
 
 #ifdef DEBUG
 
-static class : public base_with_mutex, public std::map<pthread_t, int>
-{} stackDepths;
+static struct : public base_with_mutex, public std::map<pthread_t, int>
+{} indentPerThread;
 
 t_logger::t_logger(const char *szFuncName,  const void * ptr)
 {
@@ -440,8 +440,8 @@ t_logger::t_logger(const char *szFuncName,  const void * ptr)
 	m_szName = szFuncName;
 	callobj = uintptr_t(ptr);
 	{
-		lockguard __lockguard(stackDepths);
-		m_nLevel = stackDepths[m_id]++;
+		lockguard __lockguard(indentPerThread);
+		m_nLevel = indentPerThread[m_id]++;
 	}
 	// writing to the level of parent since it's being "created there"
 	GetFmter() << ">> " << szFuncName << " [T:"<<m_id<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
@@ -454,10 +454,10 @@ t_logger::~t_logger()
 	m_nLevel--;
 	GetFmter() << "<< " << m_szName << " [T:"<<m_id<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	Write();
-	lockguard __lockguard(stackDepths);
-	stackDepths[m_id]--;
-	if(0 == stackDepths[m_id])
-		stackDepths.erase(m_id);
+	lockguard __lockguard(indentPerThread);
+	indentPerThread[m_id]--;
+	if(0 == indentPerThread[m_id])
+		indentPerThread.erase(m_id);
 }
 
 tSS & t_logger::GetFmter()
