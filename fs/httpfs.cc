@@ -175,7 +175,6 @@ public:
 	{
 		// expire the caches every time, should not cost much anyway
 		g_tcp_con_factory.BackgroundCleanup();
-		CAddrInfo::BackgroundCleanup();
 	};
 
 	int Read(char *retbuf, const char *path, off_t pos, size_t len)

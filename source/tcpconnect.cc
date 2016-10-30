@@ -183,7 +183,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 {
 	LOGSTART2("tcpconnect::_Connect", "hostname: " << m_sHostName);
 
-	CAddrInfo::SPtr dns = CAddrInfo::CachedResolve(m_sHostName, m_sPort, sErrorMsg);
+	auto dns = CAddrInfo::CachedResolve(m_sHostName, m_sPort, sErrorMsg);
 
 	if(!dns)
 	{

@@ -19,33 +19,34 @@
 namespace acng
 {
 
-class CAddrInfo;
-
-class CAddrInfo : public base_with_mutex
+class CAddrInfo
 {
 public:
+	bool m_bError = false; // to pass the error hint to waiting resolver
+	bool m_bResInProgress = false; // to be just in the end when the resolution is finished
+
 	time_t m_nExpTime=0;
+
+	// hint to the first descriptor of any TCP type
 	struct addrinfo * m_addrInfo=nullptr;
 	
 	CAddrInfo() =default;
 	bool Resolve(const mstring & sHostname, const mstring &sPort, mstring & sErrorBuf);
 	~CAddrInfo();
 
-	typedef SHARED_PTR<CAddrInfo> SPtr;
-	static SPtr CachedResolve(const mstring & sHostname, const mstring &sPort,
+	static SHARED_PTR<CAddrInfo> CachedResolve(const mstring & sHostname, const mstring &sPort,
 			mstring &sErrorMsgBuf);
-
-	static time_t BackgroundCleanup();
 
 protected:
 	struct addrinfo * m_resolvedInfo=nullptr; // getaddrinfo excrements, to cleanup
-
 private:
 	// not to be copied ever
-	CAddrInfo(const CAddrInfo&);
-	CAddrInfo operator=(const CAddrInfo&);
+	CAddrInfo(const CAddrInfo&) = delete;
+	CAddrInfo operator=(const CAddrInfo&) = delete;
 
 };
+
+typedef SHARED_PTR<CAddrInfo> CAddrInfoPtr;
 
 }
 
