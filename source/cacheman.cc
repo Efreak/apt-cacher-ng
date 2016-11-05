@@ -931,7 +931,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 void cacheman::StartDlder()
 {
 	if (!m_pDlcon)
-		m_pDlcon = new dlcon(true);
+		m_pDlcon = new dlcon;
 }
 
 void cacheman::ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups& idxGroups,

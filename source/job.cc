@@ -113,6 +113,7 @@ public:
 			m_nConsumed=0;
 			while(0 == m_nConsumed && m_status <= FIST_COMPLETE)
 				wait(g);
+#warning FIXME, nix wait
 
 			dbgline;
 			// let the downloader abort?
@@ -133,6 +134,7 @@ public:
 		while(0 == m_nConsumable && m_status<=FIST_COMPLETE
 				&& ! (m_nSizeChecked==0 && m_status==FIST_COMPLETE))
 		{
+#warning FIXME, nix wait
 			wait(g);
 		}
 		if (m_status >= FIST_DLERROR || !m_pData)
@@ -802,6 +804,11 @@ job::eJobResult job::SendData(int confd)
 				break;
 			
 			dbgline;
+
+			// if this is our downloader, don't block it
+			if(m_pParentCon->m_pDlClient && m_pParentCon->m_pDlClient->IsCurrentDownload(m_pItem.getFiPtr()))
+				return R_AGAIN;
+
 			m_pItem.getFiPtr()->wait(g);
 			
 			dbgline;

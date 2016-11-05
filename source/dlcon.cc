@@ -40,7 +40,7 @@ static const auto taboo =
 
 std::atomic_uint g_nDlCons(0);
 
-dlcon::dlcon(bool bManualExecution, string *xff, IDlConFactory *pConFactory) :
+dlcon::dlcon(string *xff, IDlConFactory *pConFactory) :
 		m_pConFactory(pConFactory),
 		m_nTempPipelineDisable(0),
 		m_bProxyTot(false)
@@ -1011,7 +1011,7 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 				}
 
 				// ok, let's mimic the same operations that would happen outside in connection class
-				if (retcmd.fd >=0 &&  flags & eWorkParameter::internalIoLooping)
+				if (retcmd.fd >=0 && (flags & eWorkParameter::internalIoLooping))
 				{
 
 					ldbg("select dlcon");
@@ -1423,6 +1423,13 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
         	}
         }
 	}
+}
+
+bool dlcon::IsCurrentDownload(const tFileItemPtr &fiptr)
+{
+	if(inpipe.empty())
+		return false;
+	return fiptr == inpipe.front()->m_pStorage;
 }
 
 }

@@ -1004,7 +1004,7 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	string xurl(surl);
 	if(!url.SetHttpUrl(xurl))
 		return -2;
-	dlcon dl(true, nullptr, pDlconFac);
+	dlcon dl(nullptr, pDlconFac);
 
 	auto fi=fac->Create();
 	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT);

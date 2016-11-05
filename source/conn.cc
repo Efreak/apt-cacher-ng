@@ -25,8 +25,6 @@ namespace acng
 
 conn::conn(int fdId, const char *c) :
 			m_confd(fdId),
-			m_bStopActivity(false),
-			m_dlerthr(0),
 			m_pDlClient(nullptr),
 			m_pTmpHead(nullptr)
 {
@@ -187,7 +185,7 @@ void conn::WorkLoop() {
 	inBuf.setsize(32*1024);
 
 	int maxfd=m_confd;
-	while(!m_bStopActivity) {
+	while(true) {
 		fd_set rfds, wfds;
 		FD_ZERO(&wfds);
 		FD_ZERO(&rfds);
@@ -393,10 +391,10 @@ bool conn::SetupDownloader(const char *pszOrigin)
 				sXff += ", ";
 			}
 			sXff+=m_sClientHost;
-			m_pDlClient=new dlcon(false, &sXff);
+			m_pDlClient=new dlcon(&sXff);
 		}
 		else
-			m_pDlClient=new dlcon(false);
+			m_pDlClient=new dlcon;
 
 		if(!m_pDlClient)
 			return false;

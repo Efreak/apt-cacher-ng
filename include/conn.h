@@ -45,11 +45,6 @@ class conn // : public tRunable
       // to awake select with dummy data
       int wakepipe[2];
 #endif
-      
-      bool m_bStopActivity;
-      
-      pthread_t m_dlerthr;
-      
       // for jobs
       friend class job;
       bool SetupDownloader(const char *xff);

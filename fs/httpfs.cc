@@ -179,7 +179,7 @@ public:
 
 	int Read(char *retbuf, const char *path, off_t pos, size_t len)
 	{
-		dlcon dler(true, 0);
+		dlcon dler(0);
 		tHttpUrl uri = proxyUrl;
 		uri.sPath += baseUrl.sHost
 		// + ":" + ( baseUrl.sPort.empty() ? baseUrl.sPort : "80")
@@ -352,7 +352,7 @@ public:
 		}
 		// ok, not cached, do the hard way
 
-		dlcon dler(true, 0);
+		dlcon dler(0);
 
 		tHttpUrl uri = proxyUrl;
 		uri.sPath += baseUrl.sHost

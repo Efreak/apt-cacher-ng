@@ -50,7 +50,7 @@ enum eStateTransition
 class dlcon
 { 
     public:
-        dlcon(bool bManualExecution, mstring *xff=nullptr,
+        dlcon(mstring *xff=nullptr,
         		IDlConFactory *pConFactory = &g_tcp_con_factory);
         ~dlcon();
 
@@ -86,6 +86,8 @@ class dlcon
 
         mstring m_sXForwardedFor;
 
+        //! Returns true if the file is currently being downloaded by this thread
+        bool IsCurrentDownload(const tFileItemPtr &fiptr);
     private:
 
     	//not to be copied
