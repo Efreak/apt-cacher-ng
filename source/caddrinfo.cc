@@ -106,7 +106,10 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 	CAddrInfoPtr job;
 
 	if(!cfg::dnscachetime)
+	{
+		job.reset(new CAddrInfo);
 		goto plain_resolve;
+	}
 
 	{
 		lockuniq lg(dnsCacheCv);

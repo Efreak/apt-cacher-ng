@@ -23,6 +23,14 @@ struct tDlJob;
 typedef std::shared_ptr<tDlJob> tDlJobPtr;
 typedef std::list<tDlJobPtr> tDljQueue;
 
+enum eStateTransition
+{
+	DONE,
+// no break, break equals return	LOOP_BREAK,
+	LOOP_CONTINUE,
+	FUNC_RETURN
+};
+
 /**
  * dlcon is a basic connection broker for download processes.
  * It's defacto a slave of the conn class, the active thread is spawned by conn when needed
@@ -88,7 +96,7 @@ class dlcon : public base_with_mutex
     	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
     	tSS m_sendBuf, m_inBuf;
 
-    	unsigned ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &qActive);
+	unsigned ExchangeData();
 
     	// Disable pipelining for the next # requests. Actually used as crude workaround for the
     	// concept limitation (because of automata over a couple of function) and its
@@ -115,6 +123,16 @@ class dlcon : public base_with_mutex
       unsigned m_nLastDlCount=0;
 
       void wake();
+
+      // temp state variables
+  	tDljQueue inpipe;
+  	tDlStreamHandle con;
+  	bool bStopRequesting; // hint to stop adding request headers until the connection is restarted
+  	int nLostConTolerance;
+    string sErrorMsg;
+    bool ResetState(); // set them back to defaults
+    eStateTransition SetupConnectionAndRequests();
+    void BlacklistMirror(tDlJobPtr & job);
 };
 
 #define IS_REDIRECT(st) (st == 301 || st == 302 || st == 307)

@@ -24,10 +24,9 @@ using namespace std;
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
 
-#define MAX_RETRY 11
-
 namespace acng
 {
+static const int MAX_RETRY = 11;
 
 static cmstring sGenericError("567 Unknown download error occured");
 
@@ -762,7 +761,7 @@ dlcon::~dlcon()
   g_nDlCons--;
 }
 
-inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &inpipe)
+inline unsigned dlcon::ExchangeData()
 {
 	LOGSTART2("dlcon::ExchangeData",
 			"qsize: " << inpipe.size() << ", sendbuf size: "
@@ -1086,40 +1085,33 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 	return EFLAG_JOB_BROKEN|HINT_DISCON;
 }
 
-void dlcon::WorkLoop()
+bool dlcon::ResetState()
 {
-	LOGSTART("dlcon::WorkLoop");
-    string sErrorMsg;
     m_inBuf.clear();
     
 	if (!m_inBuf.setsize(cfg::dlbufsize))
 	{
 		log::err("500 Out of memory");
-		return;
+		return false;
 	}
 
 	if(fdWakeRead<0 || fdWakeWrite<0)
 	{
 		log::err("Error creating pipe file descriptors");
-		return;
+		return false;
 	}
 
-	tDljQueue inpipe;
-	tDlStreamHandle con;
-	unsigned loopRes=0;
+	inpipe.clear();
+	con.reset();
+	bStopRequesting = false;
+	nLostConTolerance = MAX_RETRY;
+	sErrorMsg.clear();
+	return true;
+}
 
-	bool bStopRequesting=false; // hint to stop adding request headers until the connection is restarted
-
-	int nLostConTolerance=MAX_RETRY;
-
-	auto BlacklistMirror = [&](tDlJobPtr & job)
-	{
-		LOGSTART2("BlacklistMirror", "blacklisting " <<
-				job->GetPeerHost().ToURI(false));
-		m_blacklist[std::make_pair(job->GetPeerHost().sHost,
-				job->GetPeerHost().GetPort())] = sErrorMsg;
-	};
-
+eStateTransition dlcon::SetupConnectionAndRequests()
+{
+	LOGSTART(__FUNCTION__);
 	auto prefProxy = [&](tDlJobPtr& cjob) -> const tHttpUrl*
 	{
 		if(m_bProxyTot)
@@ -1133,9 +1125,7 @@ void dlcon::WorkLoop()
 		return cfg::GetProxyInfo();
 	};
 
-	while(true) // outer loop: jobs, connection handling
-	{
-        // init state or transfer loop jumped out, what are the needed actions?
+    // init state or transfer loop jumped out, what are the needed actions?
         {
         	setLockGuard;
         	LOG("New jobs: " << m_qNewjobs.size());
@@ -1150,13 +1140,13 @@ void dlcon::WorkLoop()
         		{
         			if(con)
         				m_pConFactory->RecycleIdleConnection(con);
-        			return;
+        			return eStateTransition::FUNC_RETURN;
         		}
         	}
 
 
         	if(m_qNewjobs.empty())
-        		goto go_select; // parent will notify RSN
+        		return eStateTransition::DONE; // parent will notify RSN
 
         	if(!con)
         	{
@@ -1180,8 +1170,8 @@ void dlcon::WorkLoop()
         		}
         		if(m_qNewjobs.empty())
         		{
-        			LOG("no jobs left, start waiting")
-        			goto go_select; // nothing left, might receive new jobs soon
+        			LOG("no jobs left, start waiting");
+        			return eStateTransition::DONE; // nothing left, might receive new jobs soon when awaken
         		}
 
 				bool bUsed = false;
@@ -1250,13 +1240,13 @@ void dlcon::WorkLoop()
         			{
         				ldbg("code: MoonWalker");
         				con.reset();
-        				continue;
+        				return eStateTransition::LOOP_CONTINUE;
         			}
         		}
         		else
         		{
         			BlacklistMirror(cjob);
-        			continue; // try the next backend
+        			return eStateTransition::LOOP_CONTINUE; // try the next backend
         		}
         	}
 
@@ -1315,10 +1305,33 @@ void dlcon::WorkLoop()
 				}
         	}
         }
+    	ldbg("Request(s) cooked, buffer contents: " << m_sendBuf);
+    	return eStateTransition::DONE;
+}
 
-		ldbg("Request(s) cooked, buffer contents: " << m_sendBuf);
+void dlcon::BlacklistMirror(tDlJobPtr & job)
+	{
+		LOGSTART2("BlacklistMirror", "blacklisting " <<
+				job->GetPeerHost().ToURI(false));
+		m_blacklist[std::make_pair(job->GetPeerHost().sHost,
+				job->GetPeerHost().GetPort())] = sErrorMsg;
+	};
 
-        go_select:
+void dlcon::WorkLoop()
+{
+	LOGSTART("dlcon::WorkLoop");
+	if(!ResetState()) return;
+
+	unsigned loopRes=0;
+
+	while(true) // outer loop: jobs, connection handling
+	{
+		switch(SetupConnectionAndRequests())
+		{
+		case eStateTransition::DONE: break; // go select now
+		case eStateTransition::FUNC_RETURN: return;
+		case eStateTransition::LOOP_CONTINUE: continue;
+		}
 
         if(inpipe.empty() && m_bManualMode)
         {
@@ -1326,7 +1339,7 @@ void dlcon::WorkLoop()
         }
 
         // inner loop: plain communication until something happens. Maybe should use epoll here?
-        loopRes=ExchangeData(sErrorMsg, con, inpipe);
+        loopRes=ExchangeData();
         ldbg("loopRes: "<< loopRes);
 
         /* check whether we have a pipeline stall. This may happen because a) we are done or
@@ -1368,12 +1381,19 @@ void dlcon::WorkLoop()
 
         if ( loopRes & HINT_TGTCHANGE )
         {
-        	// short queue continues jobs with rewritten targets, so
-        	// reinsert them into the new task list and continue
+			// short queue continues jobs with rewritten targets, so
+			// reinsert them into the new task list and continue
 
-        	// if conn was not reset above then it should be in good shape
-        	m_pConFactory->RecycleIdleConnection(con);
-        	goto move_jobs_back_to_q;
+			// if conn was not reset above then it should be in good shape
+			m_pConFactory->RecycleIdleConnection(con);
+
+			// for the jobs that were not finished and/or dropped, move them back into the task queue
+			{
+				setLockGuard;
+				m_qNewjobs.insert(m_qNewjobs.begin(), inpipe.begin(), inpipe.end());
+				inpipe.clear();
+			};
+			continue;
         }
 
         if ((EFLAG_LOST_CON & loopRes) && !inpipe.empty())
@@ -1450,15 +1470,6 @@ void dlcon::WorkLoop()
         		cleaner(m_qNewjobs);
         	}
         }
-
-        move_jobs_back_to_q:
-        // for the jobs that were not finished and/or dropped, move them back into the task queue
-        {
-        	setLockGuard;
-        	m_qNewjobs.insert(m_qNewjobs.begin(), inpipe.begin(), inpipe.end());
-        	inpipe.clear();
-        }
-
 	}
 }
 
