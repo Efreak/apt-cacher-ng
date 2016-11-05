@@ -309,7 +309,7 @@ public:
 
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
-		dler.AddJob(spFi, &uri, 0, 0, 0);
+		dler.AddJob(spFi, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		pFi->WaitForFinish(&nHttpCode);
@@ -382,7 +382,7 @@ public:
 			}
 		};
 		auto probe(make_shared<tFitemProbe>());
-		dler.AddJob(probe, &uri, 0, 0, 0);
+		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);

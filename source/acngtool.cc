@@ -1028,7 +1028,7 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	dlcon dl(true, nullptr, pDlconFac);
 
 	auto fi=fac->Create();
-	dl.AddJob(fi, &url, nullptr, nullptr, 0);
+	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT);
 	dl.WorkLoop();
 	auto fistatus = fi->GetStatus();
 	header hh = fi->GetHeader();

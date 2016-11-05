@@ -98,7 +98,7 @@ void cleaner::WorkLoop()
 
 		if(time_nextcand <= now || time_nextcand < 1)
 		{
-			log::err(tSS() << "ERROR: looping bug candidate on " << what
+			log::err(tSS() << "ERROR: looping bug candidate on " << (int) what
 					<< ", value: " << time_nextcand);
 			time_nextcand=GetTime()+60;
 		}

@@ -456,7 +456,7 @@ struct tDlJob
 
 		for (;;) // returned by explicit error (or get-more) return
 		{
-			ldbg("switch: " << m_DlState);
+			ldbg("switch: " << (int)m_DlState);
 
 			if (STATE_GETHEADER == m_DlState ||  STATE_REGETHEADER == m_DlState)
 			{
@@ -711,7 +711,8 @@ void dlcon::wake()
 
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const cfg::tRepoData *pBackends,
-		cmstring *sPatSuffix, LPCSTR reqHead)
+		cmstring *sPatSuffix, LPCSTR reqHead,
+		int nMaxRedirection)
 {
 	if(!pForcedUrl)
 	{
@@ -729,8 +730,7 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 	LOGSTART2("dlcon::EnqJob", todo->m_remoteUri.ToURI(false));
 */
 	m_qNewjobs.emplace_back(
-			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,
-							m_bManualMode ? ACFG_REDIRMAX_DEFAULT : cfg::redirmax));
+			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection));
 
 	m_qNewjobs.back()->ExtractCustomHeaders(reqHead);
 
@@ -912,7 +912,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 #endif
 			))
 		{
-       if(cfg::maxdlspeed != RESERVED_DEFVAL)
+       if(cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
        {
           auto nCntNew=g_nDlCons.load();
           if(m_nLastDlCount != nCntNew)

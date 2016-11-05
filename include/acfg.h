@@ -10,11 +10,8 @@
 // 1757961
 #define ACNG_DEF_PORT "3142"
 
-#define ACFG_REDIRMAX_DEFAULT 5
-
 namespace acng
 {
-static const int RESERVED_DEFVAL = -4223;
 
 struct ltstring {
 	bool operator()(const mstring &s1, const mstring &s2) const {
@@ -26,6 +23,9 @@ typedef std::map<mstring, mstring, ltstring> NoCaseStringMap;
 
 namespace cfg
 {
+static const int RESERVED_DEFVAL = -4223;
+
+static const int REDIRMAX_DEFAULT = 5;
 
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
 reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, adminauthB64,
