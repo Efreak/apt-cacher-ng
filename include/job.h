@@ -12,7 +12,7 @@
 namespace acng
 {
 
-class con;
+class conn;
 
 class job {
 
@@ -37,7 +37,7 @@ class job {
 	   	STATE_FINISHJOB
 	   } eJobState;
 
-      job(header *h, con *pParent);
+      job(header *h, conn *pParent);
       ~job();
       //  __attribute__((externally_visible))  
       
@@ -51,7 +51,7 @@ class job {
    private:
       
 	  int m_filefd;
-	  con *m_pParentCon;
+	  conn *m_pParentCon;
       
       bool m_bChunkMode;
       bool m_bClientWants2Close;

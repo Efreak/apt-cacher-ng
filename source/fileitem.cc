@@ -868,7 +868,7 @@ void fileItemMgmt::RegisterFileitemLocalOnly(fileitem* replacement)
 }
 
 
-// this method is supposed to be awaken periodically and detect items with ref count manipulated by
+// this method is supposed to be awaken periodically and detects items with ref count manipulated by
 // the request storm prevention mechanism. Items shall be be dropped after some time if no other
 // thread but us is using them.
 time_t fileItemMgmt::BackgroundCleanup()

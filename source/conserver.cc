@@ -50,7 +50,7 @@ int g_sockunix(-1);
 vector<int> g_vecSocks;
 
 base_with_condition g_ThreadPoolCondition;
-list<con*> g_freshConQueue;
+list<conn*> g_freshConQueue;
 int g_nStandbyThreads(0);
 int g_nAllConThreadCount(0);
 bool bTerminationMode(false);
@@ -62,7 +62,7 @@ bool bTerminationMode(false);
 void * ThreadAction(void *)
 {
 	lockuniq g(g_ThreadPoolCondition);
-	list<con*> & Qu = g_freshConQueue;
+	list<conn*> & Qu = g_freshConQueue;
 
 	while (true)
 	{
@@ -72,7 +72,7 @@ void * ThreadAction(void *)
 		if (bTerminationMode)
 			break;
 
-		con *c=Qu.front();
+		conn *c=Qu.front();
 		Qu.pop_front();
 
 		g_nStandbyThreads--;
@@ -111,7 +111,7 @@ bool CreateDetachedThread(void *(*__start_routine)(void *))
 inline bool SpawnThreadsAsNeeded()
 {
 	lockguard g(g_ThreadPoolCondition);
-	list<con*> & Qu = g_freshConQueue;
+	list<conn*> & Qu = g_freshConQueue;
 
 	// check the kill-switch
 	if(g_nAllConThreadCount+1>=cfg::tpthreadmax || bTerminationMode)
@@ -141,7 +141,7 @@ void SetupConAndGo(int fd, const char *szClientName=nullptr)
 		szClientName="";
 	
 	USRDBG( "Client name: " << szClientName);
-	con *c(nullptr);
+	conn *c(nullptr);
 
 	{
 		// thread pool control, and also see Shutdown(), protect from
@@ -157,7 +157,7 @@ void SetupConAndGo(int fd, const char *szClientName=nullptr)
 
 		try
 		{
-			c = new con(fd, szClientName);
+			c = new conn(fd, szClientName);
 			if (!c)
 			{
 #ifdef NO_EXCEPTIONS
