@@ -212,7 +212,7 @@ fileitem::FiStatus fileitem::Setup(bool bCheckFreshness)
 		if(!bCheckFreshness)
 			m_nSizeSeen=GetFileSize(sPathAbs, 0);
 	}
-	LOG("resulting status: " << m_status);
+	LOG("resulting status: " << (int) m_status);
 	return m_status;
 
 	error_clean:
@@ -335,7 +335,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 
 	setLockGuard;
 
-	USRDBG( "Download started, storeHeader for " << m_sPathRel << ", current status: " << m_status);
+	USRDBG( "Download started, storeHeader for " << m_sPathRel << ", current status: " << (int) m_status);
 	
 	if(m_status >= FIST_COMPLETE)
 	{
@@ -648,7 +648,7 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 {
 	setLockGuard;
 
-	LOGSTART2("fileitem::StoreFileData", "status: " << m_status << ", size: " << size);
+	LOGSTART2("fileitem::StoreFileData", "status: " <<  (int) m_status << ", size: " << size);
 
 	// something might care, most likely... also about BOUNCE action
 	notifyAll();
@@ -657,7 +657,7 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 	
 	if(m_status > FIST_COMPLETE || m_status < FIST_DLGOTHEAD)
 	{
-		ldbg("StoreFileData rejected, status: " << m_status)
+		ldbg("StoreFileData rejected, status: " << (int) m_status)
 		return false;
 	}
 	
@@ -744,7 +744,7 @@ inline void fileItemMgmt::Unreg()
 	{
 		if(m_ptr->m_status < fileitem::FIST_COMPLETE && m_ptr->m_status != fileitem::FIST_INITED)
 		{
-			ldbg("usercount dropped to zero while downloading?: " << m_ptr->m_status);
+			ldbg("usercount dropped to zero while downloading?: " << (int) m_ptr->m_status);
 		}
 
 		// some file items will be held ready for some time
@@ -940,7 +940,7 @@ void fileItemMgmt::dump_status()
 		{
 			fmt << "\t" << item.second->m_sPathRel
 					<< "\n\tDlRefCount: " << item.second->m_nDlRefsCount
-					<< "\n\tState: " << item.second->m_status
+					<< "\n\tState: " << (int)  item.second->m_status
 					<< "\n\tFilePos: " << item.second->m_nIncommingCount << " , "
 					<< item.second->m_nRangeLimit << " , "
 					<< item.second->m_nSizeChecked << " , "

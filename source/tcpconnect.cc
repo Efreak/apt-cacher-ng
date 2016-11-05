@@ -51,7 +51,7 @@ dl_con_factory g_tcp_con_factory;
 
 tcpconnect::tcpconnect(cfg::tRepoData::IHookHandler *pObserver) : m_pStateObserver(pObserver)
 {
-	if(cfg::maxdlspeed != RESERVED_DEFVAL)
+	if(cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
 		dl_con_factory::g_nconns.fetch_add(1);
 	if(pObserver)
 		pObserver->OnAccess();
@@ -61,7 +61,7 @@ tcpconnect::~tcpconnect()
 {
 	LOGSTART("tcpconnect::~tcpconnect, terminating outgoing connection class");
 	Disconnect();
-	if(cfg::maxdlspeed != RESERVED_DEFVAL)
+	if(cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
 		dl_con_factory::g_nconns.fetch_add(-1);
 #ifdef HAVE_SSL
 	if(m_ctx)

@@ -52,7 +52,8 @@ class dlcon : public base_with_mutex
 
         bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
         		const cfg::tRepoData *pRepoDesc,
-        		cmstring *sPatSuffix, LPCSTR reqHead);
+        		cmstring *sPatSuffix, LPCSTR reqHead,
+				int nMaxRedirection);
 
         mstring m_sXForwardedFor;
 

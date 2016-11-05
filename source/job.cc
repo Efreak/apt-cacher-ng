@@ -90,7 +90,7 @@ public:
 	{
 		lockuniq g(this);
 
-		LOGSTART2("tPassThroughFitem::StoreFileData", "status: " << m_status);
+		LOGSTART2("tPassThroughFitem::StoreFileData", "status: " << (int) m_status);
 
 		// something might care, most likely... also about BOUNCE action
 		notifyAll();
@@ -622,7 +622,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
        goto report_degraded;
     
     fistate = m_pItem.getFiPtr()->Setup(bForceFreshnessChecks);
-	LOG("Got initial file status: " << fistate);
+	LOG("Got initial file status: " << (int) fistate);
 
 	if (bPtMode && fistate != fileitem::FIST_COMPLETE)
 		fistate = _SwitchToPtItem();
@@ -688,7 +688,8 @@ MYTRY
 					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.getFiPtr(),
 							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
 							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
-									(LPCSTR) ( bPtMode ? headBuf : nullptr)))
+									(LPCSTR) ( bPtMode ? headBuf : nullptr),
+							cfg::redirmax))
 				{
 					ldbg("Download job enqueued for " << m_sFileLoc);
 				}
@@ -766,7 +767,7 @@ job::eJobResult job::SendData(int confd)
 		{
 			fistate=m_pItem.getFiPtr()->GetStatusUnlocked(nGoodDataSize);
 			
-			LOG(fistate);
+			LOG((int) fistate);
 			if (fistate > fileitem::FIST_COMPLETE)
 			{
 				const header &h = m_pItem.getFiPtr()->GetHeaderUnlocked();
@@ -795,7 +796,7 @@ job::eJobResult job::SendData(int confd)
 				break;
 			}
 			// or wait for the dl source to get data at the position we need to start from
-			LOG("sendstate: " << fistate << " , sendpos: " << m_nSendPos << nGoodDataSize);
+			LOG("sendstate: " << (int) fistate << " , sendpos: " << m_nSendPos << nGoodDataSize);
 			if(fistate==fileitem::FIST_COMPLETE || (m_nSendPos < nGoodDataSize && fistate>=fileitem::FIST_DLGOTHEAD))
 				break;
 			
@@ -849,7 +850,7 @@ job::eJobResult job::SendData(int confd)
 					if(!IsValidFD(m_filefd)) THROW_ERROR("503 IO error");
 
 					m_state=m_bChunkMode ? STATE_SEND_CHUNK_HEADER : STATE_SEND_PLAIN_DATA;
-					ldbg("next state will be: " << m_state);
+					ldbg("next state will be: " << (int) m_state);
 					continue;
 				}
 				case(STATE_SEND_PLAIN_DATA):
@@ -940,7 +941,7 @@ job::eJobResult job::SendData(int confd)
 						m_sendbuf.drop(r);
 						if(m_sendbuf.empty())
 						{
-							USRDBG("Returning to last state, " << m_backstate);
+							USRDBG("Returning to last state, " << (int) m_backstate);
 							m_state=m_backstate;
 							continue;
 						}

@@ -1178,7 +1178,7 @@ void PostProcConfig()
    }
 
    if(redirmax == RESERVED_DEFVAL)
-	   redirmax = forcemanaged ? 0 : ACFG_REDIRMAX_DEFAULT;
+	   redirmax = forcemanaged ? 0 : REDIRMAX_DEFAULT;
 
    if(!persistoutgoing)
 	   pipelinelen = 1;
