@@ -47,7 +47,7 @@ enum eStateTransition
  * In addition, there is a local blacklist which is applied to all download jobs in the queue,
  * i.e. remotes marked as faulty there are no longer considered by the subsequent download jobs.
  */
-class dlcon : public base_with_mutex
+class dlcon
 { 
     public:
         dlcon(bool bManualExecution, mstring *xff=nullptr,
@@ -60,14 +60,16 @@ class dlcon : public base_with_mutex
 		{
         		freshStart = 1, // init/reinit object state, only in the beginning
         	    internalIoLooping = 2,// "manual mode" - run internal IO and loop until the job list is processed
-				canRecv =4, canSend=8, gotError=16, gotTimeout = 32,
-				gotWork = 64 // prepare download, connect, etc.
+				canRecv =4, canSend=8, gotError=16, gotTimeout = 32
+				// ,				gotWork = 64 // prepare download, connect, etc.
 		};
         struct tWorkState
         {
         	enum
 			{
-        		allDone = 0, needRecv = 1, needSend = 2, needWork = 4 , fatalError =8
+        		allDone = 0, needRecv = 1, needSend = 2,
+				needConnect = 4, // there is some connection-related work to do
+				fatalError = 8
         	};
         	int flags; // one or multiple ORed from above
         	int fd;

@@ -692,6 +692,7 @@ MYTRY
 							cfg::redirmax))
 				{
 					ldbg("Download job enqueued for " << m_sFileLoc);
+					m_pParentCon->m_lastDlState.flags |= dlcon::tWorkState::needConnect;
 				}
 				else
 				{

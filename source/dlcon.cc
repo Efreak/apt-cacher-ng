@@ -698,14 +698,6 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		if(!sPatSuffix || sPatSuffix->empty())
 			return false;
 	}
-	setLockGuard;
-/*
-	ASSERT(
-			todo->m_pStorage->m_nRangeLimit < 0
-					|| todo->m_pStorage->m_nRangeLimit >= todo->m_pStorage->m_nSizeSeen);
-
-	LOGSTART2("dlcon::EnqJob", todo->m_remoteUri.ToURI(false));
-*/
 	m_qNewjobs.emplace_back(
 			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection));
 
@@ -759,173 +751,175 @@ eStateTransition dlcon::SetupConnectionAndRequests()
 		return cfg::GetProxyInfo();
 	};
 
-    // init state or transfer loop jumped out, what are the needed actions?
-        {
-        	setLockGuard;
-        	LOG("New jobs: " << m_qNewjobs.size());
+	// init state or transfer loop jumped out, what are the needed actions?
+	LOG("New jobs: " << m_qNewjobs.size());
 
-        	if(m_qNewjobs.empty())
-        		return eStateTransition::DONE; // parent will notify RSN
+	if (m_qNewjobs.empty())
+		return eStateTransition::DONE; // parent will notify RSN
 
-        	if(!con)
-        	{
-        		// cleanup after the last connection - send buffer, broken jobs, ...
-        		m_sendBuf.clear();
-        		m_inBuf.clear();
-        		inpipe.clear();
+	if (!con)
+	{
+		// cleanup after the last connection - send buffer, broken jobs, ...
+		m_sendBuf.clear();
+		m_inBuf.clear();
+		inpipe.clear();
 
-        		bStopRequesting=false;
+		bStopRequesting = false;
 
-        		for(tDljQueue::iterator it=m_qNewjobs.begin(); it!=m_qNewjobs.end();)
-        		{
-        			if((**it).SetupJobConfig(sErrorMsg, m_blacklist))
-        				++it;
-        			else
-        			{
-        				setIfNotEmpty2( (**it).sErrorMsg, sErrorMsg,
-        						"500 Broken mirror or incorrect configuration");
-        				m_qNewjobs.erase(it++);
-        			}
-        		}
-        		if(m_qNewjobs.empty())
-        		{
-        			LOG("no jobs left, start waiting");
-        			return eStateTransition::DONE; // nothing left, might receive new jobs soon when awaken
-        		}
+		for (tDljQueue::iterator it = m_qNewjobs.begin();
+				it != m_qNewjobs.end();)
+		{
+			if ((**it).SetupJobConfig(sErrorMsg, m_blacklist))
+				++it;
+			else
+			{
+				setIfNotEmpty2((**it).sErrorMsg, sErrorMsg,
+						"500 Broken mirror or incorrect configuration");
+				m_qNewjobs.erase(it++);
+			}
+		}
+		if (m_qNewjobs.empty())
+		{
+			LOG("no jobs left, start waiting");
+			return eStateTransition::DONE; // nothing left, might receive new jobs soon when awaken
+		}
 
-				bool bUsed = false;
-				ASSERT(!m_qNewjobs.empty());
+		bool bUsed = false;
+		ASSERT(!m_qNewjobs.empty());
 
-				auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
-				{
-					return m_pConFactory->CreateConnected(tgt.sHost,
-							tgt.GetPort(),
-							sErrorMsg,
-							&bUsed,
-							m_qNewjobs.front()->GetConnStateTracker(),
-							IFSSLORFALSE(tgt.bSSL),
-							timeout, fresh);
-			}	;
+		auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
+		{
+			return m_pConFactory->CreateConnected(tgt.sHost,
+					tgt.GetPort(),
+					sErrorMsg,
+					&bUsed,
+					m_qNewjobs.front()->GetConnStateTracker(),
+					IFSSLORFALSE(tgt.bSSL),
+					timeout, fresh);
+		};
 
-				auto& cjob = m_qNewjobs.front();
-				auto proxy = prefProxy(cjob);
-				auto& peerHost = cjob->GetPeerHost();
+		auto& cjob = m_qNewjobs.front();
+		auto proxy = prefProxy(cjob);
+		auto& peerHost = cjob->GetPeerHost();
 
 #ifdef HAVE_SSL
-				if(peerHost.bSSL)
-				{
-					if(proxy)
-					{
-						con = doconnect(*proxy, cfg::optproxytimeout > 0 ?
+		if (peerHost.bSSL)
+		{
+			if (proxy)
+			{
+				con = doconnect(*proxy,
+						cfg::optproxytimeout > 0 ?
 								cfg::optproxytimeout : cfg::nettimeout, false);
-						if(con)
-						{
-							if(!con->StartTunnel(peerHost, sErrorMsg, & proxy->sUserPass, true))
-								con.reset();
-						}
-					}
-					else
-						con = doconnect(peerHost, cfg::nettimeout, false);
+				if (con)
+				{
+					if (!con->StartTunnel(peerHost, sErrorMsg,
+							&proxy->sUserPass, true))
+						con.reset();
 				}
-				else
+			}
+			else
+				con = doconnect(peerHost, cfg::nettimeout, false);
+		}
+		else
 #endif
-				{
-					if(proxy)
-					{
-						con = doconnect(*proxy, cfg::optproxytimeout > 0 ?
+		{
+			if (proxy)
+			{
+				con = doconnect(*proxy,
+						cfg::optproxytimeout > 0 ?
 								cfg::optproxytimeout : cfg::nettimeout, false);
-					}
-					else
-						con = doconnect(peerHost, cfg::nettimeout, false);
-				}
+			}
+			else
+				con = doconnect(peerHost, cfg::nettimeout, false);
+		}
 
-        		if(!con && proxy && cfg::optproxytimeout>0)
-        		{
-        			ldbg("optional proxy broken, disable");
-        			m_bProxyTot = true;
-        			proxy = nullptr;
-				cfg::MarkProxyFailure();
-        			con = doconnect(peerHost, cfg::nettimeout, false);
-        		}
+		if (!con && proxy && cfg::optproxytimeout > 0)
+		{
+			ldbg("optional proxy broken, disable");
+			m_bProxyTot = true;
+			proxy = nullptr;
+			cfg::MarkProxyFailure();
+			con = doconnect(peerHost, cfg::nettimeout, false);
+		}
 
-        		ldbg("connection valid? " << bool(con) << " was fresh? " << !bUsed);
+		ldbg("connection valid? " << bool(con) << " was fresh? " << !bUsed);
 
-        		if(con)
-        		{
-        			ldbg("target? [" << con->GetHostname() << "]:" << con->GetPort());
+		if (con)
+		{
+			ldbg("target? [" << con->GetHostname() << "]:" << con->GetPort());
 
-        			// must test this connection, just be sure no crap is in the pipe
-        			if (bUsed && check_read_state(con->GetFD()))
-        			{
-        				ldbg("code: MoonWalker");
-        				con.reset();
-        				return eStateTransition::LOOP_CONTINUE;
-        			}
-        		}
-        		else
-        		{
-        			BlacklistMirror(cjob);
-        			return eStateTransition::LOOP_CONTINUE; // try the next backend
-        		}
-        	}
+			// must test this connection, just be sure no crap is in the pipe
+			if (bUsed && check_read_state(con->GetFD()))
+			{
+				ldbg("code: MoonWalker");
+				con.reset();
+				return eStateTransition::LOOP_CONTINUE;
+			}
+		}
+		else
+		{
+			BlacklistMirror(cjob);
+			return eStateTransition::LOOP_CONTINUE; // try the next backend
+		}
+	}
 
-        	// connection should be stable now, prepare all jobs and/or move to pipeline
-        	while(!bStopRequesting
-        			&& !m_qNewjobs.empty()
-        			&& int(inpipe.size()) <= cfg::pipelinelen)
-        	{
-   				tDlJobPtr &cjob = m_qNewjobs.front();
+	// connection should be stable now, prepare all jobs and/or move to pipeline
+	while (!bStopRequesting && !m_qNewjobs.empty()
+			&& int(inpipe.size()) <= cfg::pipelinelen)
+	{
+		tDlJobPtr &cjob = m_qNewjobs.front();
 
-        		if(!cjob->SetupJobConfig(sErrorMsg, m_blacklist))
-        		{
-        			// something weird happened to it, drop it and let the client care
-        			m_qNewjobs.pop_front();
-        			continue;
-        		}
+		if (!cjob->SetupJobConfig(sErrorMsg, m_blacklist))
+		{
+			// something weird happened to it, drop it and let the client care
+			m_qNewjobs.pop_front();
+			continue;
+		}
 
-        		auto& tgt=cjob->GetPeerHost();
-        		// good case, direct or tunneled connection
-        		bool match=(tgt.sHost == con->GetHostname() && tgt.GetPort() == con->GetPort());
-        		const tHttpUrl * proxy = nullptr; // to be set ONLY if PROXY mode is used
+		auto& tgt = cjob->GetPeerHost();
+		// good case, direct or tunneled connection
+		bool match = (tgt.sHost == con->GetHostname()
+				&& tgt.GetPort() == con->GetPort());
+		const tHttpUrl * proxy = nullptr; // to be set ONLY if PROXY mode is used
 
-        		// if not exact and can be proxied, and is this the right proxy?
-        		if(!match)
-        		{
-        			proxy = prefProxy(cjob);
-        			if(proxy)
-        			{
-        				/*
-        				 * SSL over proxy uses HTTP tunnels (CONNECT scheme) so the check
-        				 * above should have matched before.
-        				 */
-        				if(!tgt.bSSL)
-        					match=(proxy->sHost == con->GetHostname() && proxy->GetPort() == con->GetPort());
-        			}
-        			// else... host changed and not going through the same proxy -> fail
-        		}
+		// if not exact and can be proxied, and is this the right proxy?
+		if (!match)
+		{
+			proxy = prefProxy(cjob);
+			if (proxy)
+			{
+				/*
+				 * SSL over proxy uses HTTP tunnels (CONNECT scheme) so the check
+				 * above should have matched before.
+				 */
+				if (!tgt.bSSL)
+					match = (proxy->sHost == con->GetHostname()
+							&& proxy->GetPort() == con->GetPort());
+			}
+			// else... host changed and not going through the same proxy -> fail
+		}
 
-        		if(!match)
-        		{
-        			LOG("host mismatch, new target: " << tgt.sHost << ":" << tgt.GetPort());
-        			bStopRequesting=true;
-        			break;
-        		}
+		if (!match)
+		{
+			LOG("host mismatch, new target: " << tgt.sHost << ":" << tgt.GetPort());
+			bStopRequesting = true;
+			break;
+		}
 
-				cjob->AppendRequest(m_sendBuf, m_sXForwardedFor, proxy);
-				LOG("request added to buffer");
-				inpipe.emplace_back(cjob);
-				m_qNewjobs.pop_front();
+		cjob->AppendRequest(m_sendBuf, m_sXForwardedFor, proxy);
+		LOG("request added to buffer");
+		inpipe.emplace_back(cjob);
+		m_qNewjobs.pop_front();
 
-				if (m_nTempPipelineDisable > 0)
-				{
-					bStopRequesting = true;
-					--m_nTempPipelineDisable;
-					break;
-				}
-        	}
-        }
-    	ldbg("Request(s) cooked, buffer contents: " << m_sendBuf);
-    	return eStateTransition::DONE;
+		if (m_nTempPipelineDisable > 0)
+		{
+			bStopRequesting = true;
+			--m_nTempPipelineDisable;
+			break;
+		}
+	}
+	ldbg("Request(s) cooked, buffer contents: " << m_sendBuf);
+	return eStateTransition::DONE;
 }
 
 void dlcon::BlacklistMirror(tDlJobPtr & job)
@@ -942,6 +936,9 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 	if( (flags & eWorkParameter::freshStart) && !ResetState())
 		return {tWorkState::fatalError, -1};
 
+	tWorkState retcmd
+	{ m_qNewjobs.empty() ? 0 : tWorkState::needConnect, con ? con->GetFD() : -1 };
+
 	// Zero is good, positive is good (means some count) negative is bad (sometimes negated errno value)
 	int ioresult = 0;
 	if(flags & eWorkParameter::gotError)
@@ -949,7 +946,11 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 	else if(flags & eWorkParameter::gotTimeout)
 		ioresult = 0;
 
-	unsigned loopRes=0;
+	unsigned loopRes = 0;
+	bool byPassIoCheck = false; // skip some uneeded IO operations when switchin between outer and inner IO loop
+
+	if (flags & (gotError | gotTimeout | canRecv | canSend))
+		goto returned_from_io;
 
 	while(true) // outer loop: jobs, connection handling
 	{
@@ -968,17 +969,17 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 		// IO loop: plain communication and pushing into job handler until something happens
 #define END_IO_LOOP(x) {loopRes=(x); goto after_io_loop; }
 		{
-			LOGSTART2("dlcon::ExchangeData",
+/*			LOGSTART2("dlcon::ExchangeData",
 					"qsize: " << inpipe.size() << ", sendbuf size: "
 					<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
-
-			tWorkState retcmd { tWorkState::needWork, con ? con->GetFD() : -1 };
-
+*/
 			if (inpipe.empty())
 				m_inBuf.clear(); // better be sure about dirty buffer from previous connection
 
-			// no socket operation needed in this case but just process old buffer contents
-			bool bReEnteredIoBlock = !m_inBuf.empty();
+			// no socket operation needed in this case, just process old buffer contents
+			byPassIoCheck = !m_inBuf.empty();
+			if(con)
+				retcmd.fd = con->GetFD();
 
 			loop_again:
 
@@ -1003,14 +1004,14 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 				}
 
 				// jump right into data processing but only once
-				if (bReEnteredIoBlock)
+				if (byPassIoCheck)
 				{
-					bReEnteredIoBlock = false;
+					byPassIoCheck = false;
 					goto proc_data;
 				}
 
 				// ok, let's mimic the same operations that would happen outside in connection class
-				if (flags & eWorkParameter::internalIoLooping)
+				if (retcmd.fd >=0 &&  flags & eWorkParameter::internalIoLooping)
 				{
 
 					ldbg("select dlcon");
@@ -1343,11 +1344,8 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 			m_pConFactory->RecycleIdleConnection(con);
 
 			// for the jobs that were not finished and/or dropped, move them back into the task queue
-			{
-				setLockGuard;
-				m_qNewjobs.insert(m_qNewjobs.begin(), inpipe.begin(), inpipe.end());
-				inpipe.clear();
-			};
+			m_qNewjobs.insert(m_qNewjobs.begin(), inpipe.begin(), inpipe.end());
+			inpipe.clear();
 			continue;
         }
 
@@ -1421,7 +1419,6 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
         			}
         		};
         		cleaner(inpipe);
-        		setLockGuard;
         		cleaner(m_qNewjobs);
         	}
         }
