@@ -202,7 +202,7 @@ public:
 	header & HeadRef() { return m_head; }
 };
 
-job::job(header *h, con *pParent) :
+job::job(header *h, conn *pParent) :
 	m_filefd(-1),
 	m_pParentCon(pParent),
 	m_bChunkMode(CHUNKDEFAULT),

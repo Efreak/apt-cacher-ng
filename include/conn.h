@@ -17,20 +17,20 @@ class dlcon;
 class job;
 class header;
 
-class con;
-typedef SHARED_PTR<con> tConPtr;
+class conn;
+typedef SHARED_PTR<conn> tConPtr;
 
-class con // : public tRunable
+class conn // : public tRunable
 {
    public:
-      con(int fdId, const char *client);
-      virtual ~con();
+      conn(int fdId, const char *client);
+      virtual ~conn();
       
       void WorkLoop();
       
    private:
-	   con& operator=(const con&);// { /* ASSERT(!"Don't copy con objects"); */ };
-	   con(const con&);// { /* ASSERT(!"Don't copy con objects"); */ };
+	   conn& operator=(const conn&);// { /* ASSERT(!"Don't copy con objects"); */ };
+	   conn(const conn&);// { /* ASSERT(!"Don't copy con objects"); */ };
 
 	      //! Terminate the connection descriptors gracefully
 	      void ShutDown();

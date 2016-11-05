@@ -23,7 +23,7 @@ using namespace std;
 namespace acng
 {
 
-con::con(int fdId, const char *c) :
+conn::conn(int fdId, const char *c) :
 			m_confd(fdId),
 			m_bStopActivity(false),
 			m_dlerthr(0),
@@ -41,7 +41,7 @@ con::con(int fdId, const char *c) :
 
 };
 
-con::~con() {
+conn::~conn() {
 	LOGSTART("con::~con (Destroying connection...)");
 	termsocket(m_confd);
 
@@ -196,7 +196,7 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 }
 }
 
-void con::WorkLoop() {
+void conn::WorkLoop() {
 
 	LOGSTART("con::WorkLoop");
 
@@ -401,7 +401,7 @@ void * _StartDownloader(void *pVoidDler)
 	return nullptr;
 }
 
-bool con::SetupDownloader(const char *pszOrigin)
+bool conn::SetupDownloader(const char *pszOrigin)
 {
 	if (m_pDlClient)
 		return true;
@@ -440,7 +440,7 @@ bool con::SetupDownloader(const char *pszOrigin)
 	return false;
 }
 
-void con::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
+void conn::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
 		off_t nNewOut, bool bAsError)
 {
 	string sClient;
@@ -462,7 +462,7 @@ void con::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
 }
 
 // sends the stats to logging and replaces file/client identities with the new context
-void con::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient)
+void conn::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient)
 {
 		log::transfer(fileTransferIn, fileTransferOut, logClient, logFile, m_bLogAsError);
 		fileTransferIn = fileTransferOut = 0;
