@@ -415,7 +415,11 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix, 0, cfg::REDIRMAX_DEFAULT);
 
-	m_pDlcon->WorkLoop();
+	if(dlcon::tWorkState::fatalError & m_pDlcon->WorkLoop(dlcon::eWorkParameter::freshStart
+					| dlcon::eWorkParameter::internalIoLooping).flags)
+		goto rep_dl_error;
+
+
 	if (pFi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE
 			&& pFi->GetHeaderUnlocked().getStatus() == 200)
 	{
@@ -561,6 +565,8 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		}
 		//else
 		//	AddDelCbox(sFilePathRel);
+
+		rep_dl_error:
 
 		if (sErr.empty())
 			sErr = "Download error";

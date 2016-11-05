@@ -41,22 +41,11 @@ static const auto taboo =
 std::atomic_uint g_nDlCons(0);
 
 dlcon::dlcon(bool bManualExecution, string *xff, IDlConFactory *pConFactory) :
-		m_pConFactory(pConFactory), m_bStopASAP(false), m_bManualMode(bManualExecution),
+		m_pConFactory(pConFactory),
 		m_nTempPipelineDisable(0),
 		m_bProxyTot(false)
 {
 	LOGSTART("dlcon::dlcon");
-#ifdef HAVE_LINUX_EVENTFD
-	m_wakeventfd=eventfd(0, 0);
-	if(m_wakeventfd>=0)
-		set_nb(m_wakeventfd);
-#else
-	if (0 == pipe(m_wakepipe))
-	{
-		set_nb(m_wakepipe[0]);
-		set_nb(m_wakepipe[1]);
-	}
-#endif
 	if (xff)
 		m_sXForwardedFor = *xff;
   g_nDlCons++;
@@ -697,17 +686,6 @@ private:
 	tDlJob & operator=(const tDlJob&);
 };
 
-void dlcon::wake()
-{
-	if (fdWakeWrite<0)
-		return;
-#ifdef HAVE_LINUX_EVENTFD
-	while(eventfd_write(fdWakeWrite, 1)<0) ;
-#else
-	POKE(fdWakeWrite);
-#endif
-}
-
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const cfg::tRepoData *pBackends,
 		cmstring *sPatSuffix, LPCSTR reqHead,
@@ -732,33 +710,13 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection));
 
 	m_qNewjobs.back()->ExtractCustomHeaders(reqHead);
-
-	wake();
 	return true;
-}
-
-void dlcon::SignalStop()
-{
-	LOGSTART("dlcon::SignalStop");
-	setLockGuard;
-
-	// stop all activity as soon as possible
-	m_bStopASAP=true;
-	m_qNewjobs.clear();
-
-	wake();
 }
 
 dlcon::~dlcon()
 {
 	LOGSTART("dlcon::~dlcon, Destroying dlcon");
-#ifdef HAVE_LINUX_EVENTFD
-	checkforceclose(m_wakeventfd);
-#else
-	checkforceclose(m_wakepipe[0]);
-	checkforceclose(m_wakepipe[1]);
-#endif
-  g_nDlCons--;
+	g_nDlCons--;
 }
 
 bool dlcon::ResetState()
@@ -771,18 +729,18 @@ bool dlcon::ResetState()
 		return false;
 	}
 
-	if(fdWakeRead<0 || fdWakeWrite<0)
-	{
-		log::err("Error creating pipe file descriptors");
-		return false;
-	}
-
 	inpipe.clear();
 	con.reset();
 	bStopRequesting = false;
 	nLostConTolerance = MAX_RETRY;
 	sErrorMsg.clear();
 	return true;
+}
+
+void dlcon::shutdown()
+{
+	if (inpipe.empty() && con)
+		m_pConFactory->RecycleIdleConnection(con);
 }
 
 eStateTransition dlcon::SetupConnectionAndRequests()
@@ -805,21 +763,6 @@ eStateTransition dlcon::SetupConnectionAndRequests()
         {
         	setLockGuard;
         	LOG("New jobs: " << m_qNewjobs.size());
-
-        	if(m_bStopASAP)
-        	{
-        		/* The no-more-users checking logic will purge orphaned items from the inpipe
-        		 * queue. When the connection is dirty after that, it will be closed in the
-        		 * ExchangeData() but if not then it can be assumed to be clean and reusable.
-        		 */
-        		if(inpipe.empty())
-        		{
-        			if(con)
-        				m_pConFactory->RecycleIdleConnection(con);
-        			return eStateTransition::FUNC_RETURN;
-        		}
-        	}
-
 
         	if(m_qNewjobs.empty())
         		return eStateTransition::DONE; // parent will notify RSN
@@ -993,10 +936,18 @@ void dlcon::BlacklistMirror(tDlJobPtr & job)
 				job->GetPeerHost().GetPort())] = sErrorMsg;
 	};
 
-void dlcon::WorkLoop()
+dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 {
 	LOGSTART("dlcon::WorkLoop");
-	if(!ResetState()) return;
+	if( (flags & eWorkParameter::freshStart) && !ResetState())
+		return {tWorkState::fatalError, -1};
+
+	// Zero is good, positive is good (means some count) negative is bad (sometimes negated errno value)
+	int ioresult = 0;
+	if(flags & eWorkParameter::gotError)
+		ioresult = -1;
+	else if(flags & eWorkParameter::gotTimeout)
+		ioresult = 0;
 
 	unsigned loopRes=0;
 
@@ -1005,13 +956,13 @@ void dlcon::WorkLoop()
 		switch(SetupConnectionAndRequests())
 		{
 		case eStateTransition::DONE: break; // go select now
-		case eStateTransition::FUNC_RETURN: return;
+		case eStateTransition::FUNC_RETURN: return {tWorkState::allDone, -1};
 		case eStateTransition::LOOP_CONTINUE: continue;
 		}
 
-        if(inpipe.empty() && m_bManualMode)
+        if(inpipe.empty() && (flags & internalIoLooping))
         {
-        	return;
+        	return {tWorkState::allDone, -1};
         }
 
 		// IO loop: plain communication and pushing into job handler until something happens
@@ -1021,60 +972,76 @@ void dlcon::WorkLoop()
 					"qsize: " << inpipe.size() << ", sendbuf size: "
 					<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
 
-			fd_set rfds, wfds;
-			struct timeval tv;
-			int r = 0;
-			int fd = con ? con->GetFD() : -1;
-			FD_ZERO(&rfds);
-			FD_ZERO(&wfds);
+			tWorkState retcmd { tWorkState::needWork, con ? con->GetFD() : -1 };
 
 			if (inpipe.empty())
 				m_inBuf.clear(); // better be sure about dirty buffer from previous connection
 
 			// no socket operation needed in this case but just process old buffer contents
-			bool bReEntered = !m_inBuf.empty();
+			bool bReEnteredIoBlock = !m_inBuf.empty();
 
 			loop_again:
 
 			for (;;)
 			{
-				FD_SET(fdWakeRead, &rfds);
-				int nMaxFd = fdWakeRead;
-
-				if (fd >= 0)
+				if (retcmd.fd >= 0)
 				{
-					FD_SET(fd, &rfds);
-					nMaxFd = std::max(fd, nMaxFd);
+					retcmd.flags |= tWorkState::needRecv;
 
 					if (!m_sendBuf.empty())
 					{
 						ldbg("Needs to send " << m_sendBuf.size() << " bytes");
-						FD_SET(fd, &wfds);
+						retcmd.flags |= tWorkState::needSend;
 					}
 #ifdef HAVE_SSL
 					else if (con->GetBIO() && BIO_should_write(con->GetBIO()))
 					{
 						ldbg("NOTE: OpenSSL wants to write although send buffer is empty!");
-						FD_SET(fd, &wfds);
+						retcmd.flags |= tWorkState::needSend;
 					}
 #endif
 				}
 
-				ldbg("select dlcon");
-				tv.tv_sec = cfg::nettimeout;
-				tv.tv_usec = 0;
-
 				// jump right into data processing but only once
-				if (bReEntered)
+				if (bReEnteredIoBlock)
 				{
-					bReEntered = false;
+					bReEnteredIoBlock = false;
 					goto proc_data;
 				}
 
-				r = select(nMaxFd + 1, &rfds, &wfds, nullptr, &tv);
-				ldbg("returned: " << r << ", errno: " << errno);
+				// ok, let's mimic the same operations that would happen outside in connection class
+				if (flags & eWorkParameter::internalIoLooping)
+				{
 
-				if (r < 0)
+					ldbg("select dlcon");
+					struct timeval tv
+					{ cfg::nettimeout, 1 };
+
+					fd_set rfds, wfds;
+					FD_ZERO(&rfds);
+					FD_ZERO(&wfds);
+					if (retcmd.flags & tWorkState::needRecv)
+						FD_SET(retcmd.fd, &rfds);
+					else
+						FD_CLR(retcmd.fd, &rfds);
+					if (retcmd.flags & tWorkState::needSend)
+						FD_SET(retcmd.fd, &wfds);
+					else
+						FD_CLR(retcmd.fd, &wfds);
+					ioresult = select(retcmd.fd + 1, &rfds, &wfds, nullptr, &tv);
+					ldbg("returned: " << ioresult << ", errno: " << errno);
+					if(ioresult >= 0)
+					{
+						if(FD_ISSET(retcmd.fd, &rfds))
+							flags |= eWorkParameter::canRecv;
+						if(FD_ISSET(retcmd.fd, &wfds))
+							flags |= eWorkParameter::canSend;
+					}
+				}
+
+				returned_from_io:
+
+				if (ioresult < 0)
 				{
 					if (EINTR == errno)
 						continue;
@@ -1088,7 +1055,7 @@ void dlcon::WorkLoop()
 					END_IO_LOOP(
 							HINT_DISCON|EFLAG_JOB_BROKEN|EFLAG_MIRROR_BROKEN);
 				}
-				else if (r == 0) // looks like a timeout
+				else if (ioresult == 0) // looks like a timeout
 				{
 					sErrorMsg = "500 Connection timeout";
 					// was there anything to do at all?
@@ -1101,72 +1068,44 @@ void dlcon::WorkLoop()
 					END_IO_LOOP(HINT_DISCON|EFLAG_JOB_BROKEN);
 				}
 
-				if (FD_ISSET(fdWakeRead, &rfds))
+				if (retcmd.fd >= 0 && (flags & eWorkParameter::canSend))
 				{
-					dbgline;
-#ifdef HAVE_LINUX_EVENTFD
-					eventfd_t xtmp;
-					int tmp;
-					do
-					{
-						tmp = eventfd_read(fdWakeRead, &xtmp);
-					} while (tmp < 0 && (errno == EINTR || errno == EAGAIN));
-
-#else
-					for (int tmp; read(m_wakepipe[0], &tmp, 1) > 0;)
-					;
-#endif
-					END_IO_LOOP(HINT_SWITCH);
-				}
-
-				if (fd >= 0)
-				{
-					if (FD_ISSET(fd, &wfds))
-					{
-						FD_CLR(fd, &wfds);
 
 #ifdef HAVE_SSL
-						if (con->GetBIO())
+					if (con->GetBIO())
+					{
+						int s = BIO_write(con->GetBIO(), m_sendBuf.rptr(),
+								m_sendBuf.size());
+						ldbg(
+								"tried to write to SSL, " << m_sendBuf.size() << " bytes, result: " << s);
+						if (s > 0)
+							m_sendBuf.drop(s);
+					}
+					else
+#endif
+					{
+						ldbg("Sending data...\n" << m_sendBuf);
+						int s = ::send(retcmd.fd, m_sendBuf.data(), m_sendBuf.length(),
+						MSG_NOSIGNAL);
+						ldbg(
+								"Sent " << s << " bytes from " << m_sendBuf.length() << " to " << con.get());
+						if (s < 0)
 						{
-							int s = BIO_write(con->GetBIO(), m_sendBuf.rptr(),
-									m_sendBuf.size());
-							ldbg(
-									"tried to write to SSL, " << m_sendBuf.size() << " bytes, result: " << s);
-							if (s > 0)
-								m_sendBuf.drop(s);
+							// EAGAIN is weird but let's retry later, otherwise reconnect
+							if (errno != EAGAIN && errno != EINTR)
+							{
+								sErrorMsg = "502 Send failed";
+								END_IO_LOOP(EFLAG_LOST_CON);
+							}
 						}
 						else
-						{
-#endif
-							ldbg("Sending data...\n" << m_sendBuf);
-							int s = ::send(fd, m_sendBuf.data(),
-									m_sendBuf.length(),
-									MSG_NOSIGNAL);
-							ldbg(
-									"Sent " << s << " bytes from " << m_sendBuf.length() << " to " << con.get());
-							if (s < 0)
-							{
-								// EAGAIN is weird but let's retry later, otherwise reconnect
-								if (errno != EAGAIN && errno != EINTR)
-								{
-									sErrorMsg = "502 Send failed";
-									END_IO_LOOP(EFLAG_LOST_CON);
-								}
-							}
-							else
-								m_sendBuf.drop(s);
+							m_sendBuf.drop(s);
 
-						}
-#ifdef HAVE_SSL
 					}
-#endif
+
 				}
 
-				if (fd >= 0 && (FD_ISSET(fd, &rfds)
-#ifdef HAVE_SSL
-						|| (con->GetBIO() && BIO_should_read(con->GetBIO()))
-#endif
-						))
+				if (retcmd.fd >= 0 && (flags & eWorkParameter::canRecv))
 				{
 					if (cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
 					{
@@ -1203,21 +1142,22 @@ void dlcon::WorkLoop()
 						}
 					}
 #ifdef HAVE_SSL
+					// ssl connection?
 					if (con->GetBIO())
 					{
-						r = BIO_read(con->GetBIO(), m_inBuf.wptr(),
+						ioresult = BIO_read(con->GetBIO(), m_inBuf.wptr(),
 								std::min(m_nSpeedLimitMaxPerTake,
 										m_inBuf.freecapa()));
-						if (r > 0)
-							m_inBuf.got(r);
+						if (ioresult > 0)
+							m_inBuf.got(ioresult);
 						else
 							// <=0 doesn't mean an error, only a double check can tell
-							r = BIO_should_read(con->GetBIO()) ? 1 : -errno;
+							ioresult = BIO_should_read(con->GetBIO()) ? 1 : -errno;
 					}
 					else
 #endif
 					{
-						r = m_inBuf.sysread(fd, m_nSpeedLimitMaxPerTake);
+						ioresult = m_inBuf.sysread(retcmd.fd, m_nSpeedLimitMaxPerTake);
 					}
 
 #ifdef DISCO_FAILURE
@@ -1239,20 +1179,20 @@ void dlcon::WorkLoop()
 					}
 #endif
 
-					if (r == -EAGAIN || r == -EWOULDBLOCK)
+					if (ioresult == -EAGAIN || ioresult == -EWOULDBLOCK)
 					{
 						ldbg("why EAGAIN/EINTR after getting it from select?");
 						//				timespec sleeptime = { 0, 432000000 };
 						//				nanosleep(&sleeptime, nullptr);
 						goto loop_again;
 					}
-					else if (r == 0)
+					else if (ioresult == 0)
 					{
 						dbgline;
 						sErrorMsg = "502 Connection closed";
 						END_IO_LOOP(EFLAG_LOST_CON);
 					}
-					else if (r < 0) // other error, might reconnect
+					else if (ioresult < 0) // other error, might reconnect
 					{
 						dbgline;
 #ifdef MINIBUILD

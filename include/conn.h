@@ -4,6 +4,7 @@
 
 #include "config.h"
 #include "lockable.h"
+#include "dlcon.h"
 
 #include <list>
 #include <string>
@@ -13,7 +14,6 @@
 namespace acng
 {
 
-class dlcon;
 class job;
 class header;
 
@@ -54,6 +54,7 @@ class conn // : public tRunable
       friend class job;
       bool SetupDownloader(const char *xff);
       dlcon * m_pDlClient;
+      dlcon::tWorkState m_lastDlState = {dlcon::tWorkState::allDone,0};
       mstring m_sClientHost;
       header *m_pTmpHead;
       

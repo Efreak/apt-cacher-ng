@@ -1008,7 +1008,9 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 
 	auto fi=fac->Create();
 	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT);
-	dl.WorkLoop();
+	if(dlcon::tWorkState::fatalError & dl.WorkLoop(dlcon::eWorkParameter::freshStart
+					| dlcon::eWorkParameter::internalIoLooping).flags)
+		exit(23);
 	auto fistatus = fi->GetStatus();
 	header hh = fi->GetHeader();
 	int st=hh.getStatus();

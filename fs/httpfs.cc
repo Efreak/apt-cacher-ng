@@ -310,7 +310,10 @@ public:
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
 		dler.AddJob(spFi, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
-		dler.WorkLoop();
+		if(dlcon::tWorkState::fatalError & dler.WorkLoop(dlcon::eWorkParameter::freshStart
+				| dlcon::eWorkParameter::internalIoLooping).flags)
+			exit(1);
+
 		int nHttpCode(100);
 		pFi->WaitForFinish(&nHttpCode);
 		bIsFirst=false;
@@ -383,7 +386,9 @@ public:
 		};
 		auto probe(make_shared<tFitemProbe>());
 		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
-		dler.WorkLoop();
+		if(dlcon::tWorkState::fatalError & dler.WorkLoop(dlcon::eWorkParameter::freshStart
+						| dlcon::eWorkParameter::internalIoLooping).flags)
+			exit(23);
 		int nHttpCode(100);
 		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
 		stbuf.st_size = atoofft(probe->GetHeaderUnlocked().h[header::CONTENT_LENGTH], 0);

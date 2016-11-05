@@ -12,6 +12,7 @@
 #include <memory>
 #include "meta.h"
 #include "sockio.h"
+#include "acfg.h"
 
 #include <memory>
 

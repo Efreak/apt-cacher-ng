@@ -44,29 +44,10 @@ conn::conn(int fdId, const char *c) :
 conn::~conn() {
 	LOGSTART("con::~con (Destroying connection...)");
 	termsocket(m_confd);
-
-	// our user's connection is released but the downloader task created here may still be serving others
-	// tell it to stop when it gets the chance and delete it then
-
-	std::list<job*>::iterator jit;
-	for (jit=m_jobs2send.begin(); jit!=m_jobs2send.end(); jit++)
-		delete *jit;
-
 	writeAnotherLogRecord(sEmptyString, sEmptyString);
-
-	if(m_pDlClient)
-	{
-		m_pDlClient->SignalStop();
-		pthread_join(m_dlerthr, nullptr);
-
-		delete m_pDlClient;
-		m_pDlClient=nullptr;
-	}
-	if(m_pTmpHead)
-	{
-		delete m_pTmpHead;
-		m_pTmpHead=nullptr;
-	}
+	for(auto& j: m_jobs2send) delete j;
+	delete m_pDlClient;
+	delete m_pTmpHead;
 	log::flush();
 }
 
@@ -257,6 +238,7 @@ void conn::WorkLoop() {
 				else
 				{
 					ldbg("client closed connection");
+					if(m_pDlClient) m_pDlClient->shutdown();
 					return;
 				}
 			}
@@ -395,12 +377,6 @@ void conn::WorkLoop() {
 	}
 }
 
-void * _StartDownloader(void *pVoidDler)
-{
-	static_cast<dlcon*>(pVoidDler) -> WorkLoop();
-	return nullptr;
-}
-
 bool conn::SetupDownloader(const char *pszOrigin)
 {
 	if (m_pDlClient)
@@ -424,20 +400,15 @@ bool conn::SetupDownloader(const char *pszOrigin)
 
 		if(!m_pDlClient)
 			return false;
+
+		m_lastDlState = m_pDlClient->WorkLoop(dlcon::freshStart);
+		return ! (dlcon::tWorkState::fatalError & m_lastDlState.flags);
+
 	}
 	MYCATCH(bad_alloc&)
 	{
 		return false;
 	}
-
-	if (0==pthread_create(&m_dlerthr, nullptr, _StartDownloader,
-			(void *)m_pDlClient))
-	{
-		return true;
-	}
-	delete m_pDlClient;
-	m_pDlClient=nullptr;
-	return false;
 }
 
 void conn::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,

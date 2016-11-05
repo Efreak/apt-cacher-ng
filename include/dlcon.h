@@ -54,9 +54,29 @@ class dlcon : public base_with_mutex
         		IDlConFactory *pConFactory = &g_tcp_con_factory);
         ~dlcon();
 
-        void WorkLoop();
-        
-        void SignalStop();
+
+        // helpers for communication with the outside world
+        enum eWorkParameter
+		{
+        		freshStart = 1, // init/reinit object state, only in the beginning
+        	    internalIoLooping = 2,// "manual mode" - run internal IO and loop until the job list is processed
+				canRecv =4, canSend=8, gotError=16, gotTimeout = 32,
+				gotWork = 64 // prepare download, connect, etc.
+		};
+        struct tWorkState
+        {
+        	enum
+			{
+        		allDone = 0, needRecv = 1, needSend = 2, needWork = 4 , fatalError =8
+        	};
+        	int flags; // one or multiple ORed from above
+        	int fd;
+        };
+
+        tWorkState WorkLoop(unsigned /* eWorkParameter */ flags);
+
+        // donate internal resources and prepare for termination. Should not be called during glboal shutdown.
+        void shutdown();
 
         bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
         		const cfg::tRepoData *pRepoDesc,
@@ -75,22 +95,6 @@ class dlcon : public base_with_mutex
     	
     	tDljQueue m_qNewjobs;
     	IDlConFactory* m_pConFactory;
-
-#ifdef HAVE_LINUX_EVENTFD
-    	int m_wakeventfd = -1;
-#define fdWakeRead m_wakeventfd
-#define fdWakeWrite m_wakeventfd
-#else
-    	int m_wakepipe[2] = {-1, -1};
-#define fdWakeRead m_wakepipe[0]
-#define fdWakeWrite m_wakepipe[1]
-#endif
-    	// flags and local copies for input parsing
-    	/// remember being attached to an fitem
-
-    	bool m_bStopASAP;
-
-    	unsigned m_bManualMode;
 
     	/// blacklist for permanently failing hosts, with error message
     	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
@@ -120,13 +124,11 @@ class dlcon : public base_with_mutex
     	unsigned m_nSpeedLimitMaxPerTake = MAX_VAL(unsigned);
       unsigned m_nLastDlCount=0;
 
-      void wake();
-
-      // temp state variables
+      // temp state variables and internal helpers
   	tDljQueue inpipe;
   	tDlStreamHandle con;
-  	bool bStopRequesting; // hint to stop adding request headers until the connection is restarted
-  	int nLostConTolerance;
+  	bool bStopRequesting = false; // hint to stop adding request headers until the connection is restarted
+  	int nLostConTolerance = 1;
     string sErrorMsg;
     bool ResetState(); // set them back to defaults
     eStateTransition SetupConnectionAndRequests();
