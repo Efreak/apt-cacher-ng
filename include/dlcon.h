@@ -96,8 +96,6 @@ class dlcon : public base_with_mutex
     	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
     	tSS m_sendBuf, m_inBuf;
 
-	unsigned ExchangeData();
-
     	// Disable pipelining for the next # requests. Actually used as crude workaround for the
     	// concept limitation (because of automata over a couple of function) and its
     	// impact on download performance.

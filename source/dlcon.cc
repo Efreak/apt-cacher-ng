@@ -761,330 +761,6 @@ dlcon::~dlcon()
   g_nDlCons--;
 }
 
-inline unsigned dlcon::ExchangeData()
-{
-	LOGSTART2("dlcon::ExchangeData",
-			"qsize: " << inpipe.size() << ", sendbuf size: "
-			<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
-
-	fd_set rfds, wfds;
-	struct timeval tv;
-	int r = 0;
-	int fd = con ? con->GetFD() : -1;
-	FD_ZERO(&rfds);
-	FD_ZERO(&wfds);
-
-	if(inpipe.empty())
-		m_inBuf.clear(); // better be sure about dirty buffer from previous connection
-
-	// no socket operation needed in this case but just process old buffer contents
-	bool bReEntered=!m_inBuf.empty();
-
-	loop_again:
-
-	for (;;)
-	{
-		FD_SET(fdWakeRead, &rfds);
-		int nMaxFd = fdWakeRead;
-
-		if (fd>=0)
-		{
-			FD_SET(fd, &rfds);
-			nMaxFd = std::max(fd, nMaxFd);
-
-			if (!m_sendBuf.empty())
-			{
-				ldbg("Needs to send " << m_sendBuf.size() << " bytes");
-				FD_SET(fd, &wfds);
-			}
-#ifdef HAVE_SSL
-			else if(con->GetBIO() && BIO_should_write(con->GetBIO()))
-			{
-				ldbg("NOTE: OpenSSL wants to write although send buffer is empty!");
-				FD_SET(fd, &wfds);
-			}
-#endif
-		}
-
-		ldbg("select dlcon");
-		tv.tv_sec = cfg::nettimeout;
-		tv.tv_usec = 0;
-
-		// jump right into data processing but only once
-		if(bReEntered)
-		{
-			bReEntered=false;
-			goto proc_data;
-		}
-
-		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, &tv);
-		ldbg("returned: " << r << ", errno: " << errno);
-
-		if (r < 0)
-		{
-			if (EINTR == errno)
-				continue;
-#ifdef MINIBUILD
-			string fer("select failed");
-#else
-			tErrnoFmter fer("FAILURE: select, ");
-			LOG(fer);
-#endif
-			sErrorMsg = string("500 Internal malfunction, ") + fer;
-			return HINT_DISCON|EFLAG_JOB_BROKEN|EFLAG_MIRROR_BROKEN;
-		}
-		else if (r == 0) // looks like a timeout
-		{
-			sErrorMsg = "500 Connection timeout";
-			// was there anything to do at all?
-			if(inpipe.empty())
-				return HINT_SWITCH;
-
-			if(inpipe.front()->IsRecoverableState())
-				return EFLAG_LOST_CON;
-			else
-				return (HINT_DISCON|EFLAG_JOB_BROKEN);
-		}
-
-		if (FD_ISSET(fdWakeRead, &rfds))
-		{
-			dbgline;
-#ifdef HAVE_LINUX_EVENTFD
-			eventfd_t xtmp;
-			int tmp;
-			do {
-				tmp = eventfd_read(fdWakeRead, &xtmp);
-			} while (tmp < 0 && (errno == EINTR || errno == EAGAIN));
-
-#else
-			for (int tmp; read(m_wakepipe[0], &tmp, 1) > 0;)
-				;
-#endif
-			return HINT_SWITCH;
-		}
-
-		if (fd >= 0)
-		{
-			if (FD_ISSET(fd, &wfds))
-			{
-				FD_CLR(fd, &wfds);
-
-#ifdef HAVE_SSL
-				if (con->GetBIO())
-				{
-					int s = BIO_write(con->GetBIO(), m_sendBuf.rptr(),
-							m_sendBuf.size());
-					ldbg(
-							"tried to write to SSL, " << m_sendBuf.size() << " bytes, result: " << s);
-					if (s > 0)
-						m_sendBuf.drop(s);
-				}
-				else
-				{
-#endif
-					ldbg("Sending data...\n" << m_sendBuf);
-					int s = ::send(fd, m_sendBuf.data(), m_sendBuf.length(),
-							MSG_NOSIGNAL);
-					ldbg(
-							"Sent " << s << " bytes from " << m_sendBuf.length() << " to " << con.get());
-					if (s < 0)
-					{
-						// EAGAIN is weird but let's retry later, otherwise reconnect
-						if (errno != EAGAIN && errno != EINTR)
-						{
-							sErrorMsg = "502 Send failed";
-							return EFLAG_LOST_CON;
-						}
-					}
-					else
-						m_sendBuf.drop(s);
-
-				}
-#ifdef HAVE_SSL
-			}
-#endif
-		}
-
-		if (fd >=0 && (FD_ISSET(fd, &rfds)
-#ifdef HAVE_SSL
-				|| (con->GetBIO() && BIO_should_read(con->GetBIO()))
-#endif
-			))
-		{
-       if(cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
-       {
-          auto nCntNew=g_nDlCons.load();
-          if(m_nLastDlCount != nCntNew)
-          {
-             m_nLastDlCount=nCntNew;
-
-             // well, split the bandwidth
-             auto nSpeedNowKib = uint(cfg::maxdlspeed) / nCntNew;
-             auto nTakesPerSec = nSpeedNowKib / 32;
-             if(!nTakesPerSec)
-                nTakesPerSec=1;
-             m_nSpeedLimitMaxPerTake = nSpeedNowKib*1024/nTakesPerSec;
-             auto nIntervalUS=1000000 / nTakesPerSec;
-             auto nIntervalUS_copy = nIntervalUS;
-             // creating a bitmask
-             for(m_nSpeedLimiterRoundUp=1,nIntervalUS/=2;nIntervalUS;nIntervalUS>>=1)
-                m_nSpeedLimiterRoundUp = (m_nSpeedLimiterRoundUp<<1)|1;
-             m_nSpeedLimitMaxPerTake = uint(double(m_nSpeedLimitMaxPerTake) * double(m_nSpeedLimiterRoundUp) / double(nIntervalUS_copy));
-          }
-          // waiting for the next time slice to get data from buffer
-          timeval tv;
-          if(0==gettimeofday(&tv, nullptr))
-          {
-             auto usNext = tv.tv_usec | m_nSpeedLimiterRoundUp;
-             usleep(usNext-tv.tv_usec);
-          }
-       }
-#ifdef HAVE_SSL
-			if(con->GetBIO())
-			{
-				r=BIO_read(con->GetBIO(), m_inBuf.wptr(),
-						std::min(m_nSpeedLimitMaxPerTake, m_inBuf.freecapa()));
-				if(r>0)
-					m_inBuf.got(r);
-				else // <=0 doesn't mean an error, only a double check can tell
-					r=BIO_should_read(con->GetBIO()) ? 1 : -errno;
-			}
-			else
-#endif
-			{
-				r = m_inBuf.sysread(fd, m_nSpeedLimitMaxPerTake);
-			}
-
-#ifdef DISCO_FAILURE
-#warning hej
-			static int fakeFail=-123;
-			if(fakeFail == -123)
-			{
-				srand(getpid());
-				fakeFail = rand()%123;
-			}
-			if( fakeFail-- < 0)
-			{
-//				LOGLVL(log::LOG_DEBUG, "\n#################\nFAKING A FAILURE\n###########\n");
-				r=0;
-				fakeFail=rand()%123;
-				errno = EROFS;
-				//r = -errno;
-				shutdown(con.get()->GetFD(), SHUT_RDWR);
-			}
-#endif
-
-			if(r == -EAGAIN || r == -EWOULDBLOCK)
-			{
-				ldbg("why EAGAIN/EINTR after getting it from select?");
-//				timespec sleeptime = { 0, 432000000 };
-//				nanosleep(&sleeptime, nullptr);
-				goto loop_again;
-			}
-			else if (r == 0)
-			{
-				dbgline;
-				sErrorMsg = "502 Connection closed";
-				return EFLAG_LOST_CON;
-			}
-			else if (r < 0) // other error, might reconnect
-			{
-				dbgline;
-#ifdef MINIBUILD
-				sErrorMsg = "502 EPIC FAIL";
-#else
-				// pickup the error code for later and kill current connection ASAP
-				sErrorMsg = tErrnoFmter("502 ");
-#endif
-				return EFLAG_LOST_CON;
-			}
-
-			proc_data:
-
-			if(inpipe.empty())
-			{
-				ldbg("FIXME: unexpected data returned?");
-				sErrorMsg = "500 Unexpected data";
-				return EFLAG_LOST_CON;
-			}
-
-			while(!m_inBuf.empty())
-			{
-
-				ldbg("Processing job for " << inpipe.front()->RemoteUri(false));
-				unsigned res = inpipe.front()->ProcessIncomming(m_inBuf, false);
-				ldbg(
-						"... incoming data processing result: " << res
-						<< ", emsg: " << inpipe.front()->sErrorMsg);
-
-				if(res&EFLAG_MIRROR_BROKEN)
-				{
-					ldbg("###### BROKEN MIRROR ####### on " << con.get());
-				}
-
-				if (HINT_MORE == res)
-					goto loop_again;
-
-				if (HINT_DONE & res)
-				{
-					// just in case that server damaged the last response body
-					con->KnowLastFile(WEAK_PTR<fileitem>(inpipe.front()->m_pStorage));
-
-					inpipe.pop_front();
-					if (HINT_DISCON & res)
-						return HINT_DISCON; // with cleaned flags
-
-					LOG(
-							"job finished. Has more? " << inpipe.size()
-							<< ", remaining data? " << m_inBuf.size());
-
-					if (inpipe.empty())
-					{
-						LOG("Need more work");
-						return HINT_SWITCH;
-					}
-
-					LOG("Extract more responses");
-					continue;
-				}
-
-				if (HINT_TGTCHANGE & res)
-				{
-					/* If the target was modified for internal redirection then there might be
-					 * more responses of that kind in the queue. Apply the redirection handling
-					 * to the rest as well if possible without having side effects.
-					 */
-					auto it = inpipe.begin();
-					for(++it; it != inpipe.end(); ++it)
-					{
-						unsigned rr = (**it).ProcessIncomming(m_inBuf, true);
-						// just the internal rewriting applied and nothing else?
-						if( HINT_TGTCHANGE != rr )
-						{
-							// not internal redirection or some failure doing it
-							m_nTempPipelineDisable=30;
-							return (HINT_TGTCHANGE|HINT_DISCON);
-						}
-					}
-					// processed all inpipe stuff but if the buffer is still not empty then better disconnect
-					return HINT_TGTCHANGE | (m_inBuf.empty() ? 0 : HINT_DISCON);
-				}
-
-				// else case: error handling, pass to main loop
-				if(HINT_KILL_LAST_FILE & res)
-					con->KillLastFile();
-				setIfNotEmpty(sErrorMsg, inpipe.front()->sErrorMsg);
-				return res;
-			}
-			return HINT_DONE; // input buffer consumed
-		}
-	}
-
-	ASSERT(!"Unreachable");
-	sErrorMsg = "500 Internal failure";
-	return EFLAG_JOB_BROKEN|HINT_DISCON;
-}
-
 bool dlcon::ResetState()
 {
     m_inBuf.clear();
@@ -1338,8 +1014,347 @@ void dlcon::WorkLoop()
         	return;
         }
 
-        // inner loop: plain communication until something happens. Maybe should use epoll here?
-        loopRes=ExchangeData();
+		// IO loop: plain communication and pushing into job handler until something happens
+#define END_IO_LOOP(x) {loopRes=(x); goto after_io_loop; }
+		{
+			LOGSTART2("dlcon::ExchangeData",
+					"qsize: " << inpipe.size() << ", sendbuf size: "
+					<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
+
+			fd_set rfds, wfds;
+			struct timeval tv;
+			int r = 0;
+			int fd = con ? con->GetFD() : -1;
+			FD_ZERO(&rfds);
+			FD_ZERO(&wfds);
+
+			if (inpipe.empty())
+				m_inBuf.clear(); // better be sure about dirty buffer from previous connection
+
+			// no socket operation needed in this case but just process old buffer contents
+			bool bReEntered = !m_inBuf.empty();
+
+			loop_again:
+
+			for (;;)
+			{
+				FD_SET(fdWakeRead, &rfds);
+				int nMaxFd = fdWakeRead;
+
+				if (fd >= 0)
+				{
+					FD_SET(fd, &rfds);
+					nMaxFd = std::max(fd, nMaxFd);
+
+					if (!m_sendBuf.empty())
+					{
+						ldbg("Needs to send " << m_sendBuf.size() << " bytes");
+						FD_SET(fd, &wfds);
+					}
+#ifdef HAVE_SSL
+					else if (con->GetBIO() && BIO_should_write(con->GetBIO()))
+					{
+						ldbg("NOTE: OpenSSL wants to write although send buffer is empty!");
+						FD_SET(fd, &wfds);
+					}
+#endif
+				}
+
+				ldbg("select dlcon");
+				tv.tv_sec = cfg::nettimeout;
+				tv.tv_usec = 0;
+
+				// jump right into data processing but only once
+				if (bReEntered)
+				{
+					bReEntered = false;
+					goto proc_data;
+				}
+
+				r = select(nMaxFd + 1, &rfds, &wfds, nullptr, &tv);
+				ldbg("returned: " << r << ", errno: " << errno);
+
+				if (r < 0)
+				{
+					if (EINTR == errno)
+						continue;
+#ifdef MINIBUILD
+					string fer("select failed");
+#else
+					tErrnoFmter fer("FAILURE: select, ");
+					LOG(fer);
+#endif
+					sErrorMsg = string("500 Internal malfunction, ") + fer;
+					END_IO_LOOP(
+							HINT_DISCON|EFLAG_JOB_BROKEN|EFLAG_MIRROR_BROKEN);
+				}
+				else if (r == 0) // looks like a timeout
+				{
+					sErrorMsg = "500 Connection timeout";
+					// was there anything to do at all?
+					if (inpipe.empty())
+						END_IO_LOOP(HINT_SWITCH);
+
+					if (inpipe.front()->IsRecoverableState())
+						END_IO_LOOP(EFLAG_LOST_CON);
+
+					END_IO_LOOP(HINT_DISCON|EFLAG_JOB_BROKEN);
+				}
+
+				if (FD_ISSET(fdWakeRead, &rfds))
+				{
+					dbgline;
+#ifdef HAVE_LINUX_EVENTFD
+					eventfd_t xtmp;
+					int tmp;
+					do
+					{
+						tmp = eventfd_read(fdWakeRead, &xtmp);
+					} while (tmp < 0 && (errno == EINTR || errno == EAGAIN));
+
+#else
+					for (int tmp; read(m_wakepipe[0], &tmp, 1) > 0;)
+					;
+#endif
+					END_IO_LOOP(HINT_SWITCH);
+				}
+
+				if (fd >= 0)
+				{
+					if (FD_ISSET(fd, &wfds))
+					{
+						FD_CLR(fd, &wfds);
+
+#ifdef HAVE_SSL
+						if (con->GetBIO())
+						{
+							int s = BIO_write(con->GetBIO(), m_sendBuf.rptr(),
+									m_sendBuf.size());
+							ldbg(
+									"tried to write to SSL, " << m_sendBuf.size() << " bytes, result: " << s);
+							if (s > 0)
+								m_sendBuf.drop(s);
+						}
+						else
+						{
+#endif
+							ldbg("Sending data...\n" << m_sendBuf);
+							int s = ::send(fd, m_sendBuf.data(),
+									m_sendBuf.length(),
+									MSG_NOSIGNAL);
+							ldbg(
+									"Sent " << s << " bytes from " << m_sendBuf.length() << " to " << con.get());
+							if (s < 0)
+							{
+								// EAGAIN is weird but let's retry later, otherwise reconnect
+								if (errno != EAGAIN && errno != EINTR)
+								{
+									sErrorMsg = "502 Send failed";
+									END_IO_LOOP(EFLAG_LOST_CON);
+								}
+							}
+							else
+								m_sendBuf.drop(s);
+
+						}
+#ifdef HAVE_SSL
+					}
+#endif
+				}
+
+				if (fd >= 0 && (FD_ISSET(fd, &rfds)
+#ifdef HAVE_SSL
+						|| (con->GetBIO() && BIO_should_read(con->GetBIO()))
+#endif
+						))
+				{
+					if (cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
+					{
+						auto nCntNew = g_nDlCons.load();
+						if (m_nLastDlCount != nCntNew)
+						{
+							m_nLastDlCount = nCntNew;
+
+							// well, split the bandwidth
+							auto nSpeedNowKib = uint(cfg::maxdlspeed) / nCntNew;
+							auto nTakesPerSec = nSpeedNowKib / 32;
+							if (!nTakesPerSec)
+								nTakesPerSec = 1;
+							m_nSpeedLimitMaxPerTake = nSpeedNowKib * 1024
+									/ nTakesPerSec;
+							auto nIntervalUS = 1000000 / nTakesPerSec;
+							auto nIntervalUS_copy = nIntervalUS;
+							// creating a bitmask
+							for (m_nSpeedLimiterRoundUp = 1, nIntervalUS /= 2;
+									nIntervalUS; nIntervalUS >>= 1)
+								m_nSpeedLimiterRoundUp = (m_nSpeedLimiterRoundUp
+										<< 1) | 1;
+							m_nSpeedLimitMaxPerTake = uint(
+									double(m_nSpeedLimitMaxPerTake)
+											* double(m_nSpeedLimiterRoundUp)
+											/ double(nIntervalUS_copy));
+						}
+						// waiting for the next time slice to get data from buffer
+						timeval tv;
+						if (0 == gettimeofday(&tv, nullptr))
+						{
+							auto usNext = tv.tv_usec | m_nSpeedLimiterRoundUp;
+							usleep(usNext - tv.tv_usec);
+						}
+					}
+#ifdef HAVE_SSL
+					if (con->GetBIO())
+					{
+						r = BIO_read(con->GetBIO(), m_inBuf.wptr(),
+								std::min(m_nSpeedLimitMaxPerTake,
+										m_inBuf.freecapa()));
+						if (r > 0)
+							m_inBuf.got(r);
+						else
+							// <=0 doesn't mean an error, only a double check can tell
+							r = BIO_should_read(con->GetBIO()) ? 1 : -errno;
+					}
+					else
+#endif
+					{
+						r = m_inBuf.sysread(fd, m_nSpeedLimitMaxPerTake);
+					}
+
+#ifdef DISCO_FAILURE
+#warning hej
+					static int fakeFail=-123;
+					if(fakeFail == -123)
+					{
+						srand(getpid());
+						fakeFail = rand()%123;
+					}
+					if( fakeFail-- < 0)
+					{
+						//				LOGLVL(log::LOG_DEBUG, "\n#################\nFAKING A FAILURE\n###########\n");
+						r=0;
+						fakeFail=rand()%123;
+						errno = EROFS;
+						//r = -errno;
+						shutdown(con.get()->GetFD(), SHUT_RDWR);
+					}
+#endif
+
+					if (r == -EAGAIN || r == -EWOULDBLOCK)
+					{
+						ldbg("why EAGAIN/EINTR after getting it from select?");
+						//				timespec sleeptime = { 0, 432000000 };
+						//				nanosleep(&sleeptime, nullptr);
+						goto loop_again;
+					}
+					else if (r == 0)
+					{
+						dbgline;
+						sErrorMsg = "502 Connection closed";
+						END_IO_LOOP(EFLAG_LOST_CON);
+					}
+					else if (r < 0) // other error, might reconnect
+					{
+						dbgline;
+#ifdef MINIBUILD
+						sErrorMsg = "502 EPIC FAIL";
+#else
+						// pickup the error code for later and kill current connection ASAP
+						sErrorMsg = tErrnoFmter("502 ");
+#endif
+						END_IO_LOOP(EFLAG_LOST_CON);
+					}
+
+					proc_data:
+
+					if (inpipe.empty())
+					{
+						ldbg("FIXME: unexpected data returned?");
+						sErrorMsg = "500 Unexpected data";
+						END_IO_LOOP(EFLAG_LOST_CON);
+					}
+
+					while (!m_inBuf.empty())
+					{
+
+						ldbg("Processing job for " << inpipe.front()->RemoteUri(false));
+						unsigned res = inpipe.front()->ProcessIncomming(m_inBuf,
+								false);
+						ldbg(
+								"... incoming data processing result: " << res
+								<< ", emsg: " << inpipe.front()->sErrorMsg);
+
+						if (res & EFLAG_MIRROR_BROKEN)
+						{
+							ldbg("###### BROKEN MIRROR ####### on " << con.get());
+						}
+
+						if (HINT_MORE == res)
+							goto loop_again;
+
+						if (HINT_DONE & res)
+						{
+							// just in case that server damaged the last response body
+							con->KnowLastFile(WEAK_PTR<fileitem>(inpipe.front()->m_pStorage));
+
+							inpipe.pop_front();
+							if (HINT_DISCON & res)
+							END_IO_LOOP( HINT_DISCON); // with cleaned flags
+
+							LOG(
+							"job finished. Has more? " << inpipe.size()
+							<< ", remaining data? " << m_inBuf.size());
+
+							if (inpipe.empty())
+							{
+								LOG("Need more work");
+								END_IO_LOOP( HINT_SWITCH);
+							}
+
+							LOG("Extract more responses");
+							continue;
+						}
+
+						if (HINT_TGTCHANGE & res)
+						{
+							/* If the target was modified for internal redirection then there might be
+							 * more responses of that kind in the queue. Apply the redirection handling
+							 * to the rest as well if possible without having side effects.
+							 */
+							auto it = inpipe.begin();
+							for (++it; it != inpipe.end(); ++it)
+							{
+								unsigned rr = (**it).ProcessIncomming(m_inBuf,
+										true);
+								// just the internal rewriting applied and nothing else?
+								if ( HINT_TGTCHANGE != rr)
+								{
+									// not internal redirection or some failure doing it
+									m_nTempPipelineDisable = 30;
+									END_IO_LOOP(HINT_TGTCHANGE|HINT_DISCON);
+								}
+							}
+							// processed all inpipe stuff but if the buffer is still not empty then better disconnect
+							END_IO_LOOP(
+									HINT_TGTCHANGE | (m_inBuf.empty() ? 0 : HINT_DISCON));
+						}
+
+						// else case: error handling, pass to main loop
+						if (HINT_KILL_LAST_FILE & res)
+							con->KillLastFile();
+						setIfNotEmpty(sErrorMsg, inpipe.front()->sErrorMsg);
+						END_IO_LOOP(res);
+					}
+					END_IO_LOOP(HINT_DONE); // input buffer consumed
+				}
+			}
+
+			ASSERT(!"Unreachable");
+			sErrorMsg = "500 Internal failure";
+			END_IO_LOOP(EFLAG_JOB_BROKEN|HINT_DISCON);
+		}
+
+		after_io_loop:
+
         ldbg("loopRes: "<< loopRes);
 
         /* check whether we have a pipeline stall. This may happen because a) we are done or
