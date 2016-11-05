@@ -941,15 +941,15 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 
 	// Zero is good, positive is good (means some count) negative is bad (sometimes negated errno value)
 	int ioresult = 0;
-	if(flags & eWorkParameter::gotError)
+	if(flags & eWorkParameter::ioretGotError)
 		ioresult = -1;
-	else if(flags & eWorkParameter::gotTimeout)
+	else if(flags & eWorkParameter::ioretGotTimeout)
 		ioresult = 0;
 
 	unsigned loopRes = 0;
 	bool byPassIoCheck = false; // skip some uneeded IO operations when switchin between outer and inner IO loop
 
-	if (flags & (gotError | gotTimeout | canRecv | canSend))
+	if (flags & (ioretGotError | ioretGotTimeout | ioretCanRecv | ioretCanSend))
 		goto returned_from_io;
 
 	while(true) // outer loop: jobs, connection handling
@@ -1034,9 +1034,9 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 					if(ioresult >= 0)
 					{
 						if(FD_ISSET(retcmd.fd, &rfds))
-							flags |= eWorkParameter::canRecv;
+							flags |= eWorkParameter::ioretCanRecv;
 						if(FD_ISSET(retcmd.fd, &wfds))
-							flags |= eWorkParameter::canSend;
+							flags |= eWorkParameter::ioretCanSend;
 					}
 				}
 
@@ -1069,7 +1069,7 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 					END_IO_LOOP(HINT_DISCON|EFLAG_JOB_BROKEN);
 				}
 
-				if (retcmd.fd >= 0 && (flags & eWorkParameter::canSend))
+				if (retcmd.fd >= 0 && (flags & eWorkParameter::ioretCanSend))
 				{
 
 #ifdef HAVE_SSL
@@ -1106,7 +1106,7 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 
 				}
 
-				if (retcmd.fd >= 0 && (flags & eWorkParameter::canRecv))
+				if (retcmd.fd >= 0 && (flags & eWorkParameter::ioretCanRecv))
 				{
 					if (cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
 					{

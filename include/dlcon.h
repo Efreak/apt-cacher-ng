@@ -60,8 +60,7 @@ class dlcon
 		{
         		freshStart = 1, // init/reinit object state, only in the beginning
         	    internalIoLooping = 2,// "manual mode" - run internal IO and loop until the job list is processed
-				canRecv =4, canSend=8, gotError=16, gotTimeout = 32
-				// ,				gotWork = 64 // prepare download, connect, etc.
+				ioretCanRecv =4, ioretCanSend=8, ioretGotError=16, ioretGotTimeout = 32
 		};
         struct tWorkState
         {
