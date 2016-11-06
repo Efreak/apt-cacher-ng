@@ -244,8 +244,8 @@ public:
 
 #define POKE(x) for(;;) { ssize_t n=write(x, "", 1); if(n>0 || (EAGAIN!=errno && EINTR!=errno)) break;  }
 
-#define MIN_VAL(x) (std::numeric_limits<x>::min()) 
-#define MAX_VAL(x) (std::numeric_limits<x>::max()) 
+#define MIN_VAL(x) (std::numeric_limits< x >::min())
+#define MAX_VAL(x) (std::numeric_limits< x >::max())
 
 void appendLong(mstring &s, long val);
 
