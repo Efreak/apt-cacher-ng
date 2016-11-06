@@ -729,7 +729,7 @@ bool dlcon::ResetState()
 	return true;
 }
 
-void dlcon::shutdown()
+void dlcon::Shutdown()
 {
 	if (inpipe.empty() && con)
 		m_pConFactory->RecycleIdleConnection(con);
@@ -936,8 +936,7 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 	if( (flags & eWorkParameter::freshStart) && !ResetState())
 		return {tWorkState::fatalError, -1};
 
-	tWorkState retcmd
-	{ m_qNewjobs.empty() ? 0 : tWorkState::needConnect, con ? con->GetFD() : -1 };
+	tWorkState retcmd { 0, -1};
 
 	// Zero is good, positive is good (means some count) negative is bad (sometimes negated errno value)
 	int ioresult = 0;
@@ -950,7 +949,21 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 	bool byPassIoCheck = false; // skip some uneeded IO operations when switchin between outer and inner IO loop
 
 	if (flags & (ioretGotError | ioretGotTimeout | ioretCanRecv | ioretCanSend))
+	{
+		if(con)
+			retcmd.fd = con->GetFD();
 		goto returned_from_io;
+	}
+#if 0 // unlikely
+	// not returned -- standalone loop or initialization?
+	if((flags & dlcon::internalIoLooping) && m_qNewjobs.empty())
+		return { tWorkState::fatalError, -1}; // WTF?
+
+#endif
+
+	// nothing to do yet
+	if( (flags & dlcon::freshStart) && m_qNewjobs.empty())
+		return { tWorkState::allDone, -1};
 
 	while(true) // outer loop: jobs, connection handling
 	{
@@ -961,14 +974,15 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 		case eStateTransition::LOOP_CONTINUE: continue;
 		}
 
-        if(inpipe.empty() && (flags & internalIoLooping))
-        {
+        if(inpipe.empty() && m_qNewjobs.empty())
         	return {tWorkState::allDone, -1};
-        }
 
 		// IO loop: plain communication and pushing into job handler until something happens
 #define END_IO_LOOP(x) {loopRes=(x); goto after_io_loop; }
 		{
+			// cannot rely on previous cached value
+			retcmd.fd = -1;
+
 /*			LOGSTART2("dlcon::ExchangeData",
 					"qsize: " << inpipe.size() << ", sendbuf size: "
 					<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
@@ -1039,6 +1053,8 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 							flags |= eWorkParameter::ioretCanSend;
 					}
 				}
+				else
+					return retcmd;
 
 				returned_from_io:
 
@@ -1176,7 +1192,7 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 						fakeFail=rand()%123;
 						errno = EROFS;
 						//r = -errno;
-						shutdown(con.get()->GetFD(), SHUT_RDWR);
+						Shutdown(con.get()->GetFD(), SHUT_RDWR);
 					}
 #endif
 

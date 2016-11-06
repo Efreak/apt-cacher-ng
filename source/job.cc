@@ -799,16 +799,24 @@ job::eJobResult job::SendData(int confd)
 				break;
 			}
 			// or wait for the dl source to get data at the position we need to start from
-			LOG("sendstate: " << (int) fistate << " , sendpos: " << m_nSendPos << nGoodDataSize);
+			LOG("sendstate: " << (int) fistate << " , sendpos: " << m_nSendPos << " from " << nGoodDataSize);
 			if(fistate==fileitem::FIST_COMPLETE || (m_nSendPos < nGoodDataSize && fistate>=fileitem::FIST_DLGOTHEAD))
 				break;
 			
-			dbgline;
+			ldbg("cannot send more data for " << m_sFileLoc);
 
-			// if this is our downloader, don't block it
-			if(m_pParentCon->m_pDlClient && m_pParentCon->m_pDlClient->IsCurrentDownload(m_pItem.getFiPtr()))
+#if 0
+			// if this is our downloader, don't block it when it needs our thread cpu time
+			if(m_pParentCon->m_pDlClient
+					&& m_pParentCon->m_pDlClient->IsCurrentDownload(m_pItem.getFiPtr())
+			&& m_pParentCon->m_lastDlState.flags)// & (dlcon::tWorkState::needConnect | dlcon::tWorkState::needRecv | dlcon::tWorkState::needSend)))
 				return R_AGAIN;
 
+#endif
+			// if downloader is active, don't block it
+			if(m_pParentCon->m_lastDlState.flags & (dlcon::tWorkState::needConnect | dlcon::tWorkState::needRecv | dlcon::tWorkState::needSend))
+				return R_AGAIN;
+			// otherwise it's some other downloader active, just wait for progress
 			m_pItem.getFiPtr()->wait(g);
 			
 			dbgline;

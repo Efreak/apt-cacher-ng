@@ -202,6 +202,23 @@ void conn::WorkLoop() {
 			FD_SET(m_confd, &wfds);
 		}
 
+		bool checkDlFd = false;
+		if(m_pDlClient)
+		{
+			// just do it here
+			if(m_lastDlState.flags & dlcon::tWorkState::needConnect)
+				m_lastDlState = m_pDlClient->WorkLoop(dlcon::canConnect);
+			checkDlFd = (m_lastDlState.flags & (dlcon::tWorkState::needRecv|dlcon::tWorkState::needSend));
+			if(checkDlFd)
+			{
+				if(m_lastDlState.fd > maxfd)
+					maxfd = m_lastDlState.fd;
+				if(m_lastDlState.flags & dlcon::tWorkState::needSend)
+					FD_SET(m_lastDlState.fd, &wfds);
+				if(m_lastDlState.flags & dlcon::tWorkState::needRecv)
+					FD_SET(m_lastDlState.fd, &rfds);
+			}
+		}
 
 		ldbg("select con");
 
@@ -213,6 +230,11 @@ void conn::WorkLoop() {
 		if(ready == 0)
 		{
 			USRDBG("Timeout occurred, apt client disappeared silently?");
+			if(checkDlFd)
+			{
+				m_lastDlState = m_pDlClient->WorkLoop(dlcon::ioretGotTimeout);
+				continue;
+			}
 			return;
 		}
 		else if (ready<0)
@@ -221,10 +243,26 @@ void conn::WorkLoop() {
 				continue;
 
 			ldbg("select error in con, errno: " << errno);
+
+			if(checkDlFd)
+				m_pDlClient->WorkLoop(dlcon::ioretGotError);
+
 			return; // FIXME: good error message?
 		}
 
 		ldbg("select con back");
+
+		// first let the downloader work so that job handler is likely to get its data ASAP
+		if(checkDlFd)
+		{
+			unsigned hint = 0;
+			if((m_lastDlState.flags & dlcon::tWorkState::needSend) && FD_ISSET(m_lastDlState.fd, &wfds))
+				hint |= dlcon::ioretCanSend;
+			if((m_lastDlState.flags & dlcon::tWorkState::needRecv) && FD_ISSET(m_lastDlState.fd, &rfds))
+				hint |= dlcon::ioretCanRecv;
+			if(hint)
+				m_lastDlState = m_pDlClient->WorkLoop(hint);
+		}
 
 		if(FD_ISSET(m_confd, &rfds)) {
 			int n=inBuf.sysread(m_confd);
@@ -236,7 +274,7 @@ void conn::WorkLoop() {
 				else
 				{
 					ldbg("client closed connection");
-					if(m_pDlClient) m_pDlClient->shutdown();
+					if(m_pDlClient) m_pDlClient->Shutdown();
 					return;
 				}
 			}

@@ -60,7 +60,8 @@ class dlcon
 		{
         		freshStart = 1, // init/reinit object state, only in the beginning
         	    internalIoLooping = 2,// "manual mode" - run internal IO and loop until the job list is processed
-				ioretCanRecv =4, ioretCanSend=8, ioretGotError=16, ioretGotTimeout = 32
+				ioretCanRecv =4, ioretCanSend=8, ioretGotError=16, ioretGotTimeout = 32,
+				canConnect = 64 // not an io check result but just donated CPU time
 		};
         struct tWorkState
         {
@@ -77,7 +78,7 @@ class dlcon
         tWorkState WorkLoop(unsigned /* eWorkParameter */ flags);
 
         // donate internal resources and prepare for termination. Should not be called during glboal shutdown.
-        void shutdown();
+        void Shutdown();
 
         bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
         		const cfg::tRepoData *pRepoDesc,

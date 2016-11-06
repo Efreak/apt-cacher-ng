@@ -49,7 +49,7 @@ class conn // : public tRunable
       friend class job;
       bool SetupDownloader(const char *xff);
       dlcon * m_pDlClient;
-      dlcon::tWorkState m_lastDlState = {dlcon::tWorkState::allDone,0};
+      dlcon::tWorkState m_lastDlState = {dlcon::tWorkState::allDone, 0};
       mstring m_sClientHost;
       header *m_pTmpHead;
       
