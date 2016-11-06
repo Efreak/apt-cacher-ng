@@ -938,13 +938,6 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 
 	tWorkState retcmd { 0, -1};
 
-	// Zero is good, positive is good (means some count) negative is bad (sometimes negated errno value)
-	int ioresult = 0;
-	if(flags & eWorkParameter::ioretGotError)
-		ioresult = -1;
-	else if(flags & eWorkParameter::ioretGotTimeout)
-		ioresult = 0;
-
 	unsigned loopRes = 0;
 	bool byPassIoCheck = false; // skip some uneeded IO operations when switchin between outer and inner IO loop
 
@@ -1043,22 +1036,24 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 						FD_SET(retcmd.fd, &wfds);
 					else
 						FD_CLR(retcmd.fd, &wfds);
-					ioresult = select(retcmd.fd + 1, &rfds, &wfds, nullptr, &tv);
+					auto ioresult = select(retcmd.fd + 1, &rfds, &wfds, nullptr, &tv);
 					ldbg("returned: " << ioresult << ", errno: " << errno);
-					if(ioresult >= 0)
+					if(ioresult > 0)
 					{
 						if(FD_ISSET(retcmd.fd, &rfds))
 							flags |= eWorkParameter::ioretCanRecv;
 						if(FD_ISSET(retcmd.fd, &wfds))
 							flags |= eWorkParameter::ioretCanSend;
 					}
+					else
+						flags |= ioresult ? eWorkParameter::ioretGotError : eWorkParameter::ioretGotTimeout;
 				}
 				else
 					return retcmd;
 
 				returned_from_io:
 
-				if (ioresult < 0)
+				if (eWorkParameter::ioretGotError & flags)
 				{
 					if (EINTR == errno)
 						continue;
@@ -1072,7 +1067,7 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 					END_IO_LOOP(
 							HINT_DISCON|EFLAG_JOB_BROKEN|EFLAG_MIRROR_BROKEN);
 				}
-				else if (ioresult == 0) // looks like a timeout
+				else if (eWorkParameter::ioretGotTimeout & flags)
 				{
 					sErrorMsg = "500 Connection timeout";
 					// was there anything to do at all?
@@ -1158,67 +1153,74 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 							usleep(usNext - tv.tv_usec);
 						}
 					}
+
+					{
+						int readResult = 0;
 #ifdef HAVE_SSL
-					// ssl connection?
-					if (con->GetBIO())
-					{
-						ioresult = BIO_read(con->GetBIO(), m_inBuf.wptr(),
-								std::min(m_nSpeedLimitMaxPerTake,
-										m_inBuf.freecapa()));
-						if (ioresult > 0)
-							m_inBuf.got(ioresult);
+						// ssl connection?
+						if (con->GetBIO())
+						{
+							readResult = BIO_read(con->GetBIO(), m_inBuf.wptr(),
+									std::min(m_nSpeedLimitMaxPerTake,
+											m_inBuf.freecapa()));
+							if (readResult > 0)
+								m_inBuf.got(readResult);
+							else
+								// <=0 doesn't mean an error, only a double check can tell
+								readResult =
+										BIO_should_read(con->GetBIO()) ?
+												1 : -errno;
+						}
 						else
-							// <=0 doesn't mean an error, only a double check can tell
-							ioresult = BIO_should_read(con->GetBIO()) ? 1 : -errno;
-					}
-					else
 #endif
-					{
-						ioresult = m_inBuf.sysread(retcmd.fd, m_nSpeedLimitMaxPerTake);
-					}
+						{
+							readResult = m_inBuf.sysread(retcmd.fd,
+									m_nSpeedLimitMaxPerTake);
+						}
 
 #ifdef DISCO_FAILURE
 #warning hej
-					static int fakeFail=-123;
-					if(fakeFail == -123)
-					{
-						srand(getpid());
-						fakeFail = rand()%123;
-					}
-					if( fakeFail-- < 0)
-					{
-						//				LOGLVL(log::LOG_DEBUG, "\n#################\nFAKING A FAILURE\n###########\n");
-						r=0;
-						fakeFail=rand()%123;
-						errno = EROFS;
-						//r = -errno;
-						Shutdown(con.get()->GetFD(), SHUT_RDWR);
-					}
+						static int fakeFail=-123;
+						if(fakeFail == -123)
+						{
+							srand(getpid());
+							fakeFail = rand()%123;
+						}
+						if( fakeFail-- < 0)
+						{
+							//				LOGLVL(log::LOG_DEBUG, "\n#################\nFAKING A FAILURE\n###########\n");
+							r=0;
+							fakeFail=rand()%123;
+							errno = EROFS;
+							//r = -errno;
+							Shutdown(con.get()->GetFD(), SHUT_RDWR);
+						}
 #endif
 
-					if (ioresult == -EAGAIN || ioresult == -EWOULDBLOCK)
-					{
-						ldbg("why EAGAIN/EINTR after getting it from select?");
-						//				timespec sleeptime = { 0, 432000000 };
-						//				nanosleep(&sleeptime, nullptr);
-						goto loop_again;
-					}
-					else if (ioresult == 0)
-					{
-						dbgline;
-						sErrorMsg = "502 Connection closed";
-						END_IO_LOOP(EFLAG_LOST_CON);
-					}
-					else if (ioresult < 0) // other error, might reconnect
-					{
-						dbgline;
+						if (readResult == -EAGAIN || readResult == -EWOULDBLOCK)
+						{
+							ldbg("why EAGAIN/EINTR after getting it from select?");
+							//				timespec sleeptime = { 0, 432000000 };
+							//				nanosleep(&sleeptime, nullptr);
+							goto loop_again;
+						}
+						else if (readResult == 0)
+						{
+							dbgline;
+							sErrorMsg = "502 Connection closed";
+							END_IO_LOOP(EFLAG_LOST_CON);
+						}
+						else if (readResult < 0) // other error, might reconnect
+						{
+							dbgline;
 #ifdef MINIBUILD
-						sErrorMsg = "502 EPIC FAIL";
+							sErrorMsg = "502 EPIC FAIL";
 #else
-						// pickup the error code for later and kill current connection ASAP
-						sErrorMsg = tErrnoFmter("502 ");
+							// pickup the error code for later and kill current connection ASAP
+							sErrorMsg = tErrnoFmter("502 ");
 #endif
-						END_IO_LOOP(EFLAG_LOST_CON);
+							END_IO_LOOP(EFLAG_LOST_CON);
+						}
 					}
 
 					proc_data:
