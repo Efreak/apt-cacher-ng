@@ -405,7 +405,9 @@ struct tDlJob
 		while (true)
 		{
 			off_t nToStore = min((off_t) inBuf.size(), m_nRest);
-			ldbg("To store: " <<nToStore);
+			ldbg("To store: " <<nToStore << " and target is unique? "
+					<< m_pStorage.unique()
+					<< " or use count: " << m_pStorage.use_count());
 			if (0 == nToStore)
 				break;
 
@@ -731,8 +733,19 @@ bool dlcon::ResetState()
 
 void dlcon::Shutdown()
 {
-	if (inpipe.empty() && con)
-		m_pConFactory->RecycleIdleConnection(con);
+	if (inpipe.empty())
+	{
+		if(con)
+			m_pConFactory->RecycleIdleConnection(con);
+	}
+	else
+	{
+		while(inpipe.size()>1)
+			inpipe.pop_back();
+
+		// keep the current download running as long as somebody uses it
+		WorkLoop(internalIoLooping);
+	}
 }
 
 eStateTransition dlcon::SetupConnectionAndRequests()
@@ -1049,8 +1062,7 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 						flags |= ioresult ? eWorkParameter::ioretGotError : eWorkParameter::ioretGotTimeout;
 				}
 				else
-					return retcmd;
-
+					return retcmd; // return the hints and wait for it to come back to this label:
 				returned_from_io:
 
 				if (eWorkParameter::ioretGotError & flags)

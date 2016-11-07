@@ -60,12 +60,13 @@ class tPassThroughFitem : public fileitem
 {
 protected:
 
-	const char *m_pData;
-	size_t m_nConsumable, m_nConsumed;
+	// forward buffer, remaining part, cursor position
+	const char *m_pData = 0;
+	size_t m_nConsumable=0, m_nConsumed=0;
+	int& m_dlflags;
 
 public:
-	tPassThroughFitem(std::string s) :
-	m_pData(nullptr), m_nConsumable(0), m_nConsumed(0)
+	tPassThroughFitem(std::string s, int& dlflags): m_dlflags(dlflags)
 	{
 		m_sPathRel = s;
 		m_bAllowStoreData=false;
@@ -81,19 +82,13 @@ public:
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t, const char *,
 			bool, bool&) override
 	{
-		setLockGuard;
 		m_head=h;
 		m_status=FIST_DLGOTHEAD;
 		return true;
 	}
 	virtual bool StoreFileData(const char *data, unsigned int size) override
 	{
-		lockuniq g(this);
-
 		LOGSTART2("tPassThroughFitem::StoreFileData", "status: " << (int) m_status);
-
-		// something might care, most likely... also about BOUNCE action
-		notifyAll();
 
 		m_nIncommingCount += size;
 
@@ -111,10 +106,17 @@ public:
 			m_pData = data;
 			m_nConsumable=size;
 			m_nConsumed=0;
-			while(0 == m_nConsumed && m_status <= FIST_COMPLETE)
-				wait(g);
-#warning FIXME, nix wait
+#warning test pass-through
+			m_dlflags |= dlcon::tWorkState::needPause;
 
+		/*	while(0 == m_nConsumed && m_status <= FIST_COMPLETE)
+			{
+				if(dlflags & (dlcon::tWorkState::needConnect | dlcon::tWorkState::needRecv | dlcon::tWorkState::needSend))
+					return R_AGAIN;
+
+				wait(g);
+			}
+*/
 			dbgline;
 			// let the downloader abort?
 			if(m_status >= FIST_DLERROR)
@@ -134,8 +136,7 @@ public:
 		while(0 == m_nConsumable && m_status<=FIST_COMPLETE
 				&& ! (m_nSizeChecked==0 && m_status==FIST_COMPLETE))
 		{
-#warning FIXME, nix wait
-			wait(g);
+			return 0; // will get more or block until then
 		}
 		if (m_status >= FIST_DLERROR || !m_pData)
 			return -1;
@@ -157,8 +158,8 @@ public:
 			m_pData+=r;
 			m_nConsumed+=r;
 			nSendPos+=r;
+			if(m_nConsumable<=0) m_dlflags &= ~dlcon::tWorkState::needPause;
 		}
-		notifyAll();
 		return r;
 	}
 };
@@ -814,7 +815,7 @@ job::eJobResult job::SendData(int confd)
 
 #endif
 			// if downloader is active, don't block it
-			if(m_pParentCon->m_lastDlState.flags & (dlcon::tWorkState::needConnect | dlcon::tWorkState::needRecv | dlcon::tWorkState::needSend))
+			if(m_pParentCon->m_lastDlState.flags & dlcon::tWorkState::needActivity)
 				return R_AGAIN;
 			// otherwise it's some other downloader active, just wait for progress
 			m_pItem.getFiPtr()->wait(g);
@@ -1161,7 +1162,7 @@ fileitem::FiStatus job::_SwitchToPtItem()
 	// Changing to local pass-through file item
 	LOGSTART("job::_SwitchToPtItem");
 	// exception-safe sequence
-	m_pItem.RegisterFileitemLocalOnly(new tPassThroughFitem(m_sFileLoc));
+	m_pItem.RegisterFileitemLocalOnly(new tPassThroughFitem(m_sFileLoc, m_pParentCon->m_lastDlState.flags));
 	return m_pItem.getFiPtr()->Setup(true);
 }
 

@@ -20,13 +20,16 @@
 
 using namespace std;
 
+#warning mutex base nur fuer filesotreage
 namespace acng
 {
 #define MAXTEMPDELAY acng::cfg::maxtempdelay // 27
 mstring sReplDir("_altStore" SZPATHSEP);
 
-static tFiGlobMap mapItems;
-static acmutex mapItemsMx;
+typedef std::unordered_multimap<mstring, std::weak_ptr<fileitem> > tFiGlobMap;
+
+static tFiGlobMap g_sharedItems;
+static acmutex g_sharedItemsMx;
 
 header const & fileitem::GetHeaderUnlocked()
 {
@@ -50,22 +53,24 @@ fileitem::fileitem() :
 	m_bAllowStoreData(true),
 	m_nSizeChecked(0),
 	m_filefd(-1),
-	m_nDlRefsCount(0),
-	usercount(0),
 	m_status(FIST_FRESH),
-	m_nTimeDlStarted(0),
-	m_nTimeDlDone(END_OF_TIME),
-	m_globRef(mapItems.end())
+	m_nTimeDlStarted(0)
 {
 }
 
 fileitem::~fileitem()
 {
-	//setLockGuard;
-//	m_head.clear();
+	if(m_bGlobRegistered)
+	{
+		lockguard g(g_sharedItemsMx);
+		ASSERT(this == g_sharedItems[m_sPathRel]);
+		g_sharedItems.erase(m_sPathRel);
+	}
+	// assuming that it's in sane state and closing it here is only precaution
 	checkforceclose(m_filefd);
 }
 
+#if 0
 void fileitem::IncDlRefCount()
 {
 	setLockGuard;
@@ -96,6 +101,7 @@ void fileitem::DecDlRefCount(const string &sReason)
 	}
 	checkforceclose(m_filefd);
 }
+#endif
 
 uint64_t fileitem::GetTransferCount()
 {
@@ -324,7 +330,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		m_bAllowStoreData=false;
 		m_head.frontLine=mstring("HTTP/1.1 ")+x;
 		m_head.set(header::XORIG, h.h[header::XORIG]);
-	    m_status=FIST_DLERROR; m_nTimeDlDone=GetTime();
+	    m_status=FIST_DLERROR;
 		_LogWithErrno(x, m_sPathRel);
 	};
 
@@ -377,7 +383,6 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		::unlink(sHeadPath.c_str());
 
 		m_status=FIST_DLERROR;
-		m_nTimeDlDone=GetTime();
 		return false;
 	};
 
@@ -670,7 +675,6 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 		else
 		{
 			m_status = FIST_COMPLETE;
-			m_nTimeDlDone=GetTime();
 
 			if (cfg::debug & log::LOG_MORE)
 				log::misc(tSS() << "Download of " << m_sPathRel << " finished");
@@ -700,7 +704,6 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 					m_head.frontLine = efmt;
 					m_status=FIST_DLERROR;
 					// message will be set by the caller
-					m_nTimeDlDone=GetTime();
 					_LogWithErrno(efmt.c_str(), m_sPathRel);
 					return false;
 				}
@@ -954,14 +957,16 @@ void fileItemMgmt::dump_status()
 
 fileitem_with_storage::~fileitem_with_storage()
 {
+#if 0
 	if(startsWith(m_sPathRel, sReplDir))
 	{
 		::unlink(SZABSPATH(m_sPathRel));
 		::unlink((SABSPATH(m_sPathRel)+".head").c_str());
 	}
+#endif
 }
 
-// special file? When it's rewritten from start, save the old version instead
+// keep a snapshot of that files for later identification of by-hash-named metadata
 int fileitem_with_storage::MoveRelease2Sidestore()
 {
 	if(m_nSizeChecked)

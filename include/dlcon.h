@@ -69,7 +69,9 @@ class dlcon
 			{
         		allDone = 0, needRecv = 1, needSend = 2,
 				needConnect = 4, // there is some connection-related work to do
-				fatalError = 8
+				fatalError = 8,
+				needPause = 16, // hint not to call WorkLoop for a while
+				needActivity = 1 + 2 + 4 // shortcut for all IO related hints
         	};
         	int flags; // one or multiple ORed from above
         	int fd;

@@ -203,7 +203,7 @@ void conn::WorkLoop() {
 		}
 
 		bool checkDlFd = false;
-		if(m_pDlClient)
+		if(m_pDlClient && 0==(m_lastDlState.flags & dlcon::tWorkState::needPause))
 		{
 			// just do it here
 			if(m_lastDlState.flags & dlcon::tWorkState::needConnect)
