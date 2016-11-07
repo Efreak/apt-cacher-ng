@@ -64,6 +64,8 @@ class conn // : public tRunable
 	void LogDataCounts(cmstring & file, const char *xff, off_t countIn, off_t countOut,
 			bool bAsError);
 
+	void Shutdown();
+
 #ifdef DEBUG
       unsigned m_nProcessedJobs;
 #endif

@@ -276,7 +276,6 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	const cfg::tRepoData *pRepoDesc=nullptr;
 	mstring sRemoteSuffix, sFilePathAbs(SABSPATH(sFilePathRel));
 
-	fileItemMgmt fiaccess;
 	tHttpUrl parserPath, parserHead;
 	const tHttpUrl *pResolvedDirectUrl=nullptr;
 
@@ -286,10 +285,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	hor.LoadFromFile(sFilePathAbs + ".head");
 
 	if(!pFi)
-	{
-		fiaccess.PrepareRegisteredFileItemWithStorage(sFilePathRel, false);
-		pFi=fiaccess.getFiPtr();
-	}
+		fileitem_with_storage::CreateRegistered(sFilePathRel);
 	if (!pFi)
 	{
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
@@ -863,6 +859,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 		}
 		virtual bool Inject(cmstring &fromRel, const header &head)
 		{
+#warning check for collision with running download or document?
 			m_head = head;
 			mstring sPathAbs = SABSPATH(m_sPathRel);
 			mkbasedir(sPathAbs);
@@ -908,14 +905,8 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 		}
 	};
 	auto pfi(make_shared<tInjectItem>(toRel, bTryLink));
-	// register it in global scope
-	fileItemMgmt fi;
-	if(!fi.RegisterFileItem(pfi))
-	{
-		MTLOGASSERT(false, "Couldn't register copy item");
-		return false;
-	}
-	bool bOK = pfi->Inject(fromRel, *pHead);
+	// register it in global scope and execute
+	bool bOK = fileitem_with_storage::CreateRegistered(toRel, pfi) && pfi->Inject(fromRel, *pHead);
 
 	MTLOGASSERT(bOK, "Inject: failed");
 

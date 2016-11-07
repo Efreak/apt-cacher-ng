@@ -88,8 +88,9 @@ void cleaner::WorkLoop()
 			USRDBG("tcpconnect::ExpireCache, nextRunTime now: " << time_nextcand);
 			break;
 		case TYPE_EXFILEITEM:
-			time_nextcand = fileItemMgmt::BackgroundCleanup();
-			USRDBG("fileitem::DoDelayedUnregAndCheck, nextRunTime now: " << time_nextcand);
+#warning fixme, reenable but smarter
+//			time_nextcand = fileItemMgmt::BackgroundCleanup();
+//			USRDBG("fileitem::DoDelayedUnregAndCheck, nextRunTime now: " << time_nextcand);
 			break;
 
 		case ETYPE_MAX:
@@ -167,7 +168,8 @@ void cleaner::dump_status()
 
 
 void dump_handler(int) {
-	fileItemMgmt::dump_status();
+#warning reenable, as static method
+	//fileItemMgmt::dump_status();
 	g_victor.dump_status();
 	g_tcp_con_factory.dump_status();
 	cfg::dump_trace();

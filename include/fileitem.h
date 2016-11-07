@@ -13,11 +13,14 @@ namespace acng
 {
 
 class fileitem;
+class fileitem_with_storage;
 typedef std::shared_ptr<fileitem> tFileItemPtr;
 
 //! Base class containing all required data and methods for communication with the download sources
 class fileitem: public base_with_condition
 {
+	friend class fileitem_with_storage;
+
 public:
 
 	// Life cycle (process states) of a file description item
@@ -86,7 +89,7 @@ public:
 
 protected:
 	bool m_bAllowStoreData;
-	bool m_bGlobRegistered = false;
+	//bool m_bDisposed = false;
 	fileitem();
 	off_t m_nSizeChecked;
 	header m_head;
@@ -97,11 +100,6 @@ protected:
 	mstring m_sPathRel;
 	time_t m_nTimeDlStarted; //, m_nTimeDlDone;
 
-private:
-	// helper data for global registration control. Access is synchronized by the global lock,
-	// not the internal lock here
-	//tFiGlobMap::iterator m_globRef;
-	//friend class fileItemMgmt;
 };
 
 // dl item implementation with storage on disk, can be shared among users
@@ -122,9 +120,16 @@ public:
 		return cfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
 	}
 
-	static tFileItemPtr CreateRegistered(cmstring& sPathRel);
+	/** Returns a (optionally new) globally registered item. If existingFi is supplied, that one will be registered.
+	 * If one is supplied but another exists, a false pointer is returned.
+	 */
+	static tFileItemPtr CreateRegistered(cmstring& sPathRel,
+			const tFileItemPtr& existingFi = tFileItemPtr());
+	fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
+
+	// attempt to unregister a global item but only if it's unused
+	static bool TryDispose(tFileItemPtr& existingFi);
 protected:
-	fileitem_with_storage(cmstring &s); // {m_sPathRel=s;};
 	int MoveRelease2Sidestore();
 };
 
@@ -173,6 +178,6 @@ private:
 #define fileItemMgmt void
 #endif // not MINIBUILD
 
-}
 #endif
+}
 #endif

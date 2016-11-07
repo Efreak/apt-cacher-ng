@@ -140,7 +140,8 @@ bool CompileExpressions();
 
 #define CACHE_BASE (acng::cfg::cacheDirSlash)
 #define CACHE_BASE_LEN (CACHE_BASE.length()) // where the relative paths begin
-#define SZABSPATH(x) (CACHE_BASE+(x)).c_str()
+#define SZABSPATH(x) ((const char*) (CACHE_BASE+(x)).c_str())
+#define SZABSPATHSFX(x, y) ((const char*) (CACHE_BASE+(x)+(y)).c_str())
 #define SABSPATH(x) (CACHE_BASE+(x))
 
 bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);

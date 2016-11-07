@@ -60,12 +60,6 @@ fileitem::fileitem() :
 
 fileitem::~fileitem()
 {
-	if(m_bGlobRegistered)
-	{
-		lockguard g(g_sharedItemsMx);
-		ASSERT(this == g_sharedItems[m_sPathRel]);
-		g_sharedItems.erase(m_sPathRel);
-	}
 	// assuming that it's in sane state and closing it here is only precaution
 	checkforceclose(m_filefd);
 }
@@ -683,7 +677,7 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 			if (m_filefd >= 0 && !m_head.h[header::CONTENT_LENGTH])
 			{
 				m_head.set(header::CONTENT_LENGTH, m_nSizeChecked);
-				m_head.StoreToFile(CACHE_BASE + m_sPathRel + ".head");
+				m_head.StoreToFile(SZABSPATHSFX(m_sPathRel, ".head"));
 			}
 		}
 	}
@@ -721,6 +715,45 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 	return true;
 }
 
+tFileItemPtr fileitem_with_storage::CreateRegistered(cmstring& sPathUnescaped,
+		const tFileItemPtr& existingFi)
+{
+	mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
+	tFileItemPtr ret;
+	lockguard g(g_sharedItemsMx);
+	auto itWeak = g_sharedItems.find(sPathRel);
+	if(itWeak != g_sharedItems.end())
+		ret = itWeak->second.lock();
+	if(ret && existingFi && ret != existingFi) // conflict, report failure
+		return tFileItemPtr();
+	if(!ret)
+	{
+		ret = std::make_shared<fileitem_with_storage>(sPathRel);
+		EMPLACE_PAIR_COMPAT(g_sharedItems, sPathRel, ret);
+	}
+	return ret;
+}
+
+bool fileitem_with_storage::TryDispose(tFileItemPtr& existingFi)
+{
+	lockguard g(g_sharedItemsMx);
+	if(!existingFi || existingFi.use_count()>1)
+		return false; // cannot dispose, invalid or still used by others than the caller
+	auto it = g_sharedItems.find(existingFi->m_sPathRel);
+	if(it == g_sharedItems.end())
+		return false; // weird
+	auto sptr = it->second.lock();
+	if(sptr != existingFi) // XXX: report error?
+		return false;
+	// can do this without looking because no other thread can start sending data ATM
+	g_sharedItems.erase(it);
+	sptr->m_status = FIST_DLSTOP;
+	checkforceclose(sptr->m_filefd);
+	return true;
+}
+
+
+#if 0
 fileItemMgmt::~fileItemMgmt()
 {
 	LOGSTART("fileItemMgmt::~fileItemMgmt");
@@ -911,6 +944,7 @@ time_t fileItemMgmt::BackgroundCleanup()
 	// preserving a few seconds to catch more of them in the subsequent run
 	return std::max(oldestGet + MAXTEMPDELAY, GetTime()+8);
 }
+#endif
 
 ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, size_t count)
 {
@@ -926,6 +960,7 @@ ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, 
 #endif
 }
 
+#if 0
 void fileItemMgmt::dump_status()
 {
 	tSS fmt;
@@ -954,6 +989,7 @@ void fileItemMgmt::dump_status()
 	}
 	log::flush();
 }
+#endif
 
 fileitem_with_storage::~fileitem_with_storage()
 {
@@ -964,6 +1000,19 @@ fileitem_with_storage::~fileitem_with_storage()
 		::unlink((SABSPATH(m_sPathRel)+".head").c_str());
 	}
 #endif
+	{
+		lockguard g(g_sharedItemsMx);
+		//ASSERT(this == g_sharedItems[m_sPathRel]);
+		auto it = g_sharedItems.find(m_sPathRel);
+		if (it != g_sharedItems.end())
+		{
+			auto backRef = it->second.lock();
+			if (backRef) // this was ok, release the external reference then and we are good
+				g_sharedItems.erase(m_sPathRel);
+			// else... what? set some tag to become harmless?
+		}
+	}
+
 }
 
 // keep a snapshot of that files for later identification of by-hash-named metadata
@@ -973,9 +1022,9 @@ int fileitem_with_storage::MoveRelease2Sidestore()
 		return 0;
 	if(!endsWithSzAr(m_sPathRel, "/InRelease") && !endsWithSzAr(m_sPathRel, "/Release"))
 		return 0;
-	auto tgtDir = CACHE_BASE + cfg::privStoreRelSnapSufix + sPathSep + GetDirPart(m_sPathRel);
+	cmstring tgtDir = CACHE_BASE + cfg::privStoreRelSnapSufix + sPathSep + GetDirPart(m_sPathRel);
 	mkdirhier(tgtDir);
-	auto srcAbs = CACHE_BASE + m_sPathRel;
+	cmstring srcAbs = CACHE_BASE + m_sPathRel;
 	Cstat st(srcAbs);
 	auto sideFileAbs = tgtDir + ltos(st.st_ino) + ltos(st.st_mtim.tv_sec) + ltos(st.st_mtim.tv_nsec);
 	return FileCopy(srcAbs, sideFileAbs);
@@ -985,3 +1034,4 @@ int fileitem_with_storage::MoveRelease2Sidestore()
 #endif // MINIBUILD
 
 }
+

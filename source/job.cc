@@ -231,16 +231,17 @@ job::~job()
 {
 	LOGSTART("job::~job");
 	int stcode = 200;
-	if(m_pItem) stcode = m_pItem.getFiPtr()->GetHeader().getStatus();
+	if(m_pItem) stcode = m_pItem->GetHeader().getStatus();
 
 	bool bErr=m_sFileLoc.empty() || stcode >= 400;
 
 	m_pParentCon->LogDataCounts(
 			m_sFileLoc + (bErr ? (miscError + ltos(stcode) + ']') : sEmptyString),
 			m_pReqHead->h[header::XFORWARDEDFOR],
-			(m_pItem ? m_pItem.getFiPtr()->GetTransferCount() : 0),
+			(m_pItem ? m_pItem->GetTransferCount() : 0),
 			m_nAllDataCount, bErr);
 	
+#warning gute volatiole spenden an 33s cache oder so
 	checkforceclose(m_filefd);
 	delete m_pReqHead;
 }
@@ -316,7 +317,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 					seal();
 				}
 			};
-			m_pItem.RegisterFileitemLocalOnly(new dirredirect(visPath));
+			m_pItem.reset(new dirredirect(visPath));
 			return;
 		}
 
@@ -329,8 +330,8 @@ inline void job::PrepareLocalDownload(const string &visPath,
 				seal(); // for now...
 			}
 		};
-		listing *p=new listing(visPath);
-		m_pItem.RegisterFileitemLocalOnly(p); // assign to smart pointer ASAP, operations might throw
+		auto p=new listing(visPath);
+		m_pItem.reset(p);
 		tSS & page = p->m_data;
 
 		page << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>Index of "
@@ -431,7 +432,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 			return fd;
 		}
 	};
-	m_pItem.RegisterFileitemLocalOnly(new tLocalGetFitem(absPath, stbuf));
+	m_pItem.reset(new tLocalGetFitem(absPath, stbuf));
 }
 
 inline bool job::ParseRange()
@@ -608,7 +609,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 		bForceFreshnessChecks = ( ! cfg::offlinemode && m_type == FILE_VOLATILE);
 
-		m_pItem.PrepareRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
+		m_pItem = fileitem_with_storage::CreateRegistered(m_sFileLoc);
 	}
 	MYCATCH(std::out_of_range&) // better safe...
 	{
@@ -624,7 +625,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
     if(cfg::DegradedMode())
        goto report_degraded;
     
-    fistate = m_pItem.getFiPtr()->Setup(bForceFreshnessChecks);
+    fistate = m_pItem->Setup(bForceFreshnessChecks);
 	LOG("Got initial file status: " << (int) fistate);
 
 	if (bPtMode && fistate != fileitem::FIST_COMPLETE)
@@ -634,7 +635,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 	// might need to update the filestamp because nothing else would trigger it
 	if(cfg::trackfileuse && fistate >= fileitem::FIST_DLGOTHEAD && fistate < fileitem::FIST_DLERROR)
-		m_pItem.getFiPtr()->UpdateHeadTimestamp();
+		m_pItem->UpdateHeadTimestamp();
 
 	if(fistate==fileitem::FIST_COMPLETE)
 		return; // perfect, done here
@@ -645,9 +646,8 @@ void job::PrepareDownload(LPCSTR headBuf) {
 	if((m_nReqRangeFrom>=0 && m_nReqRangeTo>=0)
 			|| (m_pReqHead->type==header::HEAD && 0!=(m_nReqRangeTo=-1)))
 	{
-		auto p(m_pItem.getFiPtr());
-		lockguard g(p.get());
-		if(m_pItem.getFiPtr()->CheckUsableRange_unlocked(m_nReqRangeTo))
+		lockguard g(m_pItem);
+		if(m_pItem->CheckUsableRange_unlocked(m_nReqRangeTo))
 		{
 			LOG("Got a partial request for incomplete download; range is available");
 			m_bNoDownloadStarted=true;
@@ -688,7 +688,7 @@ MYTRY
 						fistate = _SwitchToPtItem();
 				}
 
-					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.getFiPtr(),
+					if (m_pParentCon->m_pDlClient->AddJob(m_pItem,
 							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
 							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
 									(LPCSTR) ( bPtMode ? headBuf : nullptr),
@@ -765,16 +765,16 @@ job::eJobResult job::SendData(int confd)
 
 	if (m_pItem)
 	{
-		lockuniq g(m_pItem.getFiPtr().get());
+		lockuniq g(m_pItem);
 		
 		for(;;)
 		{
-			fistate=m_pItem.getFiPtr()->GetStatusUnlocked(nGoodDataSize);
+			fistate=m_pItem->GetStatusUnlocked(nGoodDataSize);
 			
 			LOG((int) fistate);
 			if (fistate > fileitem::FIST_COMPLETE)
 			{
-				const header &h = m_pItem.getFiPtr()->GetHeaderUnlocked();
+				const header &h = m_pItem->GetHeaderUnlocked();
 				g.unLock(); // item lock must be released in order to replace it!
 				if(m_nAllDataCount)
 					return R_DISCON;
@@ -818,12 +818,12 @@ job::eJobResult job::SendData(int confd)
 			if(m_pParentCon->m_lastDlState.flags & dlcon::tWorkState::needActivity)
 				return R_AGAIN;
 			// otherwise it's some other downloader active, just wait for progress
-			m_pItem.getFiPtr()->wait(g);
+			m_pItem->wait(g);
 			
 			dbgline;
 		}
 		
-		respHead = m_pItem.getFiPtr()->GetHeaderUnlocked();
+		respHead = m_pItem->GetHeaderUnlocked();
 
 		if(respHead.h[header::XORIG])
 			m_sOrigUrl=respHead.h[header::XORIG];
@@ -863,7 +863,7 @@ job::eJobResult job::SendData(int confd)
 						return R_AGAIN;
 					}
 
-					m_filefd=m_pItem.getFiPtr()->GetFileFd();
+					m_filefd=m_pItem->GetFileFd();
 					if(!IsValidFD(m_filefd)) THROW_ERROR("503 IO error");
 
 					m_state=m_bChunkMode ? STATE_SEND_CHUNK_HEADER : STATE_SEND_PLAIN_DATA;
@@ -886,7 +886,7 @@ job::eJobResult job::SendData(int confd)
 
 					size_t nMax2SendNow=min(nGoodDataSize-m_nSendPos, m_nCurrentRangeLast+1-m_nSendPos);
 					ldbg("~sendfile: on "<< m_nSendPos << " up to : " << nMax2SendNow);
-					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd, m_nSendPos, nMax2SendNow);
+					int n = m_pItem->SendData(confd, m_filefd, m_nSendPos, nMax2SendNow);
 					ldbg("~sendfile: " << n << " new m_nSendPos: " << m_nSendPos);
 
 					if(n>0)
@@ -924,7 +924,7 @@ job::eJobResult job::SendData(int confd)
 
 					if(m_nChunkRemainingBytes==0)
 						GOTOENDE; // done
-					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd, m_nSendPos, m_nChunkRemainingBytes);
+					int n = m_pItem->SendData(confd, m_filefd, m_nSendPos, m_nChunkRemainingBytes);
 					if(n<0)
 						THROW_ERROR("400 Client error");
 					m_nChunkRemainingBytes-=n;
@@ -1162,8 +1162,8 @@ fileitem::FiStatus job::_SwitchToPtItem()
 	// Changing to local pass-through file item
 	LOGSTART("job::_SwitchToPtItem");
 	// exception-safe sequence
-	m_pItem.RegisterFileitemLocalOnly(new tPassThroughFitem(m_sFileLoc, m_pParentCon->m_lastDlState.flags));
-	return m_pItem.getFiPtr()->Setup(true);
+	m_pItem.reset(new tPassThroughFitem(m_sFileLoc, m_pParentCon->m_lastDlState.flags));
+	return m_pItem->Setup(true);
 }
 
 
@@ -1189,7 +1189,7 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation, const
 
 	erroritem *p = new erroritem("noid", errorLine, bodytext);
 	p->HeadRef().set(header::LOCATION, szLocation);
-	m_pItem.RegisterFileitemLocalOnly(p);
+	m_pItem.reset(p);
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
 	m_state=STATE_SEND_MAIN_HEAD;
 }

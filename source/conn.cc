@@ -274,7 +274,8 @@ void conn::WorkLoop() {
 				else
 				{
 					ldbg("client closed connection");
-					if(m_pDlClient) m_pDlClient->Shutdown();
+					Shutdown();
+
 					return;
 				}
 			}
@@ -476,6 +477,13 @@ void conn::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewCli
 		m_bLogAsError = false;
 		logFile = pNewFile;
 		logClient = pNewClient;
+}
+
+void conn::Shutdown()
+{
+	for(auto& j: m_jobs2send) delete j;
+	m_jobs2send.clear();
+	if(m_pDlClient) m_pDlClient->Shutdown();
 }
 
 }

@@ -21,6 +21,7 @@ struct lockguard {
 	lockguard(std::mutex* mx) : _guard(*mx) {}
 	lockguard(base_with_mutex& mbase) : _guard(mbase.m_obj_mutex) {}
 	lockguard(base_with_mutex* mbase) : _guard(mbase->m_obj_mutex) {}
+	lockguard(std::shared_ptr<base_with_mutex> mbase) : _guard(mbase->m_obj_mutex) {}
 };
 
 struct lockuniq {
@@ -28,6 +29,7 @@ struct lockuniq {
 	lockuniq(std::mutex& mx) : _guard(mx) {}
 	lockuniq(base_with_mutex& mbase) : _guard(mbase.m_obj_mutex) {}
 	lockuniq(base_with_mutex* mbase) : _guard(mbase->m_obj_mutex) {}
+	lockuniq(std::shared_ptr<base_with_mutex> mbase) : _guard(mbase->m_obj_mutex) {}
 	void unLock() { _guard.unlock();}
 	void reLock() { _guard.lock(); }
 	void reLockSafe() { if(!_guard.owns_lock()) _guard.lock(); }

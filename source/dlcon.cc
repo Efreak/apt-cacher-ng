@@ -125,8 +125,6 @@ struct tDlJob
 				<< ", " << "restpath: " << (psPath?*psPath:sEmptyString)
 		<< "repo: " << uintptr_t(pRepoData)
 		);
-		if (m_pStorage)
-			m_pStorage->IncDlRefCount();
 		if(pUri)
 			m_remoteUri=*pUri;
 		else
@@ -138,8 +136,7 @@ struct tDlJob
 
 	~tDlJob()
 	{
-		if (m_pStorage)
-			m_pStorage->DecDlRefCount(sErrorMsg.empty() ? sGenericError : sErrorMsg);
+
 	}
 
 	inline void ExtractCustomHeaders(LPCSTR reqHead)
@@ -610,6 +607,16 @@ struct tDlJob
 				// similar states, just handled differently afterwards
 				ldbg("STATE_GETDATA");
 				auto res = NewDataHandler(inBuf);
+
+#ifndef MINIBUILD
+
+				// faster download abort when the only user disconnected
+
+				// when active, 2 refs must be there, one in job and one here, others are weak
+				if(m_pStorage.use_count() < 2 && fileitem_with_storage::TryDispose(m_pStorage))
+					return HINT_DISCON | EFLAG_JOB_BROKEN | EFLAG_STORE_COLLISION;;
+#endif
+
 				if (HINT_SWITCH != res)
 					return res;
 			}
@@ -742,7 +749,7 @@ void dlcon::Shutdown()
 	{
 		while(inpipe.size()>1)
 			inpipe.pop_back();
-
+#warning reicht nicht, muss verlorernen download erkennen und dort abbrechen
 		// keep the current download running as long as somebody uses it
 		WorkLoop(internalIoLooping);
 	}
