@@ -28,6 +28,8 @@ class conn // : public tRunable
       
       void WorkLoop();
       
+      bool dlPaused = false;
+
    private:
 	   conn& operator=(const conn&);// { /* ASSERT(!"Don't copy con objects"); */ };
 	   conn(const conn&);// { /* ASSERT(!"Don't copy con objects"); */ };
@@ -50,6 +52,7 @@ class conn // : public tRunable
       bool SetupDownloader(const char *xff);
       dlcon * m_pDlClient;
       dlcon::tWorkState m_lastDlState = {dlcon::tWorkState::allDone, 0};
+
       mstring m_sClientHost;
       header *m_pTmpHead;
       

@@ -21,7 +21,11 @@ class job {
 
 	   typedef enum : char
 	{
-		R_DONE = 0, R_AGAIN = 1, R_DISCON = 2, R_NOTFORUS = 3
+		R_DONE = 0, // processing finished
+				R_AGAIN = 1, // short loop, just restart SendData loop to do some work
+				R_DISCON = 2,
+				R_WAITDL = 4 // reenter SendData when something happened with downloader
+
 	} eJobResult;
 
 	   typedef enum : char {
@@ -80,7 +84,7 @@ class job {
       const char * BuildAndEnqueHeader(const fileitem::FiStatus &fistate, const off_t &nGooddataSize, header& respHead);
       fileitem::FiStatus _SwitchToPtItem();
       void SetErrorResponse(const char * errorLine, const char *szLocation=nullptr, const char *bodytext=nullptr);
-      void PrepareLocalDownload(const mstring &visPath,
+      void SetupFileServing(const mstring &visPath,
     			const mstring &fsBase, const mstring &fsSubpath);
 
       bool ParseRange();

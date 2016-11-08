@@ -23,12 +23,12 @@ using namespace std;
 
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
-
+#warning FIXME, keeping fd in the dlstate is pointless, will be fetched again anyhow. Simplify...
 namespace acng
 {
 static const int MAX_RETRY = 11;
 
-static cmstring sGenericError("567 Unknown download error occured");
+//static cmstring sGenericError("567 Unknown download error occured");
 
 // those are not allowed to be forwarded
 static const auto taboo =
@@ -317,7 +317,7 @@ struct tDlJob
 		//XXX: still needed? Checked while inserting already.
 		// ASSERT( (m_pCurBackend && m_fileUri.sHost.empty()) || (!m_pCurBackend && !m_fileUri.sHost.empty()));
 
-		if (m_pStorage->m_nSizeSeen > 0 || m_pStorage->m_nRangeLimit >=0)
+		if (m_pStorage->m_nSizeSeenInCache > 0 || m_pStorage->m_nRangeLimit >=0)
 		{
 			bool bSetRange(false), bSetIfRange(false);
 
@@ -367,7 +367,7 @@ struct tDlJob
 			 * */
 			if (bSetRange)
 			{
-				head << "Range: bytes=" << std::max(off_t(0), m_pStorage->m_nSizeSeen - 1) << "-";
+				head << "Range: bytes=" << std::max(off_t(0), m_pStorage->m_nSizeSeenInCache - 1) << "-";
 				if(m_pStorage->m_nRangeLimit>=0)
 					head << m_pStorage->m_nRangeLimit;
 				head << "\r\n";
@@ -609,11 +609,10 @@ struct tDlJob
 				auto res = NewDataHandler(inBuf);
 
 #ifndef MINIBUILD
-
-				// faster download abort when the only user disconnected
-
+				// faster download abort when the only user disconnected (job object gone)
 				// when active, 2 refs must be there, one in job and one here, others are weak
-				if(m_pStorage.use_count() < 2 && fileitem_with_storage::TryDispose(m_pStorage))
+				bool isGlobal = m_pStorage->m_bIsGloballyRegistered;
+				if(m_pStorage.use_count() < 2 && (!isGlobal || fileitem_with_storage::TryDispose(m_pStorage)))
 					return HINT_DISCON | EFLAG_JOB_BROKEN | EFLAG_STORE_COLLISION;;
 #endif
 
@@ -711,6 +710,7 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection));
 
 	m_qNewjobs.back()->ExtractCustomHeaders(reqHead);
+
 	return true;
 }
 
@@ -749,7 +749,7 @@ void dlcon::Shutdown()
 	{
 		while(inpipe.size()>1)
 			inpipe.pop_back();
-#warning reicht nicht, muss verlorernen download erkennen und dort abbrechen
+
 		// keep the current download running as long as somebody uses it
 		WorkLoop(internalIoLooping);
 	}

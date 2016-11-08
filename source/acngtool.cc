@@ -83,11 +83,12 @@ struct CPrintItemFactory : public IFitemFactory
 			tPrintItem()
 			{
 				m_bAllowStoreData=false;
-				m_nSizeChecked = m_nSizeSeen = 0;
+				m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
 			};
-			virtual FiStatus Setup(bool) override
+			// XXX: needing this override? where? Just to defuse the caller but for what?
+			virtual FiStatus SetupFromCache(bool) override
 			{
-				m_nSizeChecked = m_nSizeSeen = 0;
+				m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
 				return m_status = FIST_INITED;
 			}
 			virtual int GetFileFd() override
@@ -160,13 +161,14 @@ struct CReportItemFactory : public IFitemFactory
 			tRepItem()
 			{
 				m_bAllowStoreData=false;
-				m_nSizeChecked = m_nSizeSeen = 0;
+				m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
 				lineBuf.setsize(1<<16);
 				memset(lineBuf.wptr(), 0, 1<<16);
 			};
-			virtual FiStatus Setup(bool) override
+			// XXX: needing this override? where? Just to defuse the caller but for what?
+			virtual FiStatus SetupFromCache(bool) override
 			{
-				m_nSizeChecked = m_nSizeSeen = 0;
+				m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
 				return m_status = FIST_INITED;
 			}
 			virtual int GetFileFd() override

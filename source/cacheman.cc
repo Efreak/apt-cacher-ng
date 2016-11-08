@@ -308,7 +308,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			return true;
 		}
 
-		fileitem::FiStatus initState = pFi->Setup(bIsVolatileFile);
+		fileitem::FiStatus initState = pFi->SetupFromCache(bIsVolatileFile);
 		if (initState > fileitem::FIST_COMPLETE)
 			GOTOREPMSG(pFi->GetHeader().frontLine);
 		if (fileitem::FIST_COMPLETE == initState)
@@ -891,7 +891,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 			}
 			*/
 
-			if (Setup(true) > fileitem::FIST_COMPLETE)
+			if (SetupFromCache(true) > fileitem::FIST_COMPLETE)
 				return false;
 			bool bNix(false);
 			if (!fileitem_with_storage::DownloadStartedStoreHeader(head, 0,
@@ -1064,7 +1064,7 @@ void cacheman::FilterGroupData(tFileGroups& idxGroups)
 	for(auto it=idxGroups.begin(); it!=idxGroups.end();)
 	{
 		unsigned found = 0;
-		for(auto& path: it->second.paths)
+		for(const auto& path: it->second.paths)
 		{
 			// WARNING: this check works only as long as stuff is volatile AND index type
 			if(!GetFlags(path).vfile_ondisk)

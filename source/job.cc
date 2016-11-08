@@ -63,18 +63,18 @@ protected:
 	// forward buffer, remaining part, cursor position
 	const char *m_pData = 0;
 	size_t m_nConsumable=0, m_nConsumed=0;
-	int& m_dlflags;
+	conn& m_parent;
 
 public:
-	tPassThroughFitem(std::string s, int& dlflags): m_dlflags(dlflags)
+	tPassThroughFitem(std::string s, conn& par): m_parent(par)
 	{
 		m_sPathRel = s;
 		m_bAllowStoreData=false;
-		m_nSizeChecked = m_nSizeSeen = 0;
+		m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
 	};
-	virtual FiStatus Setup(bool) override
+	virtual FiStatus SetupFromCache(bool) override
 	{
-		m_nSizeChecked = m_nSizeSeen = 0;
+		m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
 		return m_status = FIST_INITED;
 	}
 	virtual int GetFileFd() override
@@ -102,30 +102,16 @@ public:
 		{
 			dbgline;
 			m_status = FIST_DLRECEIVING;
-			m_nSizeChecked += size;
+			m_nUsableSizeInCache += size;
 			m_pData = data;
 			m_nConsumable=size;
 			m_nConsumed=0;
-#warning test pass-through
-			m_dlflags |= dlcon::tWorkState::needPause;
 
-		/*	while(0 == m_nConsumed && m_status <= FIST_COMPLETE)
-			{
-				if(dlflags & (dlcon::tWorkState::needConnect | dlcon::tWorkState::needRecv | dlcon::tWorkState::needSend))
-					return R_AGAIN;
+			m_parent.dlPaused = true;
 
-				wait(g);
-			}
-*/
-			dbgline;
 			// let the downloader abort?
 			if(m_status >= FIST_DLERROR)
 				return false;
-
-			dbgline;
-			m_nConsumable=0;
-			m_pData=nullptr;
-			return m_nConsumed;
 		}
 		return true;
 	}
@@ -134,14 +120,14 @@ public:
 		lockuniq g(this);
 
 		while(0 == m_nConsumable && m_status<=FIST_COMPLETE
-				&& ! (m_nSizeChecked==0 && m_status==FIST_COMPLETE))
+				&& ! (m_nUsableSizeInCache==0 && m_status==FIST_COMPLETE))
 		{
 			return 0; // will get more or block until then
 		}
 		if (m_status >= FIST_DLERROR || !m_pData)
 			return -1;
 
-		if(!m_nSizeChecked)
+		if(!m_nUsableSizeInCache)
 			return 0;
 
 		auto r = write(out_fd, m_pData, min(nMax2SendNow, m_nConsumable));
@@ -151,6 +137,7 @@ public:
 		{
 			m_status=FIST_DLERROR;
 			m_head.frontLine="HTTP/1.1 500 Data passing error";
+			m_parent.dlPaused = false; // needs to shutdown
 		}
 		else if(r>0)
 		{
@@ -158,7 +145,8 @@ public:
 			m_pData+=r;
 			m_nConsumed+=r;
 			nSendPos+=r;
-			if(m_nConsumable<=0) m_dlflags &= ~dlcon::tWorkState::needPause;
+			if(m_nConsumable<=0)
+				m_parent.dlPaused = false;
 		}
 		return r;
 	}
@@ -194,8 +182,8 @@ public:
 	inline void seal()
 	{
 		// seal the item
-		m_nSizeChecked = m_data.size();
-		m_head.set(header::CONTENT_LENGTH, m_nSizeChecked);
+		m_nUsableSizeInCache = m_data.size();
+		m_head.set(header::CONTENT_LENGTH, m_nUsableSizeInCache);
 	}
 	// never used to store data
 	bool DownloadStartedStoreHeader(const header &, size_t, const char *, bool, bool&)
@@ -241,13 +229,13 @@ job::~job()
 			(m_pItem ? m_pItem->GetTransferCount() : 0),
 			m_nAllDataCount, bErr);
 	
-#warning gute volatiole spenden an 33s cache oder so
+#warning when volatile type and finished download, donate this to a quick life-keeping cache for 33s, see cleaner
 	checkforceclose(m_filefd);
 	delete m_pReqHead;
 }
 
 
-inline void job::PrepareLocalDownload(const string &visPath,
+inline void job::SetupFileServing(const string &visPath,
 		const string &fsBase, const string &fsSubpath)
 {
 	mstring absPath = fsBase+SZPATHSEP+fsSubpath;
@@ -409,7 +397,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 		{
 			m_bAllowStoreData=false;
 			m_status=FIST_COMPLETE;
-			m_nSizeChecked=m_nSizeSeen=stdata.st_size;
+			m_nUsableSizeInCache=m_nSizeSeenInCache=stdata.st_size;
 			m_bCheckFreshness=false;
 			m_head.type=header::ANSWER;
 			m_head.frontLine="HTTP/1.1 200 OK";
@@ -427,7 +415,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 		#ifdef HAVE_FADVISE
 			// optional, experimental
 			if(fd>=0)
-				posix_fadvise(fd, 0, m_nSizeChecked, POSIX_FADV_SEQUENTIAL);
+				posix_fadvise(fd, 0, m_nUsableSizeInCache, POSIX_FADV_SEQUENTIAL);
 		#endif
 			return fd;
 		}
@@ -437,7 +425,6 @@ inline void job::PrepareLocalDownload(const string &visPath,
 
 inline bool job::ParseRange()
 {
-
 	/*
 	 * Range: bytes=453291-
 	 * ...
@@ -468,60 +455,59 @@ inline bool job::ParseRange()
 	return false;
 }
 
-void job::PrepareDownload(LPCSTR headBuf) {
+void job::PrepareDownload(LPCSTR headBuf)
+{
 
-    LOGSTART("job::PrepareDownload");
-    
+	LOGSTART("job::PrepareDownload");
+
 #ifdef DEBUGLOCAL
-    cfg::localdirs["stuff"]="/tmp/stuff";
-    log::err(m_pReqHead->ToString());
+	cfg::localdirs["stuff"]="/tmp/stuff";
+	log::err(m_pReqHead->ToString());
 #endif
 
-    string sReqPath, sPathResidual;
-    tHttpUrl theUrl; // parsed URL
+	string sReqPath, sPathResidual;
+	tHttpUrl theUrl; // parsed URL
 
 	// resolve to an internal repo location and maybe backends later
 	cfg::tRepoResolvResult repoMapping;
 
-    fileitem::FiStatus fistate(fileitem::FIST_FRESH);
-    bool bPtMode(false);
-    bool bForceFreshnessChecks(false); // force update of the file, i.e. on dynamic index files?
-    tSplitWalk tokenizer(& m_pReqHead->frontLine, SPACECHARS);
+	fileitem::FiStatus fistate(fileitem::FIST_FRESH);
+	bool bForceFreshnessChecks(false); // force update of the file, i.e. on dynamic index files?
+	tSplitWalk tokenizer(&m_pReqHead->frontLine, SPACECHARS);
 
-    if(m_pReqHead->type!=header::GET && m_pReqHead->type!=header::HEAD)
-    	goto report_invpath;
-    if(!tokenizer.Next() || !tokenizer.Next()) // at path...
-    	goto report_invpath;
-    UrlUnescapeAppend(tokenizer, sReqPath);
-    if(!tokenizer.Next()) // at proto
-    	goto report_invpath;
-    m_bIsHttp11 = (sHttp11 == tokenizer.str());
-    
-    USRDBG( "Decoded request URI: " << sReqPath);
+	if (m_pReqHead->type != header::GET && m_pReqHead->type != header::HEAD)
+		goto report_invpath;
+	if (!tokenizer.Next() || !tokenizer.Next()) // at path...
+		goto report_invpath;
+	UrlUnescapeAppend(tokenizer, sReqPath);
+	if (!tokenizer.Next()) // at proto
+		goto report_invpath;
+	m_bIsHttp11 = (sHttp11 == tokenizer.str());
+
+	USRDBG("Decoded request URI: " << sReqPath);
 
 	// a sane default? normally, close-mode for http 1.0, keep for 1.1.
 	// But if set by the client then just comply!
-	m_bClientWants2Close =!m_bIsHttp11;
-	if(m_pReqHead && m_pReqHead->h[header::CONNECTION])
+	m_bClientWants2Close = !m_bIsHttp11;
+	if (m_pReqHead && m_pReqHead->h[header::CONNECTION])
 		m_bClientWants2Close = !strncasecmp(m_pReqHead->h[header::CONNECTION], "close", 5);
 
-    // "clever" file system browsing attempt?
-	if(rex::Match(sReqPath, rex::NASTY_PATH)
-			|| stmiss != sReqPath.find(MAKE_PTR_0_LEN("/_actmp"))
-			|| startsWithSz(sReqPath, "/_"))
+	// "clever" file system browsing attempt?
+	if (rex::Match(sReqPath, rex::NASTY_PATH) || stmiss != sReqPath.find(MAKE_PTR_0_LEN("/_actmp"))
+	|| startsWithSz(sReqPath, "/_"))
 		goto report_notallowed;
 
-    MYTRY
+	try
 	{
 		if (startsWithSz(sReqPath, "/HTTPS///"))
 			sReqPath.replace(0, 6, PROT_PFX_HTTPS);
 		// special case: proxy-mode AND special prefix are there
-		if(0==strncasecmp(sReqPath.c_str(), WITHLEN("http://https///")))
+		if (0 == strncasecmp(sReqPath.c_str(), WITHLEN("http://https///")))
 			sReqPath.replace(0, 13, PROT_PFX_HTTPS);
 
-		if(!theUrl.SetHttpUrl(sReqPath, false))
+		if (!theUrl.SetHttpUrl(sReqPath, false))
 		{
-			m_eMaintWorkType=tSpecialRequest::workUSERINFO;
+			m_eMaintWorkType = tSpecialRequest::workUSERINFO;
 			return;
 		}
 		LOG("refined path: " << theUrl.sPath << "\n on host: " << theUrl.sHost);
@@ -529,220 +515,237 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		// extract the actual port from the URL
 		char *pEnd(0);
 		unsigned nPort = 80;
-		LPCSTR sPort=theUrl.GetPort().c_str();
-		if(!*sPort)
+		LPCSTR sPort = theUrl.GetPort().c_str();
+		if (!*sPort)
 		{
 			nPort = (uint) strtoul(sPort, &pEnd, 10);
-			if('\0' != *pEnd || pEnd == sPort || nPort > TCP_PORT_MAX || !nPort)
+			if ('\0' != *pEnd || pEnd == sPort || nPort > TCP_PORT_MAX || !nPort)
 				goto report_invport;
 		}
 
-		if(cfg::pUserPorts)
+		if (cfg::pUserPorts)
 		{
-			if(!cfg::pUserPorts->test(nPort))
+			if (!cfg::pUserPorts->test(nPort))
 				goto report_invport;
 		}
-		else if(nPort != 80)
+		else if (nPort != 80)
 			goto report_invport;
 
 		// kill multiple slashes
-		for(tStrPos pos=0; stmiss != (pos = theUrl.sPath.find("//", pos, 2)); )
+		for (tStrPos pos = 0; stmiss != (pos = theUrl.sPath.find("//", pos, 2));)
 			theUrl.sPath.erase(pos, 1);
 
-		bPtMode=rex::MatchUncacheable(theUrl.ToURI(false), rex::NOCACHE_REQ);
-
-		LOG("input uri: "<<theUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode
-				<< ", admin-page: " << cfg::reportpage);
-
-		if(!cfg::reportpage.empty() || theUrl.sHost == "style.css")
 		{
-			m_eMaintWorkType = tSpecialRequest::DispatchMaintWork(sReqPath,
-					m_pReqHead->h[header::AUTHORIZATION]);
-			if(m_eMaintWorkType != tSpecialRequest::workNotSpecial)
-			{
-				m_sFileLoc = sReqPath;
-				return;
-			}
+			auto bPtMode = rex::MatchUncacheable(theUrl.ToURI(false), rex::NOCACHE_REQ);
+
+			LOG(
+					"input uri: "<<theUrl.ToURI(false)<<" , dontcache-flag? " << bPtMode << ", admin-page: " << cfg::reportpage);
+
+			if (bPtMode)
+				goto setup_pt_request;
 		}
 
 		using namespace rex;
-
 		{
+			if ((!cfg::reportpage.empty() || theUrl.sHost == "style.css"))
+			{
+				m_eMaintWorkType = tSpecialRequest::DispatchMaintWork(sReqPath,
+						m_pReqHead->h[header::AUTHORIZATION]);
+				if (m_eMaintWorkType != tSpecialRequest::workNotSpecial)
+				{
+					m_sFileLoc = sReqPath;
+					return;
+				}
+			}
+
 			tStrMap::const_iterator it = cfg::localdirs.find(theUrl.sHost);
 			if (it != cfg::localdirs.end())
 			{
-				PrepareLocalDownload(sReqPath, it->second, theUrl.sPath);
+				SetupFileServing(sReqPath, it->second, theUrl.sPath);
 				ParseRange();
 				return;
 			}
+
+			// entered directory but not defined as local? Then 404 it with hints
+			if (!theUrl.sPath.empty() && endsWithSzAr(theUrl.sPath, "/"))
+			{
+				LOG("generic user information page for " << theUrl.sPath);
+				m_eMaintWorkType = tSpecialRequest::workUSERINFO;
+				return;
+			}
+
+			m_type = GetFiletype(theUrl.sPath);
+
+			if (m_type == FILE_INVALID)
+			{
+				if (!cfg::patrace)
+					goto report_notallowed;
+
+				// ok, collect some information helpful to the user
+				m_type = FILE_VOLATILE;
+				lockguard g(traceData);
+				traceData.insert(theUrl.sPath);
+			}
 		}
 
-		// entered directory but not defined as local? Then 404 it with hints
-		if(!theUrl.sPath.empty() && endsWithSzAr(theUrl.sPath, "/"))
-		{
-			LOG("generic user information page for " << theUrl.sPath);
-			m_eMaintWorkType=tSpecialRequest::workUSERINFO;
-			return;
-		}
-
-		m_type = GetFiletype(theUrl.sPath);
-
-		if ( m_type == FILE_INVALID )
-		{
-			if(!cfg::patrace)
-				goto report_notallowed;
-
-			// ok, collect some information helpful to the user
-			m_type = FILE_VOLATILE;
-			lockguard g(traceData);
-			traceData.insert(theUrl.sPath);
-		}
-		
 		// got something valid, has type now, trace it
 		USRDBG("Processing new job, "<<m_pReqHead->frontLine);
 
 		cfg::GetRepNameAndPathResidual(theUrl, repoMapping);
-		if(repoMapping.psRepoName && !repoMapping.psRepoName->empty())
-			m_sFileLoc=*repoMapping.psRepoName+SZPATHSEP+repoMapping.sRestPath;
+		if (repoMapping.psRepoName && !repoMapping.psRepoName->empty())
+			m_sFileLoc = *repoMapping.psRepoName + SZPATHSEP + repoMapping.sRestPath;
 		else
-			m_sFileLoc=theUrl.sHost+theUrl.sPath;
+			m_sFileLoc = theUrl.sHost + theUrl.sPath;
 
-		bForceFreshnessChecks = ( ! cfg::offlinemode && m_type == FILE_VOLATILE);
+		bForceFreshnessChecks = (!cfg::offlinemode && m_type == FILE_VOLATILE);
 
 		m_pItem = fileitem_with_storage::CreateRegistered(m_sFileLoc);
-	}
-	MYCATCH(std::out_of_range&) // better safe...
+	} catch (std::out_of_range&) // better safe...
 	{
-    	goto report_invpath;
-    }
-    
-    if(!m_pItem)
-    {
-    	USRDBG("Error creating file item for " << m_sFileLoc);
-    	goto report_overload;
-    }
+		goto report_invpath;
+	}
 
-    if(cfg::DegradedMode())
-       goto report_degraded;
-    
-    fistate = m_pItem->Setup(bForceFreshnessChecks);
+	if (!m_pItem)
+	{
+		USRDBG("Error creating file item for " << m_sFileLoc);
+		goto report_overload;
+	}
+
+	if (cfg::DegradedMode())
+		goto report_degraded;
+
+	fistate = m_pItem->SetupFromCache(bForceFreshnessChecks);
 	LOG("Got initial file status: " << (int) fistate);
-
-	if (bPtMode && fistate != fileitem::FIST_COMPLETE)
-		fistate = _SwitchToPtItem();
 
 	ParseRange();
 
 	// might need to update the filestamp because nothing else would trigger it
-	if(cfg::trackfileuse && fistate >= fileitem::FIST_DLGOTHEAD && fistate < fileitem::FIST_DLERROR)
+	if (cfg::trackfileuse && fistate >= fileitem::FIST_DLGOTHEAD
+			&& fistate < fileitem::FIST_DLERROR)
 		m_pItem->UpdateHeadTimestamp();
 
-	if(fistate==fileitem::FIST_COMPLETE)
+	if (fistate == fileitem::FIST_COMPLETE)
 		return; // perfect, done here
 
 	// early optimization for requests which want a defined file part which we already have
 	// no matter whether the file is complete or not
 	// handles different cases: GET with range, HEAD with range, HEAD with no range
-	if((m_nReqRangeFrom>=0 && m_nReqRangeTo>=0)
-			|| (m_pReqHead->type==header::HEAD && 0!=(m_nReqRangeTo=-1)))
+	if ((m_nReqRangeFrom >= 0 && m_nReqRangeTo >= 0)
+			|| (m_pReqHead->type == header::HEAD && 0 != (m_nReqRangeTo = -1)))
 	{
 		lockguard g(m_pItem);
-		if(m_pItem->CheckUsableRange_unlocked(m_nReqRangeTo))
+		if (m_pItem->CheckUsableRange_unlocked(m_nReqRangeTo))
 		{
 			LOG("Got a partial request for incomplete download; range is available");
-			m_bNoDownloadStarted=true;
+			m_bNoDownloadStarted = true;
 			return;
 		}
 	}
 
-    if(cfg::offlinemode) { // make sure there will be no problems later in SendData or prepare a user message
-    	// error or needs download but freshness check was disabled, so it's really not complete.
-    	goto report_offlineconf;
-    }
-    dbgline;
-    if( fistate < fileitem::FIST_DLGOTHEAD) // needs a downloader
-    {
-    	dbgline;
-    	if(!m_pParentCon->SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
-    	{
-    		USRDBG( "Error creating download handler for "<<m_sFileLoc);
-    		goto report_overload;
-    	}
-    	
-    	dbgline;
-MYTRY
+	if (cfg::offlinemode)
+	{ // make sure there will be no problems later in SendData or prepare a user message
+	  // error or needs download but freshness check was disabled, so it's really not complete.
+		goto report_offlineconf;
+	}
+	dbgline;
+	if (fistate < fileitem::FIST_DLGOTHEAD) // needs a downloader
+	{
+		dbgline;
+		if (!m_pParentCon->SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
 		{
-    		auto bHaveRedirects=(repoMapping.repodata && !repoMapping.repodata->m_backends.empty());
-
-    		if (cfg::forcemanaged && !bHaveRedirects)
-						goto report_notallowed;
-
-				if (!bPtMode)
-				{
-					// XXX: this only checks the first found backend server, what about others?
-					auto testUri= bHaveRedirects
-							? repoMapping.repodata->m_backends.front().ToURI(false)
-									+ repoMapping.sRestPath
-							: theUrl.ToURI(false);
-					if (rex::MatchUncacheable(testUri, rex::NOCACHE_TGT))
-						fistate = _SwitchToPtItem();
-				}
-
-					if (m_pParentCon->m_pDlClient->AddJob(m_pItem,
-							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
-							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
-									(LPCSTR) ( bPtMode ? headBuf : nullptr),
-							cfg::redirmax))
-				{
-					ldbg("Download job enqueued for " << m_sFileLoc);
-					m_pParentCon->m_lastDlState.flags |= dlcon::tWorkState::needConnect;
-				}
-				else
-				{
-					ldbg("PANIC! Error creating download job for " << m_sFileLoc);
-					goto report_overload;
-				}
+			USRDBG("Error creating download handler for "<<m_sFileLoc);
+			goto report_overload;
 		}
-		MYCATCH(std::bad_alloc&) // OOM, may this ever happen here?
+
+		dbgline;
+		try
 		{
-			USRDBG( "Out of memory");
+			auto bHaveRedirects =
+					(repoMapping.repodata && !repoMapping.repodata->m_backends.empty());
+
+			if (cfg::forcemanaged && !bHaveRedirects)
+				goto report_notallowed;
+
+			// XXX: this only checks the first found backend server, what about others?
+			auto testUri =
+					bHaveRedirects ?
+							repoMapping.repodata->m_backends.front().ToURI(false)
+									+ repoMapping.sRestPath :
+							theUrl.ToURI(false);
+			if (rex::MatchUncacheable(testUri, rex::NOCACHE_TGT))
+				fistate = _SwitchToPtItem();
+
+			if (m_pParentCon->m_pDlClient->AddJob(m_pItem, bHaveRedirects ? nullptr : &theUrl,
+					repoMapping.repodata, bHaveRedirects ? &repoMapping.sRestPath : nullptr,
+					nullptr, cfg::redirmax))
+			{
+				ldbg("Download job enqueued for " << m_sFileLoc);
+				m_pParentCon->m_lastDlState.flags |= dlcon::tWorkState::needConnect;
+			}
+			else
+			{
+				ldbg("PANIC! Error creating download job for " << m_sFileLoc);
+				goto report_overload;
+			}
+		} catch (std::bad_alloc&) // OOM, may this ever happen here?
+		{
+			USRDBG("Out of memory");
 			goto report_overload;
 		};
 	}
-    
-	return;
-    
-report_overload:
-	SetErrorResponse("503 Server overload, try later");
-    return ;
 
-report_notallowed:
-	SetErrorResponse((tSS() << "403 Forbidden file type or location: " << sReqPath).c_str(),
-			nullptr, "403 Forbidden file type or location");
+	return;
+
+	report_notallowed: SetErrorResponse(
+			(tSS() << "403 Forbidden file type or location: " << sReqPath).c_str(), nullptr,
+			"403 Forbidden file type or location");
 //    USRDBG( sRawUriPath + " -- ACCESS FORBIDDEN");
-    return ;
-
-report_offlineconf:
-	SetErrorResponse("503 Unable to download in offline mode");
 	return;
 
-report_invpath:
-	SetErrorResponse("403 Invalid path specification");
-    return ;
+	report_offlineconf: SetErrorResponse("503 Unable to download in offline mode");
+	return;
 
-report_degraded:
-	SetErrorResponse("403 Cache server in degraded mode");
-	return ;
+	report_invpath: SetErrorResponse("403 Invalid path specification");
+	return;
 
-report_invport:
-	SetErrorResponse("403 Configuration error (confusing proxy mode) or prohibited port (see AllowUserPorts)");
-    return ;
-/*
-report_doubleproxy:
-	SetErrorResponse("403 URL seems to be made for proxy but contains apt-cacher-ng port. "
-    		"Inconsistent apt configuration?");
-    return ;
-*/
+	report_degraded: SetErrorResponse("403 Cache server in degraded mode");
+	return;
+
+	report_invport: SetErrorResponse(
+			"403 Configuration error (confusing proxy mode) or prohibited port (see AllowUserPorts)");
+	return;
+	/*
+	 report_doubleproxy:
+	 SetErrorResponse("403 URL seems to be made for proxy but contains apt-cacher-ng port. "
+	 "Inconsistent apt configuration?");
+	 return ;
+	 */
+	setup_pt_request:
+	{
+		m_sFileLoc = theUrl.ToURI(false);
+		ParseRange();
+		_SwitchToPtItem();
+		if (!m_pParentCon->SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
+		{
+			USRDBG("Error creating download handler for "<<m_sFileLoc);
+			goto report_overload;
+		}
+		if (m_pParentCon->m_pDlClient->AddJob(m_pItem, &theUrl, repoMapping.repodata, nullptr,
+				headBuf, cfg::redirmax))
+		{
+			ldbg("Download job enqueued for " << m_sFileLoc);
+			m_pParentCon->m_lastDlState.flags |= dlcon::tWorkState::needConnect;
+		}
+		else
+		{
+			ldbg("PANIC! Error creating download job for " << m_sFileLoc);
+			goto report_overload;
+		}
+	}
+	return;
+
+	report_overload: SetErrorResponse("503 Server overload, try later");
+	return;
 }
 
 #define THROW_ERROR(x) { if(m_nAllDataCount) return R_DISCON; SetErrorResponse(x); return R_AGAIN; }
@@ -788,7 +791,7 @@ job::eJobResult job::SendData(int confd)
 					ldbg("good ungood, consused?" << h.frontLine)
 					SetErrorResponse("500 Unknown error");
 				}
-				return R_AGAIN;
+				return R_AGAIN; // will send error response and die
 			}
 			/*
 			 * Detect the same special case as above. There is no download agent to change
@@ -815,8 +818,9 @@ job::eJobResult job::SendData(int confd)
 
 #endif
 			// if downloader is active, don't block it
+#warning bad idea, will block although the dler could continue with another in the queue and vice versa... PROBLEM! IDEA NEEDED.
 			if(m_pParentCon->m_lastDlState.flags & dlcon::tWorkState::needActivity)
-				return R_AGAIN;
+				return R_WAITDL;
 			// otherwise it's some other downloader active, just wait for progress
 			m_pItem->wait(g);
 			
@@ -824,7 +828,7 @@ job::eJobResult job::SendData(int confd)
 		}
 		
 		respHead = m_pItem->GetHeaderUnlocked();
-
+#warning what for??
 		if(respHead.h[header::XORIG])
 			m_sOrigUrl=respHead.h[header::XORIG];
 
@@ -837,7 +841,7 @@ job::eJobResult job::SendData(int confd)
 
 	for(;;) // left by returning
 	{
-		MYTRY // for bad_alloc in members
+		try // for bad_alloc in members
 		{
 			switch(m_state)
 			{
@@ -845,7 +849,7 @@ job::eJobResult job::SendData(int confd)
 				{
 					ldbg("STATE_FRESH");
 					if(fistate < fileitem::FIST_DLGOTHEAD) // be sure about that
-						return R_AGAIN;
+						return R_AGAIN; // will start waiting for downloader as needed
 					m_state=STATE_SEND_BUFFER;
 					m_backstate=STATE_HEADER_SENT; // could be changed while creating header
 					const char *szErr = BuildAndEnqueHeader(fistate, nGoodDataSize, respHead);
@@ -860,7 +864,7 @@ job::eJobResult job::SendData(int confd)
 					if(fistate < fileitem::FIST_DLGOTHEAD)
 					{
 						ldbg("ERROR condition detected: starts activity while downloader not ready")
-						return R_AGAIN;
+						return R_DISCON;
 					}
 
 					m_filefd=m_pItem->GetFileFd();
@@ -881,7 +885,7 @@ job::eJobResult job::SendData(int confd)
 						if(fistate>=fileitem::FIST_COMPLETE)
 							GOTOENDE;
 						LOG("Cannot send more, not enough fresh data yet");
-						return R_AGAIN;
+						return R_AGAIN; // will start monitoring DL when reentered
 					}
 
 					size_t nMax2SendNow=min(nGoodDataSize-m_nSendPos, m_nCurrentRangeLast+1-m_nSendPos);
@@ -900,7 +904,7 @@ job::eJobResult job::SendData(int confd)
 					if(n<0)
 						THROW_ERROR("400 Client error");
 					
-					return R_AGAIN;
+					return R_AGAIN; // probably short IO read, shall try again
 				}
 				case(STATE_SEND_CHUNK_HEADER):
 				{
@@ -909,7 +913,7 @@ job::eJobResult job::SendData(int confd)
 					if(!m_nChunkRemainingBytes && fistate < fileitem::FIST_COMPLETE)
 					{
 						ldbg("No data to send YET, will try later");
-						return R_AGAIN;
+						return R_AGAIN; // will check DL availability when reentered
 					}
 					m_sendbuf << tSS::hex << m_nChunkRemainingBytes << tSS::dec
 							<< (m_nChunkRemainingBytes ? "\r\n" : "\r\n\r\n");
@@ -936,14 +940,14 @@ job::eJobResult job::SendData(int confd)
 						m_backstate=STATE_SEND_CHUNK_HEADER;
 						continue;
 					}
-					return R_AGAIN;
+					return R_AGAIN; // will check DL availability when reentered
 				}
 				case(STATE_SEND_BUFFER):
 				{
 					/* Sends data from the local buffer, used for page or chunk headers.
 					* -> DELICATE STATE, should not be interrupted by exception or throw
 					* to another state path uncontrolled. */
-					MYTRY
+					try
 					{
 						ldbg("prebuf sending: "<< m_sendbuf.c_str());
 						auto r=send(confd, m_sendbuf.rptr(), m_sendbuf.size(),
@@ -951,7 +955,7 @@ job::eJobResult job::SendData(int confd)
 						if (r<0)
 						{
 							if (errno==EAGAIN || errno==EINTR || errno == ENOBUFS)
-								return R_AGAIN;
+								return R_AGAIN; // keep trying...
 							return R_DISCON;
 						}
 						m_nAllDataCount+=r;
@@ -962,12 +966,12 @@ job::eJobResult job::SendData(int confd)
 							m_state=m_backstate;
 							continue;
 						}
+						return R_AGAIN; // will get back here when reentered
 					}
-					MYCATCH(...)
+					catch(...)
 					{
 						return R_DISCON;
 					}
-					return R_AGAIN;
 				}
 				
 				case(STATE_ALLDONE):
@@ -991,7 +995,7 @@ job::eJobResult job::SendData(int confd)
 					return R_DISCON;
 			}
 		}
-		MYCATCH(bad_alloc&) {
+		catch(bad_alloc&) {
 			// TODO: report memory failure?
 			return R_DISCON;
 		}
@@ -1161,9 +1165,14 @@ fileitem::FiStatus job::_SwitchToPtItem()
 {
 	// Changing to local pass-through file item
 	LOGSTART("job::_SwitchToPtItem");
-	// exception-safe sequence
-	m_pItem.reset(new tPassThroughFitem(m_sFileLoc, m_pParentCon->m_lastDlState.flags));
-	return m_pItem->Setup(true);
+	m_pItem.reset(new tPassThroughFitem(m_sFileLoc, *m_pParentCon));
+	m_pItem->m_nSizeSeenInCache = m_nReqRangeFrom;
+#warning XXX: test resuming
+	m_pItem->m_nRangeLimit = m_nReqRangeTo;
+	m_pItem->m_head.set(header::LAST_MODIFIED,
+			m_pReqHead->h[header::IF_MODIFIED_SINCE] ?
+					m_pReqHead->h[header::IF_MODIFIED_SINCE] : m_pReqHead->h[header::IFRANGE]);
+	return (m_pItem->m_status = fileitem::FIST_INITED);
 }
 
 

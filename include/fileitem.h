@@ -14,14 +14,15 @@ namespace acng
 
 class fileitem;
 class fileitem_with_storage;
+class job;
 typedef std::shared_ptr<fileitem> tFileItemPtr;
 
 //! Base class containing all required data and methods for communication with the download sources
 class fileitem: public base_with_condition
 {
 	friend class fileitem_with_storage;
-
-public:
+	friend class job;
+	public:
 
 	// Life cycle (process states) of a file description item
 	enum FiStatus : char
@@ -37,7 +38,7 @@ public:
 	virtual ~fileitem();
 	
 	// initialize file item, return the status
-	virtual FiStatus Setup(bool bDynType);
+	virtual FiStatus SetupFromCache(bool bDynType);
 	
 	virtual int GetFileFd();
 	uint64_t GetTransferCount();
@@ -63,7 +64,7 @@ public:
 	mstring GetHttpMsg();
 	
 	FiStatus GetStatus() { setLockGuard; return m_status; }
-	FiStatus GetStatusUnlocked(off_t &nGoodDataSize) { nGoodDataSize = m_nSizeChecked; return m_status; }
+	FiStatus GetStatusUnlocked(off_t &nGoodDataSize) { nGoodDataSize = m_nUsableSizeInCache; return m_status; }
 	void ResetCacheState();
 
 	//! returns true if complete or DL not started yet but partial file is present and contains requested range and file contents is static
@@ -80,18 +81,20 @@ public:
 	void UpdateHeadTimestamp();
 
 	uint64_t m_nIncommingCount;
-	off_t m_nSizeSeen;
+	off_t m_nSizeSeenInCache;
 	off_t m_nRangeLimit;
 	
 	bool m_bCheckFreshness;
 	// those is only good for very special purposes [tm]
 	bool m_bHeadOnly;
+	// use a flag to avoid extra locking in case of pass-through items
+	bool m_bIsGloballyRegistered = false;
 
 protected:
 	bool m_bAllowStoreData;
-	//bool m_bDisposed = false;
+
 	fileitem();
-	off_t m_nSizeChecked;
+	off_t m_nUsableSizeInCache;
 	header m_head;
 	int m_filefd;
 //	int m_nDlRefsCount;

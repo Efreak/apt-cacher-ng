@@ -184,6 +184,8 @@ void conn::WorkLoop() {
 	acbuf inBuf;
 	inBuf.setsize(32*1024);
 
+	bool bWaitDl = false;
+
 	int maxfd=m_confd;
 	while(true) {
 		fd_set rfds, wfds;
@@ -196,14 +198,14 @@ void conn::WorkLoop() {
 
 		job *pjSender(nullptr);
 
-		if ( !m_jobs2send.empty())
+		if ( !m_jobs2send.empty() && !bWaitDl)
 		{
 			pjSender=m_jobs2send.front();
 			FD_SET(m_confd, &wfds);
 		}
 
 		bool checkDlFd = false;
-		if(m_pDlClient && 0==(m_lastDlState.flags & dlcon::tWorkState::needPause))
+		if(m_pDlClient && !dlPaused)
 		{
 			// just do it here
 			if(m_lastDlState.flags & dlcon::tWorkState::needConnect)
@@ -261,7 +263,10 @@ void conn::WorkLoop() {
 			if((m_lastDlState.flags & dlcon::tWorkState::needRecv) && FD_ISSET(m_lastDlState.fd, &rfds))
 				hint |= dlcon::ioretCanRecv;
 			if(hint)
+			{
+				bWaitDl = false;
 				m_lastDlState = m_pDlClient->WorkLoop(hint);
+			}
 		}
 
 		if(FD_ISSET(m_confd, &rfds)) {
@@ -283,7 +288,7 @@ void conn::WorkLoop() {
 
 		// split new data into requests
 		while(inBuf.size()>0) {
-			MYTRY
+			try
 			{
 				if(!m_pTmpHead)
 					m_pTmpHead = new header();
@@ -378,7 +383,7 @@ void conn::WorkLoop() {
 
 				m_pTmpHead=nullptr; // owned by job now
 			}
-			MYCATCH(bad_alloc&)
+			catch(bad_alloc&)
 			{
 				return;
 			}
@@ -387,28 +392,32 @@ void conn::WorkLoop() {
 		if(inBuf.freecapa()==0)
 			return; // cannot happen unless being attacked
 
-		if(FD_ISSET(m_confd, &wfds) && pjSender)
+		if (FD_ISSET(m_confd, &wfds) && pjSender)
 		{
-			switch(pjSender->SendData(m_confd))
+			while (true)
 			{
-			case(job::R_DISCON):
+				auto sendRes = pjSender->SendData(m_confd);
+				if (sendRes == job::R_DISCON)
 				{
 					ldbg("Disconnect advise received, stopping connection");
 					return;
 				}
-			case(job::R_DONE):
+				if (sendRes == job::R_DONE)
 				{
 					m_jobs2send.pop_front();
 					delete pjSender;
-					pjSender=nullptr;
+					pjSender = nullptr;
 
 					ldbg("Remaining jobs to send: " << m_jobs2send.size());
 					break;
 				}
-			case(job::R_AGAIN):
-				break;
-			default:
-				break;
+				if (sendRes == job::R_AGAIN)
+					continue;
+				if (sendRes == job::R_WAITDL)
+				{
+					bWaitDl = true;
+					break;
+				}
 			}
 		}
 	}
@@ -419,7 +428,7 @@ bool conn::SetupDownloader(const char *pszOrigin)
 	if (m_pDlClient)
 		return true;
 
-	MYTRY
+	try
 	{
 		if(cfg::exporigin)
 		{
@@ -442,7 +451,7 @@ bool conn::SetupDownloader(const char *pszOrigin)
 		return ! (dlcon::tWorkState::fatalError & m_lastDlState.flags);
 
 	}
-	MYCATCH(bad_alloc&)
+	catch(bad_alloc&)
 	{
 		return false;
 	}

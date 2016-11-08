@@ -264,7 +264,7 @@ public:
 					if(n<=0)
 						n=sscanf(p, "bytes=" OFF_T_FMT "-" OFF_T_FMT "/" OFF_T_FMT, &myfrom, &myto, &mylen);
 					if(n!=3  // check for nonsense
-							|| (m_nSizeSeen>0 && myfrom != m_nSizeSeen-1)
+							|| (m_nSizeSeenInCache>0 && myfrom != m_nSizeSeenInCache-1)
 							|| (m_nRangeLimit>=0 && myto > m_nRangeLimit) // too much data?
 							|| myfrom<0 || mylen<0
 					)
@@ -294,7 +294,7 @@ public:
 					nGot(0), skipBytes(start), nErr(0), m_isFirst(isfirst), fid(fi)
 			{
 				m_bCheckFreshness = false;
-				m_nSizeSeen = start;
+				m_nSizeSeenInCache = start;
 				m_nRangeLimit = g_bGoodServer ? start+size-1 : -1;
 			}
 		};
@@ -550,7 +550,7 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 	struct stat stbuf;
 	rex::eMatchType ftype = rex::GetFiletype(path);
 
-	MYTRY
+	try
 	{
 		// ok... if that is a remote object, can we still use local access instead?
 		if(!altPath.empty() && rex::FILE_SOLID == ftype)
@@ -575,7 +575,7 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 			return -EIO;
 		}
 	}
-	MYCATCH(std::bad_alloc&)
+	catch(std::bad_alloc&)
 	{
 		return -EIO;
 	}
