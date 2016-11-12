@@ -18,7 +18,7 @@ class job;
 typedef std::shared_ptr<fileitem> tFileItemPtr;
 
 //! Base class containing all required data and methods for communication with the download sources
-class fileitem: public base_with_condition
+class fileitem
 {
 	friend class fileitem_with_storage;
 	friend class job;
@@ -28,17 +28,13 @@ class fileitem: public base_with_condition
 	enum FiStatus : char
 	{
 
-	FIST_FRESH, FIST_INITED, FIST_DLPENDING, FIST_DLGOTHEAD, FIST_DLRECEIVING,
+	FIST_FRESH, FIST_INITIALIZING, FIST_INITED, FIST_DLPENDING, FIST_DLGOTHEAD, FIST_DLRECEIVING,
 	FIST_COMPLETE,
 	// error cases: downloader reports its error or last user told downloader to stop
-	FIST_DLERROR,
-	FIST_DLSTOP // assumed to not have any users left
+	FIST_DLERROR
 	};
 
 	virtual ~fileitem();
-	
-	// initialize file item, return the status
-	virtual FiStatus SetupFromCache(bool bDynType);
 	
 	virtual int GetFileFd();
 	uint64_t GetTransferCount();
@@ -46,25 +42,19 @@ class fileitem: public base_with_condition
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow)=0;
 	
 	// downloader instruments
-	//typedef extended_bool<bool, false> SuccessWithTransErrorFlag;
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 			const char *pNextData,
 			bool bForcedRestart, bool &bDoCleanRestart) =0;
-//	void IncDlRefCount();
-//	void DecDlRefCount(const mstring & sReasonStatusLine);
-	//virtual void SetFailureMode(const mstring & message, FiStatus fist=FIST_ERROR,
-	//	bool bOnlyIfNoDlRunnuning=false);
 	
 	/*!
 	 * \return true IFF ok and caller might continue. False -> caller should abort.
 	 */
 	virtual bool StoreFileData(const char *data, unsigned int size)=0;
-	header const & GetHeaderUnlocked();
 	inline header GetHeader() { setLockGuard; return m_head; }
 	mstring GetHttpMsg();
 	
-	FiStatus GetStatus() { setLockGuard; return m_status; }
-	FiStatus GetStatusUnlocked(off_t &nGoodDataSize) { nGoodDataSize = m_nUsableSizeInCache; return m_status; }
+//	FiStatus GetStatus() { setLockGuard; return m_status; }
+//	FiStatus GetStatusUnlocked(off_t &nGoodDataSize) { nGoodDataSize = m_nUsableSizeInCache; return m_status; }
 	void ResetCacheState();
 
 	//! returns true if complete or DL not started yet but partial file is present and contains requested range and file contents is static
@@ -80,7 +70,7 @@ class fileitem: public base_with_condition
 
 	void UpdateHeadTimestamp();
 
-	uint64_t m_nIncommingCount;
+	std::atomic<uint64_t> m_nIncommingCount;
 	off_t m_nSizeSeenInCache;
 	off_t m_nRangeLimit;
 	
@@ -90,19 +80,25 @@ class fileitem: public base_with_condition
 	// use a flag to avoid extra locking in case of pass-through items
 	bool m_bIsGloballyRegistered = false;
 
+	FiStatus getStatus();
+
 protected:
 	bool m_bAllowStoreData;
 
 	fileitem();
+
+	// initialize file item, return the status
+	virtual FiStatus SetupFromCache(bool bDynType);
+
+  // policy: only increasing value; read any time, write before FIST_INITED by creating thread, after by first assigned downloader thread
+	atomic<FiStatus> m_status {FIST_FRESH};
+
 	off_t m_nUsableSizeInCache;
 	header m_head;
 	int m_filefd;
-//	int m_nDlRefsCount;
-//	int usercount;
-	FiStatus m_status;
-	mstring m_sPathRel;
-	time_t m_nTimeDlStarted; //, m_nTimeDlDone;
 
+  // policy: assign in ctor, change, reset never
+	mstring m_sPathRel;
 };
 
 // dl item implementation with storage on disk, can be shared among users
@@ -125,9 +121,11 @@ public:
 
 	/** Returns a (optionally new) globally registered item. If existingFi is supplied, that one will be registered.
 	 * If one is supplied but another exists, a false pointer is returned.
+	 *
+	 * If create is needed, bDynType will be passed to the SetupFromStorage call
 	 */
 	static tFileItemPtr CreateRegistered(cmstring& sPathRel,
-			const tFileItemPtr& existingFi = tFileItemPtr());
+			const tFileItemPtr& existingFi = tFileItemPtr(), bool &created4caller);
 	fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
 
 	// attempt to unregister a global item but only if it's unused

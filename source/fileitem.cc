@@ -53,7 +53,6 @@ fileitem::fileitem() :
 	m_bAllowStoreData(true),
 	m_nUsableSizeInCache(0),
 	m_filefd(-1),
-	m_status(FIST_FRESH),
 	m_nTimeDlStarted(0)
 {
 }
@@ -144,10 +143,10 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 
 	setLockGuard;
 
-	if(m_status>FIST_FRESH)
+	if(m_status>=FIST_INITED)
 		return m_status;
 
-	m_status=FIST_INITED;
+	m_status=FIST_INITIALIZING;
 	m_bCheckFreshness = bCheckFreshness;
 	
 	cmstring sPathAbs(CACHE_BASE+m_sPathRel);
@@ -716,7 +715,7 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 }
 
 tFileItemPtr fileitem_with_storage::CreateRegistered(cmstring& sPathUnescaped,
-		const tFileItemPtr& existingFi)
+		const tFileItemPtr& existingFi, bool &created4caller)
 {
 	mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
 	tFileItemPtr ret;
@@ -732,6 +731,15 @@ tFileItemPtr fileitem_with_storage::CreateRegistered(cmstring& sPathUnescaped,
 		EMPLACE_PAIR_COMPAT(g_sharedItems, sPathRel, ret);
 		ret->m_bIsGloballyRegistered = true;
 	}
+
+#if 0
+	if(ret && ret->status.load() == FIST_FRESH)
+	{
+		ret->status.store(FIST_INITIALIZING);
+		ret->SetupFromCache(bDynType);
+		ret->status.store(FIST_INITED);
+	}
+#endif
 	return ret;
 }
 
