@@ -1,11 +1,10 @@
-
 #ifndef _JOB_H
 #define _JOB_H
 
 #include "config.h"
 #include "header.h"
 #include "acbuf.h"
-#include <sys/types.h>
+#include <sys/types.h> // XXX: why?
 #include "fileitem.h"
 #include "maintenance.h"
 
@@ -14,89 +13,110 @@ namespace acng
 
 class conn;
 
-class job {
+class job
+{
+	friend class conn;
 
+	enum : char
+		{
+			XSTATE_FINISHED = 0, // processing finished
+// pointless				R_AGAIN = 1, // short loop, just restart SendData loop to do some work
+		XSTATE_DISCON,
+		XSTATE_WAIT_DL,		// reenter SendData when something received from downloader
+		XSTATE_CAN_SEND		// can send right away, no trigger needed
+	} m_stateExternal = XSTATE_CAN_SEND;
 
-   public:
+	enum
+		: char
+		{
+			STATE_WAIT_DL_START,
+		STATE_SEND_MAIN_HEAD,
+		STATE_HEADER_SENT,
+		STATE_SEND_PLAIN_DATA,
+		STATE_SEND_CHUNK_HEADER,
+		STATE_SEND_CHUNK_DATA,
+		STATE_TODISCON,
+		STATE_ALLDONE,
+		STATE_ERRORCONT,
+		STATE_FINISHJOB,
+		STATE_INTERRUPT_LIMITED_DL,
 
-	   typedef enum : char
+// temp. states
+		STATE_SEND_BUFFER
+	,STATE_CHECK_DL_PROGRESS
+	,STATE_FATAL_ERROR
+	} m_stateInternal = STATE_WAIT_DL_START, m_stateBackSend = STATE_FATAL_ERROR;
+
+	enum : char
 	{
-		R_DONE = 0, // processing finished
-				R_AGAIN = 1, // short loop, just restart SendData loop to do some work
-				R_DISCON = 2,
-				R_WAITDL = 4 // reenter SendData when something happened with downloader
+DLSTATE_NOTNEEDED, // shortcut, tell checks to skip downloader observation
+DLSTATE_OUR, DLSTATE_OTHER
+	} m_eDlType = DLSTATE_OUR;
 
-	} eJobResult;
+	job(header *h, conn& pParent);
+	~job();
+	//  __attribute__((externally_visible))
 
-	   typedef enum : char {
-	   	STATE_SEND_MAIN_HEAD,
-	   	STATE_HEADER_SENT,
-	   	STATE_SEND_PLAIN_DATA,
-	   	STATE_SEND_CHUNK_HEADER,
-	   	STATE_SEND_CHUNK_DATA,
-	   	STATE_TODISCON,
-	   	STATE_ALLDONE,
-	   	STATE_SEND_BUFFER,
-	   	STATE_ERRORCONT,
-	   	STATE_FINISHJOB
-	   } eJobState;
+	void PrepareDownload(LPCSTR headBuf);
 
-      job(header *h, conn *pParent);
-      ~job();
-      //  __attribute__((externally_visible))  
-      
-      void PrepareDownload(LPCSTR headBuf);
+	/*
+	 * Start or continue returning the file.
+	 */
+	void SendData(int confd);
 
-      /*
-       * Start or continue returning the file.
-       */
-      eJobResult SendData(int confd);
-  
-   private:
-      
-	  int m_filefd;
-	  conn *m_pParentCon;
-      
-      bool m_bChunkMode;
-      bool m_bClientWants2Close;
-      bool m_bIsHttp11;
-      bool m_bNoDownloadStarted;
-      
-      eJobState m_state, m_backstate;
-      
-      tSS m_sendbuf;
-      mstring m_sFileLoc; // local_relative_path_to_file
-      tSpecialRequest::eMaintWorkType m_eMaintWorkType = tSpecialRequest::workNotSpecial;
-      mstring m_sOrigUrl; // local SAFE copy of the originating source
-      
-      header *m_pReqHead; // copy of users requests header
+	int m_filefd = -1;
+	conn &m_parent;
 
-      tFileItemPtr m_pItem;
-      off_t m_nSendPos, m_nCurrentRangeLast;
-      off_t m_nAllDataCount;
-      
-      unsigned long m_nChunkRemainingBytes;
-      rex::eMatchType m_type;
-      
-      job(const job&);
-      job & operator=(const job&);
+	bool m_bChunkMode = false;
+	bool m_bClientWants2Close = false;
+	bool m_bIsHttp11 = false;
 
-      const char * BuildAndEnqueHeader(const fileitem::FiStatus &fistate, const off_t &nGooddataSize, header& respHead);
-      fileitem::FiStatus _SwitchToPtItem();
-      void SetErrorResponse(const char * errorLine, const char *szLocation=nullptr, const char *bodytext=nullptr);
-      void SetupFileServing(const mstring &visPath,
-    			const mstring &fsBase, const mstring &fsSubpath);
+//	eJobState m_state = STATE_WAIT_DL_START, m_backstate = STATE_SEND_MAIN_HEAD; // current state, and state to return after temporary states
 
-      bool ParseRange();
+	tSS m_sendbuf;
+	mstring m_sFileLoc; // local_relative_path_to_file
+	tSpecialRequest::eMaintWorkType m_eMaintWorkType =
+			tSpecialRequest::workNotSpecial;
+	mstring m_sOrigUrl; // local SAFE copy of the originating source
 
-      off_t m_nReqRangeFrom, m_nReqRangeTo;
+	header *m_pReqHead = 0; // copy of users requests header
+
+	tFileItemPtr m_pItem;
+
+#warning move to scratch area in parent but with reset function
+	off_t m_nSendPos = 0, // where the reader is
+			m_nConfirmedSizeSoFar = 0, // what dler allows to send so far
+			m_nFileSendLimit = (MAX_VAL(off_t) - 1); // special limit, abort transmission there
+#warning fixme, m_nFileSendLimit is last byte of the byte after?
+
+	off_t m_nAllDataCount = 0;
+
+	unsigned long m_nChunkRemainingBytes = 0;
+	rex::eMatchType m_type = rex::FILE_INVALID;
+
+	job(const job&);
+	job & operator=(const job&);
+
+	const char * BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
+			const off_t &nGooddataSize, header& respHead);
+	fileitem::FiStatus _SwitchToPtItem();
+	void SetErrorResponse(const char * errorLine, const char *szLocation =
+			nullptr, const char *bodytext = nullptr);
+	void SetupFileServing(const mstring &visPath, const mstring &fsBase,
+			const mstring &fsSubpath);
+
+	bool ParseRange();
+
+	off_t m_nReqRangeFrom = -1, m_nReqRangeTo = -1;
 };
 
-
-class tTraceData: public tStrSet, public base_with_mutex {
-public:
-	static tTraceData& getInstance();
-};
+/*
+ #warning wtf?
+ class tTraceData: public tStrSet, public base_with_mutex {
+ public:
+ static tTraceData& getInstance();
+ };
+ */
 
 }
 

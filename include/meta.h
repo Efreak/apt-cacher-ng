@@ -328,6 +328,7 @@ off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeStri
 void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar);
 
 extern cmstring sEmptyString;
+static cmstring sHead = ".head";
 
 //! iterator-like helper for string splitting, for convenient use with for-loops
 class tSplitWalk
@@ -446,10 +447,12 @@ typedef std::deque<std::pair<std::string, std::string>> tLPS;
 bool scaseequals(cmstring& a, cmstring& b);
 
 // dirty little RAII helper
-struct tDtorEx {
+struct tDtorExec
+{
 	std::function<void(void)> _action;
-	inline tDtorEx(decltype(_action) action) : _action(action) {}
-	inline ~tDtorEx() { _action(); }
+	inline tDtorExec(decltype(_action) action) : _action(action) {}
+	inline ~tDtorExec() { _action(); }
+	inline void defuse() { _action = decltype(_action)(); }
 };
 
 // from bgtask.cc

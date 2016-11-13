@@ -11,22 +11,22 @@ typedef std::mutex acmutex;
 
 struct base_with_mutex
 {
-	std::mutex m_obj_mutex;
+	acmutex m_obj_mutex;
 };
 
 // little adapter for more convenient use
 struct lockguard {
-	std::lock_guard<std::mutex> _guard;
-	lockguard(std::mutex& mx) : _guard(mx) {}
-	lockguard(std::mutex* mx) : _guard(*mx) {}
+	std::lock_guard<acmutex> _guard;
+	lockguard(acmutex& mx) : _guard(mx) {}
+	lockguard(acmutex* mx) : _guard(*mx) {}
 	lockguard(base_with_mutex& mbase) : _guard(mbase.m_obj_mutex) {}
 	lockguard(base_with_mutex* mbase) : _guard(mbase->m_obj_mutex) {}
 	lockguard(std::shared_ptr<base_with_mutex> mbase) : _guard(mbase->m_obj_mutex) {}
 };
 
 struct lockuniq {
-	std::unique_lock<std::mutex> _guard;
-	lockuniq(std::mutex& mx) : _guard(mx) {}
+	std::unique_lock<acmutex> _guard;
+	lockuniq(acmutex& mx) : _guard(mx) {}
 	lockuniq(base_with_mutex& mbase) : _guard(mbase.m_obj_mutex) {}
 	lockuniq(base_with_mutex* mbase) : _guard(mbase->m_obj_mutex) {}
 	lockuniq(std::shared_ptr<base_with_mutex> mbase) : _guard(mbase->m_obj_mutex) {}
@@ -44,7 +44,7 @@ struct base_with_condition : public base_with_mutex
 	bool wait_for(lockuniq& uli, long secs, long msec);
 };
 
-#define setLockGuard std::lock_guard<std::mutex> local_helper_lockguard(m_obj_mutex);
+#define setLockGuard std::lock_guard<acmutex> local_helper_lockguard(m_obj_mutex);
 
 }
 

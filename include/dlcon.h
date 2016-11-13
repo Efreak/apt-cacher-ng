@@ -70,6 +70,7 @@ class dlcon
         		allDone = 0, needRecv = 1, needSend = 2,
 				needConnect = 4, // there is some connection-related work to do
 				fatalError = 8,
+#warning fixme, shorcut missleading
 				needActivity = 1 + 2 + 4 // shortcut for all IO related hints
         	};
         	int flags; // one or multiple ORed from above
@@ -86,10 +87,12 @@ class dlcon
         		cmstring *sPatSuffix, LPCSTR reqHead,
 				int nMaxRedirection);
 
+	// take final metadata from a finished job and finally retire it
+	void DisposeJob(const tFileItemPtr& refFitem, off_t &nSent, off_t &nReceived);
         mstring m_sXForwardedFor;
 
-        //! Returns true if the file is currently being downloaded by this thread
-        bool IsCurrentDownload(const tFileItemPtr &fiptr);
+        //! Returns true the file is or probably will be downloaded by this thread
+        bool IsCommingDownload(const tFileItemPtr &fiptr);
     private:
 
     	//not to be copied
@@ -98,7 +101,7 @@ class dlcon
     	
     	friend struct tDlJob;
     	
-    	tDljQueue m_qNewjobs;
+    	tDljQueue m_qNewjobs, m_qFinishedJobs;
     	IDlConFactory* m_pConFactory;
 
     	/// blacklist for permanently failing hosts, with error message

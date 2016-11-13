@@ -186,7 +186,7 @@ void tSpecOpDetachable::Run()
 			 *****************************************************/
 			lockuniq g(&g_StateCv);
 			g_sigTaskAbort=false;
-			tDtorEx cleaner([&](){g.reLockSafe(); nBgTimestamp = 0; g_StateCv.notifyAll();});
+			tDtorExec cleaner([&](){g.reLockSafe(); nBgTimestamp = 0; g_StateCv.notifyAll();});
 			g.unLock();
 
 			SendFmt << "Maintenance task <b>" << GetTaskName()

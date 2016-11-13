@@ -20,7 +20,8 @@
 
 using namespace std;
 
-#warning mutex base nur fuer filesotreage
+#warning FIXME: subscriptions, eventfd cache
+
 namespace acng
 {
 #define MAXTEMPDELAY acng::cfg::maxtempdelay // 27
@@ -30,11 +31,12 @@ typedef std::unordered_multimap<mstring, std::weak_ptr<fileitem> > tFiGlobMap;
 
 static tFiGlobMap g_sharedItems;
 static acmutex g_sharedItemsMx;
-
+/*
 header const & fileitem::GetHeaderUnlocked()
 {
 	return m_head;
 }
+
 
 string fileitem::GetHttpMsg()
 {
@@ -43,17 +45,18 @@ string fileitem::GetHttpMsg()
 		return m_head.frontLine.substr(9);
 	return m_head.frontLine;
 }
+*/
 
 fileitem::fileitem() :
-	m_nIncommingCount(0),
+//	m_nIncommingCount(0),
 	m_nSizeSeenInCache(0),
 	m_nRangeLimit(-1),
 	m_bCheckFreshness(true),
 	m_bHeadOnly(false),
 	m_bAllowStoreData(true),
-	m_nUsableSizeInCache(0),
-	m_filefd(-1),
-	m_nTimeDlStarted(0)
+	m_nCheckedSize(0),
+	m_filefd(-1)
+//	m_nTimeDlStarted(0)
 {
 }
 
@@ -96,6 +99,7 @@ void fileitem::DecDlRefCount(const string &sReason)
 }
 #endif
 
+/*
 uint64_t fileitem::GetTransferCount()
 {
 	setLockGuard;
@@ -103,10 +107,17 @@ uint64_t fileitem::GetTransferCount()
 	m_nIncommingCount=0;
 	return ret;
 }
+*/
 
 int fileitem::GetFileFd() {
 	LOGSTART("fileitem::GetFileFd");
-	setLockGuard;
+
+	// sufficient checks
+	if(m_status < FIST_DLRECEIVING || m_status > FIST_COMPLETE)
+		return -1;
+	auto hintSize = m_nCheckedSize;
+	if(m_status < FIST_DLRECEIVING || m_status > FIST_COMPLETE)
+		return -1;
 
 	ldbg("Opening " << m_sPathRel);
 	int fd=open(SZABSPATH(m_sPathRel), O_RDONLY);
@@ -114,7 +125,7 @@ int fileitem::GetFileFd() {
 #ifdef HAVE_FADVISE
 	// optional, experimental
 	if(fd>=0)
-		posix_fadvise(fd, 0, m_nUsableSizeInCache, POSIX_FADV_SEQUENTIAL);
+		posix_fadvise(fd, 0, hintSize, POSIX_FADV_SEQUENTIAL);
 #endif
 
 	return fd;
@@ -126,7 +137,7 @@ off_t GetFileSize(cmstring & path, off_t defret)
 	return (0==::stat(path.c_str(), &stbuf)) ? stbuf.st_size : defret;
 }
 
-
+/*
 void fileitem::ResetCacheState()
 {
 	setLockGuard;
@@ -136,17 +147,17 @@ void fileitem::ResetCacheState()
 	m_bAllowStoreData = true;
 	m_head.clear();
 }
+*/
 
 fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 {
 	LOGSTART2("fileitem::Setup", bCheckFreshness);
 
-	setLockGuard;
+	auto xpected = FIST_FRESH;
+	auto ourTurn = m_status.compare_exchange_strong(xpected, FIST_INITIALIZING);
+	if(!ourTurn)
+		return xpected;
 
-	if(m_status>=FIST_INITED)
-		return m_status;
-
-	m_status=FIST_INITIALIZING;
 	m_bCheckFreshness = bCheckFreshness;
 	
 	cmstring sPathAbs(CACHE_BASE+m_sPathRel);
@@ -191,7 +202,7 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 
 				LOG("Content-Length has a sane range");
 				
-				m_nUsableSizeInCache = m_nSizeSeenInCache;
+				m_nCheckedSize = m_nSizeSeenInCache;
 
 				// is it complete? and 0 value also looks weird, try to verify later
 				if(m_nSizeSeenInCache == nContLen && nContLen>0)
@@ -200,7 +211,7 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 			else
 			{
 				// no content length known, assume it's ok
-				m_nUsableSizeInCache=m_nSizeSeenInCache;
+				m_nCheckedSize=m_nSizeSeenInCache;
 			}
 		}
 	}
@@ -212,16 +223,18 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 			m_nSizeSeenInCache=GetFileSize(sPathAbs, 0);
 	}
 	LOG("resulting status: " << (int) m_status);
+	m_status = FIST_INITED;
 	return m_status;
 
 	error_clean:
-			::unlink((sPathAbs+".head").c_str());
-			m_head.clear();
-			m_nSizeSeenInCache=0;
-			m_status=FIST_INITED;
-			return m_status; // unuseable, to be redownloaded
+		::unlink((sPathAbs+".head").c_str());
+		m_head.clear();
+		m_nSizeSeenInCache=0;
+		m_status=FIST_INITED;
+		return m_status; // unuseable, to be redownloaded
 }
 
+/*
 bool fileitem::CheckUsableRange_unlocked(off_t nRangeLastByte)
 {
 	if(m_status == FIST_COMPLETE)
@@ -236,7 +249,8 @@ bool fileitem::CheckUsableRange_unlocked(off_t nRangeLastByte)
 			&& m_nSizeSeenInCache>0 && nRangeLastByte >=0 && nRangeLastByte <m_nSizeSeenInCache
 			&& atoofft(m_head.h[header::CONTENT_LENGTH], -255) > nRangeLastByte);
 }
-
+*/
+#if 0
 bool fileitem::SetupClean(bool bForce)
 {
 	setLockGuard;
@@ -275,11 +289,12 @@ bool fileitem::SetupClean(bool bForce)
 //	if(0==stat(sPathHead.c_str(), &stf) && stf.st_size >0)
 //		return false; // that's weird too, header still exists with real size
 	m_head.clear();
-	m_nSizeSeenInCache=m_nUsableSizeInCache=0;
+	m_nSizeSeenInCache=m_nCheckedSize=0;
 
 	return true;
 }
-
+#endif
+/*
 void fileitem::SetupComplete()
 {
 	setLockGuard;
@@ -287,14 +302,15 @@ void fileitem::SetupComplete()
 	m_nUsableSizeInCache = m_nSizeSeenInCache;
 	m_status = FIST_COMPLETE;
 }
+*/
 
 void fileitem::UpdateHeadTimestamp()
 {
-	if(m_sPathRel.empty())
+	if(m_status < FIST_DLGOTHEAD || m_status > FIST_COMPLETE || m_sPathRel.empty())
 		return;
-	utimes(SZABSPATH(m_sPathRel + ".head"), nullptr);
+	utimes(SZABSPATHSFX(m_sPathRel, sHead), nullptr);
 }
-
+/*
 fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)
 {
 	lockuniq g(this);
@@ -304,7 +320,7 @@ fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)
 		*httpCode=m_head.getStatus();
 	return m_status;
 }
-
+*/
 inline void _LogWithErrno(const char *msg, const string & sFile)
 {
 	tErrnoFmter f;
@@ -316,51 +332,28 @@ inline void _LogWithErrno(const char *msg, const string & sFile)
 
 bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 		const char *pNextData,
-		bool bForcedRestart, bool &bDoCleanRetry)
+		bool bRestartResume, bool &bDoCleanRetry)
 {
 	LOGSTART("fileitem::DownloadStartedStoreHeader");
-	auto SETERROR = [&](LPCSTR x) {
+	auto SETERROR = [this](LPCSTR x) {
 		m_bAllowStoreData=false;
-		m_head.frontLine=mstring("HTTP/1.1 ")+x;
-		m_head.set(header::XORIG, h.h[header::XORIG]);
-	    m_status=FIST_DLERROR;
+		{
+			lockguard g(m_mx);
+			m_head.frontLine=mstring("HTTP/1.1 ")+x;
+			m_head.set(header::XORIG, h.h[header::XORIG]);
+		}
+		m_status=FIST_DLERROR;
 		_LogWithErrno(x, m_sPathRel);
 	};
 
-	auto withError = [&](LPCSTR x) {
+	auto withError = [this](LPCSTR x) {
 		SETERROR(x);
 		return false;
 	};
-
-	setLockGuard;
-
-	USRDBG( "Download started, storeHeader for " << m_sPathRel << ", current status: " << (int) m_status);
-	
-	if(m_status >= FIST_COMPLETE)
-	{
-		USRDBG( "Download was completed or aborted, not restarting before expiration");
-		return false;
-	}
-
-	// conflict with another thread's download attempt? Deny, except for a forced restart
-	if (m_status > FIST_DLPENDING && !bForcedRestart)
-		return false;
-	
-	if(m_bCheckFreshness)
-		m_nTimeDlStarted = GetTime();
-
-	m_nIncommingCount+=hDataLen;
-
-	// optional optimization: hints for the filesystem resp. kernel
-	off_t hint_start(0), hint_length(0);
-	
-	// status will change, most likely... ie. return withError action
-	notifyAll();
-
 	cmstring sPathAbs(CACHE_BASE+m_sPathRel);
 	string sHeadPath=sPathAbs + ".head";
 
-	auto withErrorAndKillFile = [&](LPCSTR x)
+	auto withErrorAndKillFile = [this](LPCSTR x)
 	{
 		SETERROR(x);
 		if(m_filefd>=0)
@@ -379,25 +372,53 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		return false;
 	};
 
-	int serverStatus = h.getStatus();
-#if 0
-#warning FIXME
-	static UINT fc=1;
-	if(!(++fc % 4))
+	USRDBG( "Download started, storeHeader for " << m_sPathRel << ", current status: " << (int) m_status);
+
+	// always news for someone, even lost the race
+	tDtorExec _notifier([this]() {notifyObservers();});
+
+	// legal "transitions"
+	// normally from inited to assigned
+	// for hot restart and volatile:
+
+	bool bStateEntered = false;
+	auto xpect = FIST_INITED;
+	if(!bRestartResume)
+		bStateEntered = m_status.compare_exchange_strong(xpect, FIST_DLASSIGNED);
+	else if(m_bCheckFreshness) // can only resume from assigned, anything else would be crap
 	{
-		serverStatus = 416;
+		if(m_nCheckedSize != 0)
+			return false; // just to be sure, don't report bad data in any case
+		xpect = FIST_DLASSIGNED;
+		bStateEntered = m_status.compare_exchange_strong(xpect, FIST_DLASSIGNED);
 	}
-#endif
+	else // non-volatile files...
+	{
+		if(m_status < FIST_DLASSIGNED)
+			bStateEntered = m_status.compare_exchange_strong(xpect, FIST_DLASSIGNED);
+		else
+			bStateEntered = m_status < FIST_COMPLETE;
+		// and will check resumed position below
+	}
+	if(!bStateEntered)
+		return false;
+
+	// optional optimisation: hints for the filesystem resp. kernel
+	off_t hint_start(0), hint_length(0);
+	
+	lockguard g(m_mx);
+
+	int serverStatus = h.getStatus();
 	switch(serverStatus)
 	{
 	case 200:
 	{
 		if(m_status < FIST_DLGOTHEAD)
-			bForcedRestart = false; // behave normally, set all data
+			bRestartResume = false; // behave normally, set all data
 
-		if (bForcedRestart)
+		if (bRestartResume)
 		{
-			if (m_nUsableSizeInCache != 0)
+			if (m_nCheckedSize != 0)
 			{
 				/* shouldn't be here, server should have resumed at the previous position.
 				 * Most likely the remote file was modified after the download started.
@@ -414,7 +435,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		}
 		else
 		{
-			m_nUsableSizeInCache=0;
+			m_nCheckedSize=0;
 			m_head=h;
 		}
 		hint_length=atoofft(h.h[header::CONTENT_LENGTH], 0);
@@ -453,7 +474,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 			return withError("500 Server reports unexpected range");
 		}
 
-		m_nUsableSizeInCache=myfrom;
+		m_nCheckedSize=myfrom;
 		
 		hint_start=myfrom;
 		hint_length=mylen;
@@ -465,16 +486,16 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		m_head.set(header::XORIG, h.h[header::XORIG]);
 
 		// target opened before? close it, will reopen&seek later
-		if (bForcedRestart)
+		if (bRestartResume)
 			checkforceclose(m_filefd);
 
-		// special optimization; if "-1 trick" was used then maybe don't reopen that file for writing later
-		if(m_bCheckFreshness && pNextData && m_nSizeSeenInCache == mylen && m_nUsableSizeInCache == mylen-1)
+		// special optimisation; if "-1 trick" was used then maybe don't reopen that file for writing later
+		if(m_bCheckFreshness && pNextData && m_nSizeSeenInCache == mylen && m_nCheckedSize == mylen-1)
 		{
 			int fd=open(sPathAbs.c_str(), O_RDONLY);
 			if(fd>=0)
 			{
-				if(m_nUsableSizeInCache==lseek(fd, m_nUsableSizeInCache, SEEK_SET))
+				if(m_nCheckedSize==lseek(fd, m_nCheckedSize, SEEK_SET))
 				{
 					char c;
 					if(1 == read(fd, &c, 1) && c == *pNextData)
@@ -482,7 +503,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 						if(cfg::debug & log::LOG_DEBUG)
 							log::err(tSS() << "known data hit, don't write to: "<< m_sPathRel);
 						m_bAllowStoreData=false;
-						m_nUsableSizeInCache=mylen;
+						m_nCheckedSize=mylen;
 					}
 				}
 				// XXX: optimize that, open as RW if possible and keep the file open for writing
@@ -495,11 +516,12 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		// that's bad; it cannot have been completed before (the -1 trick)
 		// however, proxy servers with v3r4 cl3v3r caching strategy can cause that
 		// if if-mo-since is used and they don't like it, so attempt a retry in this case
-		if(m_nUsableSizeInCache == 0)
+		if(m_nCheckedSize == 0)
 		{
 			USRDBG( "Peer denied to resume previous download (transient error) " << m_sPathRel );
 			m_nSizeSeenInCache = 0;
 			bDoCleanRetry=true;
+			_notifier.defuse();
 			return false;
 		}
 		else
@@ -514,7 +536,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		m_head.type=header::ANSWER;
 		m_head.copy(h, header::XORIG);
 		m_head.copy(h, header::LOCATION);
-		if(bForcedRestart)
+		if(bRestartResume)
 		{
 			// got an error from the replacement mirror? cannot handle it properly
 			// because some job might already have started returning the data
@@ -556,7 +578,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		// self-recovery from cache poisoned with files with wrong permissions
 		if (m_filefd<0)
 		{
-			if(m_nUsableSizeInCache>0) // OOOH CRAP! CANNOT APPEND HERE! Do what's still possible.
+			if(m_nCheckedSize>0) // OOOH CRAP! CANNOT APPEND HERE! Do what's still possible.
 			{
 				string temp=sPathAbs+".tmp";
 				if(FileCopy(sPathAbs, temp) && 0==unlink(sPathAbs.c_str()) )
@@ -600,9 +622,9 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		auto tempLock = TFileShrinkGuard::Acquire(stbuf);
 		
 		// crop, but only if the new size is smaller. MUST NEVER become larger (would fill with zeros)
-		if(m_nUsableSizeInCache <= m_nSizeSeenInCache)
+		if(m_nCheckedSize <= m_nSizeSeenInCache)
 		{
-			if(0==ftruncate(m_filefd, m_nUsableSizeInCache))
+			if(0==ftruncate(m_filefd, m_nCheckedSize))
       {
 #if ( (_POSIX_C_SOURCE >= 199309L || _XOPEN_SOURCE >= 500) && _POSIX_SYNCHRONIZED_IO > 0)
 				fdatasync(m_filefd);
@@ -611,7 +633,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 			else
 				return withErrorAndKillFile("503 Cannot change file size");
 		}
-		else if(m_nUsableSizeInCache>m_nSizeSeenInCache) // should never happen and caught by the checks above
+		else if(m_nCheckedSize>m_nSizeSeenInCache) // should never happen and caught by the checks above
 			return withErrorAndKillFile("503 Internal error on size checking");
 		// else... nothing to fix since the expectation==reality
 
@@ -631,10 +653,10 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 					? "503 Cache storage error" : "503 OUT OF DISK SPACE"));
 			
 		// double-check the sane state
-		if(0!=fstat(m_filefd, &stbuf) || stbuf.st_size!=m_nUsableSizeInCache)
+		if(0!=fstat(m_filefd, &stbuf) || stbuf.st_size!=m_nCheckedSize)
 			return withErrorAndKillFile("503 Inconsistent file state");
 			
-		if(m_nUsableSizeInCache!=lseek(m_filefd, m_nUsableSizeInCache, SEEK_SET))
+		if(m_nCheckedSize!=lseek(m_filefd, m_nCheckedSize, SEEK_SET))
 			return withErrorAndKillFile("503 IO error, positioning");
 	}
 	
@@ -644,40 +666,26 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 
 bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 {
-	setLockGuard;
-
 	LOGSTART2("fileitem::StoreFileData", "status: " <<  (int) m_status << ", size: " << size);
 
-	// something might care, most likely... also about BOUNCE action
-	notifyAll();
-
-	m_nIncommingCount+=size;
-	
-	if(m_status > FIST_COMPLETE || m_status < FIST_DLGOTHEAD)
-	{
-		ldbg("StoreFileData rejected, status: " << (int) m_status)
+	if(m_status < FIST_DLGOTHEAD || m_status > FIST_DLRECEIVING)
 		return false;
-	}
 	
 	if (size==0)
 	{
-		if(FIST_COMPLETE == m_status)
-		{
-			LOG("already completed");
-		}
-		else
-		{
-			m_status = FIST_COMPLETE;
+		m_status = FIST_COMPLETE;
 
-			if (cfg::debug & log::LOG_MORE)
-				log::misc(tSS() << "Download of " << m_sPathRel << " finished");
+		if (cfg::debug & log::LOG_MORE)
+			log::misc(tSS() << "Download of " << m_sPathRel << " finished");
 
-			// we are done! Fix header from chunked transfers?
-			if (m_filefd >= 0 && !m_head.h[header::CONTENT_LENGTH])
+		// we are done! Fix header from chunked transfers?
+		if (m_filefd >= 0 && !m_head.h[header::CONTENT_LENGTH])
+		{
 			{
-				m_head.set(header::CONTENT_LENGTH, m_nUsableSizeInCache);
-				m_head.StoreToFile(SZABSPATHSFX(m_sPathRel, ".head"));
+				lockguard g(m_mx);
+				m_head.set(header::CONTENT_LENGTH, m_nCheckedSize);
 			}
+			m_head.StoreToFile(SZABSPATHSFX(m_sPathRel, sHead));
 		}
 	}
 	else
@@ -693,14 +701,17 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 				{
 					if(EINTR==errno || EAGAIN==errno)
 						continue;
+
 					tErrnoFmter efmt("HTTP/1.1 503 ");
+					lockguard g(m_mx);
 					m_head.frontLine = efmt;
 					m_status=FIST_DLERROR;
 					// message will be set by the caller
 					_LogWithErrno(efmt.c_str(), m_sPathRel);
+					notifyObservers();
 					return false;
 				}
-				m_nUsableSizeInCache += r;
+				m_nCheckedSize += r;
 				size-=r;
 				data+=r;
 			}
@@ -708,9 +719,9 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 	}
 
 	// needs to remember the good size, just in case the DL is resumed (restarted in hot state)
-	if(m_nSizeSeenInCache < m_nUsableSizeInCache)
-		m_nSizeSeenInCache = m_nUsableSizeInCache;
-
+	if(m_nSizeSeenInCache < m_nCheckedSize)
+		m_nSizeSeenInCache = m_nCheckedSize;
+	notifyObservers();
 	return true;
 }
 
@@ -719,27 +730,23 @@ tFileItemPtr fileitem_with_storage::CreateRegistered(cmstring& sPathUnescaped,
 {
 	mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
 	tFileItemPtr ret;
-	lockguard g(g_sharedItemsMx);
-	auto itWeak = g_sharedItems.find(sPathRel);
-	if(itWeak != g_sharedItems.end())
-		ret = itWeak->second.lock();
-	if(ret && existingFi && ret != existingFi) // conflict, report failure
-		return tFileItemPtr();
-	if(!ret)
+	created4caller = false;
 	{
-		ret = std::make_shared<fileitem_with_storage>(sPathRel);
-		EMPLACE_PAIR_COMPAT(g_sharedItems, sPathRel, ret);
-		ret->m_bIsGloballyRegistered = true;
+		lockguard g(g_sharedItemsMx);
+#warning also do house keeping in the stickyItemCache prio-q
+		auto itWeak = g_sharedItems.find(sPathRel);
+		if(itWeak != g_sharedItems.end())
+			ret = itWeak->second.lock();
+		if(ret && existingFi && ret != existingFi) // conflict, report failure
+			return tFileItemPtr();
+		if(!ret)
+		{
+			ret = std::make_shared<fileitem_with_storage>(sPathRel);
+			EMPLACE_PAIR_COMPAT(g_sharedItems, sPathRel, ret);
+			ret->m_bIsGloballyRegistered = true;
+			created4caller = true;
+		}
 	}
-
-#if 0
-	if(ret && ret->status.load() == FIST_FRESH)
-	{
-		ret->status.store(FIST_INITIALIZING);
-		ret->SetupFromCache(bDynType);
-		ret->status.store(FIST_INITED);
-	}
-#endif
 	return ret;
 }
 
@@ -756,7 +763,8 @@ bool fileitem_with_storage::TryDispose(tFileItemPtr& existingFi)
 		return false;
 	// can do this without looking because no other thread can start sending data ATM
 	g_sharedItems.erase(it);
-	sptr->m_status = FIST_DLSTOP;
+	// nothing should be reading it anymore
+	sptr->m_status = FIST_DLERROR;
 	checkforceclose(sptr->m_filefd);
 	return true;
 }
@@ -990,7 +998,7 @@ void fileItemMgmt::dump_status()
 					<< "\n\tState: " << (int)  item.second->m_status
 					<< "\n\tFilePos: " << item.second->m_nIncommingCount << " , "
 					<< item.second->m_nRangeLimit << " , "
-					<< item.second->m_nUsableSizeInCache << " , "
+					<< item.second->m_nCheckedSize << " , "
 					<< item.second->m_nSizeSeenInCache
 					<< "\n\tGotAt: " << item.second->m_nTimeDlStarted << "\n\n";
 		}
@@ -1027,7 +1035,7 @@ fileitem_with_storage::~fileitem_with_storage()
 // keep a snapshot of that files for later identification of by-hash-named metadata
 int fileitem_with_storage::MoveRelease2Sidestore()
 {
-	if(m_nUsableSizeInCache)
+	if(m_nCheckedSize)
 		return 0;
 	if(!endsWithSzAr(m_sPathRel, "/InRelease") && !endsWithSzAr(m_sPathRel, "/Release"))
 		return 0;

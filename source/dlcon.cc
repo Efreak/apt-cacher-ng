@@ -321,8 +321,7 @@ struct tDlJob
 		{
 			bool bSetRange(false), bSetIfRange(false);
 
-			lockguard g(m_pStorage.get());
-			const header &pHead = m_pStorage->GetHeaderUnlocked();
+			const auto& pHead = m_pStorage->GetHeaderUnlocked();
 
 			if (m_pStorage->m_bCheckFreshness)
 			{
@@ -591,7 +590,7 @@ struct tDlJob
 				{
 					if(bDoRetry)
 						return EFLAG_LOST_CON | HINT_DISCON; // recoverable
-
+#warning must tell caller even if lost the race, or it will wait 4ever
 					ldbg("Item dl'ed by others or in error state --> drop it, reconnect");
 					m_DlState = STATE_PROCESS_DATA;
 					sErrorMsg = "502 Cache descriptor busy";

@@ -69,6 +69,8 @@ class conn // : public tRunable
 
 	void Shutdown();
 
+
+
 #ifdef DEBUG
       unsigned m_nProcessedJobs;
 #endif

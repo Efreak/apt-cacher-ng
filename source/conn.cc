@@ -397,12 +397,12 @@ void conn::WorkLoop() {
 			while (true)
 			{
 				auto sendRes = pjSender->SendData(m_confd);
-				if (sendRes == job::R_DISCON)
+				if (sendRes == job::XSTATE_DISCON)
 				{
 					ldbg("Disconnect advise received, stopping connection");
 					return;
 				}
-				if (sendRes == job::R_DONE)
+				if (sendRes == job::XSTATE_FINISHED)
 				{
 					m_jobs2send.pop_front();
 					delete pjSender;

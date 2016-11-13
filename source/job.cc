@@ -37,6 +37,7 @@ mstring sHttp11("HTTP/1.1");
 #define SPECIAL_FD -42
 inline bool IsValidFD(int fd) { return fd>=0 || SPECIAL_FD == fd; }
 
+/*
 tTraceData traceData;
 void cfg::dump_trace()
 {
@@ -49,7 +50,7 @@ tTraceData& tTraceData::getInstance()
 {
 	return traceData;
 }
-
+*/
 
 /*
  * Unlike the regular store-and-forward file item handler, this ones does not store anything to
@@ -70,11 +71,11 @@ public:
 	{
 		m_sPathRel = s;
 		m_bAllowStoreData=false;
-		m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
+		m_nCheckedSize = m_nSizeSeenInCache = 0;
 	};
 	virtual FiStatus SetupFromCache(bool) override
 	{
-		m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
+		m_nCheckedSize = m_nSizeSeenInCache = 0;
 		return m_status = FIST_INITED;
 	}
 	virtual int GetFileFd() override
@@ -90,7 +91,8 @@ public:
 	{
 		LOGSTART2("tPassThroughFitem::StoreFileData", "status: " << (int) m_status);
 
-		m_nIncommingCount += size;
+#warning fix it too
+//		m_nIncommingCount += size;
 
 		dbgline;
 		if (m_status > fileitem::FIST_COMPLETE || m_status < FIST_DLGOTHEAD)
@@ -102,7 +104,7 @@ public:
 		{
 			dbgline;
 			m_status = FIST_DLRECEIVING;
-			m_nUsableSizeInCache += size;
+			m_nCheckedSize += size;
 			m_pData = data;
 			m_nConsumable=size;
 			m_nConsumed=0;
@@ -120,14 +122,14 @@ public:
 		lockuniq g(this);
 
 		while(0 == m_nConsumable && m_status<=FIST_COMPLETE
-				&& ! (m_nUsableSizeInCache==0 && m_status==FIST_COMPLETE))
+				&& ! (m_nCheckedSize==0 && m_status==FIST_COMPLETE))
 		{
 			return 0; // will get more or block until then
 		}
 		if (m_status >= FIST_DLERROR || !m_pData)
 			return -1;
 
-		if(!m_nUsableSizeInCache)
+		if(!m_nCheckedSize)
 			return 0;
 
 		auto r = write(out_fd, m_pData, min(nMax2SendNow, m_nConsumable));
@@ -182,8 +184,8 @@ public:
 	inline void seal()
 	{
 		// seal the item
-		m_nUsableSizeInCache = m_data.size();
-		m_head.set(header::CONTENT_LENGTH, m_nUsableSizeInCache);
+		m_nCheckedSize = m_data.size();
+		m_head.set(header::CONTENT_LENGTH, m_nCheckedSize);
 	}
 	// never used to store data
 	bool DownloadStartedStoreHeader(const header &, size_t, const char *, bool, bool&)
@@ -193,22 +195,9 @@ public:
 	header & HeadRef() { return m_head; }
 };
 
-job::job(header *h, conn *pParent) :
-	m_filefd(-1),
-	m_pParentCon(pParent),
-	m_bChunkMode(CHUNKDEFAULT),
-	m_bClientWants2Close(false),
-	m_bIsHttp11(false),
-	m_bNoDownloadStarted(false),
-	m_state(STATE_SEND_MAIN_HEAD),
-	m_backstate(STATE_TODISCON),
-	m_pReqHead(h),
-	m_nSendPos(0),
-	m_nCurrentRangeLast(MAX_VAL(off_t)-1),
-	m_nAllDataCount(0),
-	m_nChunkRemainingBytes(0),
-	m_type(rex::FILE_INVALID),
-	m_nReqRangeFrom(-1), m_nReqRangeTo(-1)
+job::job(header *h, conn &pParent) :
+	m_parent(pParent),
+	m_pReqHead(h)
 {
 	LOGSTART2("job::job", "job creating, " << m_pReqHead->frontLine << " and this: " << uintptr_t(this));
 }
@@ -218,18 +207,24 @@ static const string miscError(" [HTTP error, code: ");
 job::~job()
 {
 	LOGSTART("job::~job");
-	int stcode = 200;
-	if(m_pItem) stcode = m_pItem->GetHeader().getStatus();
+	int stcode = 555;
+	if(m_pItem)
+	{
+#warning optimize
+		m_pItem->GetHeaderLocking().getStatus();
+	}
 
 	bool bErr=m_sFileLoc.empty() || stcode >= 400;
 
-	m_pParentCon->LogDataCounts(
+#warning fixme, fetching the counts
+	m_parent.LogDataCounts(
 			m_sFileLoc + (bErr ? (miscError + ltos(stcode) + ']') : sEmptyString),
 			m_pReqHead->h[header::XFORWARDEDFOR],
-			(m_pItem ? m_pItem->GetTransferCount() : 0),
+			(m_pItem ? /* m_pItem->GetTransferCount() */ 0 : 0),
 			m_nAllDataCount, bErr);
 	
 #warning when volatile type and finished download, donate this to a quick life-keeping cache for 33s, see cleaner
+	// fileitem_with_storage::ProlongLife(m_pItem);
 	checkforceclose(m_filefd);
 	delete m_pReqHead;
 }
@@ -397,7 +392,7 @@ inline void job::SetupFileServing(const string &visPath,
 		{
 			m_bAllowStoreData=false;
 			m_status=FIST_COMPLETE;
-			m_nUsableSizeInCache=m_nSizeSeenInCache=stdata.st_size;
+			m_nCheckedSize=m_nSizeSeenInCache=stdata.st_size;
 			m_bCheckFreshness=false;
 			m_head.type=header::ANSWER;
 			m_head.frontLine="HTTP/1.1 200 OK";
@@ -415,7 +410,7 @@ inline void job::SetupFileServing(const string &visPath,
 		#ifdef HAVE_FADVISE
 			// optional, experimental
 			if(fd>=0)
-				posix_fadvise(fd, 0, m_nUsableSizeInCache, POSIX_FADV_SEQUENTIAL);
+				posix_fadvise(fd, 0, m_nCheckedSize, POSIX_FADV_SEQUENTIAL);
 		#endif
 			return fd;
 		}
@@ -583,8 +578,10 @@ void job::PrepareDownload(LPCSTR headBuf)
 
 				// ok, collect some information helpful to the user
 				m_type = FILE_VOLATILE;
-				lockguard g(traceData);
+/*				lockguard g(traceData);
 				traceData.insert(theUrl.sPath);
+
+				*/
 			}
 		}
 
@@ -600,7 +597,8 @@ void job::PrepareDownload(LPCSTR headBuf)
 		bForceFreshnessChecks = (!cfg::offlinemode && m_type == FILE_VOLATILE);
 
 		m_pItem = fileitem_with_storage::CreateRegistered(m_sFileLoc);
-	} catch (std::out_of_range&) // better safe...
+	}
+	catch (std::out_of_range&) // better safe...
 	{
 		goto report_invpath;
 	}
@@ -633,11 +631,12 @@ void job::PrepareDownload(LPCSTR headBuf)
 	if ((m_nReqRangeFrom >= 0 && m_nReqRangeTo >= 0)
 			|| (m_pReqHead->type == header::HEAD && 0 != (m_nReqRangeTo = -1)))
 	{
-		lockguard g(m_pItem);
-		if (m_pItem->CheckUsableRange_unlocked(m_nReqRangeTo))
+		if (m_pItem->m_nCheckedSize >= m_nReqRangeTo)
 		{
-			LOG("Got a partial request for incomplete download; range is available");
-			m_bNoDownloadStarted = true;
+			LOG("Got a partial request for incomplete download but sufficient range is available.");
+			m_stateDler = DLSTATE_NOTNEEDED;
+			m_stateExternal = R_SENDAGAIN;
+			m_stateInternal = STATE_SEND_MAIN_HEAD;
 			return;
 		}
 	}
@@ -648,10 +647,10 @@ void job::PrepareDownload(LPCSTR headBuf)
 		goto report_offlineconf;
 	}
 	dbgline;
-	if (fistate < fileitem::FIST_DLGOTHEAD) // needs a downloader
+	if (fistate < fileitem::FIST_DLASSIGNED) // needs a downloader
 	{
 		dbgline;
-		if (!m_pParentCon->SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
+		if (!m_parent.SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
 		{
 			USRDBG("Error creating download handler for "<<m_sFileLoc);
 			goto report_overload;
@@ -675,12 +674,12 @@ void job::PrepareDownload(LPCSTR headBuf)
 			if (rex::MatchUncacheable(testUri, rex::NOCACHE_TGT))
 				fistate = _SwitchToPtItem();
 
-			if (m_pParentCon->m_pDlClient->AddJob(m_pItem, bHaveRedirects ? nullptr : &theUrl,
+			if (m_parent.m_pDlClient->AddJob(m_pItem, bHaveRedirects ? nullptr : &theUrl,
 					repoMapping.repodata, bHaveRedirects ? &repoMapping.sRestPath : nullptr,
 					nullptr, cfg::redirmax))
 			{
 				ldbg("Download job enqueued for " << m_sFileLoc);
-				m_pParentCon->m_lastDlState.flags |= dlcon::tWorkState::needConnect;
+				m_parent.m_lastDlState.flags |= dlcon::tWorkState::needConnect;
 			}
 			else
 			{
@@ -725,16 +724,16 @@ void job::PrepareDownload(LPCSTR headBuf)
 		m_sFileLoc = theUrl.ToURI(false);
 		ParseRange();
 		_SwitchToPtItem();
-		if (!m_pParentCon->SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
+		if (!m_parent.SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
 		{
 			USRDBG("Error creating download handler for "<<m_sFileLoc);
 			goto report_overload;
 		}
-		if (m_pParentCon->m_pDlClient->AddJob(m_pItem, &theUrl, repoMapping.repodata, nullptr,
+		if (m_parent.m_pDlClient->AddJob(m_pItem, &theUrl, repoMapping.repodata, nullptr,
 				headBuf, cfg::redirmax))
 		{
 			ldbg("Download job enqueued for " << m_sFileLoc);
-			m_pParentCon->m_lastDlState.flags |= dlcon::tWorkState::needConnect;
+			m_parent.m_lastDlState.flags |= dlcon::tWorkState::needConnect;
 		}
 		else
 		{
@@ -748,66 +747,69 @@ void job::PrepareDownload(LPCSTR headBuf)
 	return;
 }
 
-#define THROW_ERROR(x) { if(m_nAllDataCount) return R_DISCON; SetErrorResponse(x); return R_AGAIN; }
-job::eJobResult job::SendData(int confd)
+//#define THROW_ERROR(x) { if(m_nAllDataCount) { m_trigger = R_DISCON; return; }; SetErrorResponse(x); goto start_sending_head; }
+#define THROW_ERROR(x)
+#warning implementme
+
+void job::SendData(int confd)
 {
 	LOGSTART("job::SendData");
+
+	// finish this way if no better state found
+	m_stateExternal = XSTATE_DISCON;
 
 	if(m_eMaintWorkType)
 	{
 		tSpecialRequest::RunMaintWork(m_eMaintWorkType, m_sFileLoc, confd);
-		return R_DISCON; // just stop and close connection
+		return;
 	}
 	
-	off_t nGoodDataSize(0);
+	if(!m_pItem)
+		return;
+
+#if 0
 	fileitem::FiStatus fistate(fileitem::FIST_DLERROR);
 	header respHead; // template of the response header, e.g. as found in cache
 
 	if (confd<0)
-		return R_DISCON; // shouldn't be here
+		return XSTATE_DISCON; // shouldn't get here with any legal path
 
-	if (m_pItem)
+	for(;;)
 	{
-		lockuniq g(m_pItem);
-		
-		for(;;)
+		fistate=m_pItem->GetStatusUnlocked(nGoodDataSize);
+		if (fistate > fileitem::FIST_COMPLETE)
 		{
-			fistate=m_pItem->GetStatusUnlocked(nGoodDataSize);
-			
-			LOG((int) fistate);
-			if (fistate > fileitem::FIST_COMPLETE)
+			const header &h = m_pItem->GetHeaderUnlocked();
+			g.unLock(); // item lock must be released in order to replace it!
+			if(m_nAllDataCount)
+				return XSTATE_DISCON;
+			if(h.h[header::XORIG])
+				m_sOrigUrl=h.h[header::XORIG];
+			// must be something like "HTTP/1.1 403 Forbidden"
+			if(h.frontLine.length()>9 && h.getStatus()!=200)
+				SetErrorResponse(h.frontLine.c_str()+9, h.h[header::LOCATION]);
+			else // good ungood? confused somewhere?!
 			{
-				const header &h = m_pItem->GetHeaderUnlocked();
-				g.unLock(); // item lock must be released in order to replace it!
-				if(m_nAllDataCount)
-					return R_DISCON;
-				if(h.h[header::XORIG])
-					m_sOrigUrl=h.h[header::XORIG];
-				// must be something like "HTTP/1.1 403 Forbidden"
-				if(h.frontLine.length()>9 && h.getStatus()!=200)
-					SetErrorResponse(h.frontLine.c_str()+9, h.h[header::LOCATION]);
-				else // good ungood? confused somewhere?!
-				{
-					ldbg("good ungood, consused?" << h.frontLine)
-					SetErrorResponse("500 Unknown error");
-				}
-				return R_AGAIN; // will send error response and die
+				ldbg("good ungood, consused?" << h.frontLine)
+				SetErrorResponse("500 Unknown error");
 			}
-			/*
-			 * Detect the same special case as above. There is no download agent to change
-			 * the state so no need to wait.
-			*/
-			if(m_bNoDownloadStarted)
-			{
-				fistate = fileitem::FIST_DLRECEIVING;
-				break;
-			}
-			// or wait for the dl source to get data at the position we need to start from
-			LOG("sendstate: " << (int) fistate << " , sendpos: " << m_nSendPos << " from " << nGoodDataSize);
-			if(fistate==fileitem::FIST_COMPLETE || (m_nSendPos < nGoodDataSize && fistate>=fileitem::FIST_DLGOTHEAD))
-				break;
-			
-			ldbg("cannot send more data for " << m_sFileLoc);
+			return R_AGAIN; // will send error response and die
+		}
+		/*
+		 * Detect the same special case as above. There is no download agent to change
+		 * the state so no need to wait.
+		*/
+		if(m_bNoDownloadStarted)
+		{
+			fistate = fileitem::FIST_DLRECEIVING;
+			break;
+		}
+		// or wait for the dl source to get data at the position we need to start from
+		LOG("sendstate: " << (int) fistate << " , sendpos: " << m_nSendPos << " from " << nGoodDataSize);
+		if(fistate==fileitem::FIST_COMPLETE || (m_nSendPos < nGoodDataSize && fistate>=fileitem::FIST_DLGOTHEAD))
+			break;
+
+		ldbg("cannot send more data for " << m_sFileLoc);
 
 #if 0
 			// if this is our downloader, don't block it when it needs our thread cpu time
@@ -826,100 +828,156 @@ job::eJobResult job::SendData(int confd)
 			
 			dbgline;
 		}
-		
-		respHead = m_pItem->GetHeaderUnlocked();
+
+	respHead = m_pItem->GetHeaderUnlocked();
 #warning what for??
-		if(respHead.h[header::XORIG])
-			m_sOrigUrl=respHead.h[header::XORIG];
+	if(respHead.h[header::XORIG])
+		m_sOrigUrl=respHead.h[header::XORIG];
+#endif
 
-	}
-	else if(m_state != STATE_SEND_BUFFER)
-	{
-		ASSERT(!"no FileItem assigned and no sensible way to continue");
-		return R_DISCON;
-	}
+	// fetch the data we need mostly
+#warning move this stuff to a scratch area inside of m_parent (!!)
+	string sErrorMsg;
+	fileitem::FiStatus fistate = fileitem::FIST_FRESH;
+	pthread_t dlThreadId;
+	header respHead;
 
-	for(;;) // left by returning
+	// can avoid data checks when switching around, but only once
+	bool skipFetchState = false;
+
+	while(true) // send initial header, chunk header, etc. in a sequence; eventually left by returning
 	{
+		if(!skipFetchState)
+		{
+			skipFetchState = false;
+
+			fistate = m_pItem->GetStatus(&dlThreadId, &sErrorMsg, &m_nConfirmedSizeSoFar,
+					(m_stateInternal == STATE_SEND_MAIN_HEAD)
+					? &respHead : nullptr);
+		}
+		if(fistate >= fileitem::FIST_DLERROR)
+			THROW_ERROR(sErrorMsg);
+
 		try // for bad_alloc in members
 		{
-			switch(m_state)
+			switch(m_stateInternal)
 			{
+			case(STATE_WAIT_DL_START):
+			{
+				if(m_eDlType == DLSTATE_NOTNEEDED)
+				{
+					m_stateInternal = STATE_SEND_MAIN_HEAD;
+					continue;
+				}
+
+				if(fistate == fileitem::FIST_COMPLETE)
+				{
+					m_stateInternal = STATE_SEND_MAIN_HEAD;
+					continue;
+				}
+				if(!m_parent.m_pDlClient)
+					THROW_ERROR("500 Internal error establishing download");
+				// now needs some trigger, either our thread getting IO or another sending updates (then subscribe to updates)
+
+				if(fistate <= fileitem::FIST_DLASSIGNED)
+				{
+					m_stateInternal = XSTATE_WAIT_DL; // there will be news from downloader
+					return;
+				}
+				// ok, assigned, to whom?
+				m_eDlType = (pthread_self() == dlThreadId) ? DLSTATE_OUR : DLSTATE_OTHER;
+				m_stateInternal = STATE_CHECK_DL_PROGRESS;
+				m_stateBackSend = STATE_SEND_MAIN_HEAD;
+				if(m_eDlType == DLSTATE_OTHER) // ok, not our download agent
+					m_parent.SetupSubscription(m_pItem);
+				continue;
+}
+			case(STATE_CHECK_DL_PROGRESS):
+	{
+				if(fistate < fileitem::FIST_DLGOTHEAD)
+				{
+					m_stateExternal = XSTATE_WAIT_DL;
+					return;
+				}
+
+				if(m_nSendPos>=m_nConfirmedSizeSoFar)
+				{
+					if(fistate>=fileitem::FIST_COMPLETE) // finito...
+						GOTOENDE;
+					LOG("Cannot send more, not enough fresh data yet");
+					m_stateExternal = XSTATE_WAIT_DL;
+					return;
+				}
+
+				m_stateInternal = m_stateBackSend;
+				skipFetchState = true;
+				continue;
+	}
 				case(STATE_SEND_MAIN_HEAD):
 				{
+#warning fixme, keine extra pruefung von fistate... wie komme ich her, alles checken
 					ldbg("STATE_FRESH");
-					if(fistate < fileitem::FIST_DLGOTHEAD) // be sure about that
-						return R_AGAIN; // will start waiting for downloader as needed
-					m_state=STATE_SEND_BUFFER;
-					m_backstate=STATE_HEADER_SENT; // could be changed while creating header
-					const char *szErr = BuildAndEnqueHeader(fistate, nGoodDataSize, respHead);
-					if(szErr) THROW_ERROR(szErr);
+#warning wird bool und soll ueber serror melden
+					if(!BuildAndEnqueHeader(fistate, m_pItem->m_nCheckedSize, respHead))
+						THROW_ERROR(sErrorMsg);
+#warning brauche alternativ-macro wenn msg schon dort steht
+					m_stateInternal = STATE_SEND_BUFFER;
+					m_stateBackSend = STATE_HEADER_SENT; // could be changed while creating header
+					skipFetchState = true;
 					USRDBG("Response header to be sent in the next cycle: \n" << m_sendbuf );
-					return R_AGAIN;
+					continue;
 				}
 				case(STATE_HEADER_SENT):
 				{
 					ldbg("STATE_HEADER_SENT");
-					
-					if(fistate < fileitem::FIST_DLGOTHEAD)
-					{
-						ldbg("ERROR condition detected: starts activity while downloader not ready")
-						return R_DISCON;
-					}
-
 					m_filefd=m_pItem->GetFileFd();
 					if(!IsValidFD(m_filefd)) THROW_ERROR("503 IO error");
-
-					m_state=m_bChunkMode ? STATE_SEND_CHUNK_HEADER : STATE_SEND_PLAIN_DATA;
-					ldbg("next state will be: " << (int) m_state);
+					m_stateInternal = m_bChunkMode ? STATE_SEND_CHUNK_HEADER : STATE_SEND_PLAIN_DATA;
+					ldbg("next state will be: " << (int) m_stateInternal);
 					continue;
 				}
 				case(STATE_SEND_PLAIN_DATA):
 				{
-					ldbg("STATE_SEND_PLAIN_DATA, max. " << nGoodDataSize);
+					ldbg("STATE_SEND_PLAIN_DATA, max. " << m_nConfirmedSizeSoFar);
 
 					// eof?
-#define GOTOENDE { m_state=STATE_FINISHJOB ; continue; }
-					if(m_nSendPos>=nGoodDataSize)
-					{
-						if(fistate>=fileitem::FIST_COMPLETE)
-							GOTOENDE;
-						LOG("Cannot send more, not enough fresh data yet");
-						return R_AGAIN; // will start monitoring DL when reentered
-					}
+#define GOTOENDE { m_stateInternal = STATE_FINISHJOB ; skipFetchState = true; continue; }
 
-					size_t nMax2SendNow=min(nGoodDataSize-m_nSendPos, m_nCurrentRangeLast+1-m_nSendPos);
+					size_t nMax2SendNow=min(m_nConfirmedSizeSoFar - m_nSendPos, m_nFileSendLimit + 1 - m_nSendPos);
 					ldbg("~sendfile: on "<< m_nSendPos << " up to : " << nMax2SendNow);
 					int n = m_pItem->SendData(confd, m_filefd, m_nSendPos, nMax2SendNow);
 					ldbg("~sendfile: " << n << " new m_nSendPos: " << m_nSendPos);
 
-					if(n>0)
-						m_nAllDataCount+=n;
-
-					// shortcuts
-					if(m_nSendPos>m_nCurrentRangeLast ||
-							(fistate==fileitem::FIST_COMPLETE && m_nSendPos==nGoodDataSize))
-						GOTOENDE;
-					
 					if(n<0)
 						THROW_ERROR("400 Client error");
-					
-					return R_AGAIN; // probably short IO read, shall try again
+
+					m_nAllDataCount += n;
+					// shortcuts, no need to check state again?
+					if(fistate==fileitem::FIST_COMPLETE && m_nSendPos==m_nConfirmedSizeSoFar)
+						GOTOENDE;
+					if(m_nSendPos>m_nFileSendLimit)
+					{
+						m_stateInternal = STATE_INTERRUPT_LIMITED_DL;
+						continue;
+					}
+//					m_stateExternal = R_
+					return; // probably short IO read or write, give the caller a slot for IO communication now
 				}
 				case(STATE_SEND_CHUNK_HEADER):
 				{
-					m_nChunkRemainingBytes=nGoodDataSize-m_nSendPos;
+					m_nChunkRemainingBytes=min(m_nConfirmedSizeSoFar - m_nSendPos, m_nFileSendLimit + 1 - m_nSendPos);
 					ldbg("STATE_SEND_CHUNK_HEADER for " << m_nChunkRemainingBytes);
-					if(!m_nChunkRemainingBytes && fistate < fileitem::FIST_COMPLETE)
+					if(m_nChunkRemainingBytes <= 0)
 					{
-						ldbg("No data to send YET, will try later");
-						return R_AGAIN; // will check DL availability when reentered
+						m_stateInternal = STATE_CHECK_DL_PROGRESS;
+						m_stateBackSend = STATE_SEND_CHUNK_HEADER;
+						continue;
 					}
 					m_sendbuf << tSS::hex << m_nChunkRemainingBytes << tSS::dec
 							<< (m_nChunkRemainingBytes ? "\r\n" : "\r\n\r\n");
 
-					m_state=STATE_SEND_BUFFER;
-					m_backstate=m_nChunkRemainingBytes ? STATE_SEND_CHUNK_DATA : STATE_FINISHJOB;
+					m_stateInternal=STATE_SEND_BUFFER;
+					m_stateBackSend=m_nChunkRemainingBytes ? STATE_SEND_CHUNK_DATA : STATE_FINISHJOB;
 					continue;
 				}
 				case(STATE_SEND_CHUNK_DATA):
@@ -933,14 +991,15 @@ job::eJobResult job::SendData(int confd)
 						THROW_ERROR("400 Client error");
 					m_nChunkRemainingBytes-=n;
 					m_nAllDataCount+=n;
+
+#warning test it, fix it... end handling = spaghetti
 					if(m_nChunkRemainingBytes<=0)
 					{ // append final newline
 						m_sendbuf<<"\r\n";
-						m_state=STATE_SEND_BUFFER;
-						m_backstate=STATE_SEND_CHUNK_HEADER;
-						continue;
+						m_stateInternal=STATE_SEND_BUFFER;
+						m_stateBackSend=STATE_SEND_CHUNK_HEADER;
 					}
-					return R_AGAIN; // will check DL availability when reentered
+					continue; // will check DL availability when reentered
 				}
 				case(STATE_SEND_BUFFER):
 				{
@@ -949,6 +1008,7 @@ job::eJobResult job::SendData(int confd)
 					* to another state path uncontrolled. */
 					try
 					{
+#error review so far
 						ldbg("prebuf sending: "<< m_sendbuf.c_str());
 						auto r=send(confd, m_sendbuf.rptr(), m_sendbuf.size(),
 								m_backstate == STATE_TODISCON ? 0 : MSG_MORE);
@@ -956,7 +1016,7 @@ job::eJobResult job::SendData(int confd)
 						{
 							if (errno==EAGAIN || errno==EINTR || errno == ENOBUFS)
 								return R_AGAIN; // keep trying...
-							return R_DISCON;
+							return XSTATE_DISCON;
 						}
 						m_nAllDataCount+=r;
 						m_sendbuf.drop(r);
@@ -970,7 +1030,7 @@ job::eJobResult job::SendData(int confd)
 					}
 					catch(...)
 					{
-						return R_DISCON;
+						return XSTATE_DISCON;
 					}
 				}
 				
@@ -984,25 +1044,21 @@ job::eJobResult job::SendData(int confd)
 					LOG("or STATE_FINISHJOB");
 					{
 						if(m_bClientWants2Close)
-							return R_DISCON;
+							return XSTATE_DISCON;
 						LOG("Reporting job done")
-						return R_DONE;
+						return XSTATE_FINISHED;
 					}
 					break;
-				case(STATE_TODISCON):
-						// no break
-				default:
-					return R_DISCON;
 			}
 		}
 		catch(bad_alloc&) {
 			// TODO: report memory failure?
-			return R_DISCON;
+			return XSTATE_DISCON;
 		}
 		//ASSERT(!"UNREACHED");
 	}
 	//ASSERT(!"UNREACHEABLE");
-	return R_DISCON;
+	return XSTATE_DISCON;
 }
 
 
@@ -1102,13 +1158,13 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 							return "416 Requested Range Not Satisfiable";
 
 						m_nSendPos = m_nReqRangeFrom;
-						m_nCurrentRangeLast = m_nReqRangeTo;
+						m_nFileSize = m_nReqRangeTo;
 						// replace with partial-response header
 						sb.clear();
 						sb << "HTTP/1.1 206 Partial Response\r\nContent-Length: "
-						 << (m_nCurrentRangeLast-m_nSendPos+1) <<
+						 << (m_nFileSize-m_nSendPos+1) <<
 								"\r\nContent-Range: bytes "<< m_nSendPos
-								<< "-" << m_nCurrentRangeLast << "/" << nContLen << "\r\n";
+								<< "-" << m_nFileSize << "/" << nContLen << "\r\n";
 						bGotLen=true;
 					}
 				}
@@ -1165,7 +1221,7 @@ fileitem::FiStatus job::_SwitchToPtItem()
 {
 	// Changing to local pass-through file item
 	LOGSTART("job::_SwitchToPtItem");
-	m_pItem.reset(new tPassThroughFitem(m_sFileLoc, *m_pParentCon));
+	m_pItem.reset(new tPassThroughFitem(m_sFileLoc, m_parent));
 	m_pItem->m_nSizeSeenInCache = m_nReqRangeFrom;
 #warning XXX: test resuming
 	m_pItem->m_nRangeLimit = m_nReqRangeTo;
