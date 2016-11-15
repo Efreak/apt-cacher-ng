@@ -87,6 +87,8 @@ class conn // : public tRunable
 
 	void Shutdown();
 
+// scratch area for shared used by jobs
+	string sErrorMsg;
 
 
 #ifdef DEBUG

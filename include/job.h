@@ -42,7 +42,7 @@ class job
 
 // temp. states
 		STATE_SEND_BUFFER
-	,STATE_CHECK_DL_PROGRESS
+	,STATE_CHECK_DL_PROGRESS // 8
 	,STATE_FATAL_ERROR
 	} m_stateInternal = STATE_WAIT_DL_START, m_stateBackSend = STATE_FATAL_ERROR;
 
@@ -97,8 +97,9 @@ DLSTATE_OUR, DLSTATE_OTHER
 	job(const job&);
 	job & operator=(const job&);
 
-	const char * BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
-			const off_t &nGooddataSize, header& respHead);
+	bool FormatHeader(const fileitem::FiStatus &fistate,
+			const off_t &nGooddataSize, const header& respHead,
+			bool bHasSendableData, int httpstatus);
 	//fileitem::FiStatus _SwitchToPtItem();
 	void SetErrorResponse(cmstring& errorLine, const char *szLocation =
 			nullptr, const char *bodytext = nullptr);

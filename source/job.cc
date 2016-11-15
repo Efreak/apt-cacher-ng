@@ -83,6 +83,7 @@ public:
 	{
 		m_head=h;
 		m_status=FIST_DLGOTHEAD;
+		m_dlThreadId = pthread_self();
 		return true;
 	}
 	virtual bool StoreFileData(const char *data, unsigned int size) override
@@ -711,7 +712,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 	}
 
 	return;
-
+#warning crap. use return SetErrorResponse(...)
 	report_notallowed: SetErrorResponse(
 			(tSS() << "403 Forbidden file type or location: " << sReqPath).c_str(), nullptr,
 			"403 Forbidden file type or location");
@@ -847,13 +848,13 @@ void job::SendData(int confd)
 
 	respHead = m_pItem->GetHeaderUnlocked();
 #warning what for??
-	if(respHead.h[header::XORIG])
-		m_sOrigUrl=respHead.h[header::XORIG];
 #endif
 
-	// fetch the data we need mostly
-#warning move this stuff to a scratch area inside of m_parent (!!)
-	string sErrorMsg;
+	string &sErrorMsg = m_parent.sErrorMsg;
+	sErrorMsg.clear();
+
+#warning also move this stuff to a scratch area inside of m_parent (!!)
+
 	fileitem::FiStatus fistate = fileitem::FIST_FRESH;
 	pthread_t dlThreadId;
 	header respHead;
@@ -877,6 +878,7 @@ void job::SendData(int confd)
 		if(fistate >= fileitem::FIST_DLERROR)
 			THROW_ERROR(sErrorMsg);
 
+		ldbg("job: istate switch " << m_stateInternal);
 		try // for bad_alloc in members
 		{
 			switch(m_stateInternal)
@@ -932,19 +934,32 @@ void job::SendData(int confd)
 				}
 
 				m_stateInternal = m_stateBackSend;
-				skipFetchState = true;
+				// skipFetchState = true; cannot, will need head data
 				continue;
 	}
 				case(STATE_SEND_MAIN_HEAD):
 				{
 #warning fixme, keine extra pruefung von fistate... wie komme ich her, alles checken
 					ldbg("STATE_FRESH");
-#warning wird bool und soll ueber serror melden
-					if(!BuildAndEnqueHeader(fistate, m_pItem->m_nCheckedSize, respHead))
-						THROW_ERROR(sErrorMsg);
-#warning brauche alternativ-macro wenn msg schon dort steht
+
+					// nothing to send for special codes (like not-unmodified) or w/ GUARANTEED empty body
+					int statusCode = respHead.getStatus();
+					bool bResponseHasBody = !BODYFREECODE(statusCode)
+							&& (!respHead.h[header::CONTENT_LENGTH] // not set, maybe chunked data
+							                || atoofft(respHead.h[header::CONTENT_LENGTH])); // set, to non-0
+
+					if(!FormatHeader(fistate, m_pItem->m_nCheckedSize,
+							respHead, bResponseHasBody, statusCode))
+					{
+						// sErrorMsg was already set
+						m_stateInternal = STATE_FATAL_ERROR; // simulated head is prepared but don't send stuff
+						continue;
+					}
+
 					m_stateInternal = STATE_SEND_BUFFER;
-					m_stateBackSend = STATE_HEADER_SENT; // could be changed while creating header
+					// just HEAD request was received or no data body to send?
+					m_stateBackSend = (m_pReqHead->type==header::HEAD || !bResponseHasBody)
+							? STATE_FINISHJOB : STATE_HEADER_SENT;
 					skipFetchState = true;
 					USRDBG("Response header to be sent in the next cycle: \n" << m_sendbuf );
 					continue;
@@ -1027,11 +1042,10 @@ void job::SendData(int confd)
 					if (r<0)
 					{
 						if (errno==EAGAIN || errno==EINTR || errno == ENOBUFS)
-						{
-							m_stateExternal = XSTATE_CAN_SEND;
-							return; // try again later
-						}
-						THROW_ERROR("500 Communication problem");
+							m_stateExternal = XSTATE_CAN_SEND; // try again later
+						else
+							m_stateExternal = XSTATE_DISCON;
+						return;
 					}
 					m_nAllDataCount+=r;
 					m_sendbuf.drop(r);
@@ -1044,14 +1058,6 @@ void job::SendData(int confd)
 					m_stateExternal = XSTATE_CAN_SEND;
 					return; // caller will come back
 				}
-/*
-				case(STATE_ALLDONE):
-					LOG("State: STATE_ALLDONE?");
-				// no break
-				case (STATE_ERRORCONT):
-					LOG("or STATE_ERRORCONT?");
-					*/
-				// no break
 				case(STATE_FINISHJOB):
 			{
 				LOG("Reporting job done");
@@ -1061,11 +1067,19 @@ void job::SendData(int confd)
 
 				case(STATE_FATAL_ERROR):
 	{
-					if(m_nAllDataCount > 0) // crap, already started sending
+					// try to send something meaningful, otherwise disconnect
+
+					if(m_nAllDataCount > 0) // crap, already started sending or that was the error header
 						m_stateExternal = XSTATE_DISCON;
 					else
 					{
-						SetErrorResponse(sErrorMsg);
+						// no fancy error page, this is basically it
+						m_sendbuf.clear();
+						m_sendbuf << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ")
+								<< sErrorMsg << "\r\n\r\n";
+						m_stateInternal = STATE_SEND_BUFFER;
+						m_stateBackSend = STATE_FATAL_ERROR; // will abort then
+						continue;
 					}
 	}
 
@@ -1080,29 +1094,35 @@ void job::SendData(int confd)
 }
 
 
-inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
-		const off_t &nGooddataSize, header& respHead)
+inline bool job::FormatHeader(const fileitem::FiStatus &fistate,
+		const off_t &nGooddataSize, const header& respHead, bool bHasSendableData,
+		int httpstatus)
 {
 	LOGSTART("job::BuildAndEnqueHeader");
 
-	if(respHead.type != header::ANSWER)
+	// just store a copy for the caller
+	auto asError = [this](const char *errMsg)
+		{
+		m_parent.sErrorMsg = errMsg;
+		return false;
+		};
+
+	if(respHead.type != header::ANSWER || respHead.frontLine.length() < 11)
 	{
 		LOG(respHead.ToString());
-		return "500 Rotten Data";
+		return asError("500 Rotten Data");
 	}
 
-	// make sure that header has consistent state and there is data to send which is expected by the client
-	int httpstatus = respHead.getStatus();
-	LOG("State: " << httpstatus);
+	if(respHead.h[header::XORIG])
+		m_sOrigUrl=respHead.h[header::XORIG];
 
-	// nothing to send for special codes (like not-unmodified) or w/ GUARANTEED empty body
-	bool bHasSendableData = !BODYFREECODE(httpstatus)
-			&& (!respHead.h[header::CONTENT_LENGTH] // not set, maybe chunked data
-			                || atoofft(respHead.h[header::CONTENT_LENGTH])); // set, to non-0
+	// make sure that header has consistent state and there is data to send which is expected by the client
+	LOG("State: " << httpstatus);
 
 	tSS &sb=m_sendbuf;
 	sb.clear();
-	sb << respHead.frontLine <<"\r\n";
+	sb << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ")
+			<< respHead.frontLine.c_str() + 9 <<"\r\n";
 
 	bool bGotLen(false);
 
@@ -1117,7 +1137,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 		{
 			// unknown length but must have data, will have to improvise: prepare chunked transfer
 			if ( ! m_bIsHttp11 ) // you cannot process this? go away
-				return "505 HTTP version not supported for this file";
+				return asError("505 HTTP version not supported for this file");
 			m_bChunkMode=true;
 			sb<<"Transfer-Encoding: chunked\r\n";
 		}
@@ -1173,7 +1193,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 					{
 						// detect errors, out-of-range case
 						if(m_nReqRangeFrom>=nContLen || m_nReqRangeTo<m_nReqRangeFrom)
-							return "416 Requested Range Not Satisfiable";
+							return asError("416 Requested Range Not Satisfiable");
 
 						m_nSendPos = m_nReqRangeFrom;
 						m_nFileSendLimit = m_nReqRangeTo;
@@ -1190,7 +1210,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 				else if(bIfModSeenAndChecked)
 				{
 					// file is fresh, and user sent if-mod-since -> fine
-					return "304 Not Modified";
+					return asError("304 Not Modified");
 				}
 			}
 		}
@@ -1212,8 +1232,6 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 	else
 	{
 		sb<<"Content-Length: 0\r\n";
-
-		m_stateBackSend = STATE_FINISHJOB;
 	}
 
 	sb << header::GenInfoHeaders();
@@ -1230,10 +1248,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 	sb<<"\r\n";
 	LOG("response prepared:" << sb);
 
-	if(m_pReqHead->type==header::HEAD)
-		m_stateBackSend = STATE_FINISHJOB; // simulated head is prepared but don't send stuff
-
-	return 0;
+	return true;
 }
 
 
