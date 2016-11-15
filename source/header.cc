@@ -86,6 +86,7 @@ header& header::operator=(const header& s)
 	frontLine=s.frontLine;
 	for (unsigned i = 0; i < HEADPOS_MAX; ++i)
 	{
+#warning should be smarter and not free&strdup but realloc as needed
 		if (h[i])
 			free(h[i]);
 		h[i] = s.h[i] ? strdup(s.h[i]) : nullptr;

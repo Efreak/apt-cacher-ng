@@ -37,10 +37,28 @@ class conn // : public tRunable
 	      //! Terminate the connection descriptors gracefully
 	      void ShutDown();
 
-
-
       int m_confd;
       
+      // descriptors for download progress watching
+      // UNSUBSCRIBING MUST BE HANDLED WITH CARE or file descriptor leak would happen
+      // (could do that that more safe with a shared_ptr structure and refcounting but
+      // feels like overkill for a simple int value)
+#ifdef HAVE_LINUX_EVENTFD
+#warning test legacy pipe
+#define fdWakeRead m_wakeventfd
+#define fdWakeWrite m_wakeventfd
+      int m_wakeventfd = -1;
+#else
+      // XXX: no, this is not nice but what are the alternatives? Add a int& reference? Wastes memory. Or use raw pointers on members? Cannot be safe WRT class member padding.
+      int m_wakepipe[2] = {-1, -1};
+#define fdWakeRead m_wakepipe[0]
+#define fdWakeWrite m_wakepipe[1]
+#endif
+      /**
+       * Setup wake descriptors as needed and subscribe on ptr. User must unsubscribe later!
+       */
+      void SetupSubscription(tFileItemPtr);
+
       std::list<job*> m_jobs2send;
       
 #ifdef KILLABLE

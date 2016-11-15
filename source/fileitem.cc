@@ -52,7 +52,6 @@ fileitem::fileitem() :
 	m_nSizeSeenInCache(0),
 	m_nRangeLimit(-1),
 	m_bCheckFreshness(true),
-	m_bHeadOnly(false),
 	m_bAllowStoreData(true),
 	m_nCheckedSize(0),
 	m_filefd(-1)
@@ -153,20 +152,36 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 {
 	LOGSTART2("fileitem::Setup", bCheckFreshness);
 
-	auto xpected = FIST_FRESH;
-	auto ourTurn = m_status.compare_exchange_strong(xpected, FIST_INITIALIZING);
-	if(!ourTurn)
-		return xpected;
+	{
+		lockguard g(m_mx);
+		auto xpected = FIST_FRESH;
+		auto ourTurn = m_status == FIST_FRESH;
+		if(!ourTurn) //		.compare_exchange_strong(xpected, FIST_INITIALIZING);
+			return xpected;
+		m_status = FIST_INITIALIZING;
+	}
+
+	cmstring sPathAbs(CACHE_BASE+m_sPathRel);
+
+	auto error_clean = [this, &sPathAbs]() -> FiStatus
+	{
+		unlink( (LPCSTR) (sPathAbs+".head").c_str());
+		m_head.clear();
+		m_nSizeSeenInCache=0;
+		m_status=FIST_INITED;
+		return m_status;
+	};
+
+	// now we are in the caller thread's turf, can do IO in critical section
+	lockguard g(m_mx);
 
 	m_bCheckFreshness = bCheckFreshness;
 	
-	cmstring sPathAbs(CACHE_BASE+m_sPathRel);
 
 	if(m_head.LoadFromFile(sPathAbs+".head") >0 && m_head.type==header::ANSWER )
 	{
 		if(200 != m_head.getStatus())
-			goto error_clean;
-		
+			return error_clean();
 
 		LOG("good head");
 
@@ -177,7 +192,7 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 		{
 			const char *p=m_head.h[header::LAST_MODIFIED];
 			if(!p)
-				goto error_clean; // suspicious, cannot use it
+				return error_clean(); // suspicious, cannot use it
 			LOG("check freshness, last modified: " << p );
 
 			// that will cause check by if-mo-only later, needs to be sure about the size here
@@ -197,8 +212,7 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 				
 				// file larger than it could ever be?
 				if(nContLen < m_nSizeSeenInCache)
-					goto error_clean;
-
+					return error_clean();
 
 				LOG("Content-Length has a sane range");
 				
@@ -225,13 +239,6 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 	LOG("resulting status: " << (int) m_status);
 	m_status = FIST_INITED;
 	return m_status;
-
-	error_clean:
-		::unlink((sPathAbs+".head").c_str());
-		m_head.clear();
-		m_nSizeSeenInCache=0;
-		m_status=FIST_INITED;
-		return m_status; // unuseable, to be redownloaded
 }
 
 /*
@@ -250,10 +257,10 @@ bool fileitem::CheckUsableRange_unlocked(off_t nRangeLastByte)
 			&& atoofft(m_head.h[header::CONTENT_LENGTH], -255) > nRangeLastByte);
 }
 */
-#if 0
-bool fileitem::SetupClean(bool bForce)
+
+bool fileitem::ResetCacheState(bool bForce)
 {
-	setLockGuard;
+	lockguard g(m_mx);
 
 	if(bForce)
 	{
@@ -293,16 +300,14 @@ bool fileitem::SetupClean(bool bForce)
 
 	return true;
 }
-#endif
-/*
-void fileitem::SetupComplete()
+
+void fileitem::SetComplete()
 {
-	setLockGuard;
-	notifyAll();
-	m_nUsableSizeInCache = m_nSizeSeenInCache;
+	lockguard g(m_mx);
+	m_nCheckedSize = m_nSizeSeenInCache;
 	m_status = FIST_COMPLETE;
+	notifyObservers();
 }
-*/
 
 void fileitem::UpdateHeadTimestamp()
 {
@@ -321,7 +326,7 @@ fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)
 	return m_status;
 }
 */
-inline void _LogWithErrno(const char *msg, const string & sFile)
+inline void _LogWithErrno(cmstring& msg, const string & sFile)
 {
 	tErrnoFmter f;
 	log::err(tSS() << sFile <<
@@ -335,7 +340,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		bool bRestartResume, bool &bDoCleanRetry)
 {
 	LOGSTART("fileitem::DownloadStartedStoreHeader");
-	auto SETERROR = [this](LPCSTR x) {
+	auto SETERROR = [this, &h](cmstring& x) {
 		m_bAllowStoreData=false;
 		{
 			lockguard g(m_mx);
@@ -346,14 +351,14 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		_LogWithErrno(x, m_sPathRel);
 	};
 
-	auto withError = [this](LPCSTR x) {
+	auto withError = [this, &SETERROR](cmstring& x) {
 		SETERROR(x);
 		return false;
 	};
 	cmstring sPathAbs(CACHE_BASE+m_sPathRel);
 	string sHeadPath=sPathAbs + ".head";
 
-	auto withErrorAndKillFile = [this](LPCSTR x)
+	auto withErrorAndKillFile = [this, &SETERROR, &sPathAbs, &sHeadPath](LPCSTR x)
 	{
 		SETERROR(x);
 		if(m_filefd>=0)
@@ -364,7 +369,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 			forceclose(m_filefd);
 		}
 
-		LOG("Deleting " << sPathAbs);
+		//LOG("Deleting " << sPathAbs);
 		::unlink(sPathAbs.c_str());
 		::unlink(sHeadPath.c_str());
 
@@ -377,6 +382,9 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 	// always news for someone, even lost the race
 	tDtorExec _notifier([this]() {notifyObservers();});
 
+
+	lockguard g(m_mx); // need this early, right after setting FIST_DLASSIGNED m_dlThreadId will be needed
+
 	// legal "transitions"
 	// normally from inited to assigned
 	// for hot restart and volatile:
@@ -384,18 +392,21 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 	bool bStateEntered = false;
 	auto xpect = FIST_INITED;
 	if(!bRestartResume)
-		bStateEntered = m_status.compare_exchange_strong(xpect, FIST_DLASSIGNED);
+	{
+		bStateEntered = m_status == xpect;
+		if(bStateEntered)
+			m_status= FIST_DLASSIGNED;
+	}
 	else if(m_bCheckFreshness) // can only resume from assigned, anything else would be crap
 	{
 		if(m_nCheckedSize != 0)
 			return false; // just to be sure, don't report bad data in any case
-		xpect = FIST_DLASSIGNED;
-		bStateEntered = m_status.compare_exchange_strong(xpect, FIST_DLASSIGNED);
+		bStateEntered = m_status == FIST_DLASSIGNED;
 	}
 	else // non-volatile files...
 	{
 		if(m_status < FIST_DLASSIGNED)
-			bStateEntered = m_status.compare_exchange_strong(xpect, FIST_DLASSIGNED);
+			m_status = FIST_DLASSIGNED;
 		else
 			bStateEntered = m_status < FIST_COMPLETE;
 		// and will check resumed position below
@@ -403,10 +414,12 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 	if(!bStateEntered)
 		return false;
 
+	if(m_status == FIST_DLASSIGNED)
+		m_dlThreadId = pthread_self();
+
 	// optional optimisation: hints for the filesystem resp. kernel
 	off_t hint_start(0), hint_length(0);
 	
-	lockguard g(m_mx);
 
 	int serverStatus = h.getStatus();
 	switch(serverStatus)
@@ -726,11 +739,11 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 }
 
 tFileItemPtr fileitem_with_storage::CreateRegistered(cmstring& sPathUnescaped,
-		const tFileItemPtr& existingFi, bool &created4caller)
+		const tFileItemPtr& existingFi, bool *created4caller)
 {
 	mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
 	tFileItemPtr ret;
-	created4caller = false;
+	if(created4caller) *created4caller = false;
 	{
 		lockguard g(g_sharedItemsMx);
 #warning also do house keeping in the stickyItemCache prio-q
@@ -744,7 +757,7 @@ tFileItemPtr fileitem_with_storage::CreateRegistered(cmstring& sPathUnescaped,
 			ret = std::make_shared<fileitem_with_storage>(sPathRel);
 			EMPLACE_PAIR_COMPAT(g_sharedItems, sPathRel, ret);
 			ret->m_bIsGloballyRegistered = true;
-			created4caller = true;
+			if(created4caller) *created4caller = true;
 		}
 	}
 	return ret;
@@ -1050,5 +1063,43 @@ int fileitem_with_storage::MoveRelease2Sidestore()
 
 #endif // MINIBUILD
 
+void fileitem::subscribe(int fd)
+{
+#warning implement
 }
 
+void fileitem::unsubscribe(int fd)
+{
+#warning implement
+}
+
+void fileitem::notifyObservers()
+{
+#warning implement
+}
+
+#warning sErrorMsg filled out correctly and reliable?
+
+fileitem::FiStatus fileitem::GetStatus(pthread_t* dlThreadId, mstring* sErrorMsg,
+		off_t* pnConfirmedSizeSoFar, header* retHead)
+{
+	lockguard g(m_mx);
+	if(dlThreadId && m_status >= FIST_DLASSIGNED)
+		*dlThreadId = m_dlThreadId;
+	if(sErrorMsg)
+		sErrorMsg->assign(m_head.getCodeMessage());
+	if(pnConfirmedSizeSoFar)
+		*pnConfirmedSizeSoFar = m_nCheckedSize;
+	if(retHead)
+		*retHead = m_head;
+	return m_status;
+}
+
+#warning implement this and use it again (subscribe for updates on fitem inside and... wait for >= complete)
+
+fileitem::FiStatus fileitem::WaitForFinish(int* httpCode)
+{
+	return FIST_DLERROR;
+}
+
+}

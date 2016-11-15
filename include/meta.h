@@ -25,6 +25,7 @@
 #include <strings.h>
 #include <cstdlib>
 #include <errno.h>
+#include <lockable.h>
 
 #define EXTREME_MEMORY_SAVING false
 
@@ -453,6 +454,12 @@ struct tDtorExec
 	inline tDtorExec(decltype(_action) action) : _action(action) {}
 	inline ~tDtorExec() { _action(); }
 	inline void defuse() { _action = decltype(_action)(); }
+};
+
+// little helper used to pass around a thread-safe collection of strings (singleton)
+struct tTraceData: public tStrSet, public base_with_mutex
+{
+	static tTraceData& getInstance();
 };
 
 // from bgtask.cc

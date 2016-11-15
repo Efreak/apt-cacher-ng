@@ -445,12 +445,15 @@ time_t dl_con_factory::BackgroundCleanup()
 
 void tcpconnect::KillLastFile()
 {
+#warning fixme, flag setzen, im dtor killen
+	/*
 #ifndef MINIBUILD
 	tFileItemPtr p = m_lastFile.lock();
 	if (!p)
 		return;
 	p->SetupClean(true);
 #endif
+*/
 }
 
 void dl_con_factory::dump_status()

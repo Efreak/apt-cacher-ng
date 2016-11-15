@@ -536,7 +536,7 @@ struct tDlJob
 				// the only case where we expect a 304
 				else if(st == 304 && cfg::vrangeops == 0)
 				{
-					m_pStorage->SetupComplete();
+					m_pStorage->SetComplete();
 					m_DlState = STATE_FINISHJOB;
 				}
 				else if (h.h[header::TRANSFER_ENCODING]
@@ -1044,6 +1044,8 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 					struct timeval tv
 					{ cfg::nettimeout, 1 };
 
+#warning this sucks, create an iterator-like object which gets a fd to watch and lambdas for read or write
+#warning then implement waitForFinish with this helper too
 					fd_set rfds, wfds;
 					FD_ZERO(&rfds);
 					FD_ZERO(&wfds);
@@ -1459,13 +1461,6 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
         	}
         }
 	}
-}
-
-bool dlcon::IsCurrentDownload(const tFileItemPtr &fiptr)
-{
-	if(inpipe.empty())
-		return false;
-	return fiptr == inpipe.front()->m_pStorage;
 }
 
 }

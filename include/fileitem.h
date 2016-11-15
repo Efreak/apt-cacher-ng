@@ -21,6 +21,7 @@ typedef std::shared_ptr<fileitem> tFileItemPtr;
 //! Base class containing all required data and methods for communication with the download sources
 class fileitem
 {
+	friend class fileitem_with_storage;
 	public:
 
 	// Life cycle (process states) of a file description item
@@ -57,20 +58,34 @@ class fileitem
 	 */
 	virtual bool StoreFileData(const char *data, unsigned int size)=0;
 	inline header GetHeaderLocking() { lockguard g(m_mx);  return m_head; }
-
-	/*!
-	 * Extracts the HTTP status line from the header, in the format "status-code message".
-	 * If status is error, the message will be 500 or higher.
-	 */
-	mstring GetHttpMsg();
 	
-#warning implement, use set<int> with spinlock protection
+#warning implement, use set<int> with spinlock protection, löschen ggf. mit setzen auf -1
 	std::set<int> m_subscriptions;
 	std::atomic<bool> notifyBusy;
 	void subscribe(int fd);
 	void unsubscribe(int fd);
 
-	FiStatus GetStatus() { return m_status; }
+	FiStatus GetStatus(pthread_t *dlThreadId = nullptr, mstring* psHttpStatusOrErrorMsg = nullptr,
+			off_t *nConfirmedSizeSoFar = nullptr, header *retHead=nullptr);
+	/*!
+	 * Extracts the HTTP status line from the header, in the format "status-code message".
+	 * If status is error, the message will be 500 or higher.
+	 */
+	inline cmstring GetHttpStatus()
+	{
+		mstring ret;
+		GetStatus(0, &ret);
+		if(ret.empty()) ret = "500 Unknown Error";
+		return ret;
+
+	}
+	/*
+			(m_stateInternal == STATE_SEND_MAIN_HEAD)
+			? &respHead : nullptr)
+	{ lockguard g(m_mx);
+	return m_status;
+	}
+	*/
 //	FiStatus GetStatusUnlocked(off_t &nGoodDataSize) { nGoodDataSize = m_nUsableSizeInCache; return m_status; }
 //	void ResetCacheState();
 
@@ -78,12 +93,12 @@ class fileitem
 //	bool CheckUsableRange_unlocked(off_t nRangeLastByte);
 
 	// returns when the state changes to complete or error
-//	FiStatus WaitForFinish(int *httpCode=nullptr);
+	FiStatus WaitForFinish(int *httpCode=nullptr);
 
-//	bool SetupClean(bool bForce=false);
+	bool ResetCacheState(bool bForce=false);
 	
 	/// mark the item as complete as-is, assuming that sizeseen is correct
-	void SetupComplete();
+	void SetComplete();
 
 	void UpdateHeadTimestamp();
 
@@ -93,21 +108,23 @@ class fileitem
 	// Initialise file item (exactly once), return the status
 	virtual FiStatus SetupFromCache(bool bDynType);
 
-protected:
+	bool m_bHeadOnly = false; // only for pass-through mode, write/read by conn thread only
+
+	bool m_bCheckFreshness; // if-modified-since or if-range flags required; set only once before FIST_INITED
+
+	bool m_bIsGloballyRegistered = false; // defacto a flag identifying it as fileitem_with_storage (globally-registered)
+
+#warning fixme
+//protected:
 
 	fileitem();
 
-private:
+//private:
 #warning FIXME, BS. dlcon loop shall retrieve the count directly from last dljob before destroying job object 
 	// uint64_t m_nIncommingCount; // written and read by the conn thread only
-	std::atomic<off_t> m_nSizeSeenInCache;   // the best known information about total size of the file. Initially set by conn thread, updated by ANY other dlcon thread during FIST_DLRECEIVING phase.
-	std::atomic<off_t> m_nCheckedSize; // the available validated data range for the current download; policy as for m_nSizeSeenInCache
+	off_t m_nSizeSeenInCache;   // the best known information about total size of the file. Initially set by conn thread, updated by ANY other dlcon thread during FIST_DLRECEIVING phase.
+	off_t m_nCheckedSize; // the available validated data range for the current download; policy as for m_nSizeSeenInCache
 	off_t m_nRangeLimit;	// only for pass-though mode, write/read by conn thread only
-	
-	bool m_bCheckFreshness; // if-modified-since or if-range flags required; set only once before FIST_INITED
-	bool m_bHeadOnly; // only for pass-though mode, write/read by conn thread only
-	
-	bool m_bIsGloballyRegistered = false; // defacto a flag identifying it as fileitem_with_storage (globally-registered)
 
 	// local cached values for dlcon callbacks only
 	bool m_bAllowStoreData;
@@ -117,15 +134,18 @@ private:
 	void notifyObservers();
 
 	// policy: only increasing value; read any time, write before FIST_INITED by creating thread, after by first assigned downloader thread
-	std::atomic<FiStatus> m_status {FIST_FRESH};
+	FiStatus m_status {FIST_FRESH};
 
 	// access protected by mutex
 	header m_head;
   
 	mstring m_sPathRel; // policy: assign in ctor, change never
 
-	// protects access to m_head
+	// protects access to values updated by dl-thread and read by others
 	acmutex m_mx;
+
+	// remember which thread was assigned as downloader
+	pthread_t m_dlThreadId = {0};
 };
 
 // dl item implementation with storage on disk, can be shared among users
@@ -152,8 +172,8 @@ public:
 	 * If create is needed, bDynType will be passed to the SetupFromStorage call
 	 */
 	static tFileItemPtr CreateRegistered(cmstring& sPathRel,
-			const tFileItemPtr& existingFi = tFileItemPtr(), bool &created4caller);
-	fileitem_with_storage(cmstring &s) {m_sPathRel=s; };
+			const tFileItemPtr& existingFi = tFileItemPtr(), bool *created4caller = nullptr);
+	fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
 
 	// attempt to unregister a global item but only if it's unused
 	static bool TryDispose(tFileItemPtr& existingFi);
@@ -207,5 +227,6 @@ private:
 #endif // not MINIBUILD
 
 #endif
+
 }
 #endif

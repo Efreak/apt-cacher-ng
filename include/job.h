@@ -35,11 +35,10 @@ class job
 		STATE_SEND_PLAIN_DATA,
 		STATE_SEND_CHUNK_HEADER,
 		STATE_SEND_CHUNK_DATA,
-		STATE_TODISCON,
-		STATE_ALLDONE,
-		STATE_ERRORCONT,
+//		STATE_TODISCON,
+//		STATE_ALLDONE,
+//		STATE_ERRORCONT,
 		STATE_FINISHJOB,
-		STATE_INTERRUPT_LIMITED_DL,
 
 // temp. states
 		STATE_SEND_BUFFER
@@ -70,6 +69,7 @@ DLSTATE_OUR, DLSTATE_OTHER
 	bool m_bChunkMode = false;
 	bool m_bClientWants2Close = false;
 	bool m_bIsHttp11 = false;
+	bool m_bFitemWasSubscribed = false;
 
 //	eJobState m_state = STATE_WAIT_DL_START, m_backstate = STATE_SEND_MAIN_HEAD; // current state, and state to return after temporary states
 
@@ -99,8 +99,8 @@ DLSTATE_OUR, DLSTATE_OTHER
 
 	const char * BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 			const off_t &nGooddataSize, header& respHead);
-	fileitem::FiStatus _SwitchToPtItem();
-	void SetErrorResponse(const char * errorLine, const char *szLocation =
+	//fileitem::FiStatus _SwitchToPtItem();
+	void SetErrorResponse(cmstring& errorLine, const char *szLocation =
 			nullptr, const char *bodytext = nullptr);
 	void SetupFileServing(const mstring &visPath, const mstring &fsBase,
 			const mstring &fsSubpath);
@@ -109,14 +109,6 @@ DLSTATE_OUR, DLSTATE_OTHER
 
 	off_t m_nReqRangeFrom = -1, m_nReqRangeTo = -1;
 };
-
-/*
- #warning wtf?
- class tTraceData: public tStrSet, public base_with_mutex {
- public:
- static tTraceData& getInstance();
- };
- */
 
 }
 

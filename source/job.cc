@@ -37,7 +37,6 @@ mstring sHttp11("HTTP/1.1");
 #define SPECIAL_FD -42
 inline bool IsValidFD(int fd) { return fd>=0 || SPECIAL_FD == fd; }
 
-/*
 tTraceData traceData;
 void cfg::dump_trace()
 {
@@ -50,7 +49,6 @@ tTraceData& tTraceData::getInstance()
 {
 	return traceData;
 }
-*/
 
 /*
  * Unlike the regular store-and-forward file item handler, this ones does not store anything to
@@ -119,7 +117,7 @@ public:
 	}
 	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow) override
 	{
-		lockuniq g(this);
+		lockguard g(m_mx);
 
 		while(0 == m_nConsumable && m_status<=FIST_COMPLETE
 				&& ! (m_nCheckedSize==0 && m_status==FIST_COMPLETE))
@@ -163,13 +161,14 @@ public:
 
 	tSS m_data;
 
-	tGeneratedFitemBase(const string &sFitemId, const char *szFrontLineMsg) : m_data(256)
+	tGeneratedFitemBase(const string &sFitemId, cmstring &sFrontLineMsg) : m_data(256)
 	{
 		m_status=FIST_COMPLETE;
 		m_sPathRel=sFitemId;
 		m_head.type = header::ANSWER;
 		m_head.frontLine = "HTTP/1.1 ";
-		m_head.frontLine += (szFrontLineMsg ? szFrontLineMsg : "500 Internal Failure");
+		m_head.frontLine += sFrontLineMsg.empty()
+				? cmstring("500 Internal Failure") : sFrontLineMsg;
 		m_head.set(header::CONTENT_TYPE, WITHLEN("text/html") );
 	}
 	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow)
@@ -227,6 +226,9 @@ job::~job()
 	// fileitem_with_storage::ProlongLife(m_pItem);
 	checkforceclose(m_filefd);
 	delete m_pReqHead;
+
+	if(m_pItem && m_bFitemWasSubscribed)
+		m_pItem->unsubscribe(m_parent.fdWakeWrite);
 }
 
 
@@ -460,6 +462,21 @@ void job::PrepareDownload(LPCSTR headBuf)
 	log::err(m_pReqHead->ToString());
 #endif
 
+
+	auto _SwitchToPtItem = [this]() ->fileitem::FiStatus
+	{
+		// Changing to local pass-through file item
+		LOGSTART("job::_SwitchToPtItem");
+		m_pItem.reset(new tPassThroughFitem(m_sFileLoc, m_parent));
+		m_pItem->m_nSizeSeenInCache = m_nReqRangeFrom;
+	#warning XXX: test resuming
+		m_pItem->m_nRangeLimit = m_nReqRangeTo;
+		m_pItem->m_head.set(header::LAST_MODIFIED,
+				m_pReqHead->h[header::IF_MODIFIED_SINCE] ?
+						m_pReqHead->h[header::IF_MODIFIED_SINCE] : m_pReqHead->h[header::IFRANGE]);
+		return (m_pItem->m_status = fileitem::FIST_INITED);
+	};
+
 	string sReqPath, sPathResidual;
 	tHttpUrl theUrl; // parsed URL
 
@@ -634,8 +651,8 @@ void job::PrepareDownload(LPCSTR headBuf)
 		if (m_pItem->m_nCheckedSize >= m_nReqRangeTo)
 		{
 			LOG("Got a partial request for incomplete download but sufficient range is available.");
-			m_stateDler = DLSTATE_NOTNEEDED;
-			m_stateExternal = R_SENDAGAIN;
+			m_eDlType = DLSTATE_NOTNEEDED;
+			m_stateExternal = XSTATE_CAN_SEND;
 			m_stateInternal = STATE_SEND_MAIN_HEAD;
 			return;
 		}
@@ -747,9 +764,8 @@ void job::PrepareDownload(LPCSTR headBuf)
 	return;
 }
 
-//#define THROW_ERROR(x) { if(m_nAllDataCount) { m_trigger = R_DISCON; return; }; SetErrorResponse(x); goto start_sending_head; }
-#define THROW_ERROR(x)
-#warning implementme
+#define REPORT_ERROR { m_stateInternal = STATE_FATAL_ERROR; continue;}
+#define THROW_ERROR(x) { sErrorMsg = x; REPORT_ERROR; }
 
 void job::SendData(int confd)
 {
@@ -845,6 +861,9 @@ void job::SendData(int confd)
 	// can avoid data checks when switching around, but only once
 	bool skipFetchState = false;
 
+	// eof?
+#define GOTOENDE { m_stateInternal = STATE_FINISHJOB ; skipFetchState = true; continue; }
+
 	while(true) // send initial header, chunk header, etc. in a sequence; eventually left by returning
 	{
 		if(!skipFetchState)
@@ -881,7 +900,7 @@ void job::SendData(int confd)
 
 				if(fistate <= fileitem::FIST_DLASSIGNED)
 				{
-					m_stateInternal = XSTATE_WAIT_DL; // there will be news from downloader
+					m_stateExternal = XSTATE_WAIT_DL; // there will be news from downloader
 					return;
 				}
 				// ok, assigned, to whom?
@@ -889,7 +908,10 @@ void job::SendData(int confd)
 				m_stateInternal = STATE_CHECK_DL_PROGRESS;
 				m_stateBackSend = STATE_SEND_MAIN_HEAD;
 				if(m_eDlType == DLSTATE_OTHER) // ok, not our download agent
+				{
 					m_parent.SetupSubscription(m_pItem);
+					m_bFitemWasSubscribed = true;
+				}
 				continue;
 }
 			case(STATE_CHECK_DL_PROGRESS):
@@ -940,9 +962,6 @@ void job::SendData(int confd)
 				{
 					ldbg("STATE_SEND_PLAIN_DATA, max. " << m_nConfirmedSizeSoFar);
 
-					// eof?
-#define GOTOENDE { m_stateInternal = STATE_FINISHJOB ; skipFetchState = true; continue; }
-
 					size_t nMax2SendNow=min(m_nConfirmedSizeSoFar - m_nSendPos, m_nFileSendLimit + 1 - m_nSendPos);
 					ldbg("~sendfile: on "<< m_nSendPos << " up to : " << nMax2SendNow);
 					int n = m_pItem->SendData(confd, m_filefd, m_nSendPos, nMax2SendNow);
@@ -957,10 +976,10 @@ void job::SendData(int confd)
 						GOTOENDE;
 					if(m_nSendPos>m_nFileSendLimit)
 					{
-						m_stateInternal = STATE_INTERRUPT_LIMITED_DL;
+						m_stateInternal = STATE_FINISHJOB;
 						continue;
 					}
-//					m_stateExternal = R_
+					m_stateExternal = XSTATE_CAN_SEND;
 					return; // probably short IO read or write, give the caller a slot for IO communication now
 				}
 				case(STATE_SEND_CHUNK_HEADER):
@@ -1003,62 +1022,61 @@ void job::SendData(int confd)
 				}
 				case(STATE_SEND_BUFFER):
 				{
-					/* Sends data from the local buffer, used for page or chunk headers.
-					* -> DELICATE STATE, should not be interrupted by exception or throw
-					* to another state path uncontrolled. */
-					try
+					ldbg("prebuf sending: "<< m_sendbuf.c_str());
+					auto r=send(confd, m_sendbuf.rptr(), m_sendbuf.size(), MSG_MORE);
+					if (r<0)
 					{
-#error review so far
-						ldbg("prebuf sending: "<< m_sendbuf.c_str());
-						auto r=send(confd, m_sendbuf.rptr(), m_sendbuf.size(),
-								m_backstate == STATE_TODISCON ? 0 : MSG_MORE);
-						if (r<0)
+						if (errno==EAGAIN || errno==EINTR || errno == ENOBUFS)
 						{
-							if (errno==EAGAIN || errno==EINTR || errno == ENOBUFS)
-								return R_AGAIN; // keep trying...
-							return XSTATE_DISCON;
+							m_stateExternal = XSTATE_CAN_SEND;
+							return; // try again later
 						}
-						m_nAllDataCount+=r;
-						m_sendbuf.drop(r);
-						if(m_sendbuf.empty())
-						{
-							USRDBG("Returning to last state, " << (int) m_backstate);
-							m_state=m_backstate;
-							continue;
-						}
-						return R_AGAIN; // will get back here when reentered
+						THROW_ERROR("500 Communication problem");
 					}
-					catch(...)
+					m_nAllDataCount+=r;
+					m_sendbuf.drop(r);
+					if(m_sendbuf.empty())
 					{
-						return XSTATE_DISCON;
+						USRDBG("Returning to last state, " << (int) m_stateBackSend);
+						m_stateInternal=m_stateBackSend;
+						continue;
 					}
+					m_stateExternal = XSTATE_CAN_SEND;
+					return; // caller will come back
 				}
-				
+/*
 				case(STATE_ALLDONE):
 					LOG("State: STATE_ALLDONE?");
 				// no break
 				case (STATE_ERRORCONT):
 					LOG("or STATE_ERRORCONT?");
+					*/
 				// no break
 				case(STATE_FINISHJOB):
-					LOG("or STATE_FINISHJOB");
-					{
-						if(m_bClientWants2Close)
-							return XSTATE_DISCON;
-						LOG("Reporting job done")
-						return XSTATE_FINISHED;
-					}
-					break;
+			{
+				LOG("Reporting job done");
+				m_stateExternal = m_bClientWants2Close ? XSTATE_DISCON : XSTATE_FINISHED;
+				return;
 			}
+
+				case(STATE_FATAL_ERROR):
+	{
+					if(m_nAllDataCount > 0) // crap, already started sending
+						m_stateExternal = XSTATE_DISCON;
+					else
+					{
+						SetErrorResponse(sErrorMsg);
+					}
+	}
+
+			}
+
 		}
 		catch(bad_alloc&) {
 			// TODO: report memory failure?
-			return XSTATE_DISCON;
+			m_stateExternal = XSTATE_DISCON;
 		}
-		//ASSERT(!"UNREACHED");
 	}
-	//ASSERT(!"UNREACHEABLE");
-	return XSTATE_DISCON;
 }
 
 
@@ -1158,13 +1176,14 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 							return "416 Requested Range Not Satisfiable";
 
 						m_nSendPos = m_nReqRangeFrom;
-						m_nFileSize = m_nReqRangeTo;
+						m_nFileSendLimit = m_nReqRangeTo;
 						// replace with partial-response header
 						sb.clear();
+#warning test me, get small ranges and fake acngfs calls
 						sb << "HTTP/1.1 206 Partial Response\r\nContent-Length: "
-						 << (m_nFileSize-m_nSendPos+1) <<
+						 << (m_nFileSendLimit-m_nSendPos+1) <<
 								"\r\nContent-Range: bytes "<< m_nSendPos
-								<< "-" << m_nFileSize << "/" << nContLen << "\r\n";
+								<< "-" << m_nFileSendLimit << "/" << nContLen << "\r\n";
 						bGotLen=true;
 					}
 				}
@@ -1194,7 +1213,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 	{
 		sb<<"Content-Length: 0\r\n";
 
-		m_backstate=STATE_ALLDONE;
+		m_stateBackSend = STATE_FINISHJOB;
 	}
 
 	sb << header::GenInfoHeaders();
@@ -1212,41 +1231,31 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 	LOG("response prepared:" << sb);
 
 	if(m_pReqHead->type==header::HEAD)
-		m_backstate=STATE_ALLDONE; // simulated head is prepared but don't send stuff
+		m_stateBackSend = STATE_FINISHJOB; // simulated head is prepared but don't send stuff
 
 	return 0;
 }
 
-fileitem::FiStatus job::_SwitchToPtItem()
-{
-	// Changing to local pass-through file item
-	LOGSTART("job::_SwitchToPtItem");
-	m_pItem.reset(new tPassThroughFitem(m_sFileLoc, m_parent));
-	m_pItem->m_nSizeSeenInCache = m_nReqRangeFrom;
-#warning XXX: test resuming
-	m_pItem->m_nRangeLimit = m_nReqRangeTo;
-	m_pItem->m_head.set(header::LAST_MODIFIED,
-			m_pReqHead->h[header::IF_MODIFIED_SINCE] ?
-					m_pReqHead->h[header::IF_MODIFIED_SINCE] : m_pReqHead->h[header::IFRANGE]);
-	return (m_pItem->m_status = fileitem::FIST_INITED);
-}
 
-
-void job::SetErrorResponse(const char * errorLine, const char *szLocation, const char *bodytext)
+void job::SetErrorResponse(cmstring& errorLine, const char *szLocation, const char *bodytext)
 {
 	LOGSTART2("job::SetErrorResponse", errorLine << " ; for " << m_sOrigUrl);
 	class erroritem: public tGeneratedFitemBase
 	{
 	public:
-		erroritem(const string &sId, const char *szError, const char *bodytext)
-			: tGeneratedFitemBase(sId, szError)
+		erroritem(const string &sId, cmstring& sError, const char *bodytext)
+			: tGeneratedFitemBase(sId, sError)
 		{
 			if(BODYFREECODE(m_head.getStatus()))
 				return;
 			// otherwise do something meaningful
-			m_data <<"<!DOCTYPE html>\n<html lang=\"en\"><head><title>" << (bodytext ? bodytext : szError)
-				<< "</title>\n</head>\n<body><h1>"
-				<< (bodytext ? bodytext : szError) << "</h1></body></html>";
+			m_data << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>"
+					<< sError << "</title>\n</head>\n<body><h1>";
+			if (bodytext)
+				m_data << bodytext;
+			else
+				m_data << sError;
+			m_data << "</h1></body></html>";
 			m_head.set(header::CONTENT_TYPE, "text/html");
 			seal();
 		}
@@ -1254,9 +1263,14 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation, const
 
 	erroritem *p = new erroritem("noid", errorLine, bodytext);
 	p->HeadRef().set(header::LOCATION, szLocation);
+	if(m_bFitemWasSubscribed)
+	{
+		m_pItem->unsubscribe(m_parent.fdWakeWrite);
+		m_bFitemWasSubscribed = false;
+	}
 	m_pItem.reset(p);
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
-	m_state=STATE_SEND_MAIN_HEAD;
+	m_stateInternal=STATE_SEND_MAIN_HEAD;
 }
 
 }

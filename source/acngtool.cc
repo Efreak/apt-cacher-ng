@@ -83,12 +83,12 @@ struct CPrintItemFactory : public IFitemFactory
 			tPrintItem()
 			{
 				m_bAllowStoreData=false;
-				m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
+				m_nCheckedSize = m_nSizeSeenInCache = 0;
 			};
 			// XXX: needing this override? where? Just to defuse the caller but for what?
 			virtual FiStatus SetupFromCache(bool) override
 			{
-				m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
+				m_nCheckedSize = m_nSizeSeenInCache = 0;
 				return m_status = FIST_INITED;
 			}
 			virtual int GetFileFd() override
@@ -161,14 +161,14 @@ struct CReportItemFactory : public IFitemFactory
 			tRepItem()
 			{
 				m_bAllowStoreData=false;
-				m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
+				m_nCheckedSize = m_nSizeSeenInCache = 0;
 				lineBuf.setsize(1<<16);
 				memset(lineBuf.wptr(), 0, 1<<16);
 			};
 			// XXX: needing this override? where? Just to defuse the caller but for what?
 			virtual FiStatus SetupFromCache(bool) override
 			{
-				m_nUsableSizeInCache = m_nSizeSeenInCache = 0;
+				m_nCheckedSize = m_nSizeSeenInCache = 0;
 				return m_status = FIST_INITED;
 			}
 			virtual int GetFileFd() override
@@ -1013,8 +1013,8 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	if(dlcon::tWorkState::fatalError & dl.WorkLoop(dlcon::eWorkParameter::freshStart
 					| dlcon::eWorkParameter::internalIoLooping).flags)
 		exit(23);
-	auto fistatus = fi->GetStatus();
-	header hh = fi->GetHeader();
+	header hh;
+	auto fistatus = fi->GetStatus(0, 0, 0, &hh);
 	int st=hh.getStatus();
 
 	if(fistatus == fileitem::FIST_COMPLETE && st == 200)

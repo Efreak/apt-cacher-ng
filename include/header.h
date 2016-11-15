@@ -68,10 +68,10 @@ class header {
       void del(eHeadPos);
       inline void copy(const header &src, eHeadPos pos) { set(pos, src.h[pos]); };
 
-      inline const char * getCodeMessage() const {
-    	  return frontLine.length()>9 ? frontLine.c_str()+9 : "";
+      inline mstring getCodeMessage() const {
+    	  return frontLine.length()>9 ? frontLine.substr(9) : sEmptyString;
       }
-      inline int getStatus() const { int r=atoi(getCodeMessage()); return r ? r : 500; }
+      inline int getStatus() const { int r=atoi(getCodeMessage().c_str()); return r ? r : 500; }
       void clear();
       
       tSS ToString() const;

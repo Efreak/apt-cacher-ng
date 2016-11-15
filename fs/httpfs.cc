@@ -315,7 +315,8 @@ public:
 			exit(1);
 
 		int nHttpCode(100);
-		pFi->WaitForFinish(&nHttpCode);
+#warning fixme, workloop was ausgeführt, code fischen
+		//pFi->WaitForFinish(&nHttpCode);
 		bIsFirst=false;
 
 
@@ -390,7 +391,8 @@ public:
 						| dlcon::eWorkParameter::internalIoLooping).flags)
 			exit(23);
 		int nHttpCode(100);
-		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
+#warning fixme, workloop was ausgeführt, code fischen
+		fileitem::FiStatus res ;//= probe->WaitForFinish(&nHttpCode);
 		stbuf.st_size = atoofft(probe->GetHeaderUnlocked().h[header::CONTENT_LENGTH], 0);
 		stbuf.st_mode &= ~S_IFDIR;
 		stbuf.st_mode |= S_IFREG;

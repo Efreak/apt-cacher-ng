@@ -371,7 +371,7 @@ void conn::WorkLoop() {
 				ldbg("Rest: " << (inBuf.size()-nHeadBytes));
 
 				{
-					job * j = new job(m_pTmpHead, this);
+					job * j = new job(m_pTmpHead, *this);
 					j->PrepareDownload(inBuf.rptr());
 					inBuf.drop(nHeadBytes);
 
@@ -392,32 +392,22 @@ void conn::WorkLoop() {
 		if(inBuf.freecapa()==0)
 			return; // cannot happen unless being attacked
 
-		if (FD_ISSET(m_confd, &wfds) && pjSender)
+		if (pjSender && (pjSender->m_stateExternal == job::XSTATE_CAN_SEND
+				|| FD_ISSET(m_confd, &wfds)))
 		{
-			while (true)
+			bWaitDl = false;
+			pjSender->SendData(m_confd);
+			ldbg("Job step result: " << pjSender->m_stateExternal);
+			switch(pjSender->m_stateExternal)
 			{
-				auto sendRes = pjSender->SendData(m_confd);
-				if (sendRes == job::XSTATE_DISCON)
-				{
-					ldbg("Disconnect advise received, stopping connection");
-					return;
-				}
-				if (sendRes == job::XSTATE_FINISHED)
-				{
-					m_jobs2send.pop_front();
-					delete pjSender;
-					pjSender = nullptr;
-
-					ldbg("Remaining jobs to send: " << m_jobs2send.size());
-					break;
-				}
-				if (sendRes == job::R_AGAIN)
-					continue;
-				if (sendRes == job::R_WAITDL)
-				{
-					bWaitDl = true;
-					break;
-				}
+			case job::XSTATE_DISCON: return;
+			case job::XSTATE_CAN_SEND: continue; // come back ASAP
+			case job::XSTATE_WAIT_DL: bWaitDl = true; break;
+			case job::XSTATE_FINISHED:
+				m_jobs2send.pop_front();
+				delete pjSender;
+				pjSender = nullptr;
+				ldbg("Remaining jobs to send: " << m_jobs2send.size());
 			}
 		}
 	}
@@ -493,6 +483,14 @@ void conn::Shutdown()
 	for(auto& j: m_jobs2send) delete j;
 	m_jobs2send.clear();
 	if(m_pDlClient) m_pDlClient->Shutdown();
+#warning close wake pipe or donate that descriptor(s) to some cache
+}
+
+void conn // : public tRunable
+::SetupSubscription(tFileItemPtr)
+{
+#warning implement
 }
 
 }
+

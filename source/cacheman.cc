@@ -295,7 +295,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if (bIsVolatileFile && m_bForceDownload)
 	{
-		if (!pFi->SetupClean())
+		if (!pFi->ResetCacheState())
 			GOTOREPMSG("Item busy, cannot reload");
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 			SendFmt << "Downloading " << sFilePathRel << "...\n";
@@ -310,11 +310,10 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 		fileitem::FiStatus initState = pFi->SetupFromCache(bIsVolatileFile);
 		if (initState > fileitem::FIST_COMPLETE)
-			GOTOREPMSG(pFi->GetHeader().frontLine);
+			GOTOREPMSG(pFi->GetHttpStatus());
 		if (fileitem::FIST_COMPLETE == initState)
 		{
-			int hs = pFi->GetHeader().getStatus();
-			if(hs != 200)
+			if(200 != atoi(pFi->GetHttpStatus().c_str()))
 			{
 				SendFmt << "Error downloading " << sFilePathRel << ":\n";
 				goto format_error;
@@ -416,12 +415,15 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		goto rep_dl_error;
 
 
-	if (pFi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE
+	if (pFi->GetStatus() == fileitem::FIST_COMPLETE
 			&& pFi->GetHeaderUnlocked().getStatus() == 200)
 	{
 		bSuccess = true;
+#warning fixme, tcount display
+		/*
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 			SendFmt << "<i>(" << pFi->GetTransferCount() / 1024 << "KiB)</i>\n";
+			*/
 	}
 	else
 	{
@@ -444,18 +446,21 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 				SendChunkSZ("<i>(ignored)</i>\n");
 		}
 		else
-			GOTOREPMSG(pFi->GetHttpMsg());
+			GOTOREPMSG(pFi->GetHttpStatus());
 	}
 
 	rep_dlresult:
 
 	if(pFi)
 	{
+#warning fixme, tcount display
+		/*
 		auto dlCount = pFi->GetTransferCount();
 		static cmstring sInternal("[INTERNAL:");
 		// need to account both, this traffic as officially tracked traffic, and also keep the count
 		// separately for expiration about trade-off calculation
 		log::transfer(dlCount, 0, sInternal + GetTaskName() + "]", sFilePathRel, false);
+		*/
 	}
 
 	if (bSuccess && bIsVolatileFile)
@@ -868,11 +873,11 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 
 			if(m_link)
 			{
-				setLockGuard;
+				lockguard g(m_mx);
 				if (LinkOrCopy(SABSPATH(fromRel), sPathAbs))
 				{
 					m_status = FIST_COMPLETE;
-					notifyAll();
+					notifyObservers();
 					return true;
 				}
 			}
