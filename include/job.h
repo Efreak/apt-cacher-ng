@@ -100,15 +100,19 @@ DLSTATE_OUR, DLSTATE_OTHER
 	bool FormatHeader(const fileitem::FiStatus &fistate,
 			const off_t &nGooddataSize, const header& respHead,
 			bool bHasSendableData, int httpstatus);
-	//fileitem::FiStatus _SwitchToPtItem();
-	void SetErrorResponse(cmstring& errorLine, const char *szLocation =
-			nullptr, const char *bodytext = nullptr);
+	/**
+	 * Installs the error message string as fatal error, allocating data as needed.
+	 */
+	void SetFatalErrorResponse(cmstring& errorLine);
 	void SetupFileServing(const mstring &visPath, const mstring &fsBase,
 			const mstring &fsSubpath);
 
 	bool ParseRange();
 
 	off_t m_nReqRangeFrom = -1, m_nReqRangeTo = -1;
+
+	// HTTP status message to report as fatal error ASAP
+	mstring* m_psFatalError = nullptr;
 };
 
 }

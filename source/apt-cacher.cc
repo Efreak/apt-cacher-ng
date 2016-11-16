@@ -265,6 +265,12 @@ int main(int argc, const char **argv)
 
 	bool bRunCleanup=false;
 
+#ifdef DEBUG
+	for(int i=0; i<argc; ++i)
+		if(0==strcmp(argv[i], "~~"))
+			argc=i++;
+#endif
+
 	parse_options(argc, argv, bRunCleanup);
 
 	if(!log::open())

@@ -228,8 +228,11 @@ job::~job()
 	checkforceclose(m_filefd);
 	delete m_pReqHead;
 
-	if(m_pItem && m_bFitemWasSubscribed)
-		m_pItem->unsubscribe(m_parent.fdWakeWrite);
+	if(m_bFitemWasSubscribed)
+		m_parent.UnsubscribeFromUpdates(m_pItem);
+
+	if(m_psFatalError)
+		delete m_psFatalError;
 }
 
 
@@ -242,27 +245,18 @@ inline void job::SetupFileServing(const string &visPath,
 	{
 		switch(errno)
 		{
-		case EACCES:
-			SetErrorResponse("403 Permission denied");
-			break;
+		case EACCES: return SetFatalErrorResponse("403 Permission denied");
+		case ELOOP: return SetFatalErrorResponse("500 Infinite link recursion");
+		case ENAMETOOLONG: return SetFatalErrorResponse("500 File name too long");
+		case ENOENT:
+		case ENOTDIR:
+			return SetFatalErrorResponse("404 File or directory not found");
 		case EBADF:
 		case EFAULT:
 		case ENOMEM:
 		case EOVERFLOW:
 		default:
-			//aclog::err("Internal error");
-			SetErrorResponse("500 Internal server error");
-			break;
-		case ELOOP:
-			SetErrorResponse("500 Infinite link recursion");
-			break;
-		case ENAMETOOLONG:
-			SetErrorResponse("500 File name too long");
-			break;
-		case ENOENT:
-		case ENOTDIR:
-			SetErrorResponse("404 File or directory not found");
-			break;
+			return SetFatalErrorResponse("500 Internal server error");
 		}
 		return;
 	}
@@ -378,10 +372,7 @@ inline void job::SetupFileServing(const string &visPath,
 		return;
 	}
 	if(!S_ISREG(stbuf.st_mode))
-	{
-		SetErrorResponse("403 Unsupported data type");
-		return;
-	}
+		return SetFatalErrorResponse("403 Unsupported data type");
 	/*
 	 * This variant of file item handler sends a local file. The
 	 * header data is generated as needed, the relative cache path variable
@@ -463,6 +454,13 @@ void job::PrepareDownload(LPCSTR headBuf)
 	log::err(m_pReqHead->ToString());
 #endif
 
+// return with impure call is better than goto
+#define msg_overload SetFatalErrorResponse("503 Server overload, please try later")
+#define msg_offline SetFatalErrorResponse("503 Unable to download in offline mode")
+#define msg_invpath  SetFatalErrorResponse("403 Invalid path specification")
+#define msg_degraded  SetFatalErrorResponse("403 Cache server in degraded mode")
+#define msg_invport  SetFatalErrorResponse("403 Configuration error (confusing proxy mode) or prohibited port (see AllowUserPorts)")
+#define msg_notallowed SetFatalErrorResponse("403 Forbidden file type or location")
 
 	auto _SwitchToPtItem = [this]() ->fileitem::FiStatus
 	{
@@ -489,12 +487,13 @@ void job::PrepareDownload(LPCSTR headBuf)
 	tSplitWalk tokenizer(&m_pReqHead->frontLine, SPACECHARS);
 
 	if (m_pReqHead->type != header::GET && m_pReqHead->type != header::HEAD)
-		goto report_invpath;
+		return msg_invpath;
 	if (!tokenizer.Next() || !tokenizer.Next()) // at path...
-		goto report_invpath;
+		return msg_invpath;
 	UrlUnescapeAppend(tokenizer, sReqPath);
 	if (!tokenizer.Next()) // at proto
-		goto report_invpath;
+		return msg_invpath;
+
 	m_bIsHttp11 = (sHttp11 == tokenizer.str());
 
 	USRDBG("Decoded request URI: " << sReqPath);
@@ -508,7 +507,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 	// "clever" file system browsing attempt?
 	if (rex::Match(sReqPath, rex::NASTY_PATH) || stmiss != sReqPath.find(MAKE_PTR_0_LEN("/_actmp"))
 	|| startsWithSz(sReqPath, "/_"))
-		goto report_notallowed;
+		return msg_notallowed;
 
 	try
 	{
@@ -533,16 +532,16 @@ void job::PrepareDownload(LPCSTR headBuf)
 		{
 			nPort = (uint) strtoul(sPort, &pEnd, 10);
 			if ('\0' != *pEnd || pEnd == sPort || nPort > TCP_PORT_MAX || !nPort)
-				goto report_invport;
+				return msg_invport;
 		}
 
 		if (cfg::pUserPorts)
 		{
 			if (!cfg::pUserPorts->test(nPort))
-				goto report_invport;
+				return msg_invport;
 		}
 		else if (nPort != 80)
-			goto report_invport;
+			return msg_invport;
 
 		// kill multiple slashes
 		for (tStrPos pos = 0; stmiss != (pos = theUrl.sPath.find("//", pos, 2));)
@@ -592,7 +591,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 			if (m_type == FILE_INVALID)
 			{
 				if (!cfg::patrace)
-					goto report_notallowed;
+					return msg_notallowed;
 
 				// ok, collect some information helpful to the user
 				m_type = FILE_VOLATILE;
@@ -618,17 +617,17 @@ void job::PrepareDownload(LPCSTR headBuf)
 	}
 	catch (std::out_of_range&) // better safe...
 	{
-		goto report_invpath;
+		return msg_invpath;
 	}
 
 	if (!m_pItem)
 	{
 		USRDBG("Error creating file item for " << m_sFileLoc);
-		goto report_overload;
+		return msg_overload;
 	}
 
 	if (cfg::DegradedMode())
-		goto report_degraded;
+		return msg_degraded;
 
 	fistate = m_pItem->SetupFromCache(bForceFreshnessChecks);
 	LOG("Got initial file status: " << (int) fistate);
@@ -662,7 +661,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 	if (cfg::offlinemode)
 	{ // make sure there will be no problems later in SendData or prepare a user message
 	  // error or needs download but freshness check was disabled, so it's really not complete.
-		goto report_offlineconf;
+		return msg_offline;
 	}
 	dbgline;
 	if (fistate < fileitem::FIST_DLASSIGNED) // needs a downloader
@@ -671,7 +670,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 		if (!m_parent.SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
 		{
 			USRDBG("Error creating download handler for "<<m_sFileLoc);
-			goto report_overload;
+			return msg_overload;
 		}
 
 		dbgline;
@@ -681,7 +680,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 					(repoMapping.repodata && !repoMapping.repodata->m_backends.empty());
 
 			if (cfg::forcemanaged && !bHaveRedirects)
-				goto report_notallowed;
+				return msg_notallowed;
 
 			// XXX: this only checks the first found backend server, what about others?
 			auto testUri =
@@ -702,41 +701,17 @@ void job::PrepareDownload(LPCSTR headBuf)
 			else
 			{
 				ldbg("PANIC! Error creating download job for " << m_sFileLoc);
-				goto report_overload;
+				return msg_overload;
 			}
 		} catch (std::bad_alloc&) // OOM, may this ever happen here?
 		{
 			USRDBG("Out of memory");
-			goto report_overload;
+			return msg_overload;
 		};
 	}
 
 	return;
-#warning crap. use return SetErrorResponse(...)
-	report_notallowed: SetErrorResponse(
-			(tSS() << "403 Forbidden file type or location: " << sReqPath).c_str(), nullptr,
-			"403 Forbidden file type or location");
-//    USRDBG( sRawUriPath + " -- ACCESS FORBIDDEN");
-	return;
 
-	report_offlineconf: SetErrorResponse("503 Unable to download in offline mode");
-	return;
-
-	report_invpath: SetErrorResponse("403 Invalid path specification");
-	return;
-
-	report_degraded: SetErrorResponse("403 Cache server in degraded mode");
-	return;
-
-	report_invport: SetErrorResponse(
-			"403 Configuration error (confusing proxy mode) or prohibited port (see AllowUserPorts)");
-	return;
-	/*
-	 report_doubleproxy:
-	 SetErrorResponse("403 URL seems to be made for proxy but contains apt-cacher-ng port. "
-	 "Inconsistent apt configuration?");
-	 return ;
-	 */
 	setup_pt_request:
 	{
 		m_sFileLoc = theUrl.ToURI(false);
@@ -745,7 +720,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 		if (!m_parent.SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
 		{
 			USRDBG("Error creating download handler for "<<m_sFileLoc);
-			goto report_overload;
+			return msg_overload;
 		}
 		if (m_parent.m_pDlClient->AddJob(m_pItem, &theUrl, repoMapping.repodata, nullptr,
 				headBuf, cfg::redirmax))
@@ -756,33 +731,30 @@ void job::PrepareDownload(LPCSTR headBuf)
 		else
 		{
 			ldbg("PANIC! Error creating download job for " << m_sFileLoc);
-			goto report_overload;
+			return msg_overload;
 		}
 	}
-	return;
-
-	report_overload: SetErrorResponse("503 Server overload, try later");
-	return;
 }
 
-#define REPORT_ERROR { m_stateInternal = STATE_FATAL_ERROR; continue;}
-#define THROW_ERROR(x) { sErrorMsg = x; REPORT_ERROR; }
+#define THROW_ERROR(x) { SetFatalErrorResponse(x); continue; }
 
 void job::SendData(int confd)
 {
 	LOGSTART("job::SendData");
 
-	// finish this way if no better state found
-	m_stateExternal = XSTATE_DISCON;
-
 	if(m_eMaintWorkType)
 	{
 		tSpecialRequest::RunMaintWork(m_eMaintWorkType, m_sFileLoc, confd);
+		m_stateExternal = XSTATE_DISCON;
+
 		return;
 	}
 	
 	if(!m_pItem)
+	{
+		m_stateExternal = XSTATE_DISCON;
 		return;
+	}
 
 #if 0
 	fileitem::FiStatus fistate(fileitem::FIST_DLERROR);
@@ -850,9 +822,6 @@ void job::SendData(int confd)
 #warning what for??
 #endif
 
-	string &sErrorMsg = m_parent.sErrorMsg;
-	sErrorMsg.clear();
-
 #warning also move this stuff to a scratch area inside of m_parent (!!)
 
 	fileitem::FiStatus fistate = fileitem::FIST_FRESH;
@@ -867,16 +836,19 @@ void job::SendData(int confd)
 
 	while(true) // send initial header, chunk header, etc. in a sequence; eventually left by returning
 	{
+		if(m_stateExternal == XSTATE_DISCON)
+			return;
+
 		if(!skipFetchState)
 		{
 			skipFetchState = false;
 
-			fistate = m_pItem->GetStatus(&dlThreadId, &sErrorMsg, &m_nConfirmedSizeSoFar,
+			fistate = m_pItem->GetStatus(&dlThreadId, &m_parent.sErrorMsg, &m_nConfirmedSizeSoFar,
 					(m_stateInternal == STATE_SEND_MAIN_HEAD)
 					? &respHead : nullptr);
 		}
 		if(fistate >= fileitem::FIST_DLERROR)
-			THROW_ERROR(sErrorMsg);
+			THROW_ERROR(m_parent.sErrorMsg);
 
 		ldbg("job: istate switch " << m_stateInternal);
 		try // for bad_alloc in members
@@ -911,7 +883,7 @@ void job::SendData(int confd)
 				m_stateBackSend = STATE_SEND_MAIN_HEAD;
 				if(m_eDlType == DLSTATE_OTHER) // ok, not our download agent
 				{
-					m_parent.SetupSubscription(m_pItem);
+					m_parent.Subscribe4updates(m_pItem);
 					m_bFitemWasSubscribed = true;
 				}
 				continue;
@@ -1073,10 +1045,13 @@ void job::SendData(int confd)
 						m_stateExternal = XSTATE_DISCON;
 					else
 					{
+						if(!m_psFatalError)
+							m_psFatalError = new std::string("500 Unknown Error");
 						// no fancy error page, this is basically it
 						m_sendbuf.clear();
 						m_sendbuf << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ")
-								<< sErrorMsg << "\r\n\r\n";
+								<< *m_psFatalError << "\r\n\r\n";
+#warning add oneline body with content length
 						m_stateInternal = STATE_SEND_BUFFER;
 						m_stateBackSend = STATE_FATAL_ERROR; // will abort then
 						continue;
@@ -1103,6 +1078,7 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate,
 	// just store a copy for the caller
 	auto asError = [this](const char *errMsg)
 		{
+#warning still need a scratch error string
 		m_parent.sErrorMsg = errMsg;
 		return false;
 		};
@@ -1250,8 +1226,8 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate,
 
 	return true;
 }
-
-
+#if 0
+#error method is shit. no need for location or bodytext anymore. no need to replace item, this is only for fatal items
 void job::SetErrorResponse(cmstring& errorLine, const char *szLocation, const char *bodytext)
 {
 	LOGSTART2("job::SetErrorResponse", errorLine << " ; for " << m_sOrigUrl);
@@ -1286,6 +1262,22 @@ void job::SetErrorResponse(cmstring& errorLine, const char *szLocation, const ch
 	m_pItem.reset(p);
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
 	m_stateInternal=STATE_SEND_MAIN_HEAD;
+}
+#endif
+void job::SetFatalErrorResponse(cmstring& errorLine)
+{
+	if(!m_psFatalError)
+		m_psFatalError = new std::string(errorLine);
+	else
+		m_psFatalError->assign(errorLine);
+#warning log?
+	if(m_nAllDataCount>0)
+	{
+		m_stateExternal = XSTATE_DISCON;
+		return;
+	}
+	m_stateInternal = STATE_FATAL_ERROR;
+	m_stateExternal = XSTATE_CAN_SEND;
 }
 
 }

@@ -47,6 +47,7 @@ conn::~conn() {
 	delete m_pDlClient;
 	delete m_pTmpHead;
 	log::flush();
+#warning recycle update fds
 }
 
 namespace RawPassThrough
@@ -372,6 +373,7 @@ void conn::WorkLoop() {
 
 				{
 					job * j = new job(m_pTmpHead, *this);
+#warning clear scratch data here?
 					j->PrepareDownload(inBuf.rptr());
 					inBuf.drop(nHeadBytes);
 
@@ -486,11 +488,14 @@ void conn::Shutdown()
 #warning close wake pipe or donate that descriptor(s) to some cache
 }
 
-void conn // : public tRunable
-::SetupSubscription(tFileItemPtr)
+void conn::Subscribe4updates(tFileItemPtr)
 {
 #warning implement
 }
 
+void conn::UnsubscribeFromUpdates(tFileItemPtr)
+{
+#warning implement
+}
 }
 

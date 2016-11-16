@@ -15,6 +15,8 @@
 namespace acng
 {
 
+#warning add TRACEPOINT(name) which returns true when env "name" is set
+
 #ifdef DEBUG
 #define ASSERT(x) assert(x)
 #else
