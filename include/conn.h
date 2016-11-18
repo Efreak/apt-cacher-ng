@@ -52,15 +52,11 @@ class conn // : public tRunable
       /**
        * Setup wake descriptors as needed and subscribe on ptr. User must unsubscribe later!
        */
-      void Subscribe4updates(tFileItemPtr);
+      bool Subscribe4updates(tFileItemPtr);
       void UnsubscribeFromUpdates(tFileItemPtr);
 
       std::list<job*> m_jobs2send;
       
-#ifdef KILLABLE
-      // to awake select with dummy data
-      int wakepipe[2];
-#endif
       // for jobs
       friend class job;
       bool SetupDownloader(const char *xff);

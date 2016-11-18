@@ -1,4 +1,3 @@
-
 #ifndef _DLCON_H
 #define _DLCON_H
 
@@ -48,99 +47,99 @@ enum eStateTransition
  * i.e. remotes marked as faulty there are no longer considered by the subsequent download jobs.
  */
 class dlcon
-{ 
-    public:
-        dlcon(mstring *xff=nullptr,
-        		IDlConFactory *pConFactory = &g_tcp_con_factory);
-        ~dlcon();
+{
+public:
+	dlcon(mstring *xff = nullptr, IDlConFactory *pConFactory = &g_tcp_con_factory);
+	~dlcon();
 
-
-        // helpers for communication with the outside world
-        enum eWorkParameter
+	// helpers for communication with the outside world
+	enum eWorkParameter
+	{
+		freshStart = 1, // init/reinit object state, only in the beginning
+		internalIoLooping = 2, // "manual mode" - run internal IO and loop until the job list is processed
+		ioretCanRecv = 4,
+		ioretCanSend = 8,
+		ioretGotError = 16,
+		ioretGotTimeout = 32,
+		canConnect = 64 // not an io check result but just donated CPU time
+	};
+	struct tWorkState
+	{
+		enum
 		{
-        		freshStart = 1, // init/reinit object state, only in the beginning
-        	    internalIoLooping = 2,// "manual mode" - run internal IO and loop until the job list is processed
-				ioretCanRecv =4, ioretCanSend=8, ioretGotError=16, ioretGotTimeout = 32,
-				canConnect = 64 // not an io check result but just donated CPU time
-		};
-        struct tWorkState
-        {
-        	enum
-			{
-        		allDone = 0, needRecv = 1, needSend = 2,
-				needConnect = 4, // there is some connection-related work to do
-				fatalError = 8,
+			allDone = 0, // remain idle
+			needRecv = 1,
+			needSend = 2,
+			needConnect = 4, // there is some connection-related work to do
+			fatalError = 8,
 #warning fixme, shorcut missleading
-				needActivity = 1 + 2 + 4 // shortcut for all IO related hints
-        	};
-        	int flags; // one or multiple ORed from above
-        	int fd;
-        };
+			needActivity = 1 + 2 + 4 // shortcut for all IO related hints
+		};
+		int flags; // one or multiple ORed from above
+		int fd;
+	};
 
-        tWorkState WorkLoop(unsigned /* eWorkParameter */ flags);
+	tWorkState WorkLoop(unsigned /* eWorkParameter */flags);
 
-        // donate internal resources and prepare for termination. Should not be called during glboal shutdown.
-        void Shutdown();
+	// donate internal resources and prepare for termination. Should not be called during glboal shutdown.
+	void Shutdown();
 
-        bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
-        		const cfg::tRepoData *pRepoDesc,
-        		cmstring *sPatSuffix, LPCSTR reqHead,
-				int nMaxRedirection);
+	bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl, const cfg::tRepoData *pRepoDesc,
+			cmstring *sPatSuffix, LPCSTR reqHead, int nMaxRedirection);
 
 	// take final metadata from a finished job and finally retire it
 	void DisposeJob(const tFileItemPtr& refFitem, off_t &nSent, off_t &nReceived);
-        mstring m_sXForwardedFor;
+	mstring m_sXForwardedFor;
 
-        //! Returns true the file is or probably will be downloaded by this thread
-        bool IsCommingDownload(const tFileItemPtr &fiptr);
-    private:
+	//! Returns true the file is or probably will be downloaded by this thread
+	bool IsCommingDownload(const tFileItemPtr &fiptr);
+private:
 
-    	//not to be copied
-    	dlcon & operator=(const dlcon&);
-    	dlcon(const dlcon&);
-    	
-    	friend struct tDlJob;
-    	
-    	tDljQueue m_qNewjobs, m_qFinishedJobs;
-    	IDlConFactory* m_pConFactory;
+	//not to be copied
+	dlcon & operator=(const dlcon&);
+	dlcon(const dlcon&);
 
-    	/// blacklist for permanently failing hosts, with error message
-    	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;
-    	tSS m_sendBuf, m_inBuf;
+	friend struct tDlJob;
 
-    	// Disable pipelining for the next # requests. Actually used as crude workaround for the
-    	// concept limitation (because of automata over a couple of function) and its
-    	// impact on download performance.
-    	// The use case: stupid web servers that redirect all requests do that step-by-step, i.e.
-    	// they get a bunch of requests but return only the first response and then flush the buffer
-    	// so we process this response and wish to switch to the new target location (dropping
-    	// the current connection because we don't keep it somehow to background, this is the only
-    	// download agent we have). This manner perverts the whole principle and causes permanent
-    	// disconnects/reconnects. In this case, it's beneficial to disable pipelining and send
-    	// our requests one-by-one. This is done for a while (i.e. the valueof(m_nDisablePling)/2 )
-    	// times before the operation mode returns to normal.
-    	int m_nTempPipelineDisable;
+	tDljQueue m_qNewjobs, m_qFinishedJobs;
+	IDlConFactory* m_pConFactory;
 
+	/// blacklist for permanently failing hosts, with error message
+	std::map<std::pair<cmstring, cmstring>, mstring> m_blacklist;
+	tSS m_sendBuf, m_inBuf;
 
-    	// the default behavior or using or not using the proxy. Will be set
-    	// if access proxies shall no longer be used.
-    	bool m_bProxyTot;
+	// Disable pipelining for the next # requests. Actually used as crude workaround for the
+	// concept limitation (because of automata over a couple of function) and its
+	// impact on download performance.
+	// The use case: stupid web servers that redirect all requests do that step-by-step, i.e.
+	// they get a bunch of requests but return only the first response and then flush the buffer
+	// so we process this response and wish to switch to the new target location (dropping
+	// the current connection because we don't keep it somehow to background, this is the only
+	// download agent we have). This manner perverts the whole principle and causes permanent
+	// disconnects/reconnects. In this case, it's beneficial to disable pipelining and send
+	// our requests one-by-one. This is done for a while (i.e. the valueof(m_nDisablePling)/2 )
+	// times before the operation mode returns to normal.
+	int m_nTempPipelineDisable;
 
-    	// this is a binary factor, meaning how many reads from buffer are OK when
-    	// speed limiting is enabled
-    	unsigned m_nSpeedLimiterRoundUp = (unsigned(1)<<16)-1;
-    	unsigned m_nSpeedLimitMaxPerTake = MAX_VAL(unsigned);
-      unsigned m_nLastDlCount=0;
+	// the default behavior or using or not using the proxy. Will be set
+	// if access proxies shall no longer be used.
+	bool m_bProxyTot;
 
-      // temp state variables and internal helpers
-  	tDljQueue inpipe;
-  	tDlStreamHandle con;
-  	bool bStopRequesting = false; // hint to stop adding request headers until the connection is restarted
-  	int nLostConTolerance = 1;
-    string sErrorMsg;
-    bool ResetState(); // set them back to defaults
-    eStateTransition SetupConnectionAndRequests();
-    void BlacklistMirror(tDlJobPtr & job);
+	// this is a binary factor, meaning how many reads from buffer are OK when
+	// speed limiting is enabled
+	unsigned m_nSpeedLimiterRoundUp = (unsigned(1) << 16) - 1;
+	unsigned m_nSpeedLimitMaxPerTake = MAX_VAL(unsigned);
+	unsigned m_nLastDlCount = 0;
+
+	// temp state variables and internal helpers
+	tDljQueue inpipe;
+	tDlStreamHandle con;
+	bool bStopRequesting = false; // hint to stop adding request headers until the connection is restarted
+	int nLostConTolerance = 1;
+	string sErrorMsg;
+	bool ResetState(); // set them back to defaults
+	eStateTransition SetupConnectionAndRequests();
+	void BlacklistMirror(tDlJobPtr & job);
 };
 
 #define IS_REDIRECT(st) (st == 301 || st == 302 || st == 307)

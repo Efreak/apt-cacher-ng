@@ -22,7 +22,7 @@ class acbuf
     	inline bool empty() const { return w==r;}
     	//! Count of the data inside
         inline unsigned int size() const { return w-r;}
-        //! Returns capacity
+        //! Returns remaining capacity
         inline unsigned int freecapa() const { return m_nCapacity-w; }
         inline unsigned int totalcapa() const { return m_nCapacity; }
         //! Erase all characters after a certain position  

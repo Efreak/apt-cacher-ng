@@ -356,6 +356,8 @@ void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
 	if(!handle)
 		return;
 
+//	handle->m_recvBuf.clear();
+
 	LOGSTART2s("tcpconnect::RecycleIdleConnection", handle->m_sHostName);
 
 	if(handle->m_pStateObserver)
@@ -370,16 +372,6 @@ void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
 		handle.reset();
 		return;
 	}
-
-#ifdef DEBUG
-	if(check_read_state(handle->GetFD()))
-	{
-		acbuf checker;
-		checker.setsize(300000);
-		checker.sysread(handle->GetFD());
-
-	}
-#endif
 
 	auto& host = handle->GetHostname();
 	if (!host.empty())

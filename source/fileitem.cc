@@ -10,6 +10,9 @@
 #include "fileio.h"
 #include "cleaner.h"
 #include "filelocks.h"
+#ifdef HAVE_LINUX_EVENTFD
+#include <sys/eventfd.h>
+#endif
 
 #include <errno.h>
 #include <algorithm>
@@ -47,15 +50,7 @@ string fileitem::GetHttpMsg()
 }
 */
 
-fileitem::fileitem() :
-//	m_nIncommingCount(0),
-	m_nSizeSeenInCache(0),
-	m_nRangeLimit(-1),
-	m_bCheckFreshness(true),
-	m_bAllowStoreData(true),
-	m_nCheckedSize(0),
-	m_filefd(-1)
-//	m_nTimeDlStarted(0)
+fileitem::fileitem()
 {
 }
 
@@ -237,7 +232,8 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 			m_nSizeSeenInCache=GetFileSize(sPathAbs, 0);
 	}
 	LOG("resulting status: " << (int) m_status);
-	m_status = FIST_INITED;
+	if(m_status < FIST_INITED)
+		m_status = FIST_INITED;
 	return m_status;
 }
 
@@ -1063,19 +1059,38 @@ int fileitem_with_storage::MoveRelease2Sidestore()
 
 #endif // MINIBUILD
 
+void fileitem::poke(int fd)
+{
+#ifdef HAVE_LINUX_EVENTFD
+       while(eventfd_write(fd, 1)<0) ;
+#else
+       POKE(fd);
+#endif
+}
+
 void fileitem::subscribe(int fd)
 {
-#warning implement
+	ASSERT(fd != -1);
+	lockguard g(m_mx);
+	m_subscribers.push_back(fd);
+	// might have changed since lock was issued
+	poke(fd);
 }
 
 void fileitem::unsubscribe(int fd)
 {
-#warning implement
+	lockguard g(m_mx);
+	for(auto& m: m_subscribers)
+		if(m == fd)
+			m = -1;
 }
 
 void fileitem::notifyObservers()
 {
-#warning implement
+	lockguard g(m_mx);
+	for(const auto& n: m_subscribers)
+		if(n != -1)
+			poke(n);
 }
 
 #warning sErrorMsg filled out correctly and reliable?

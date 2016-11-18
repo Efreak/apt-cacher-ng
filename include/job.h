@@ -20,10 +20,10 @@ class job
 	enum : char
 		{
 			XSTATE_FINISHED = 0, // processing finished
-// pointless				R_AGAIN = 1, // short loop, just restart SendData loop to do some work
 		XSTATE_DISCON,
 		XSTATE_WAIT_DL,		// reenter SendData when something received from downloader
-		XSTATE_CAN_SEND		// can send right away, no trigger needed
+		XSTATE_CAN_SEND,	// can send right away, no trigger needed
+//		XSTATE_WAIT_OUT,	// outgoing client socket is busy
 	} m_stateExternal = XSTATE_CAN_SEND;
 
 	enum
@@ -35,9 +35,6 @@ class job
 		STATE_SEND_PLAIN_DATA,
 		STATE_SEND_CHUNK_HEADER,
 		STATE_SEND_CHUNK_DATA,
-//		STATE_TODISCON,
-//		STATE_ALLDONE,
-//		STATE_ERRORCONT,
 		STATE_FINISHJOB,
 
 // temp. states
@@ -73,6 +70,9 @@ DLSTATE_OUR, DLSTATE_OTHER
 
 //	eJobState m_state = STATE_WAIT_DL_START, m_backstate = STATE_SEND_MAIN_HEAD; // current state, and state to return after temporary states
 
+#warning move most to scratch area in parent but with reset function
+
+
 	tSS m_sendbuf;
 	mstring m_sFileLoc; // local_relative_path_to_file
 	tSpecialRequest::eMaintWorkType m_eMaintWorkType =
@@ -83,7 +83,6 @@ DLSTATE_OUR, DLSTATE_OTHER
 
 	tFileItemPtr m_pItem;
 
-#warning move to scratch area in parent but with reset function
 	off_t m_nSendPos = 0, // where the reader is
 			m_nConfirmedSizeSoFar = 0, // what dler allows to send so far
 			m_nFileSendLimit = (MAX_VAL(off_t) - 1); // special limit, abort transmission there

@@ -10,7 +10,11 @@
 #include "acbuf.h"
 #include "tcpconnect.h"
 #include "cleaner.h"
+#include "fileio.h"
 
+#ifdef HAVE_LINUX_EVENTFD
+#include <sys/eventfd.h>
+#endif
 #include <sys/select.h>
 #include <signal.h>
 #include <string.h>
@@ -183,9 +187,8 @@ void conn::WorkLoop() {
 	signal(SIGPIPE, SIG_IGN);
 
 	acbuf inBuf;
+#warning adjust to socket buffer size
 	inBuf.setsize(32*1024);
-
-	bool bWaitDl = false;
 
 	int maxfd=m_confd;
 	while(true) {
@@ -197,15 +200,14 @@ void conn::WorkLoop() {
 		if(inBuf.freecapa()==0)
 			return; // shouldn't even get here
 
-		job *pjSender(nullptr);
-
-		if ( !m_jobs2send.empty() && !bWaitDl)
-		{
-			pjSender=m_jobs2send.front();
-			FD_SET(m_confd, &wfds);
-		}
 
 		bool checkDlFd = false;
+		job *pjSender = m_jobs2send.empty() ? nullptr :m_jobs2send.front();
+
+		// usually can always send unless socket is busy or the download is ours and we wait for it
+		if (pjSender && pjSender->m_stateExternal == job::XSTATE_CAN_SEND)
+			FD_SET(m_confd, &wfds);
+
 		if(m_pDlClient && !dlPaused)
 		{
 			// just do it here
@@ -264,10 +266,7 @@ void conn::WorkLoop() {
 			if((m_lastDlState.flags & dlcon::tWorkState::needRecv) && FD_ISSET(m_lastDlState.fd, &rfds))
 				hint |= dlcon::ioretCanRecv;
 			if(hint)
-			{
-				bWaitDl = false;
 				m_lastDlState = m_pDlClient->WorkLoop(hint);
-			}
 		}
 
 		if(FD_ISSET(m_confd, &rfds)) {
@@ -394,17 +393,16 @@ void conn::WorkLoop() {
 		if(inBuf.freecapa()==0)
 			return; // cannot happen unless being attacked
 
-		if (pjSender && (pjSender->m_stateExternal == job::XSTATE_CAN_SEND
-				|| FD_ISSET(m_confd, &wfds)))
+		if((pjSender && pjSender->m_stateExternal == job::XSTATE_CAN_SEND)
+				&& FD_ISSET(m_confd, &wfds))
 		{
-			bWaitDl = false;
 			pjSender->SendData(m_confd);
 			ldbg("Job step result: " << pjSender->m_stateExternal);
 			switch(pjSender->m_stateExternal)
 			{
 			case job::XSTATE_DISCON: return;
 			case job::XSTATE_CAN_SEND: continue; // come back ASAP
-			case job::XSTATE_WAIT_DL: bWaitDl = true; break;
+			case job::XSTATE_WAIT_DL: break;
 			case job::XSTATE_FINISHED:
 				m_jobs2send.pop_front();
 				delete pjSender;
@@ -485,17 +483,55 @@ void conn::Shutdown()
 	for(auto& j: m_jobs2send) delete j;
 	m_jobs2send.clear();
 	if(m_pDlClient) m_pDlClient->Shutdown();
-#warning close wake pipe or donate that descriptor(s) to some cache
+
+#ifdef HAVE_LINUX_EVENTFD
+	forceclose(m_wakeventfd);
+#else
+	forceclose(m_wakepipe[0]);
+	forceclose(m_wakepipe[1]);
+#endif
 }
 
-void conn::Subscribe4updates(tFileItemPtr)
+bool conn::Subscribe4updates(tFileItemPtr fitem)
 {
-#warning implement
+#ifdef HAVE_LINUX_EVENTFD
+	if (m_wakeventfd == -1)
+	{
+		m_wakeventfd = eventfd(0, 0);
+		if (m_wakeventfd == -1)
+			return false;
+		else
+			set_nb(m_wakeventfd);
+	}
+	fitem->subscribe(m_wakeventfd);
+#else
+	if(m_wakepipe[0] == -1)
+	{
+		if (0 == pipe(m_wakepipe))
+		{
+			set_nb(m_wakepipe[0]);
+			set_nb(m_wakepipe[1]);
+		}
+		else
+		return false;
+	}
+	fitem->subscribe(m_wakepipe[1]);
+#endif
+	return true;
 }
 
-void conn::UnsubscribeFromUpdates(tFileItemPtr)
+void conn::UnsubscribeFromUpdates(tFileItemPtr fitem)
 {
-#warning implement
+#ifdef HAVE_LINUX_EVENTFD
+	if (m_wakeventfd == -1)
+		return;
+	fitem->unsubscribe(m_wakeventfd);
+#else
+	if(m_wakepipe[0] == -1)
+	return;
+	fitem->unsubscribe(m_wakepipe[1]);
+#endif
+
 }
 }
 

@@ -59,9 +59,6 @@ class fileitem
 	virtual bool StoreFileData(const char *data, unsigned int size)=0;
 	inline header GetHeaderLocking() { lockguard g(m_mx);  return m_head; }
 	
-#warning implement, use set<int> with spinlock protection, löschen ggf. mit setzen auf -1
-	std::set<int> m_subscriptions;
-	std::atomic<bool> notifyBusy;
 	void subscribe(int fd);
 	void unsubscribe(int fd);
 
@@ -110,7 +107,7 @@ class fileitem
 
 	bool m_bHeadOnly = false; // only for pass-through mode, write/read by conn thread only
 
-	bool m_bCheckFreshness; // if-modified-since or if-range flags required; set only once before FIST_INITED
+	bool m_bCheckFreshness = true; // if-modified-since or if-range flags required; set only once before FIST_INITED
 
 	bool m_bIsGloballyRegistered = false; // defacto a flag identifying it as fileitem_with_storage (globally-registered)
 
@@ -122,13 +119,13 @@ class fileitem
 //private:
 #warning FIXME, BS. dlcon loop shall retrieve the count directly from last dljob before destroying job object 
 	// uint64_t m_nIncommingCount; // written and read by the conn thread only
-	off_t m_nSizeSeenInCache;   // the best known information about total size of the file. Initially set by conn thread, updated by ANY other dlcon thread during FIST_DLRECEIVING phase.
-	off_t m_nCheckedSize; // the available validated data range for the current download; policy as for m_nSizeSeenInCache
-	off_t m_nRangeLimit;	// only for pass-though mode, write/read by conn thread only
+	off_t m_nSizeSeenInCache = 0;   // the best known information about total size of the file. Initially set by conn thread, updated by ANY other dlcon thread during FIST_DLRECEIVING phase.
+	off_t m_nCheckedSize = 0; // the available validated data range for the current download; policy as for m_nSizeSeenInCache
+	off_t m_nRangeLimit = -1;	// only for pass-though mode, write/read by conn thread only
 
 	// local cached values for dlcon callbacks only
-	bool m_bAllowStoreData;
-	int m_filefd;
+	bool m_bAllowStoreData = true;
+	int m_filefd = -1;
 
 	// poke everyone who subscribed for updates
 	void notifyObservers();
@@ -146,6 +143,11 @@ class fileitem
 
 	// remember which thread was assigned as downloader
 	pthread_t m_dlThreadId = {0};
+
+	std::deque<int> m_subscribers;
+
+	// just a shortcut
+	void poke(int fd);
 };
 
 // dl item implementation with storage on disk, can be shared among users

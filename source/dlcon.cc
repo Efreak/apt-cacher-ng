@@ -722,7 +722,11 @@ dlcon::~dlcon()
 bool dlcon::ResetState()
 {
     m_inBuf.clear();
-    
+#warning adjust buffer size for system after every connection?
+#ifdef SO_RCVBUF
+#else
+    int bufsz=cfg::dlbufsize;
+#endif
 	if (!m_inBuf.setsize(cfg::dlbufsize))
 	{
 		log::err("500 Out of memory");

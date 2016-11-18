@@ -60,9 +60,50 @@ public:
 	//! @brief Request tunneling with CONNECT and change identity if succeeded, and start TLS
 	bool StartTunnel(const tHttpUrl & realTarget, mstring& sError, cmstring *psAuthorization, bool bDoSSLinit);
 
+#if 0
+#warning maybe simplify, return number of takes until half the buffer size was reached.
+// and main loop
+
+
+	// Report the size of the last chunk received from the file descriptor
+	// @return An average value but only when updated, zero when not updated
+	unsigned UpdateRecvBufferStats(unsigned rcvdChunkSize)
+	{
+		// buffer overrun? need to notify ASAP
+		if(m_recvBuf.freecapa() == 0)
+		{
+			m_statsTemp=m_statsCursor=0;
+			return m_recvBuf.freecapa();
+		}
+		m_statsTemp += rcvdChunkSize;
+		if(0 == (++m_statsCursor & 7))
+		{
+			auto ret=m_statsTemp / 8;
+			m_statsTemp=m_statsCursor=0;
+			return ret;
+		}
+		return 0;
+	}
+
+#warning implement
+	/*
+	 * Recommended buffer object to use for reception.
+	 * Size is adjusted according to socket specifics upon opening, or to default setting.
+	 */
+	tSS m_recvBuf;
+#endif
 private:
+
+#if 0
+#warning implement, either default or SO_RCVBUFSZ
+	bool AdjustBufferSize();
+#endif
+
 	bool _Connect(mstring &sErrOut, int timeout);
 	cfg::tRepoData::IHookHandler *m_pStateObserver=nullptr;
+
+	unsigned m_statsCursor = 0;
+	unsigned m_statsTemp = 0;
 
 protected:
 #ifdef HAVE_SSL
