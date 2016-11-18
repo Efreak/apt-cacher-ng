@@ -208,20 +208,35 @@ void conn::WorkLoop() {
 		if (pjSender && pjSender->m_stateExternal == job::XSTATE_CAN_SEND)
 			FD_SET(m_confd, &wfds);
 
-		if(m_pDlClient && !dlPaused)
+		if(pjSender)
 		{
-			// just do it here
-			if(m_lastDlState.flags & dlcon::tWorkState::needConnect)
-				m_lastDlState = m_pDlClient->WorkLoop(dlcon::canConnect);
-			checkDlFd = (m_lastDlState.flags & (dlcon::tWorkState::needRecv|dlcon::tWorkState::needSend));
-			if(checkDlFd)
+			if (pjSender->m_eDlType == job::DLSTATE_OUR && m_pDlClient && !dlPaused)
 			{
-				if(m_lastDlState.fd > maxfd)
-					maxfd = m_lastDlState.fd;
-				if(m_lastDlState.flags & dlcon::tWorkState::needSend)
-					FD_SET(m_lastDlState.fd, &wfds);
-				if(m_lastDlState.flags & dlcon::tWorkState::needRecv)
-					FD_SET(m_lastDlState.fd, &rfds);
+				// just do it here
+				if (m_lastDlState.flags & dlcon::tWorkState::needConnect)
+					m_lastDlState = m_pDlClient->WorkLoop(dlcon::canConnect);
+				checkDlFd = (m_lastDlState.flags
+						& (dlcon::tWorkState::needRecv | dlcon::tWorkState::needSend));
+				if (checkDlFd)
+				{
+					if (m_lastDlState.fd > maxfd)
+						maxfd = m_lastDlState.fd;
+					if (m_lastDlState.flags & dlcon::tWorkState::needSend)
+						FD_SET(m_lastDlState.fd, &wfds);
+					if (m_lastDlState.flags & dlcon::tWorkState::needRecv)
+						FD_SET(m_lastDlState.fd, &rfds);
+				}
+			}
+			if (pjSender->m_eDlType == job::DLSTATE_OTHER)
+			{
+#ifdef HAVE_LINUX_EVENTFD
+				int fd = m_wakeventfd;
+#else
+				int fd = m_wakepipe[0];
+#endif
+				if (fd > maxfd)
+					maxfd = fd;
+				FD_SET(fd, &rfds);
 			}
 		}
 
@@ -258,15 +273,15 @@ void conn::WorkLoop() {
 		ldbg("select con back");
 
 		// first let the downloader work so that job handler is likely to get its data ASAP
+		unsigned checkDlResult = 0;
 		if(checkDlFd)
 		{
-			unsigned hint = 0;
 			if((m_lastDlState.flags & dlcon::tWorkState::needSend) && FD_ISSET(m_lastDlState.fd, &wfds))
-				hint |= dlcon::ioretCanSend;
+				checkDlResult |= dlcon::ioretCanSend;
 			if((m_lastDlState.flags & dlcon::tWorkState::needRecv) && FD_ISSET(m_lastDlState.fd, &rfds))
-				hint |= dlcon::ioretCanRecv;
-			if(hint)
-				m_lastDlState = m_pDlClient->WorkLoop(hint);
+				checkDlResult |= dlcon::ioretCanRecv;
+			if(checkDlResult)
+				m_lastDlState = m_pDlClient->WorkLoop(checkDlResult);
 		}
 
 		if(FD_ISSET(m_confd, &rfds)) {
@@ -393,21 +408,56 @@ void conn::WorkLoop() {
 		if(inBuf.freecapa()==0)
 			return; // cannot happen unless being attacked
 
-		if((pjSender && pjSender->m_stateExternal == job::XSTATE_CAN_SEND)
-				&& FD_ISSET(m_confd, &wfds))
+		if (pjSender)
 		{
-			pjSender->SendData(m_confd);
-			ldbg("Job step result: " << pjSender->m_stateExternal);
-			switch(pjSender->m_stateExternal)
+			bool trySend = (pjSender->m_stateExternal == job::XSTATE_CAN_SEND
+					&& FD_ISSET(m_confd, &wfds));
+#ifdef HAVE_LINUX_EVENTFD
+			int fd = m_wakeventfd;
+#else
+			int fd = m_wakepipe[0];
+#endif
+			if (pjSender->m_stateExternal == job::XSTATE_WAIT_DL)
 			{
-			case job::XSTATE_DISCON: return;
-			case job::XSTATE_CAN_SEND: continue; // come back ASAP
-			case job::XSTATE_WAIT_DL: break;
-			case job::XSTATE_FINISHED:
-				m_jobs2send.pop_front();
-				delete pjSender;
-				pjSender = nullptr;
-				ldbg("Remaining jobs to send: " << m_jobs2send.size());
+				if (pjSender->m_eDlType == job::DLSTATE_OUR && checkDlResult)
+					trySend = true;
+				else if (pjSender->m_eDlType == job::DLSTATE_OTHER && FD_ISSET(fd, &rfds))
+				{
+					trySend = true; // and also needs to clean the event fd
+#ifdef HAVE_LINUX_EVENTFD
+					eventfd_t xtmp;
+					int tmp;
+					do
+					{
+						tmp = eventfd_read(fd, &xtmp);
+					} while (tmp < 0 && (errno == EINTR || errno == EAGAIN));
+
+#else
+					for (int tmp; read(fd, &tmp, 1) > 0;)
+					;
+#endif
+				}
+			}
+
+			if (trySend)
+			{
+				pjSender->SendData(m_confd);
+				ldbg("Job step result: " << pjSender->m_stateExternal);
+				switch (pjSender->m_stateExternal)
+				{
+				case job::XSTATE_DISCON:
+					return;
+				case job::XSTATE_CAN_SEND:
+					continue; // come back ASAP
+				case job::XSTATE_WAIT_DL:
+					break;
+				case job::XSTATE_FINISHED:
+					m_jobs2send.pop_front();
+					delete pjSender;
+					pjSender = nullptr;
+					ldbg("Remaining jobs to send: " << m_jobs2send.size())
+					;
+				}
 			}
 		}
 	}

@@ -978,6 +978,11 @@ void job::SendData(int confd)
 
 				size_t nMax2SendNow = min(m_nConfirmedSizeSoFar - m_nSendPos,
 						m_nFileSendLimit + 1 - m_nSendPos);
+				if(nMax2SendNow == 0)
+				{
+					m_stateExternal = XSTATE_WAIT_DL;
+					return;
+				}
 				ldbg("~sendfile: on "<< m_nSendPos << " up to : " << nMax2SendNow);
 				int n = m_pItem->SendData(confd, m_filefd, m_nSendPos, nMax2SendNow);
 				ldbg("~sendfile: " << n << " new m_nSendPos: " << m_nSendPos);
