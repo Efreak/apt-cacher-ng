@@ -14,14 +14,14 @@ namespace acng
 {
 
 class fileitem;
-class fileitem_with_storage;
+class tFileItemEx;
 class job;
 typedef std::shared_ptr<fileitem> tFileItemPtr;
 
 //! Base class containing all required data and methods for communication with the download sources
 class fileitem
 {
-	friend class fileitem_with_storage;
+	friend class tFileItemEx;
 	public:
 
 	// Life cycle (process states) of a file description item
@@ -76,18 +76,6 @@ class fileitem
 		return ret;
 
 	}
-	/*
-			(m_stateInternal == STATE_SEND_MAIN_HEAD)
-			? &respHead : nullptr)
-	{ lockguard g(m_mx);
-	return m_status;
-	}
-	*/
-//	FiStatus GetStatusUnlocked(off_t &nGoodDataSize) { nGoodDataSize = m_nUsableSizeInCache; return m_status; }
-//	void ResetCacheState();
-
-	//! returns true if complete or DL not started yet but partial file is present and contains requested range and file contents is static
-//	bool CheckUsableRange_unlocked(off_t nRangeLastByte);
 
 	// returns when the state changes to complete or error
 	FiStatus WaitForFinish(int *httpCode=nullptr);
@@ -109,7 +97,7 @@ class fileitem
 
 	bool m_bCheckFreshness = true; // if-modified-since or if-range flags required; set only once before FIST_INITED
 
-	bool m_bIsGloballyRegistered = false; // defacto a flag identifying it as fileitem_with_storage (globally-registered)
+	bool m_bIsGloballyRegistered = false; // defacto a flag identifying it as tFileItemEx (globally-registered)
 
 #warning fixme
 //protected:
@@ -153,12 +141,19 @@ class fileitem
 	void poke(int fd);
 };
 
-// dl item implementation with storage on disk, can be shared among users
-class fileitem_with_storage : public fileitem
+/**
+ * Extended implementation of file item object, supporting:
+ * a) global registration under specific name
+ * b) code to process incoming data
+ *
+ * XXX: it's still slightly spaghetti style since tPassThroughFitem makes use of it
+ * directly, although disabling cache-modification code first
+ */
+class tFileItemEx : public fileitem
 {
 public:
-//	inline fileitem_with_storage(cmstring &s, int nUsers) {m_sPathRel=s; usercount=nUsers; };
-	virtual ~fileitem_with_storage();
+//	inline tFileItemEx(cmstring &s, int nUsers) {m_sPathRel=s; usercount=nUsers; };
+	virtual ~tFileItemEx();
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
@@ -178,7 +173,7 @@ public:
 	 */
 	static tFileItemPtr CreateRegistered(cmstring& sPathRel,
 			const tFileItemPtr& existingFi = tFileItemPtr(), bool *created4caller = nullptr);
-	fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
+	tFileItemEx(cmstring &s) {m_sPathRel=s;};
 
 	// attempt to unregister a global item but only if it's unused
 	static bool TryDispose(tFileItemPtr& existingFi);

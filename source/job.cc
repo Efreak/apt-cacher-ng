@@ -54,7 +54,7 @@ tTraceData& tTraceData::getInstance()
  * harddisk. Instead, it uses the download buffer and lets job object send the data straight from
  * it to the client.
  */
-class tPassThroughFitem: public fileitem_with_storage
+class tPassThroughFitem: public tFileItemEx
 {
 protected:
 
@@ -65,7 +65,7 @@ protected:
 
 public:
 	tPassThroughFitem(std::string s, conn& par) :
-		fileitem_with_storage(s),
+		tFileItemEx(s),
 			m_parent(par)
 	{
 		m_bAllowStoreData = false;
@@ -88,7 +88,7 @@ public:
 	{
 		// behave like normal item but forbid data modifying operations
 		m_bAllowStoreData = false;
-		return fileitem_with_storage::DownloadStartedStoreHeader(h, hDataLen, pNextData, bRestartResume, bDoCleanRetry);
+		return tFileItemEx::DownloadStartedStoreHeader(h, hDataLen, pNextData, bRestartResume, bDoCleanRetry);
 	}
 	virtual bool StoreFileData(const char *data, unsigned int size) override
 	{
@@ -228,12 +228,12 @@ job::~job()
 	if (m_pItem)
 	{
 #warning optimize
-		m_pItem->GetHeaderLocking().getStatus();
+		stcode = m_pItem->GetHeaderLocking().getStatus();
 	}
 
 	bool bErr = m_sFileLoc.empty() || stcode >= 400;
 
-#warning fixme, fetching the counts
+#warning check logs, counts, etc.
 	m_parent.LogDataCounts(m_sFileLoc + (bErr ? (miscError + ltos(stcode) + ']') : sEmptyString),
 			m_pReqHead->h[header::XFORWARDEDFOR],
 			(m_pItem ? m_pItem->m_nIncommingCount : 0), m_parent.j_nRetDataCount, bErr);
@@ -394,11 +394,11 @@ inline void job::SetupFileServing(const string &visPath, const string &fsBase,
 	 * header data is generated as needed, the relative cache path variable
 	 * is reused for the real path.
 	 */
-	class tLocalGetFitem: public fileitem_with_storage
+	class tLocalGetFitem: public tFileItemEx
 	{
 	public:
 		tLocalGetFitem(string sLocalPath, struct stat &stdata) :
-				fileitem_with_storage(sLocalPath)
+				tFileItemEx(sLocalPath)
 		{
 			m_bAllowStoreData = false;
 			m_status = FIST_COMPLETE;
@@ -485,7 +485,6 @@ void job::PrepareDownload(LPCSTR headBuf)
 			LOGSTART("job::_SwitchToPtItem");
 			m_pItem.reset(new tPassThroughFitem(m_sFileLoc, m_parent));
 			m_pItem->m_nSizeSeenInCache = m_nReqRangeFrom;
-#warning XXX: test resuming
 			m_pItem->m_nRangeLimit = m_nReqRangeTo;
 			auto ifmo =	m_pReqHead->h[header::IF_MODIFIED_SINCE] ?
 					m_pReqHead->h[header::IF_MODIFIED_SINCE] : m_pReqHead->h[header::IFRANGE];
@@ -631,7 +630,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 
 		bForceFreshnessChecks = (!cfg::offlinemode && m_type == FILE_VOLATILE);
 
-		m_pItem = fileitem_with_storage::CreateRegistered(m_sFileLoc);
+		m_pItem = tFileItemEx::CreateRegistered(m_sFileLoc);
 	} catch (std::out_of_range&) // better safe...
 	{
 		return msg_invpath;

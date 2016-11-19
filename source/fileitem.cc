@@ -331,7 +331,7 @@ inline void _LogWithErrno(cmstring& msg, const string & sFile)
 
 #ifndef MINIBUILD
 
-bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 		const char *pNextData,
 		bool bRestartResume, bool &bDoCleanRetry)
 {
@@ -672,7 +672,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 	return true;
 }
 
-bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
+bool tFileItemEx::StoreFileData(const char *data, unsigned int size)
 {
 	LOGSTART2("fileitem::StoreFileData", "status: " <<  (int) m_status << ", size: " << size);
 
@@ -733,10 +733,10 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 	return true;
 }
 
-tFileItemPtr fileitem_with_storage::CreateRegistered(cmstring& sPathUnescaped,
+tFileItemPtr tFileItemEx::CreateRegistered(cmstring& sPathUnescaped,
 		const tFileItemPtr& existingFi, bool *created4caller)
 {
-	mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
+	mstring sPathRel(tFileItemEx::NormalizePath(sPathUnescaped));
 	tFileItemPtr ret;
 	if(created4caller) *created4caller = false;
 	{
@@ -749,7 +749,7 @@ tFileItemPtr fileitem_with_storage::CreateRegistered(cmstring& sPathUnescaped,
 			return tFileItemPtr();
 		if(!ret)
 		{
-			ret = std::make_shared<fileitem_with_storage>(sPathRel);
+			ret = std::make_shared<tFileItemEx>(sPathRel);
 			EMPLACE_PAIR_COMPAT(g_sharedItems, sPathRel, ret);
 			ret->m_bIsGloballyRegistered = true;
 			if(created4caller) *created4caller = true;
@@ -758,7 +758,7 @@ tFileItemPtr fileitem_with_storage::CreateRegistered(cmstring& sPathUnescaped,
 	return ret;
 }
 
-bool fileitem_with_storage::TryDispose(tFileItemPtr& existingFi)
+bool tFileItemEx::TryDispose(tFileItemPtr& existingFi)
 {
 	lockguard g(g_sharedItemsMx);
 	if(!existingFi || existingFi.use_count()>1)
@@ -839,7 +839,7 @@ bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 
 	MYTRY
 	{
-		mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
+		mstring sPathRel(tFileItemEx::NormalizePath(sPathUnescaped));
 		lockguard lockGlobalMap(mapItemsMx);
 		tFiGlobMap::iterator it=mapItems.find(sPathRel);
 		if(it!=mapItems.end())
@@ -867,7 +867,7 @@ bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 					replaceChars(sPathRelMod, "/\\", '_');
 					sPathRelMod.insert(0, sReplDir + ltos(getpid()) + "_" + ltos(now)+"_");
 					LOG("Registering a new REPLACEMENT file item...");
-					auto sp(make_shared<fileitem_with_storage>(sPathRelMod, 1));
+					auto sp(make_shared<tFileItemEx>(sPathRelMod, 1));
 					sp->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
 					m_ptr = sp;
 					return true;
@@ -879,7 +879,7 @@ bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 			return true;
 		}
 		LOG("Registering the NEW file item...");
-		auto sp(make_shared<fileitem_with_storage>(sPathRel, 1));
+		auto sp(make_shared<tFileItemEx>(sPathRel, 1));
 		sp->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
 		//lockGlobalMap.unLock();
 		m_ptr = sp;
@@ -971,7 +971,7 @@ time_t fileItemMgmt::BackgroundCleanup()
 }
 #endif
 
-ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, size_t count)
+ssize_t tFileItemEx::SendData(int out_fd, int in_fd, off_t &nSendPos, size_t count)
 {
 #ifndef HAVE_LINUX_SENDFILE
 	return sendfile_generic(out_fd, in_fd, &nSendPos, count);
@@ -1016,7 +1016,7 @@ void fileItemMgmt::dump_status()
 }
 #endif
 
-fileitem_with_storage::~fileitem_with_storage()
+tFileItemEx::~tFileItemEx()
 {
 #if 0
 	if(startsWith(m_sPathRel, sReplDir))
@@ -1045,7 +1045,7 @@ fileitem_with_storage::~fileitem_with_storage()
 }
 
 // keep a snapshot of that files for later identification of by-hash-named metadata
-int fileitem_with_storage::MoveRelease2Sidestore()
+int tFileItemEx::MoveRelease2Sidestore()
 {
 	if(m_nCheckedSize)
 		return 0;

@@ -285,7 +285,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	hor.LoadFromFile(sFilePathAbs + ".head");
 
 	if(!pFi)
-		fileitem_with_storage::CreateRegistered(sFilePathRel);
+		tFileItemEx::CreateRegistered(sFilePathRel);
 	if (!pFi)
 	{
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
@@ -762,7 +762,7 @@ bool cacheman::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sReferencePath
 {
 
 
-	class tHeadOnlyStorage: public fileitem_with_storage
+	class tHeadOnlyStorage: public tFileItemEx
 	{
 	public:
 
@@ -771,7 +771,7 @@ bool cacheman::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sReferencePath
 
 		tHeadOnlyStorage(cmstring & sTempDataRel, cmstring &sReferencePathRel) :
 
-			fileitem_with_storage(sTempDataRel) // storage ref to physical data file
+			tFileItemEx(sTempDataRel) // storage ref to physical data file
 					,
 			m_sTempDataRel(sTempDataRel),
 			m_sReferencePathRel(sReferencePathRel), m_nGotSize(-1)
@@ -849,11 +849,11 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 		head.set(header::LAST_MODIFIED, FAKEDATEMARK);
 	}
 
-	class tInjectItem : public fileitem_with_storage
+	class tInjectItem : public tFileItemEx
 	{
 	public:
 		bool m_link;
-		tInjectItem(cmstring &to, bool bTryLink) : fileitem_with_storage(to), m_link(bTryLink)
+		tInjectItem(cmstring &to, bool bTryLink) : tFileItemEx(to), m_link(bTryLink)
 		{
 		}
 		// noone else should attempt to store file through it
@@ -899,7 +899,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 			if (SetupFromCache(true) > fileitem::FIST_COMPLETE)
 				return false;
 			bool bNix(false);
-			if (!fileitem_with_storage::DownloadStartedStoreHeader(head, 0,
+			if (!tFileItemEx::DownloadStartedStoreHeader(head, 0,
 					nullptr, false, bNix))
 				return false;
 			if(!StoreFileData(data.GetBuffer(), data.GetSize()) || ! StoreFileData(nullptr, 0))
@@ -911,7 +911,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 	};
 	auto pfi(make_shared<tInjectItem>(toRel, bTryLink));
 	// register it in global scope and execute
-	bool bOK = fileitem_with_storage::CreateRegistered(toRel, pfi) && pfi->Inject(fromRel, *pHead);
+	bool bOK = tFileItemEx::CreateRegistered(toRel, pfi) && pfi->Inject(fromRel, *pHead);
 
 	MTLOGASSERT(bOK, "Inject: failed");
 

@@ -611,7 +611,7 @@ struct tDlJob
 				// faster download abort when the only user disconnected (job object gone)
 				// when active, 2 refs must be there, one in job and one here, others are weak
 				bool isGlobal = m_pStorage->m_bIsGloballyRegistered;
-				if(m_pStorage.use_count() < 2 && (!isGlobal || fileitem_with_storage::TryDispose(m_pStorage)))
+				if(m_pStorage.use_count() < 2 && (!isGlobal || tFileItemEx::TryDispose(m_pStorage)))
 					return HINT_DISCON | EFLAG_JOB_BROKEN | EFLAG_STORE_COLLISION;;
 #endif
 
