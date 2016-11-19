@@ -1,6 +1,14 @@
 apt-cacher-ng (2) LOGAN-VS-BLADE-RUNNER-3D; urgency=low
 
-  * Minor refactoring (DNS cache with fewer mutexes)
+  * Complete internal rewrite of connection-to-downloader communication
+    + Less threads and less file handles used
+    + Fewer locks or smaller critical sections
+  * Rewrite of internal file service
+    + Less memory needed, more data reuse
+    + Faster and simplified flow in case where download serves exactly one client
+      for the particular file
+  * Rewrite of input data flow control (now adaptive buffer usage)
+  * Minor DNS cache improvments (fewer mutexes, simplified expiration handling)
 
  -- 
 
