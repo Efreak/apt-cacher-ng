@@ -761,20 +761,22 @@ void job::SendData(int confd)
 {
 	LOGSTART("job::SendData");
 
-	if (m_eMaintWorkType)
+	if(m_stateInternal != STATE_FATAL_ERROR)
 	{
-		tSpecialRequest::RunMaintWork(m_eMaintWorkType, m_sFileLoc, confd);
-		m_stateExternal = XSTATE_DISCON;
+		if (m_eMaintWorkType)
+		{
+			tSpecialRequest::RunMaintWork(m_eMaintWorkType, m_sFileLoc, confd);
+			m_stateExternal = XSTATE_DISCON;
 
-		return;
+			return;
+		}
+
+		if (!m_pItem)
+		{
+			m_stateExternal = XSTATE_DISCON;
+			return;
+		}
 	}
-
-	if (!m_pItem)
-	{
-		m_stateExternal = XSTATE_DISCON;
-		return;
-	}
-
 #warning also move this stuff to a scratch area inside of m_parent (!!)
 
 	fileitem::FiStatus fistate = fileitem::FIST_FRESH;
@@ -792,18 +794,20 @@ void job::SendData(int confd)
 		if (m_stateExternal == XSTATE_DISCON)
 			return;
 
-		if (!skipFetchState)
+		if(m_stateInternal != STATE_FATAL_ERROR)
 		{
-			skipFetchState = false;
+			if (!skipFetchState && m_pItem)
+			{
+				skipFetchState = false;
 
-			fistate = m_pItem->GetStatus(&dlThreadId, &m_parent.j_sErrorMsg,
-					&m_parent.j_nConfirmedSizeSoFar,
-					(m_stateInternal == STATE_SEND_MAIN_HEAD) ? &respHead : nullptr);
+				fistate = m_pItem->GetStatus(&dlThreadId, &m_parent.j_sErrorMsg,
+						&m_parent.j_nConfirmedSizeSoFar,
+						(m_stateInternal == STATE_SEND_MAIN_HEAD) ? &respHead : nullptr);
+			}
+			if (fistate >= fileitem::FIST_DLERROR)
+				THROW_ERROR(m_parent.j_sErrorMsg);
 		}
-		if (fistate >= fileitem::FIST_DLERROR)
-			THROW_ERROR(m_parent.j_sErrorMsg);
 
-		ldbg("job: istate switch " << int(m_stateInternal));
 		try // for bad_alloc in members
 		{
 			switch (m_stateInternal)
@@ -1026,13 +1030,14 @@ void job::SendData(int confd)
 					m_stateExternal = XSTATE_DISCON;
 				else
 				{
-					if (m_parent.j_sErrorMsg.empty() || m_parent.j_sErrorMsg[0] != '5')
+					if (m_parent.j_sErrorMsg.empty() ||  m_parent.j_sErrorMsg[0] < '4')
 						m_parent.j_sErrorMsg.assign("500 Unknown Internal Error");
+
 					// no fancy error page, this is basically it
 					m_parent.j_sendbuf.clear();
 					m_parent.j_sendbuf << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ") << m_parent.j_sErrorMsg
-							<< "\r\n\r\n";
-#warning add oneline body with content length?
+							<< sCRLF << "Content-Length: " << ltos(m_parent.j_sErrorMsg.length()) <<
+							"\r\n\r\n" << m_parent.j_sErrorMsg;
 					m_stateInternal = STATE_SEND_BUFFER;
 					m_stateBackSend = STATE_FATAL_ERROR; // will abort then
 					continue;
