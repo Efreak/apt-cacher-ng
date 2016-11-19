@@ -442,7 +442,7 @@ void conn::WorkLoop() {
 			if (trySend)
 			{
 				pjSender->SendData(m_confd);
-				ldbg("Job step result: " << pjSender->m_stateExternal);
+				ldbg("Job step result: " << int(pjSender->m_stateExternal));
 				switch (pjSender->m_stateExternal)
 				{
 				case job::XSTATE_DISCON:

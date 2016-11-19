@@ -871,7 +871,7 @@ void job::SendData(int confd)
 		if (fistate >= fileitem::FIST_DLERROR)
 			THROW_ERROR(m_parent.j_sErrorMsg);
 
-		ldbg("job: istate switch " << m_stateInternal);
+		ldbg("job: istate switch " << int(m_stateInternal));
 		try // for bad_alloc in members
 		{
 			switch (m_stateInternal)
@@ -973,7 +973,7 @@ void job::SendData(int confd)
 			}
 			case (STATE_SEND_PLAIN_DATA):
 			{
-				ldbg("STATE_SEND_PLAIN_DATA, max. " << j_nConfirmedSizeSoFar);
+				ldbg("STATE_SEND_PLAIN_DATA, max. " << m_parent.j_nConfirmedSizeSoFar);
 
 				size_t nMax2SendNow = min(m_parent.j_nConfirmedSizeSoFar - m_parent.j_nSendPos,
 						m_parent.j_nFileSendLimit + 1 - m_parent.j_nSendPos);
@@ -982,9 +982,9 @@ void job::SendData(int confd)
 					m_stateExternal = XSTATE_WAIT_DL;
 					return;
 				}
-				ldbg("~sendfile: on "<< j_nSendPos << " up to : " << nMax2SendNow);
+				ldbg("~sendfile: on "<< m_parent.j_nSendPos << " up to : " << nMax2SendNow);
 				int n = m_pItem->SendData(confd, m_parent.j_filefd, m_parent.j_nSendPos, nMax2SendNow);
-				ldbg("~sendfile: " << n << " new m_nSendPos: " << j_nSendPos);
+				ldbg("~sendfile: " << n << " new m_nSendPos: " << m_parent.j_nSendPos);
 
 				if (n < 0)
 				{
@@ -1010,7 +1010,7 @@ void job::SendData(int confd)
 			{
 				m_parent.j_nChunkRemainingBytes = min(m_parent.j_nConfirmedSizeSoFar - m_parent.j_nSendPos,
 						m_parent.j_nFileSendLimit + 1 - m_parent.j_nSendPos);
-				ldbg("STATE_SEND_CHUNK_HEADER for " << j_nChunkRemainingBytes);
+				ldbg("STATE_SEND_CHUNK_HEADER for " << m_parent.j_nChunkRemainingBytes);
 				if (m_parent.j_nChunkRemainingBytes <= 0)
 				{
 					m_stateInternal = STATE_CHECK_DL_PROGRESS;
@@ -1048,7 +1048,7 @@ void job::SendData(int confd)
 			}
 			case (STATE_SEND_BUFFER):
 			{
-				ldbg("prebuf sending: "<< j_sendbuf.c_str());
+				ldbg("prebuf sending: "<< m_parent.j_sendbuf.c_str());
 				auto r = send(confd, m_parent.j_sendbuf.rptr(), m_parent.j_sendbuf.size(), MSG_MORE);
 				if (r < 0)
 				{
