@@ -532,7 +532,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 			_notifier.defuse();
 			return false;
 		}
-		else
+		else if(m_bIsGloballyRegistered) // only cleanup when acting on cache
 		{
 		// -> kill cached file ASAP
 			m_bAllowStoreData=false;
@@ -556,7 +556,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		// have a clean header with just the error message
 		m_head.frontLine=h.frontLine;
 		m_head.set(header::CONTENT_LENGTH, "0");
-		if(m_status>FIST_DLGOTHEAD)
+		if(m_status>FIST_DLGOTHEAD && m_bIsGloballyRegistered) // only enable when acting on cache
 		{
 			// oh shit. Client may have already started sending it. Prevent such trouble in future.
 			unlink(sHeadPath.c_str());
@@ -1027,6 +1027,10 @@ fileitem_with_storage::~fileitem_with_storage()
 #endif
 	{
 		lockguard g(g_sharedItemsMx);
+
+		if(!m_bIsGloballyRegistered)
+			return;
+
 		//ASSERT(this == g_sharedItems[m_sPathRel]);
 		auto it = g_sharedItems.find(m_sPathRel);
 		if (it != g_sharedItems.end())

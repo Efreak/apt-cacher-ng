@@ -54,7 +54,7 @@ tTraceData& tTraceData::getInstance()
  * harddisk. Instead, it uses the download buffer and lets job object send the data straight from
  * it to the client.
  */
-class tPassThroughFitem: public fileitem
+class tPassThroughFitem: public fileitem_with_storage
 {
 protected:
 
@@ -65,9 +65,9 @@ protected:
 
 public:
 	tPassThroughFitem(std::string s, conn& par) :
+		fileitem_with_storage(s),
 			m_parent(par)
 	{
-		m_sPathRel = s;
 		m_bAllowStoreData = false;
 		m_nCheckedSize = m_nSizeSeenInCache = 0;
 	}
@@ -82,12 +82,13 @@ public:
 		return SPECIAL_FD;
 	}
 	; // something, don't care for now
-	virtual bool DownloadStartedStoreHeader(const header & h, size_t, const char *, bool, bool&) override
+	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+			const char *pNextData,
+			bool bRestartResume, bool &bDoCleanRetry) override
 	{
-		m_head = h;
-		m_status = FIST_DLGOTHEAD;
-		m_dlThreadId = pthread_self();
-		return true;
+		// behave like normal item but forbid data modifying operations
+		m_bAllowStoreData = false;
+		return fileitem_with_storage::DownloadStartedStoreHeader(h, hDataLen, pNextData, bRestartResume, bDoCleanRetry);
 	}
 	virtual bool StoreFileData(const char *data, unsigned int size) override
 	{

@@ -450,6 +450,7 @@ void conn::WorkLoop() {
 				case job::XSTATE_CAN_SEND:
 					continue; // come back ASAP
 				case job::XSTATE_WAIT_DL:
+					dlPaused = false; // does not make sense anymore
 					break;
 				case job::XSTATE_FINISHED:
 					m_jobs2send.pop_front();
