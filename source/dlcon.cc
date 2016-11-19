@@ -968,7 +968,7 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 	{
 		if(con)
 			retcmd.fd = con->GetFD();
-		goto returned_from_io;
+		goto returned_for_io;
 	}
 #if 0 // unlikely
 	// not returned -- standalone loop or initialization?
@@ -1075,7 +1075,8 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 				}
 				else
 					return retcmd; // return the hints and wait for it to come back to this label:
-				returned_from_io:
+
+				returned_for_io:
 
 				if (eWorkParameter::ioretGotError & flags)
 				{
@@ -1115,7 +1116,13 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 						ldbg(
 								"tried to write to SSL, " << m_sendBuf.size() << " bytes, result: " << s);
 						if (s > 0)
+						{
 							m_sendBuf.drop(s);
+#if TRACK_OUTCOUNT
+							if(AC_LIKELY(inpipe.front()->m_pStorage))
+								inpipe.front()->m_pStorage->m_inOutCounters.second+=s;
+#endif
+						}
 					}
 					else
 #endif
@@ -1134,8 +1141,14 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 								END_IO_LOOP(EFLAG_LOST_CON);
 							}
 						}
-						else
+						else if (s > 0)
+						{
 							m_sendBuf.drop(s);
+#if TRACK_OUTCOUNT
+							if(AC_LIKELY(inpipe.front()->m_pStorage))
+								inpipe.front()->m_pStorage->m_inOutCounters.second+=s;
+#endif
+						}
 
 					}
 
@@ -1188,7 +1201,15 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 									std::min(m_nSpeedLimitMaxPerTake,
 											m_inBuf.freecapa()));
 							if (readResult > 0)
+							{
 								m_inBuf.got(readResult);
+								if (AC_LIKELY(inpipe.front()->m_pStorage))
+#if TRACK_OUTCOUNT
+									inpipe.front()->m_pStorage->m_inOutCounters.first += readResult;
+#else
+									inpipe.front()->m_pStorage->m_nIncommingCount += readResult;
+#endif
+							}
 							else
 								// <=0 doesn't mean an error, only a double check can tell
 								readResult =
@@ -1244,6 +1265,15 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 							sErrorMsg = tErrnoFmter("502 ");
 #endif
 							END_IO_LOOP(EFLAG_LOST_CON);
+						}
+						else
+						{
+							if(AC_LIKELY(inpipe.front()->m_pStorage))
+#if TRACK_OUTCOUNT
+								inpipe.front()->m_pStorage->m_inOutCounters.first += readResult;
+#else
+							inpipe.front()->m_pStorage->m_nIncommingCount += readResult;
+#endif
 						}
 					}
 

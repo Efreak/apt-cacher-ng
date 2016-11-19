@@ -80,7 +80,24 @@ class conn // : public tRunable
 	void Shutdown();
 
 // scratch area for shared used by jobs
-	string sErrorMsg;
+	string j_sErrorMsg;
+	unsigned long j_nChunkRemainingBytes = 0;
+	off_t j_nRetDataCount = 0, j_nConfirmedSizeSoFar = 0; // what dler allows to send so far
+	off_t j_nSendPos = 0; // where the reader is
+	off_t j_nFileSendLimit = (MAX_VAL(off_t) - 1); // special limit, abort transmission there
+	tSS j_sendbuf;
+	int j_filefd = -1;
+
+#warning fixme, m_nFileSendLimit is last byte of the byte after?
+
+	inline void ClearSharedMembers()
+	{
+		j_sErrorMsg.clear();
+		j_nChunkRemainingBytes = j_nRetDataCount = j_nConfirmedSizeSoFar = j_nSendPos = 0;
+		j_nFileSendLimit = (MAX_VAL(off_t) - 1);
+		j_sendbuf.clear();
+		j_filefd = -1;
+	}
 
 
 #ifdef DEBUG

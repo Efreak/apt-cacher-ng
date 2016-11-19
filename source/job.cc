@@ -237,18 +237,16 @@ job::~job()
 #warning fixme, fetching the counts
 	m_parent.LogDataCounts(m_sFileLoc + (bErr ? (miscError + ltos(stcode) + ']') : sEmptyString),
 			m_pReqHead->h[header::XFORWARDEDFOR],
-			(m_pItem ? /* m_pItem->GetTransferCount() */0 : 0), m_nAllDataCount, bErr);
+			(m_pItem ? m_pItem->m_nIncommingCount : 0), m_parent.j_nRetDataCount, bErr);
 
 #warning when volatile type and finished download, donate this to a quick life-keeping cache for 33s, see cleaner
 	// fileitem_with_storage::ProlongLife(m_pItem);
-	checkforceclose(m_filefd);
+	checkforceclose(m_parent.j_filefd);
 	delete m_pReqHead;
 
 	if (m_bFitemWasSubscribed)
 		m_parent.UnsubscribeFromUpdates(m_pItem);
 
-	if (m_psFatalError)
-		delete m_psFatalError;
 }
 
 inline void job::SetupFileServing(const string &visPath, const string &fsBase,
@@ -793,7 +791,7 @@ void job::SendData(int confd)
 		{
 			const header &h = m_pItem->GetHeaderUnlocked();
 			g.unLock(); // item lock must be released in order to replace it!
-			if(m_nAllDataCount)
+			if(j_nRetDataCount)
 			return XSTATE_DISCON;
 			if(h.h[header::XORIG])
 			m_sOrigUrl=h.h[header::XORIG];
@@ -817,8 +815,8 @@ void job::SendData(int confd)
 			break;
 		}
 		// or wait for the dl source to get data at the position we need to start from
-		LOG("sendstate: " << (int) fistate << " , sendpos: " << m_nSendPos << " from " << nGoodDataSize);
-		if(fistate==fileitem::FIST_COMPLETE || (m_nSendPos < nGoodDataSize && fistate>=fileitem::FIST_DLGOTHEAD))
+		LOG("sendstate: " << (int) fistate << " , sendpos: " << j_nSendPos << " from " << nGoodDataSize);
+		if(fistate==fileitem::FIST_COMPLETE || (j_nSendPos < nGoodDataSize && fistate>=fileitem::FIST_DLGOTHEAD))
 		break;
 
 		ldbg("cannot send more data for " << m_sFileLoc);
@@ -866,11 +864,12 @@ void job::SendData(int confd)
 		{
 			skipFetchState = false;
 
-			fistate = m_pItem->GetStatus(&dlThreadId, &m_parent.sErrorMsg, &m_nConfirmedSizeSoFar,
+			fistate = m_pItem->GetStatus(&dlThreadId, &m_parent.j_sErrorMsg,
+					&m_parent.j_nConfirmedSizeSoFar,
 					(m_stateInternal == STATE_SEND_MAIN_HEAD) ? &respHead : nullptr);
 		}
 		if (fistate >= fileitem::FIST_DLERROR)
-			THROW_ERROR(m_parent.sErrorMsg);
+			THROW_ERROR(m_parent.j_sErrorMsg);
 
 		ldbg("job: istate switch " << m_stateInternal);
 		try // for bad_alloc in members
@@ -919,7 +918,7 @@ void job::SendData(int confd)
 					return;
 				}
 
-				if (m_nSendPos >= m_nConfirmedSizeSoFar)
+				if (m_parent.j_nSendPos >= m_parent.j_nConfirmedSizeSoFar)
 				{
 					if (fistate >= fileitem::FIST_COMPLETE) // finito...
 						GOTOENDE
@@ -959,14 +958,14 @@ void job::SendData(int confd)
 								STATE_FINISHJOB :
 								STATE_HEADER_SENT;
 				skipFetchState = true;
-				USRDBG("Response header to be sent in the next cycle: \n" << m_sendbuf);
+				USRDBG("Response header to be sent in the next cycle: \n" << m_parent.j_sendbuf);
 				continue;
 			}
 			case (STATE_HEADER_SENT):
 			{
 				ldbg("STATE_HEADER_SENT");
-				m_filefd = m_pItem->GetFileFd();
-				if (!IsValidFD(m_filefd))
+				m_parent.j_filefd = m_pItem->GetFileFd();
+				if (!IsValidFD(m_parent.j_filefd))
 					THROW_ERROR("503 IO error");
 				m_stateInternal = m_bChunkMode ? STATE_SEND_CHUNK_HEADER : STATE_SEND_PLAIN_DATA;
 				ldbg("next state will be: " << (int) m_stateInternal);
@@ -974,18 +973,18 @@ void job::SendData(int confd)
 			}
 			case (STATE_SEND_PLAIN_DATA):
 			{
-				ldbg("STATE_SEND_PLAIN_DATA, max. " << m_nConfirmedSizeSoFar);
+				ldbg("STATE_SEND_PLAIN_DATA, max. " << j_nConfirmedSizeSoFar);
 
-				size_t nMax2SendNow = min(m_nConfirmedSizeSoFar - m_nSendPos,
-						m_nFileSendLimit + 1 - m_nSendPos);
+				size_t nMax2SendNow = min(m_parent.j_nConfirmedSizeSoFar - m_parent.j_nSendPos,
+						m_parent.j_nFileSendLimit + 1 - m_parent.j_nSendPos);
 				if(nMax2SendNow == 0)
 				{
 					m_stateExternal = XSTATE_WAIT_DL;
 					return;
 				}
-				ldbg("~sendfile: on "<< m_nSendPos << " up to : " << nMax2SendNow);
-				int n = m_pItem->SendData(confd, m_filefd, m_nSendPos, nMax2SendNow);
-				ldbg("~sendfile: " << n << " new m_nSendPos: " << m_nSendPos);
+				ldbg("~sendfile: on "<< j_nSendPos << " up to : " << nMax2SendNow);
+				int n = m_pItem->SendData(confd, m_parent.j_filefd, m_parent.j_nSendPos, nMax2SendNow);
+				ldbg("~sendfile: " << n << " new m_nSendPos: " << j_nSendPos);
 
 				if (n < 0)
 				{
@@ -994,12 +993,12 @@ void job::SendData(int confd)
 					THROW_ERROR("400 Client error");
 				}
 
-				m_nAllDataCount += n;
+				m_parent.j_nRetDataCount += n;
 				// shortcuts, no need to check state again?
-				if (fistate == fileitem::FIST_COMPLETE && m_nSendPos == m_nConfirmedSizeSoFar)
+				if (fistate == fileitem::FIST_COMPLETE && m_parent.j_nSendPos == m_parent.j_nConfirmedSizeSoFar)
 					GOTOENDE
 				;
-				if (m_nSendPos > m_nFileSendLimit)
+				if (m_parent.j_nSendPos > m_parent.j_nFileSendLimit)
 				{
 					m_stateInternal = STATE_FINISHJOB;
 					continue;
@@ -1009,39 +1008,39 @@ void job::SendData(int confd)
 			}
 			case (STATE_SEND_CHUNK_HEADER):
 			{
-				m_nChunkRemainingBytes = min(m_nConfirmedSizeSoFar - m_nSendPos,
-						m_nFileSendLimit + 1 - m_nSendPos);
-				ldbg("STATE_SEND_CHUNK_HEADER for " << m_nChunkRemainingBytes);
-				if (m_nChunkRemainingBytes <= 0)
+				m_parent.j_nChunkRemainingBytes = min(m_parent.j_nConfirmedSizeSoFar - m_parent.j_nSendPos,
+						m_parent.j_nFileSendLimit + 1 - m_parent.j_nSendPos);
+				ldbg("STATE_SEND_CHUNK_HEADER for " << j_nChunkRemainingBytes);
+				if (m_parent.j_nChunkRemainingBytes <= 0)
 				{
 					m_stateInternal = STATE_CHECK_DL_PROGRESS;
 					m_stateBackSend = STATE_SEND_CHUNK_HEADER;
 					continue;
 				}
-				m_sendbuf << tSS::hex << m_nChunkRemainingBytes << tSS::dec
-						<< (m_nChunkRemainingBytes ? "\r\n" : "\r\n\r\n");
+				m_parent.j_sendbuf << tSS::hex << m_parent.j_nChunkRemainingBytes << tSS::dec
+						<< (m_parent.j_nChunkRemainingBytes ? "\r\n" : "\r\n\r\n");
 
 				m_stateInternal = STATE_SEND_BUFFER;
-				m_stateBackSend = m_nChunkRemainingBytes ? STATE_SEND_CHUNK_DATA : STATE_FINISHJOB;
+				m_stateBackSend = m_parent.j_nChunkRemainingBytes ? STATE_SEND_CHUNK_DATA : STATE_FINISHJOB;
 				continue;
 			}
 			case (STATE_SEND_CHUNK_DATA):
 			{
 				ldbg("STATE_SEND_CHUNK_DATA");
 
-				if (m_nChunkRemainingBytes == 0)
+				if (m_parent.j_nChunkRemainingBytes == 0)
 					GOTOENDE
 				; // done
-				int n = m_pItem->SendData(confd, m_filefd, m_nSendPos, m_nChunkRemainingBytes);
+				int n = m_pItem->SendData(confd, m_parent.j_filefd, m_parent.j_nSendPos, m_parent.j_nChunkRemainingBytes);
 				if (n < 0)
 					THROW_ERROR("400 Client error");
-				m_nChunkRemainingBytes -= n;
-				m_nAllDataCount += n;
+				m_parent.j_nChunkRemainingBytes -= n;
+				m_parent.j_nRetDataCount += n;
 
 #warning test it, fix it... end handling = spaghetti
-				if (m_nChunkRemainingBytes <= 0)
+				if (m_parent.j_nChunkRemainingBytes <= 0)
 				{ // append final newline
-					m_sendbuf << "\r\n";
+					m_parent.j_sendbuf << "\r\n";
 					m_stateInternal = STATE_SEND_BUFFER;
 					m_stateBackSend = STATE_SEND_CHUNK_HEADER;
 				}
@@ -1049,8 +1048,8 @@ void job::SendData(int confd)
 			}
 			case (STATE_SEND_BUFFER):
 			{
-				ldbg("prebuf sending: "<< m_sendbuf.c_str());
-				auto r = send(confd, m_sendbuf.rptr(), m_sendbuf.size(), MSG_MORE);
+				ldbg("prebuf sending: "<< j_sendbuf.c_str());
+				auto r = send(confd, m_parent.j_sendbuf.rptr(), m_parent.j_sendbuf.size(), MSG_MORE);
 				if (r < 0)
 				{
 					if(errno == EAGAIN || errno == EINTR || errno == ENOBUFS)
@@ -1058,9 +1057,9 @@ void job::SendData(int confd)
 					m_stateExternal = XSTATE_DISCON;
 					return;
 				}
-				m_nAllDataCount += r;
-				m_sendbuf.drop(r);
-				if (m_sendbuf.empty())
+				m_parent.j_nRetDataCount += r;
+				m_parent.j_sendbuf.drop(r);
+				if (m_parent.j_sendbuf.empty())
 				{
 					USRDBG("Returning to last state, " << (int) m_stateBackSend);
 					m_stateInternal = m_stateBackSend;
@@ -1080,17 +1079,17 @@ void job::SendData(int confd)
 			{
 				// try to send something meaningful, otherwise disconnect
 
-				if (m_nAllDataCount > 0) // crap, already started sending or that was the error header
+				if (m_parent.j_nRetDataCount > 0) // crap, already started sending or that was the error header
 					m_stateExternal = XSTATE_DISCON;
 				else
 				{
-					if (!m_psFatalError)
-						m_psFatalError = new std::string("500 Unknown Error");
+					if (m_parent.j_sErrorMsg.empty() || m_parent.j_sErrorMsg[0] != '5')
+						m_parent.j_sErrorMsg.assign("500 Unknown Internal Error");
 					// no fancy error page, this is basically it
-					m_sendbuf.clear();
-					m_sendbuf << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ") << *m_psFatalError
+					m_parent.j_sendbuf.clear();
+					m_parent.j_sendbuf << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ") << m_parent.j_sErrorMsg
 							<< "\r\n\r\n";
-#warning add oneline body with content length
+#warning add oneline body with content length?
 					m_stateInternal = STATE_SEND_BUFFER;
 					m_stateBackSend = STATE_FATAL_ERROR; // will abort then
 					continue;
@@ -1116,7 +1115,7 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 	auto asError = [this](const char *errMsg)
 	{
 #warning still need a scratch error string
-			m_parent.sErrorMsg = errMsg;
+			m_parent.j_sErrorMsg = errMsg;
 			return false;
 		};
 
@@ -1125,14 +1124,17 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 		LOG(respHead.ToString());
 		return asError("500 Rotten Data");
 	}
+	string sOrigUrl;
+
+#warning test origurl
 
 	if (respHead.h[header::XORIG])
-		m_sOrigUrl = respHead.h[header::XORIG];
+		sOrigUrl = respHead.h[header::XORIG];
 
 	// make sure that header has consistent state and there is data to send which is expected by the client
 	LOG("State: " << httpstatus);
 
-	tSS &sb = m_sendbuf;
+	tSS &sb = m_parent.j_sendbuf;
 	sb.clear();
 	sb << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ") << respHead.frontLine.c_str() + 9 << "\r\n";
 
@@ -1208,15 +1210,15 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 						if (m_nReqRangeFrom >= nContLen || m_nReqRangeTo < m_nReqRangeFrom)
 							return asError("416 Requested Range Not Satisfiable");
 
-						m_nSendPos = m_nReqRangeFrom;
-						m_nFileSendLimit = m_nReqRangeTo;
+						m_parent.j_nSendPos = m_nReqRangeFrom;
+						m_parent.j_nFileSendLimit = m_nReqRangeTo;
 						// replace with partial-response header
 						sb.clear();
 #warning test me, get small ranges and fake acngfs calls
 						sb << "HTTP/1.1 206 Partial Response\r\nContent-Length: "
-								<< (m_nFileSendLimit - m_nSendPos + 1)
-								<< "\r\nContent-Range: bytes " << m_nSendPos << "-"
-								<< m_nFileSendLimit << "/" << nContLen << "\r\n";
+								<< (m_parent.j_nFileSendLimit - m_parent.j_nSendPos + 1)
+								<< "\r\nContent-Range: bytes " << m_parent.j_nSendPos << "-"
+								<< m_parent.j_nFileSendLimit << "/" << nContLen << "\r\n";
 						bGotLen = true;
 					}
 				}
@@ -1252,8 +1254,8 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 	if (respHead.h[header::LOCATION])
 		sb << "Location: " << respHead.h[header::LOCATION] << "\r\n";
 
-	if (!m_sOrigUrl.empty())
-		sb << "X-Original-Source: " << m_sOrigUrl << "\r\n";
+	if (!sOrigUrl.empty())
+		sb << "X-Original-Source: " << sOrigUrl << "\r\n";
 
 	// whatever the client wants
 	sb << "Connection: " << (m_bClientWants2Close ? "close" : "Keep-Alive") << "\r\n";
@@ -1305,11 +1307,8 @@ void job::SetFatalErrorResponse(cmstring& errorLine)
 {
 	LOGSTART(__FUNCTION__);
 	ldbg(errorLine);
-	if (!m_psFatalError)
-		m_psFatalError = new std::string(errorLine);
-	else
-		m_psFatalError->assign(errorLine);
-	if (m_nAllDataCount > 0)
+	m_parent.j_sErrorMsg = errorLine;
+	if (m_parent.j_nRetDataCount > 0)
 	{
 		m_stateExternal = XSTATE_DISCON;
 		return;

@@ -455,6 +455,7 @@ void conn::WorkLoop() {
 					m_jobs2send.pop_front();
 					delete pjSender;
 					pjSender = nullptr;
+					ClearSharedMembers();
 					ldbg("Remaining jobs to send: " << m_jobs2send.size())
 					;
 				}

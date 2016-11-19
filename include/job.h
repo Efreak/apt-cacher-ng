@@ -60,37 +60,19 @@ DLSTATE_OUR, DLSTATE_OTHER
 	 */
 	void SendData(int confd);
 
-	int m_filefd = -1;
 	conn &m_parent;
 
+	// local data bits calculated in the preparation step
 	bool m_bChunkMode = false;
 	bool m_bClientWants2Close = false;
 	bool m_bIsHttp11 = false;
 	bool m_bFitemWasSubscribed = false;
-
-//	eJobState m_state = STATE_WAIT_DL_START, m_backstate = STATE_SEND_MAIN_HEAD; // current state, and state to return after temporary states
-
-#warning move most to scratch area in parent but with reset function
-
-
-	tSS m_sendbuf;
 	mstring m_sFileLoc; // local_relative_path_to_file
 	tSpecialRequest::eMaintWorkType m_eMaintWorkType =
 			tSpecialRequest::workNotSpecial;
-	mstring m_sOrigUrl; // local SAFE copy of the originating source
-
 	header *m_pReqHead = 0; // copy of users requests header
-
+	off_t m_nReqRangeFrom = -1, m_nReqRangeTo = -1;
 	tFileItemPtr m_pItem;
-
-	off_t m_nSendPos = 0, // where the reader is
-			m_nConfirmedSizeSoFar = 0, // what dler allows to send so far
-			m_nFileSendLimit = (MAX_VAL(off_t) - 1); // special limit, abort transmission there
-#warning fixme, m_nFileSendLimit is last byte of the byte after?
-
-	off_t m_nAllDataCount = 0;
-
-	unsigned long m_nChunkRemainingBytes = 0;
 	rex::eMatchType m_type = rex::FILE_INVALID;
 
 	job(const job&);
@@ -108,10 +90,6 @@ DLSTATE_OUR, DLSTATE_OTHER
 
 	bool ParseRange();
 
-	off_t m_nReqRangeFrom = -1, m_nReqRangeTo = -1;
-
-	// HTTP status message to report as fatal error ASAP
-	mstring* m_psFatalError = nullptr;
 };
 
 }

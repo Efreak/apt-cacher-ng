@@ -117,7 +117,11 @@ class fileitem
 	fileitem();
 
 //private:
-	tInOutCounters m_intOutCounters; // written and read by the conn/dlcon thread only
+#if TRACK_OUTCOUNT
+	tInOutCounters m_inOutCounters;
+#else
+	off_t m_nIncommingCount = 0; // written and read by the conn/dlcon thread only
+#endif
 	off_t m_nSizeSeenInCache = 0;   // the best known information about total size of the file. Initially set by conn thread, updated by ANY other dlcon thread during FIST_DLRECEIVING phase.
 	off_t m_nCheckedSize = 0; // the available validated data range for the current download; policy as for m_nSizeSeenInCache
 	off_t m_nRangeLimit = -1;	// only for pass-though mode, write/read by conn thread only

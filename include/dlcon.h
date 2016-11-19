@@ -72,7 +72,7 @@ public:
 			needSend = 2,
 			needConnect = 4, // there is some connection-related work to do
 			fatalError = 8,
-#warning fixme, shorcut missleading
+#warning fixme? shorcut missleading?
 			needActivity = 1 + 2 + 4 // shortcut for all IO related hints
 		};
 		int flags; // one or multiple ORed from above
@@ -80,12 +80,12 @@ public:
 
 		enum
 		{
-			bufUtilizationUnknown = 0,
-			bufUtilizationVeryLow,
-			bufUtilizationLow,
-			bufUtilizationOK,
-			bufUtilizationHigh,
-			bufUtilizationOverrun
+			bufUtilizationUnknown = 0,	// don't have reliable buffer information from OS (yet?)
+			bufUtilizationVeryLow,	// -> double delay
+			bufUtilizationLow,		// -> increase delay by half
+			bufUtilizationOK,		// -> keep delay
+			bufUtilizationHigh,		// -> decrease to half
+			bufUtilizationOverrun	// -> decrease delay to a quarter
 		} bufferUtilizationRatio;
 	};
 
