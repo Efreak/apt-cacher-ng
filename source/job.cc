@@ -486,9 +486,10 @@ void job::PrepareDownload(LPCSTR headBuf)
 			m_pItem->m_nSizeSeenInCache = m_nReqRangeFrom;
 #warning XXX: test resuming
 			m_pItem->m_nRangeLimit = m_nReqRangeTo;
-			m_pItem->m_head.set(header::LAST_MODIFIED,
-					m_pReqHead->h[header::IF_MODIFIED_SINCE] ?
-					m_pReqHead->h[header::IF_MODIFIED_SINCE] : m_pReqHead->h[header::IFRANGE]);
+			auto ifmo =	m_pReqHead->h[header::IF_MODIFIED_SINCE] ?
+					m_pReqHead->h[header::IF_MODIFIED_SINCE] : m_pReqHead->h[header::IFRANGE];
+			m_pItem->m_head.set(header::LAST_MODIFIED, ifmo);
+			m_pItem->m_bCheckFreshness = ifmo;
 			return (m_pItem->m_status = fileitem::FIST_INITED);
 		};
 
@@ -777,11 +778,8 @@ void job::SendData(int confd)
 			return;
 		}
 	}
-#warning also move this stuff to a scratch area inside of m_parent (!!)
 
 	fileitem::FiStatus fistate = fileitem::FIST_FRESH;
-	pthread_t dlThreadId;
-	header respHead;
 
 	// can avoid data checks when switching around, but only once
 	bool skipFetchState = false;
@@ -800,9 +798,9 @@ void job::SendData(int confd)
 			{
 				skipFetchState = false;
 
-				fistate = m_pItem->GetStatus(&dlThreadId, &m_parent.j_sErrorMsg,
+				fistate = m_pItem->GetStatus(&m_parent.dlThreadId, &m_parent.j_sErrorMsg,
 						&m_parent.j_nConfirmedSizeSoFar,
-						(m_stateInternal == STATE_SEND_MAIN_HEAD) ? &respHead : nullptr);
+						(m_stateInternal == STATE_SEND_MAIN_HEAD) ? &m_parent.respHead : nullptr);
 			}
 			if (fistate >= fileitem::FIST_DLERROR)
 				THROW_ERROR(m_parent.j_sErrorMsg);
@@ -835,7 +833,7 @@ void job::SendData(int confd)
 					return;
 				}
 				// ok, assigned, to whom?
-				m_eDlType = (pthread_self() == dlThreadId) ? DLSTATE_OUR : DLSTATE_OTHER;
+				m_eDlType = (pthread_self() == m_parent.dlThreadId) ? DLSTATE_OUR : DLSTATE_OTHER;
 				m_stateInternal = STATE_CHECK_DL_PROGRESS;
 				m_stateBackSend = STATE_SEND_MAIN_HEAD;
 				if (m_eDlType == DLSTATE_OTHER) // ok, not our download agent
@@ -870,16 +868,14 @@ void job::SendData(int confd)
 			}
 			case (STATE_SEND_MAIN_HEAD):
 			{
-#warning fixme, keine extra pruefung von fistate... wie komme ich her, alles checken
 				ldbg("STATE_FRESH");
-
 				// nothing to send for special codes (like not-unmodified) or w/ GUARANTEED empty body
-				int statusCode = respHead.getStatus();
+				int statusCode = m_parent.respHead.getStatus();
 				bool bResponseHasBody = !BODYFREECODE(statusCode)
-						&& (!respHead.h[header::CONTENT_LENGTH] // not set, maybe chunked data
-						|| atoofft(respHead.h[header::CONTENT_LENGTH])); // set, to non-0
+						&& (!m_parent.respHead.h[header::CONTENT_LENGTH] // not set, maybe chunked data
+						|| atoofft(m_parent.respHead.h[header::CONTENT_LENGTH])); // set, to non-0
 
-				if (!FormatHeader(fistate, m_pItem->m_nCheckedSize, respHead, bResponseHasBody,
+				if (!FormatHeader(fistate, m_pItem->m_nCheckedSize, m_parent.respHead, bResponseHasBody,
 						statusCode))
 				{
 					// sErrorMsg was already set
@@ -983,8 +979,6 @@ void job::SendData(int confd)
 				}
 				m_parent.j_nChunkRemainingBytes -= n;
 				m_parent.j_nRetDataCount += n;
-
-#warning test it, fix it... end handling = spaghetti
 				if (m_parent.j_nChunkRemainingBytes <= 0)
 				{ // append final newline
 					m_parent.j_sendbuf << "\r\n";

@@ -102,6 +102,7 @@ header::~header()
 
 void header::clear()
 {
+#warning make it smarter, keep buffers in a side list or something similar
 	for(unsigned i=0; i<HEADPOS_MAX; i++)
 		del((eHeadPos) i);
 	frontLine.clear();

@@ -87,6 +87,8 @@ class conn // : public tRunable
 	off_t j_nFileSendLimit = (MAX_VAL(off_t) - 1); // special limit, abort transmission there
 	tSS j_sendbuf;
 	int j_filefd = -1;
+	pthread_t dlThreadId;
+	header respHead;
 
 #warning fixme, m_nFileSendLimit is last byte of the byte after?
 
@@ -97,6 +99,7 @@ class conn // : public tRunable
 		j_nFileSendLimit = (MAX_VAL(off_t) - 1);
 		j_sendbuf.clear();
 		j_filefd = -1;
+		respHead.clear();
 	}
 
 
