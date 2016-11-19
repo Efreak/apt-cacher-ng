@@ -81,6 +81,8 @@ extern cmstring FAKEDATEMARK;
 #define szNEWLINE "\n"
 #endif
 
+static const cmstring sCRLF("\r\n");
+
 // some alternative versions of these flags
 
 #ifndef O_NONBLOCK

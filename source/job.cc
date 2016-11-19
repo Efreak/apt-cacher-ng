@@ -20,11 +20,9 @@ using namespace std;
 
 #include <errno.h>
 
-#if 0 // defined(DEBUG)
-#define CHUNKDEFAULT true
+//#define TESTCHUNKMODE
+#ifdef TESTCHUNKMODE
 #warning testing chunk mode
-#else
-#define CHUNKDEFAULT false
 #endif
 
 namespace acng
@@ -777,72 +775,6 @@ void job::SendData(int confd)
 		return;
 	}
 
-#if 0
-	fileitem::FiStatus fistate(fileitem::FIST_DLERROR);
-	header respHead; // template of the response header, e.g. as found in cache
-
-	if (confd<0)
-	return XSTATE_DISCON;// shouldn't get here with any legal path
-
-	for(;;)
-	{
-		fistate=m_pItem->GetStatusUnlocked(nGoodDataSize);
-		if (fistate > fileitem::FIST_COMPLETE)
-		{
-			const header &h = m_pItem->GetHeaderUnlocked();
-			g.unLock(); // item lock must be released in order to replace it!
-			if(j_nRetDataCount)
-			return XSTATE_DISCON;
-			if(h.h[header::XORIG])
-			m_sOrigUrl=h.h[header::XORIG];
-			// must be something like "HTTP/1.1 403 Forbidden"
-			if(h.frontLine.length()>9 && h.getStatus()!=200)
-			SetErrorResponse(h.frontLine.c_str()+9, h.h[header::LOCATION]);
-			else// good ungood? confused somewhere?!
-			{
-				ldbg("good ungood, consused?" << h.frontLine)
-				SetErrorResponse("500 Unknown error");
-			}
-			return R_AGAIN; // will send error response and die
-		}
-		/*
-		 * Detect the same special case as above. There is no download agent to change
-		 * the state so no need to wait.
-		 */
-		if(m_bNoDownloadStarted)
-		{
-			fistate = fileitem::FIST_DLRECEIVING;
-			break;
-		}
-		// or wait for the dl source to get data at the position we need to start from
-		LOG("sendstate: " << (int) fistate << " , sendpos: " << j_nSendPos << " from " << nGoodDataSize);
-		if(fistate==fileitem::FIST_COMPLETE || (j_nSendPos < nGoodDataSize && fistate>=fileitem::FIST_DLGOTHEAD))
-		break;
-
-		ldbg("cannot send more data for " << m_sFileLoc);
-
-#if 0
-		// if this is our downloader, don't block it when it needs our thread cpu time
-		if(m_pParentCon->m_pDlClient
-				&& m_pParentCon->m_pDlClient->IsCurrentDownload(m_pItem.getFiPtr())
-				&& m_pParentCon->m_lastDlState.flags)// & (dlcon::tWorkState::needConnect | dlcon::tWorkState::needRecv | dlcon::tWorkState::needSend)))
-		return R_AGAIN;
-
-#endif
-		// if downloader is active, don't block it
-#warning bad idea, will block although the dler could continue with another in the queue and vice versa... PROBLEM! IDEA NEEDED.
-		if(m_pParentCon->m_lastDlState.flags & dlcon::tWorkState::needActivity)
-		return R_WAITDL;
-		// otherwise it's some other downloader active, just wait for progress
-		m_pItem->wait(g);
-
-		dbgline;
-	}
-
-	respHead = m_pItem->GetHeaderUnlocked();
-#warning what for??
-#endif
-
 #warning also move this stuff to a scratch area inside of m_parent (!!)
 
 	fileitem::FiStatus fistate = fileitem::FIST_FRESH;
@@ -974,9 +906,9 @@ void job::SendData(int confd)
 			case (STATE_SEND_PLAIN_DATA):
 			{
 				ldbg("STATE_SEND_PLAIN_DATA, max. " << m_parent.j_nConfirmedSizeSoFar);
-
-				size_t nMax2SendNow = min(m_parent.j_nConfirmedSizeSoFar - m_parent.j_nSendPos,
-						m_parent.j_nFileSendLimit + 1 - m_parent.j_nSendPos);
+				auto sendLimit = min(m_parent.j_nConfirmedSizeSoFar,
+						m_parent.j_nFileSendLimit + 1);
+				auto nMax2SendNow = sendLimit - m_parent.j_nSendPos;
 				if(nMax2SendNow == 0)
 				{
 					m_stateExternal = XSTATE_WAIT_DL;
@@ -1008,20 +940,27 @@ void job::SendData(int confd)
 			}
 			case (STATE_SEND_CHUNK_HEADER):
 			{
-				m_parent.j_nChunkRemainingBytes = min(m_parent.j_nConfirmedSizeSoFar - m_parent.j_nSendPos,
-						m_parent.j_nFileSendLimit + 1 - m_parent.j_nSendPos);
+				m_parent.j_nChunkRemainingBytes = min(m_parent.j_nConfirmedSizeSoFar, m_parent.j_nFileSendLimit + 1)
+						- m_parent.j_nSendPos;
 				ldbg("STATE_SEND_CHUNK_HEADER for " << m_parent.j_nChunkRemainingBytes);
+				bool bFinalChunk = !m_parent.j_nChunkRemainingBytes ;
+
 				if (m_parent.j_nChunkRemainingBytes <= 0)
 				{
-					m_stateInternal = STATE_CHECK_DL_PROGRESS;
-					m_stateBackSend = STATE_SEND_CHUNK_HEADER;
-					continue;
+					if(fistate > fileitem::FIST_COMPLETE)
+						THROW_ERROR("500 Download interrupted");
+					if(fistate < fileitem::FIST_COMPLETE)
+					{
+						m_stateInternal = STATE_CHECK_DL_PROGRESS;
+						m_stateBackSend = STATE_SEND_CHUNK_HEADER;
+						continue;
+					}
 				}
-				m_parent.j_sendbuf << tSS::hex << m_parent.j_nChunkRemainingBytes << tSS::dec
-						<< (m_parent.j_nChunkRemainingBytes ? "\r\n" : "\r\n\r\n");
+				m_parent.j_sendbuf << tSS::hex << m_parent.j_nChunkRemainingBytes << tSS::dec << sCRLF;
+				if(bFinalChunk) m_parent.j_sendbuf << sCRLF;
 
 				m_stateInternal = STATE_SEND_BUFFER;
-				m_stateBackSend = m_parent.j_nChunkRemainingBytes ? STATE_SEND_CHUNK_DATA : STATE_FINISHJOB;
+				m_stateBackSend = bFinalChunk ? STATE_FINISHJOB : STATE_SEND_CHUNK_DATA;
 				continue;
 			}
 			case (STATE_SEND_CHUNK_DATA):
@@ -1033,7 +972,11 @@ void job::SendData(int confd)
 				; // done
 				int n = m_pItem->SendData(confd, m_parent.j_filefd, m_parent.j_nSendPos, m_parent.j_nChunkRemainingBytes);
 				if (n < 0)
+				{
+					if(errno == EAGAIN || errno == EINTR)
+						return;
 					THROW_ERROR("400 Client error");
+				}
 				m_parent.j_nChunkRemainingBytes -= n;
 				m_parent.j_nRetDataCount += n;
 
@@ -1114,29 +1057,22 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 	// just store a copy for the caller
 	auto asError = [this](const char *errMsg)
 	{
-#warning still need a scratch error string
-			m_parent.j_sErrorMsg = errMsg;
-			return false;
-		};
+		m_parent.j_sErrorMsg = errMsg;
+		return false;
+	};
 
 	if (respHead.type != header::ANSWER || respHead.frontLine.length() < 11)
 	{
 		LOG(respHead.ToString());
 		return asError("500 Rotten Data");
 	}
-	string sOrigUrl;
-
-#warning test origurl
-
-	if (respHead.h[header::XORIG])
-		sOrigUrl = respHead.h[header::XORIG];
 
 	// make sure that header has consistent state and there is data to send which is expected by the client
 	LOG("State: " << httpstatus);
 
 	tSS &sb = m_parent.j_sendbuf;
 	sb.clear();
-	sb << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ") << respHead.frontLine.c_str() + 9 << "\r\n";
+	sb << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ") << respHead.frontLine.c_str() + 9 << sCRLF;
 
 	bool bGotLen(false);
 
@@ -1144,8 +1080,8 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 	{
 		LOG("has sendable content");
 		if (!respHead.h[header::CONTENT_LENGTH]
-#ifdef DEBUG // might have been defined before for testing purposes
-				|| m_bChunkMode
+#ifdef TESTCHUNKMODE
+				|| true
 #endif
 				)
 		{
@@ -1218,7 +1154,7 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 						sb << "HTTP/1.1 206 Partial Response\r\nContent-Length: "
 								<< (m_parent.j_nFileSendLimit - m_parent.j_nSendPos + 1)
 								<< "\r\nContent-Range: bytes " << m_parent.j_nSendPos << "-"
-								<< m_parent.j_nFileSendLimit << "/" << nContLen << "\r\n";
+								<< m_parent.j_nFileSendLimit << "/" << nContLen << sCRLF;
 						bGotLen = true;
 					}
 				}
@@ -1231,16 +1167,16 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 		}
 		// has cont-len available but this header was not set yet in the code above
 		if (!bGotLen && !m_bChunkMode)
-			sb << "Content-Length: " << respHead.h[header::CONTENT_LENGTH] << "\r\n";
+			sb << "Content-Length: " << respHead.h[header::CONTENT_LENGTH] << sCRLF;
 
 		// OK, has data for user and has set content-length and/or range or chunked transfer mode, now add various meta headers...
 
 		if (respHead.h[header::LAST_MODIFIED])
-			sb << "Last-Modified: " << respHead.h[header::LAST_MODIFIED] << "\r\n";
+			sb << "Last-Modified: " << respHead.h[header::LAST_MODIFIED] << sCRLF;
 
 		sb << "Content-Type: ";
 		if (respHead.h[header::CONTENT_TYPE])
-			sb << respHead.h[header::CONTENT_TYPE] << "\r\n";
+			sb << respHead.h[header::CONTENT_TYPE] << sCRLF;
 		else
 			sb << "application/octet-stream\r\n";
 	}
@@ -1252,57 +1188,21 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 	sb << header::GenInfoHeaders();
 
 	if (respHead.h[header::LOCATION])
-		sb << "Location: " << respHead.h[header::LOCATION] << "\r\n";
+		sb << "Location: " << respHead.h[header::LOCATION] << sCRLF;
 
-	if (!sOrigUrl.empty())
-		sb << "X-Original-Source: " << sOrigUrl << "\r\n";
+	if (respHead.h[header::XORIG])
+		sb << "X-Original-Source: " << respHead.h[header::XORIG] << sCRLF;
 
 	// whatever the client wants
-	sb << "Connection: " << (m_bClientWants2Close ? "close" : "Keep-Alive") << "\r\n";
+	sb << "Connection: " << (m_bClientWants2Close ? "close" : "Keep-Alive") << sCRLF;
 
-	sb << "\r\n";
+	//if(!m_bChunkMode)
+	sb << sCRLF;
+
 	LOG("response prepared:" << sb);
 
 	return true;
 }
-#if 0
-#error method is shit. no need for location or bodytext anymore. no need to replace item, this is only for fatal items
-void job::SetErrorResponse(cmstring& errorLine, const char *szLocation, const char *bodytext)
-{
-	LOGSTART2("job::SetErrorResponse", errorLine << " ; for " << m_sOrigUrl);
-	class erroritem: public tGeneratedFitemBase
-	{
-	public:
-		erroritem(const string &sId, cmstring& sError, const char *bodytext)
-		: tGeneratedFitemBase(sId, sError)
-		{
-			if(BODYFREECODE(m_head.getStatus()))
-			return;
-			// otherwise do something meaningful
-			m_data << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>"
-			<< sError << "</title>\n</head>\n<body><h1>";
-			if (bodytext)
-			m_data << bodytext;
-			else
-			m_data << sError;
-			m_data << "</h1></body></html>";
-			m_head.set(header::CONTENT_TYPE, "text/html");
-			seal();
-		}
-	};
-
-	erroritem *p = new erroritem("noid", errorLine, bodytext);
-	p->HeadRef().set(header::LOCATION, szLocation);
-	if(m_bFitemWasSubscribed)
-	{
-		m_pItem->unsubscribe(m_parent.fdWakeWrite);
-		m_bFitemWasSubscribed = false;
-	}
-	m_pItem.reset(p);
-	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
-	m_stateInternal=STATE_SEND_MAIN_HEAD;
-}
-#endif
 void job::SetFatalErrorResponse(cmstring& errorLine)
 {
 	LOGSTART(__FUNCTION__);

@@ -81,7 +81,7 @@ class conn // : public tRunable
 
 // scratch area for shared used by jobs
 	string j_sErrorMsg;
-	unsigned long j_nChunkRemainingBytes = 0;
+	off_t j_nChunkRemainingBytes = 0;
 	off_t j_nRetDataCount = 0, j_nConfirmedSizeSoFar = 0; // what dler allows to send so far
 	off_t j_nSendPos = 0; // where the reader is
 	off_t j_nFileSendLimit = (MAX_VAL(off_t) - 1); // special limit, abort transmission there
