@@ -376,19 +376,20 @@ inline void expiration::DropExceptionalVersions()
 inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 {
 	LOGSTART("expiration::_RemoveAndStoreStatus");
-	FILE_RAII f;
+	FILE *dbFile(0);
+	ACTION_ON_LEAVING(closer, [&dbFile](){checkForceFclose(dbFile);})
     if(!bPurgeNow)
     {
         DropExceptionalVersions();
         string sDbFileAbs=CACHE_BASE+FNAME_PENDING;
-        f.p = fopen(sDbFileAbs.c_str(), "w");
-        if(!f)
+        dbFile = fopen(sDbFileAbs.c_str(), "w");
+        if(!dbFile)
         {
             SendChunk(WITHLEN("Unable to open " FNAME_PENDING
             		" for writing, attempting to recreate... "));
             ::unlink(sDbFileAbs.c_str());
-            f.p=::fopen(sDbFileAbs.c_str(), "w");
-            if(f)
+            dbFile=::fopen(sDbFileAbs.c_str(), "w");
+            if(dbFile)
                 SendChunk(WITHLEN("OK\n<br>\n"));
             else
             {
@@ -443,7 +444,7 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 				::rmdir(SZABSPATH(dir_props.first));
 #endif
 			}
-			else if (f)
+			else if (dbFile)
 			{
 				SendFmt << "Tagging " << sPathRel;
 				if (m_bVerbose)
@@ -452,7 +453,7 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 
 				nCount++;
 				tagSpace += desc.fpr.size;
-				fprintf(f, "%lu\t%s\t%s\n",
+				fprintf(dbFile, "%lu\t%s\t%s\n",
 						(unsigned long) desc.nLostAt,
 						dir_props.first.c_str(),
 						fileGroup.first.c_str());

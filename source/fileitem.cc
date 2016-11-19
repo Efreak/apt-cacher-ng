@@ -375,9 +375,8 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 
 	USRDBG( "Download started, storeHeader for " << m_sPathRel << ", current status: " << (int) m_status);
 
-	// always news for someone, even lost the race
-	tDtorExec _notifier([this]() {notifyObservers();});
-
+	// always news for someone, even when lost the race
+	ACTION_ON_LEAVING_EX(_notifier, [this]() {notifyObservers();};);
 
 	lockguard g(m_mx); // need this early, right after setting FIST_DLASSIGNED m_dlThreadId will be needed
 

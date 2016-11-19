@@ -73,19 +73,6 @@ inline void checkForceFclose(FILE* &fh)
 	}
 }
 
-// more efficient than tDtorEx with lambda
-struct FILE_RAII
-{
-	FILE *p = nullptr;
-	inline FILE_RAII() {};
-	inline ~FILE_RAII() { close(); }
-	operator FILE* () const { return p; }
-	inline void close() { checkForceFclose(p); };
-private:
-	FILE_RAII(const FILE_RAII&);
-	FILE_RAII operator=(const FILE_RAII&);
-};
-
 void mkdirhier(cmstring& path);
 bool xtouch(cmstring &wanted);
 void mkbasedir(const mstring & path);

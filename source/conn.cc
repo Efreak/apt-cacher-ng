@@ -532,6 +532,7 @@ void conn::Shutdown()
 {
 	for(auto& j: m_jobs2send) delete j;
 	m_jobs2send.clear();
+
 	if(m_pDlClient) m_pDlClient->Shutdown();
 
 #ifdef HAVE_LINUX_EVENTFD

@@ -50,6 +50,7 @@ typedef std::string mstring;
 typedef const std::string cmstring;
 
 typedef std::pair<mstring, mstring> tStrPair;
+typedef std::pair<off_t, off_t> tInOutCounters;
 typedef std::vector<mstring> tStrVec;
 typedef std::set<mstring> tStrSet;
 typedef std::deque<mstring> tStrDeq;
@@ -447,14 +448,30 @@ typedef std::deque<std::pair<std::string, std::string>> tLPS;
 
 bool scaseequals(cmstring& a, cmstring& b);
 
-// dirty little RAII helper
+// dirty little RAII helpers, more or less heavy
+template<typename T>
 struct tDtorExec
 {
-	std::function<void(void)> _action;
+	T &_action;
 	inline tDtorExec(decltype(_action) action) : _action(action) {}
 	inline ~tDtorExec() { _action(); }
-	inline void defuse() { _action = decltype(_action)(); }
 };
+#define ACTION_ON_LEAVING(oname, lambdacode) \
+		auto __do ## oname = lambdacode; \
+		tDtorExec<decltype(__do ## oname)> oname(__do ## oname);
+// similar, can be defused
+template<typename T>
+struct tDtorExec2
+{
+	T &_action;
+	bool defused=false;
+	inline tDtorExec2(decltype(_action) action) : _action(action) {}
+	inline ~tDtorExec2() { if(!defused) _action(); }
+	inline void defuse() { defused = true; }
+};
+#define ACTION_ON_LEAVING_EX(oname, lambdacode) \
+		auto __do ## oname = lambdacode; \
+		tDtorExec2<decltype(__do ## oname)> oname(__do ## oname);
 
 // little helper used to pass around a thread-safe collection of strings (singleton)
 struct tTraceData: public tStrSet, public base_with_mutex

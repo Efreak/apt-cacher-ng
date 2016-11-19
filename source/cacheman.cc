@@ -1240,21 +1240,24 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 		// XXX: use smarter line matching or regex
 		auto probeCS = probeOrig.GetCsAsString();
 		auto probeSize = offttos(probeOrig.size);
-		FILE_RAII pf;
+
+		bool foundStartPoint = false;
+		FILE *pPatchMergeStream(0);
+		ACTION_ON_LEAVING(pfclean, [&pPatchMergeStream]() {checkForceFclose(pPatchMergeStream);} )
+
 		for(const auto& histLine: csHist)
 		{
-			// quick filter
-			if(!pf.p && !startsWith(histLine, probeCS))
+			if(!foundStartPoint && !startsWith(histLine, probeCS))
 				continue;
+			foundStartPoint = true;
 
 			// analyze the state line
 			tSplitWalk split(&histLine, SPACECHARS);
-			if(!split.Next() || !split.Next())
+			if(!split.Next() || !split.Next()) // at checksum, at size
 				continue;
-			// at size token
-			if(!pf.p && probeSize != split.str())
+			if(probeSize != split.str())
 				return false; // faulty data?
-			if(!split.Next())
+			if(!split.Next()) // state name
 				continue;
 			string pname = split.str();
 			trimString(pname);
@@ -1262,18 +1265,18 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 				return false; // XXX: maybe throw int with line number
 
 			// ok, first patch of the sequence found
-			if(!pf.p)
+
+			if(!pPatchMergeStream)
 			{
 				acng::mkbasedir(sPatchCombinedAbs);
 				// append mode!
-				pf.p=fopen(sPatchCombinedAbs.c_str(), "w");
-				if(!pf.p)
+				pPatchMergeStream = fopen(sPatchCombinedAbs.c_str(), "w");
+				if(!pPatchMergeStream)
 				{
 					SendChunk("Failed to create intermediate patch file, stop patching...<br>");
 					return false;
 				}
 			}
-			// ok, so we started collecting patches...
 
 			string patchPathRel(pindexPathRel.substr(0, pindexPathRel.size()-5) +
 					pname + ".gz");
@@ -1286,7 +1289,7 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 
 			// append context to combined diff while unpacking
 			// XXX: probe result can be checked against contents["SHA256-History"]
-			if(!probe.ScanFile(SABSPATH(patchPathRel), CSTYPE_SHA256, true, pf.p))
+			if(!probe.ScanFile(SABSPATH(patchPathRel), CSTYPE_SHA256, true, pPatchMergeStream))
 			{
 				if(m_bVerbose)
 					SendFmt << "Failure on checking of intermediate patch data in " << patchPathRel << ", stop patching...<br>";
@@ -1298,16 +1301,17 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 				return false;
 			}
 		}
-		if(pf.p)
+		if(pPatchMergeStream)
 		{
-			::fprintf(pf.p, "w patch.result\n");
-			::fflush(pf.p); // still a slight risk of file closing error but it's good enough for now
-			if(::ferror(pf.p))
+			::fprintf(pPatchMergeStream, "w patch.result\n");
+			::fflush(pPatchMergeStream); // still a slight risk of file closing error but it's good enough for now
+			if(::ferror(pPatchMergeStream))
 			{
 				SendChunk("Patch application error<br>");
 				return false;
 			}
-			checkForceFclose(pf.p);
+			// flush, close
+			pfclean._action();
 
 #ifndef DEBUGIDX
 			if(m_bVerbose)
@@ -1352,20 +1356,22 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 			if(itype != FindCompIdx(pb))
 				continue;
 
-			FILE_RAII df;
 			DelTree(SABSPATH("_actmp"));
 			acng::mkbasedir(sPatchInputAbs);
-			df.p = fopen(sPatchInputAbs.c_str(), "w");
-			if(!df.p)
+
+			FILE *pOrigBlob(0);
+			pOrigBlob = fopen(sPatchInputAbs.c_str(), "w");
+			ACTION_ON_LEAVING(closer, [&pOrigBlob](){checkForceFclose(pOrigBlob);})
+			if(!pOrigBlob)
 			{
 				SendFmt << "Cannot write temporary patch data to "
 						<< sPatchInputRel << "<br>";
 				return;
 			}
 			if(!probeOrig.ScanFile(SABSPATH(pb),
-					CSTYPE_SHA256, true, df.p))
+					CSTYPE_SHA256, true, pOrigBlob))
 				continue;
-			df.close();
+			closer._action(); // flush, close
 			if(probeStateWanted == probeOrig)
 			{
 				SetFlags(pb).uptodate = true;

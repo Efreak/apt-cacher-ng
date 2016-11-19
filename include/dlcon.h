@@ -77,6 +77,16 @@ public:
 		};
 		int flags; // one or multiple ORed from above
 		int fd;
+
+		enum
+		{
+			bufUtilizationUnknown = 0,
+			bufUtilizationVeryLow,
+			bufUtilizationLow,
+			bufUtilizationOK,
+			bufUtilizationHigh,
+			bufUtilizationOverrun
+		} bufferUtilizationRatio;
 	};
 
 	tWorkState WorkLoop(unsigned /* eWorkParameter */flags);
