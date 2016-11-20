@@ -2,6 +2,7 @@
 #ifndef _FILEITEM_H
 #define _FILEITEM_H
 
+#include <fileitem.h>
 #include <string>
 
 #include "config.h"
@@ -111,27 +112,35 @@ struct fileitem
 	bool m_bAllowStoreData = true;
 	int m_filefd = -1;
 
-	// poke everyone who subscribed for updates
-	void notifyObservers();
+	// set a new status and notify thread waiting on m_cvState
+	void SetReportStatus(FiStatus);
 
 	// policy: only increasing value; read any time, write before FIST_INITED by creating thread, after by first assigned downloader thread
 	FiStatus m_status {FIST_FRESH};
 
 	// access protected by mutex
 	header m_head;
-  
+
 	mstring m_sPathRel; // policy: assign in ctor, change never
 
 	// protects access to values updated by dl-thread and read by others
-	acmutex m_mx;
+	std::mutex m_mx;
 
 	// remember which thread was assigned as downloader
 	pthread_t m_dlThreadId = {0};
 
 	std::vector<int> m_subscribers;
 
-	// XXX: add a lightweight subscription scheme that only notifies about status changes.
-	// Maybe even use condition_variable for that because all relevant client threads are blocking style.
+	// only used for blocking clients
+	std::condition_variable m_cvState;
+
+	// ... with lock
+	void notifyObservers();
+
+protected:
+
+	// poke everyone who subscribed for updates
+	void notifyObserversNoLock();
 
 	// just a shortcut
 	void poke(int fd);
@@ -176,53 +185,6 @@ public:
 protected:
 	int MoveRelease2Sidestore();
 };
-
-#if 0 // murks
-#ifndef MINIBUILD
-
-// auto_ptr like object that "owns" a fileitem while it's registered in the global
-// access table. Might cause item's deletion when destroyed
-class fileItemMgmt
-{
-public:
-
-	// public constructor wrapper, get a unique object from the map or a new one
-	bool PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore);
-
-	// related to GetRegisteredFileItem but used for registration of custom file item
-	// implementations created elsewhere (which still need to obey regular work flow)
-	bool RegisterFileItem(tFileItemPtr spCustomFileItem);
-
-	// deletes global registration and replaces m_ptr with another copy
-	void RegisterFileitemLocalOnly(fileitem* replacement);
-
-	//! @return: true iff there is still something in the pool for later cleaning
-	static time_t BackgroundCleanup();
-
-	static void dump_status();
-
-	// when copied around, invalidates the original reference
-	~fileItemMgmt();
-	inline fileItemMgmt() {}
-	inline tFileItemPtr getFiPtr() {return m_ptr;}
-	inline operator bool() const {return (bool) m_ptr;}
-
-
-private:
-	tFileItemPtr m_ptr;
-	void Unreg();
-
-	fileItemMgmt(const fileItemMgmt &src);
-	fileItemMgmt& operator=(const fileItemMgmt &src);
-
-	inline fileitem* operator->() const {return m_ptr.get();}
-
-};
-#else
-#define fileItemMgmt void
-#endif // not MINIBUILD
-
-#endif
 
 }
 #endif

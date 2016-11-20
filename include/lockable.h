@@ -8,6 +8,8 @@ namespace acng
 {
 
 typedef std::mutex acmutex;
+typedef std::lock_guard<std::mutex> lguard;
+typedef std::unique_lock<std::mutex> ulock;
 
 struct base_with_mutex
 {

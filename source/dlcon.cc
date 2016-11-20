@@ -1482,6 +1482,8 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
         if( (EFLAG_JOB_BROKEN & loopRes) && !inpipe.empty())
         {
         	setIfNotEmpty(inpipe.front()->sErrorMsg, sErrorMsg);
+        	if(AC_LIKELY(inpipe.front()->m_pStorage))
+        		inpipe.front()->m_pStorage->SetReportStatus(fileitem::FIST_DLERROR);
 
         	inpipe.pop_front();
 
@@ -1497,7 +1499,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
         			for(auto it = joblist.begin(); it!= joblist.end();)
         			{
         				if(*it && (**it).m_pStorage
-        						&& (**it).m_pStorage->GetStatus() >= fileitem::FIST_DLRECEIVING)
+        						&& (**it).m_pStorage->GetStatus() >= fileitem::FIST_DLASSIGNED)
         				{
         					// someone else is doing it -> drop
         					joblist.erase(it++);

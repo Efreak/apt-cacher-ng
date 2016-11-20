@@ -413,16 +413,14 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	if(!m_pDlcon->WorkLoop())
 		goto rep_dl_error;
 
+	pFi->WaitForFinish();
 
 	if (pFi->GetStatus() == fileitem::FIST_COMPLETE
 			&& pFi->GetHeaderUnlocked().getStatus() == 200)
 	{
 		bSuccess = true;
-#warning fixme, tcount display
-		/*
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
-			SendFmt << "<i>(" << pFi->GetTransferCount() / 1024 << "KiB)</i>\n";
-			*/
+			SendFmt << "<i>(" << pFi->m_nIncommingCount / 1024 << "KiB)</i>\n";
 	}
 	else
 	{
@@ -452,14 +450,11 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if(pFi)
 	{
-#warning fixme, tcount display
-		/*
-		auto dlCount = pFi->GetTransferCount();
+		auto dlCount = pFi->m_nIncommingCount;
 		static cmstring sInternal("[INTERNAL:");
 		// need to account both, this traffic as officially tracked traffic, and also keep the count
 		// separately for expiration about trade-off calculation
 		log::transfer(dlCount, 0, sInternal + GetTaskName() + "]", sFilePathRel, false);
-		*/
 	}
 
 	if (bSuccess && bIsVolatileFile)
@@ -877,6 +872,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 				{
 					m_status = FIST_COMPLETE;
 					notifyObservers();
+					m_cvState.notify_all();
 					return true;
 				}
 			}

@@ -23,8 +23,6 @@
 
 using namespace std;
 
-#warning FIXME: subscriptions, eventfd cache
-
 namespace acng
 {
 #define MAXTEMPDELAY acng::cfg::maxtempdelay // 27
@@ -302,13 +300,18 @@ void fileitem::SetComplete()
 	lockguard g(m_mx);
 	m_nCheckedSize = m_nSizeSeenInCache;
 	m_status = FIST_COMPLETE;
-	notifyObservers();
+	m_cvState.notify_all();
+	notifyObserversNoLock();
 }
 
+#warning lock, access?
 void fileitem::UpdateHeadTimestamp()
 {
-	if(m_status < FIST_DLGOTHEAD || m_status > FIST_COMPLETE || m_sPathRel.empty())
-		return;
+	{
+		lockguard g(m_mx);
+		if(m_status < FIST_DLGOTHEAD || m_status > FIST_COMPLETE || m_sPathRel.empty())
+			return;
+	}
 	utimes(SZABSPATHSFX(m_sPathRel, sHead), nullptr);
 }
 /*
@@ -336,14 +339,18 @@ bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 		bool bRestartResume, bool &bDoCleanRetry)
 {
 	LOGSTART("fileitem::DownloadStartedStoreHeader");
+
+	// big critical section is ok since all the waiters have to get the state soon anyhow
+	lockguard g(m_mx);
+
 	auto SETERROR = [this, &h](cmstring& x) {
 		m_bAllowStoreData=false;
 		{
-			lockguard g(m_mx);
 			m_head.frontLine=mstring("HTTP/1.1 ")+x;
 			m_head.set(header::XORIG, h.h[header::XORIG]);
+			m_status=FIST_DLERROR;
+			m_cvState.notify_all();
 		}
-		m_status=FIST_DLERROR;
 		_LogWithErrno(x, m_sPathRel);
 	};
 
@@ -376,9 +383,14 @@ bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 	USRDBG( "Download started, storeHeader for " << m_sPathRel << ", current status: " << (int) m_status);
 
 	// always news for someone, even when lost the race
-	ACTION_ON_LEAVING_EX(_notifier, [this]() {notifyObservers();};);
-
-	lockguard g(m_mx); // need this early, right after setting FIST_DLASSIGNED m_dlThreadId will be needed
+	auto notifAction = [this]() {
+		// nope, we have a lock already... notifyObservers();
+		for(const auto& n: m_subscribers)
+			if(n != -1)
+				poke(n);
+		m_cvState.notify_all();
+	};
+	ACTION_ON_LEAVING_EX(_notifier, notifAction)
 
 	// legal "transitions"
 	// normally from inited to assigned
@@ -676,30 +688,33 @@ bool tFileItemEx::StoreFileData(const char *data, unsigned int size)
 {
 	LOGSTART2("fileitem::StoreFileData", "status: " <<  (int) m_status << ", size: " << size);
 
-	if(m_status < FIST_DLGOTHEAD || m_status > FIST_DLRECEIVING)
-		return false;
+	// lock carefully to avoid pointless critical sections, especially around IO
+
+	off_t tgtsize;
+	{
+		lockguard g(m_mx);
+		if(m_status < FIST_DLGOTHEAD || m_status > FIST_DLRECEIVING)
+			return false;
+		tgtsize = m_nCheckedSize + size;
+		if(size)
+			m_status = FIST_DLRECEIVING;
+	}
 	
 	if (size==0)
 	{
-		m_status = FIST_COMPLETE;
-
 		if (cfg::debug & log::LOG_MORE)
 			log::misc(tSS() << "Download of " << m_sPathRel << " finished");
-
+		m_head.StoreToFile(SZABSPATHSFX(m_sPathRel, sHead));
+		lockguard g(m_mx);
 		// we are done! Fix header from chunked transfers?
 		if (m_filefd >= 0 && !m_head.h[header::CONTENT_LENGTH])
-		{
-			{
-				lockguard g(m_mx);
-				m_head.set(header::CONTENT_LENGTH, m_nCheckedSize);
-			}
-			m_head.StoreToFile(SZABSPATHSFX(m_sPathRel, sHead));
-		}
+			m_head.set(header::CONTENT_LENGTH, m_nCheckedSize);
+		m_status = FIST_COMPLETE;
+		notifyObserversNoLock();
+		m_cvState.notify_all();
 	}
 	else
 	{
-		m_status = FIST_DLRECEIVING;
-
 		if (m_bAllowStoreData && m_filefd>=0)
 		{
 			while(size>0)
@@ -713,23 +728,26 @@ bool tFileItemEx::StoreFileData(const char *data, unsigned int size)
 					tErrnoFmter efmt("HTTP/1.1 503 ");
 					lockguard g(m_mx);
 					m_head.frontLine = efmt;
-					m_status=FIST_DLERROR;
+					m_status = FIST_DLERROR;
 					// message will be set by the caller
 					_LogWithErrno(efmt.c_str(), m_sPathRel);
-					notifyObservers();
+					notifyObserversNoLock();
+					m_cvState.notify_all();
 					return false;
 				}
-				m_nCheckedSize += r;
 				size-=r;
 				data+=r;
 			}
 		}
 	}
 
+	lockguard g(m_mx);
+	m_nCheckedSize = tgtsize;
 	// needs to remember the good size, just in case the DL is resumed (restarted in hot state)
 	if(m_nSizeSeenInCache < m_nCheckedSize)
 		m_nSizeSeenInCache = m_nCheckedSize;
-	notifyObservers();
+	notifyObserversNoLock();
+	// NOT pinging state watchers
 	return true;
 }
 
@@ -771,8 +789,8 @@ bool tFileItemEx::TryDispose(tFileItemPtr& existingFi)
 		return false;
 	// can do this without looking because no other thread can start sending data ATM
 	g_sharedItems.erase(it);
-	// nothing should be reading it anymore
-	sptr->m_status = FIST_DLERROR;
+	// nothing should be reading it anymore anyway
+	sptr->SetReportStatus(FIST_DLERROR);
 	checkforceclose(sptr->m_filefd);
 	return true;
 }
@@ -1082,7 +1100,7 @@ void fileitem::subscribe(int fd)
 
 void fileitem::unsubscribe(int fd)
 {
-	lockguard g(m_mx);
+	lguard g(m_mx);
 	for(auto& m: m_subscribers)
 		if(m == fd)
 			m = -1;
@@ -1090,7 +1108,15 @@ void fileitem::unsubscribe(int fd)
 
 void fileitem::notifyObservers()
 {
-	lockguard g(m_mx);
+	lguard g(m_mx);
+	for(const auto& n: m_subscribers)
+		if(n != -1)
+			poke(n);
+}
+
+
+void fileitem::notifyObserversNoLock()
+{
 	for(const auto& n: m_subscribers)
 		if(n != -1)
 			poke(n);
@@ -1101,7 +1127,7 @@ void fileitem::notifyObservers()
 fileitem::FiStatus fileitem::GetStatus(pthread_t* dlThreadId, mstring* sErrorMsg,
 		off_t* pnConfirmedSizeSoFar, header* retHead)
 {
-	lockguard g(m_mx);
+	lguard g(m_mx);
 	if(dlThreadId && m_status >= FIST_DLASSIGNED)
 		*dlThreadId = m_dlThreadId;
 	if(sErrorMsg)
@@ -1117,7 +1143,19 @@ fileitem::FiStatus fileitem::GetStatus(pthread_t* dlThreadId, mstring* sErrorMsg
 
 fileitem::FiStatus fileitem::WaitForFinish(int* httpCode)
 {
-	return FIST_DLERROR;
+	ulock g(m_mx);
+	while(m_status < FIST_COMPLETE)
+		m_cvState.wait(g);
+	if(httpCode)
+		*httpCode = m_head.getStatus();
+	return m_status;
+}
+
+void fileitem::SetReportStatus(FiStatus fistat)
+{
+	lguard g(m_mx);
+	m_status = fistat;
+	m_cvState.notify_all();
 }
 
 }

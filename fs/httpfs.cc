@@ -314,10 +314,8 @@ public:
 			exit(1);
 
 		int nHttpCode(100);
-#warning fixme, workloop was ausgeführt, code fischen
-		//pFi->WaitForFinish(&nHttpCode);
+		pFi->WaitForFinish(&nHttpCode);
 		bIsFirst=false;
-
 
 		if (m_ftype == rex::FILE_SOLID && fidOrig != fid)
 		{
@@ -389,8 +387,7 @@ public:
 		if(!dler.WorkLoop(dlcon::eWorkParameter::freshStart))
 			exit(23);
 		int nHttpCode(100);
-#warning fixme, workloop was ausgeführt, code fischen
-		fileitem::FiStatus res ;//= probe->WaitForFinish(&nHttpCode);
+		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
 		stbuf.st_size = atoofft(probe->GetHeaderUnlocked().h[header::CONTENT_LENGTH], 0);
 		stbuf.st_mode &= ~S_IFDIR;
 		stbuf.st_mode |= S_IFREG;
