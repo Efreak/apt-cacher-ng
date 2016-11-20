@@ -450,7 +450,8 @@ typedef std::deque<std::pair<std::string, std::string>> tLPS;
 
 bool scaseequals(cmstring& a, cmstring& b);
 
-// dirty little RAII helpers, more or less heavy
+// dirty little RAII helpers, lightweight because most likely optimized down to just destruction calls,
+// and working without std::function / type erasure
 template<typename T>
 struct tDtorExec
 {
@@ -461,7 +462,9 @@ struct tDtorExec
 #define ACTION_ON_LEAVING(oname, lambdacode) \
 		auto __do ## oname = lambdacode; \
 		tDtorExec<decltype(__do ## oname)> oname(__do ## oname);
-// similar, can be defused
+
+// similar, can be turned off... maybe overkill and could be done with external parameters but easier to use
+// in a macro with less headaches
 template<typename T>
 struct tDtorExec2
 {
