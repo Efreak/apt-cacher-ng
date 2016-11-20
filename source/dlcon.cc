@@ -590,8 +590,9 @@ struct tDlJob
 				{
 					if(bDoRetry)
 						return EFLAG_LOST_CON | HINT_DISCON; // recoverable
-#warning must tell caller even if lost the race, or it will wait 4ever
+
 					ldbg("Item dl'ed by others or in error state --> drop it, reconnect");
+					m_pStorage->notifyObservers();
 					m_DlState = STATE_PROCESS_DATA;
 					sErrorMsg = "502 Cache descriptor busy";
 /*					header xh = m_pStorage->GetHeader();
@@ -763,7 +764,7 @@ bool dlcon::WorkLoop(unsigned flags)
 	LOGSTART(__FUNCTION__);
 	while (true)
 	{
-		auto retcmd = Work(0);
+		auto retcmd = Work(flags);
 		if(retcmd.flags & tWorkState::fatalError)
 			return false;
 		if( ! (retcmd.flags & tWorkState::needActivity))

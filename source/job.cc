@@ -1023,14 +1023,16 @@ void job::SendData(int confd)
 					m_stateExternal = XSTATE_DISCON;
 				else
 				{
-					if (m_parent.j_sErrorMsg.empty() ||  m_parent.j_sErrorMsg[0] < '4')
-						m_parent.j_sErrorMsg.assign("500 Unknown Internal Error");
+					int hcode = atoi(m_parent.j_sErrorMsg.c_str());
+					if (m_parent.j_sErrorMsg.empty() || hcode < 300) // avoid really suspicious things... XXX: report?
+						m_parent.j_sErrorMsg.insert(0, "500 Unknown Internal Error ");
 
 					// no fancy error page, this is basically it
 					m_parent.j_sendbuf.clear();
-					m_parent.j_sendbuf << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ") << m_parent.j_sErrorMsg
-							<< sCRLF << "Content-Length: " << ltos(m_parent.j_sErrorMsg.length()) <<
-							"\r\n\r\n" << m_parent.j_sErrorMsg;
+					m_parent.j_sendbuf << (m_bIsHttp11 ? "HTTP/1.1 " : "HTTP/1.0 ") << m_parent.j_sErrorMsg	<< sCRLF;
+					if(!BODYFREECODE(hcode))
+						m_parent.j_sendbuf << "Content-Length: " << ltos(m_parent.j_sErrorMsg.length()) << sCRLF;
+					m_parent.j_sendbuf << sCRLF;
 					m_stateInternal = STATE_SEND_BUFFER;
 					m_stateBackSend = STATE_FATAL_ERROR; // will abort then
 					continue;
