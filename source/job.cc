@@ -94,8 +94,7 @@ public:
 	{
 		LOGSTART2("tPassThroughFitem::StoreFileData", "status: " << (int) m_status);
 
-#warning fix it too
-//		m_nIncommingCount += size;
+		m_nIncommingCount += size;
 
 		dbgline;
 		if (m_status > fileitem::FIST_COMPLETE || m_status < FIST_DLGOTHEAD)

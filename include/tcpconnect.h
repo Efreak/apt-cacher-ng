@@ -25,7 +25,7 @@ namespace acng
 {
 
 class tcpconnect;
-class fileitem;
+struct fileitem;
 typedef std::shared_ptr<tcpconnect> tDlStreamHandle;
 
 class tcpconnect
@@ -41,6 +41,8 @@ public:
 #ifdef HAVE_SSL
 	inline BIO* GetBIO() { return m_bio;};
 #endif
+
+	int m_nRcvBufSize = -1;
 
 protected:
 	tcpconnect operator=(const tcpconnect&);

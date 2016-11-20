@@ -754,7 +754,55 @@ void dlcon::Shutdown()
 			inpipe.pop_back();
 
 		// keep the current download running as long as somebody uses it
-		WorkLoop(internalIoLooping);
+		WorkLoop(0);
+	}
+}
+
+bool dlcon::WorkLoop(unsigned flags)
+{
+	LOGSTART(__FUNCTION__);
+	while (true)
+	{
+		auto retcmd = Work(0);
+		if(retcmd.flags & tWorkState::fatalError)
+			return false;
+		if( ! (retcmd.flags & tWorkState::needActivity))
+			return true;
+
+		flags = 0;
+
+		if (retcmd.fd >= 0)
+		{
+			ldbg("select dlcon");
+			struct timeval tv
+			{ cfg::nettimeout, 1 };
+#warning implement waitForFinish with subscription
+			fd_set rfds, wfds;
+			FD_ZERO(&rfds);
+			FD_ZERO(&wfds);
+			if (retcmd.flags & tWorkState::needRecv)
+				FD_SET(retcmd.fd, &rfds);
+			else
+				FD_CLR(retcmd.fd, &rfds);
+			if (retcmd.flags & tWorkState::needSend)
+				FD_SET(retcmd.fd, &wfds);
+			else
+				FD_CLR(retcmd.fd, &wfds);
+			auto ioresult = select(retcmd.fd + 1, &rfds, &wfds, nullptr, &tv);
+			ldbg("returned: " << ioresult << ", errno: " << errno);
+			if (ioresult > 0)
+			{
+				if (FD_ISSET(retcmd.fd, &rfds))
+					flags |= eWorkParameter::ioretCanRecv;
+				if (FD_ISSET(retcmd.fd, &wfds))
+					flags |= eWorkParameter::ioretCanSend;
+			}
+			else
+				flags |=
+						ioresult ?
+								eWorkParameter::ioretGotError :
+								eWorkParameter::ioretGotTimeout;
+		}
 	}
 }
 
@@ -953,7 +1001,7 @@ void dlcon::BlacklistMirror(tDlJobPtr & job)
 				job->GetPeerHost().GetPort())] = sErrorMsg;
 	};
 
-dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
+dlcon::tWorkState dlcon::Work(unsigned flags)
 {
 	LOGSTART("dlcon::WorkLoop");
 	if( (flags & eWorkParameter::freshStart) && !ResetState())
@@ -1040,41 +1088,9 @@ dlcon::tWorkState dlcon::WorkLoop(unsigned flags)
 					goto proc_data;
 				}
 
-				// ok, let's mimic the same operations that would happen outside in connection class
-				if (retcmd.fd >=0 && (flags & eWorkParameter::internalIoLooping))
-				{
+				return retcmd; // return the hints and wait for it to come back to this label:
 
-					ldbg("select dlcon");
-					struct timeval tv
-					{ cfg::nettimeout, 1 };
-
-#warning this sucks, create an iterator-like object which gets a fd to watch and lambdas for read or write
-#warning then implement waitForFinish with this helper too
-					fd_set rfds, wfds;
-					FD_ZERO(&rfds);
-					FD_ZERO(&wfds);
-					if (retcmd.flags & tWorkState::needRecv)
-						FD_SET(retcmd.fd, &rfds);
-					else
-						FD_CLR(retcmd.fd, &rfds);
-					if (retcmd.flags & tWorkState::needSend)
-						FD_SET(retcmd.fd, &wfds);
-					else
-						FD_CLR(retcmd.fd, &wfds);
-					auto ioresult = select(retcmd.fd + 1, &rfds, &wfds, nullptr, &tv);
-					ldbg("returned: " << ioresult << ", errno: " << errno);
-					if(ioresult > 0)
-					{
-						if(FD_ISSET(retcmd.fd, &rfds))
-							flags |= eWorkParameter::ioretCanRecv;
-						if(FD_ISSET(retcmd.fd, &wfds))
-							flags |= eWorkParameter::ioretCanSend;
-					}
-					else
-						flags |= ioresult ? eWorkParameter::ioretGotError : eWorkParameter::ioretGotTimeout;
-				}
-				else
-					return retcmd; // return the hints and wait for it to come back to this label:
+				/////// TIME PASSES ///////
 
 				returned_for_io:
 

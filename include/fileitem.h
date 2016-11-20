@@ -13,17 +13,14 @@
 namespace acng
 {
 
-class fileitem;
+struct fileitem;
 class tFileItemEx;
 class job;
 typedef std::shared_ptr<fileitem> tFileItemPtr;
 
 //! Base class containing all required data and methods for communication with the download sources
-class fileitem
+struct fileitem
 {
-	friend class tFileItemEx;
-	public:
-
 	// Life cycle (process states) of a file description item
 	enum FiStatus : char
 	{
@@ -99,12 +96,8 @@ class fileitem
 
 	bool m_bIsGloballyRegistered = false; // defacto a flag identifying it as tFileItemEx (globally-registered)
 
-#warning fixme
-//protected:
-
 	fileitem();
 
-//private:
 #if TRACK_OUTCOUNT
 	tInOutCounters m_inOutCounters;
 #else
@@ -135,7 +128,10 @@ class fileitem
 	// remember which thread was assigned as downloader
 	pthread_t m_dlThreadId = {0};
 
-	std::deque<int> m_subscribers;
+	std::vector<int> m_subscribers;
+
+	// XXX: add a lightweight subscription scheme that only notifies about status changes.
+	// Maybe even use condition_variable for that because all relevant client threads are blocking style.
 
 	// just a shortcut
 	void poke(int fd);

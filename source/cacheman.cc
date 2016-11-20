@@ -410,8 +410,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix, 0, cfg::REDIRMAX_DEFAULT);
 
-	if(dlcon::tWorkState::fatalError & m_pDlcon->WorkLoop(dlcon::eWorkParameter::freshStart
-					| dlcon::eWorkParameter::internalIoLooping).flags)
+	if(!m_pDlcon->WorkLoop())
 		goto rep_dl_error;
 
 

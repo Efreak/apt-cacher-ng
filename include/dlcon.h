@@ -56,7 +56,7 @@ public:
 	enum eWorkParameter
 	{
 		freshStart = 1, // init/reinit object state, only in the beginning
-		internalIoLooping = 2, // "manual mode" - run internal IO and loop until the job list is processed
+	//	internalIoLooping = 2, // "manual mode" - run internal IO and loop until the job list is processed
 		ioretCanRecv = 4,
 		ioretCanSend = 8,
 		ioretGotError = 16,
@@ -72,24 +72,25 @@ public:
 			needSend = 2,
 			needConnect = 4, // there is some connection-related work to do
 			fatalError = 8,
-#warning fixme? shorcut missleading?
 			needActivity = 1 + 2 + 4 // shortcut for all IO related hints
 		};
 		int flags; // one or multiple ORed from above
 		int fd;
-
+/*
 		enum
 		{
 			bufUtilizationUnknown = 0,	// don't have reliable buffer information from OS (yet?)
-			bufUtilizationVeryLow,	// -> double delay
-			bufUtilizationLow,		// -> increase delay by half
-			bufUtilizationOK,		// -> keep delay
-			bufUtilizationHigh,		// -> decrease to half
-			bufUtilizationOverrun	// -> decrease delay to a quarter
+			bufUtilizationVeryLow,	// -> increase delay QUICKLY
+			bufUtilizationOK,		// -> keep delay or slightly increase
+			bufUtilizationOverrun	// -> decrease delay to half or a quarter
 		} bufferUtilizationRatio;
+	*/
 	};
 
-	tWorkState WorkLoop(unsigned /* eWorkParameter */flags);
+	tWorkState Work(unsigned /* eWorkParameter */flags);
+
+	// run Work until job list is empty, return true if not thrown out with fatalError code
+	bool WorkLoop(unsigned initialFlags = eWorkParameter::freshStart);
 
 	// donate internal resources and prepare for termination. Should not be called during glboal shutdown.
 	void Shutdown();

@@ -310,8 +310,7 @@ public:
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
 		dler.AddJob(spFi, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
-		if(dlcon::tWorkState::fatalError & dler.WorkLoop(dlcon::eWorkParameter::freshStart
-				| dlcon::eWorkParameter::internalIoLooping).flags)
+		if(!dler.WorkLoop())
 			exit(1);
 
 		int nHttpCode(100);
@@ -387,8 +386,7 @@ public:
 		};
 		auto probe(make_shared<tFitemProbe>());
 		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
-		if(dlcon::tWorkState::fatalError & dler.WorkLoop(dlcon::eWorkParameter::freshStart
-						| dlcon::eWorkParameter::internalIoLooping).flags)
+		if(!dler.WorkLoop(dlcon::eWorkParameter::freshStart))
 			exit(23);
 		int nHttpCode(100);
 #warning fixme, workloop was ausgeführt, code fischen

@@ -214,7 +214,7 @@ void conn::WorkLoop() {
 			{
 				// just do it here
 				if (m_lastDlState.flags & dlcon::tWorkState::needConnect)
-					m_lastDlState = m_pDlClient->WorkLoop(dlcon::canConnect);
+					m_lastDlState = m_pDlClient->Work(dlcon::canConnect);
 				checkDlFd = (m_lastDlState.flags
 						& (dlcon::tWorkState::needRecv | dlcon::tWorkState::needSend));
 				if (checkDlFd)
@@ -252,7 +252,7 @@ void conn::WorkLoop() {
 			USRDBG("Timeout occurred, apt client disappeared silently?");
 			if(checkDlFd)
 			{
-				m_lastDlState = m_pDlClient->WorkLoop(dlcon::ioretGotTimeout);
+				m_lastDlState = m_pDlClient->Work(dlcon::ioretGotTimeout);
 				continue;
 			}
 			return;
@@ -265,7 +265,7 @@ void conn::WorkLoop() {
 			ldbg("select error in con, errno: " << errno);
 
 			if(checkDlFd)
-				m_pDlClient->WorkLoop(dlcon::ioretGotError);
+				m_pDlClient->Work(dlcon::ioretGotError);
 
 			return; // FIXME: good error message?
 		}
@@ -281,7 +281,7 @@ void conn::WorkLoop() {
 			if((m_lastDlState.flags & dlcon::tWorkState::needRecv) && FD_ISSET(m_lastDlState.fd, &rfds))
 				checkDlResult |= dlcon::ioretCanRecv;
 			if(checkDlResult)
-				m_lastDlState = m_pDlClient->WorkLoop(checkDlResult);
+				m_lastDlState = m_pDlClient->Work(checkDlResult);
 		}
 
 		if(FD_ISSET(m_confd, &rfds)) {
@@ -489,7 +489,7 @@ bool conn::SetupDownloader(const char *pszOrigin)
 		if(!m_pDlClient)
 			return false;
 
-		m_lastDlState = m_pDlClient->WorkLoop(dlcon::freshStart);
+		m_lastDlState = m_pDlClient->Work(dlcon::freshStart);
 		return ! (dlcon::tWorkState::fatalError & m_lastDlState.flags);
 
 	}

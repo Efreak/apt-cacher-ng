@@ -113,7 +113,8 @@ void termsocket(int fd)
 	};
 }
 
-static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t addrlen, time_t timeout, bool bAssumeNonBlock)
+inline int connect_timeout(int sockfd, const struct sockaddr *addr,
+		socklen_t addrlen, time_t timeout, bool bAssumeNonBlock, int& nRetBufSize)
 {
 	long stflags;
 	struct timeval tv;
@@ -133,7 +134,8 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 			return -1;
 	}
 	res = connect(sockfd, addr, addrlen);
-	if (res < 0) {
+	if (res < 0)
+	{
 		if (EINPROGRESS == errno)
 		{
 			for (;;) {
@@ -160,7 +162,10 @@ static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t ad
 						errno = err;
 						return -1;
 					}
-
+#ifdef SO_RCVBUF
+					if (getsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, (void *)&err, &optlen) == 0)
+						nRetBufSize = err;
+#endif
 					break;
 				} else {
 					// Timeout.
@@ -220,12 +225,13 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			}
 #endif
 			set_nb(m_conFd);
-			if (acng::connect_timeout(m_conFd, pInfo->ai_addr, pInfo->ai_addrlen, timeout, true) < 0)
+			if (acng::connect_timeout(m_conFd, pInfo->ai_addr, pInfo->ai_addrlen, timeout, true, m_nRcvBufSize) < 0)
 			{
 				if(errno==ETIMEDOUT)
 					sErrorMsg="Connection timeout";
 #ifndef MINIBUILD
-				USRDBG(tErrnoFmter("Outgoing connection for ") << m_sHostName << ", Port: " << m_sPort );
+				USRDBG(tErrnoFmter("Outgoing connection for ") << m_sHostName
+						<< ", Port: " << m_sPort << " and rcv buf size: " << m_nRcvBufSize );
 #endif
 				continue;
 			}
@@ -265,6 +271,7 @@ void tcpconnect::Disconnect()
 	m_lastFile.reset();
 
 	termsocket_quick(m_conFd);
+	m_nRcvBufSize = -1;
 }
 acmutex spareConPoolMx;
 multimap<tuple<string,string SSL_OPT_ARG(bool) >,
