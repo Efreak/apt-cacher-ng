@@ -4,6 +4,7 @@ apt-cacher-ng (2) THE-LAST-JOB-FILMS-LTD; urgency=low
   * FIX: communication for maint jobs now properly considers possible
     addresses from daemon's configuration. Communication via UDS remains
     broken which is subject to repairs in the next core code update
+  * FIX: Correct parsing of unix suffixes for ExStartTradeOff option
 
  -- 
 
