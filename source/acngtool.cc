@@ -483,105 +483,123 @@ int maint_job()
 {
 	cfg::SetOption("proxy=", nullptr);
 
-	LPCSTR envh = getenv("HOSTNAME");
-	if(!envh)
-	{
-		static char buf[500];
-		if(0 == gethostname(buf, sizeof(buf)))
-			envh = buf;
-	}
-	if (!envh)
-		envh = "localhost";
-	LPCSTR req = getenv("ACNGREQ");
-	if (!req)
-		req = "?doExpire=Start+Expiration&abortOnErrors=aOe";
-
-	tSS urlPath;
-	urlPath << "http://";
-	if(!cfg::adminauth.empty())
-		urlPath << cfg::adminauth << "@";
-	urlPath << envh << ":" << cfg::port;
-
-	if(cfg::reportpage.empty())
-		return -1;
-	if(cfg::reportpage[0] != '/')
-		urlPath << '/';
-	urlPath << cfg::reportpage << req;
-
-#ifdef DEBUG
-	cerr << "Constructed URL: " << (string) urlPath <<endl;
+	tStrVec hostips;
+#if 0 // FIXME, processing on UDS gets stuck somewhere
+	// prefer UDS if configured in a sane way
+	if (startsWithSz(cfg::fifopath, "/"))
+		hostips.emplace_back(cfg::fifopath);
 #endif
+	auto nips = Tokenize(cfg::bindaddr, SPACECHARS, hostips, true);
+	if (!nips)
+		hostips.emplace_back("localhost");
 
-	CReportItemFactory fac;
-
-	int s = -1;
-	if (!cfg::fifopath.empty())
+	for (const auto& hostaddr : hostips)
 	{
-#ifdef DEBUG
-		cerr << "Socket path: " << cfg::fifopath << endl;
-#endif
-		s = socket(PF_UNIX, SOCK_STREAM, 0);
-		if (s >= 0)
+		// use an own connection factory which does "the right thing" and leaks the
+		// internal connection result
+		struct maintfac: public IDlConFactory
 		{
-			struct sockaddr_un addr;
-			addr.sun_family = PF_UNIX;
-			strcpy(addr.sun_path, cfg::fifopath.c_str());
-			socklen_t adlen = cfg::fifopath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
-			if (0 != connect(s, (struct sockaddr*) &addr, adlen))
+			bool m_bOK = false;
+			mstring m_hname;
+			maintfac(cmstring& s) :
+					m_hname(s)
 			{
-				s = -1;
-#ifdef DEBUG
-				perror("connect");
-#endif
 			}
-			else
-			{
-				//identify myself
-				tSS ids;
-				ids << "GET / HTTP/1.0\r\nX-Original-Source: localhost\r\n\r\n";
-				if (!ids.send(s))
-					s = -1;
-			}
-		}
-	}
-
-	if(s>=0) // use hot unix socket
-	{
-		struct udsFac: public IDlConFactory
-		{
-			int m_sockfd = -1;
-			udsFac(int n) : m_sockfd(n) {}
 
 			void RecycleIdleConnection(tDlStreamHandle & handle) override
-			{}
+			{
+				// keep going, no recycling/restoring
+			}
 			virtual tDlStreamHandle CreateConnected(cmstring &, cmstring &, mstring &, bool *,
 					cfg::tRepoData::IHookHandler *, bool, int, bool) override
 			{
-				struct udsconnection : public tcpconnect
+				string serr;
+
+				if (m_hname[0] != '/') // not UDS
 				{
-					udsconnection(int s) : tcpconnect(nullptr)
+					auto mhandle = g_tcp_con_factory.CreateConnected(m_hname, cfg::port, serr, 0, 0,
+							false, 30, true);
+					m_bOK = mhandle.get();
+					return mhandle;
+				}
+				// otherwise build a fake connection on unix domain socket
+				struct udsconnection: public tcpconnect
+				{
+					udsconnection(cmstring& udspath, bool *ok) :
+							tcpconnect(nullptr)
 					{
-						m_conFd = s;
-#ifdef HAVE_SSL
+#ifdef DEBUG
+						cerr << "Socket path: " << udspath << endl;
+#endif
+						auto m_conFd = socket(PF_UNIX, SOCK_STREAM, 0);
+						if (m_conFd < 0)
+							return;
+
+						struct sockaddr_un addr;
+						addr.sun_family = PF_UNIX;
+						strcpy(addr.sun_path, cfg::fifopath.c_str());
+						socklen_t adlen =
+								cfg::fifopath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
+						if (connect(m_conFd, (struct sockaddr*) &addr, adlen))
+						{
+#ifdef DEBUG
+							perror("connect");
+#endif
+							return;
+						}
+						// basic identification needed
+						tSS ids;
+						ids << "GET / HTTP/1.0\r\nX-Original-Source: localhost\r\n\r\n";
+						if (!ids.send(m_conFd))
+							return;
+
 						m_ssl = nullptr;
 						m_bio = nullptr;
-#endif
-						// must match the URL parameters
+						// better match the TCP socket parameters
 						m_sHostName = "localhost";
-						m_sPort = cfg::port;
-
+						m_sPort = sDefPortHTTP;
+						*ok = true;
 					}
 				};
-				return make_shared<udsconnection>(m_sockfd);
+				return make_shared<udsconnection>(m_hname, &m_bOK);
 			}
-		} udsfac(s);
-		wcat(urlPath.c_str(), nullptr, &fac, &udsfac);
+		};
+		maintfac factoryWrapper(hostaddr);
+		tSS urlPath;
+		urlPath << "http://";
+		if (!cfg::adminauth.empty())
+			urlPath << cfg::adminauth << "@";
+		if (hostaddr[0] == '/')
+			urlPath << "localhost";
+		else
+			urlPath << hostaddr << ":" << cfg::port;
+
+		if (cfg::reportpage.empty())
+			return -1;
+		if(cfg::reportpage[0] != '/')
+			urlPath << "/";
+		urlPath << cfg::reportpage;
+		LPCSTR req = getenv("ACNGREQ");
+		urlPath << (req ? req : "?doExpire=Start+Expiration&abortOnErrors=aOe");
+
+#ifdef DEBUG
+		cerr << "Constructed URL: " << (string) urlPath << endl;
+#endif
+
+		CReportItemFactory printItemFactory;
+		auto retcode = wcat(urlPath.c_str(), nullptr, &printItemFactory, &factoryWrapper);
+		if (retcode)
+		{
+			if (!factoryWrapper.m_bOK) // connection failed, try another IP
+				continue;
+			// otherwise the stuff has been printed
+			return 2;
+		}
+		else
+			return 0;
 	}
-	else // ok, try the TCP path
-	{
-		wcat(urlPath.c_str(), getenv("http_proxy"), &fac);
-	}
-	return 0;
+	// all attempts failed
+	return 3;
 }
 
 int patch_file(string sBase, string sPatch, string sResult)
@@ -977,6 +995,9 @@ int main(int argc, const char **argv)
 			});
 	if(!mode || !parm)
 		usage(3);
+#ifdef DEBUG
+	log::open();
+#endif
 	if(!xargCount) // should run the code at least once?
 	{
 		if(parm->minArg) // uh... needs argument(s)

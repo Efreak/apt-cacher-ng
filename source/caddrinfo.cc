@@ -105,6 +105,12 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 
 	CAddrInfoPtr job;
 
+	if (!cfg::dnscachetime)
+	{
+		job.reset(new CAddrInfo);
+		goto plain_resolve;
+	}
+
 	if(!cfg::dnscachetime)
 		goto plain_resolve;
 
