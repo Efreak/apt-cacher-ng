@@ -45,7 +45,8 @@ void cleaner::WorkLoop()
 	lockuniq g(this);
 	for(;;)
 	{
-		eType what = TYPE_EXDNS;
+		// XXX: review the flow, is this always safe?
+		eType what = TYPE_EXCONNS;
 		time_t when = END_OF_TIME;
 
 		if(m_terminating)
@@ -86,12 +87,6 @@ void cleaner::WorkLoop()
 			time_nextcand = g_tcp_con_factory.BackgroundCleanup();
 			USRDBG("tcpconnect::ExpireCache, nextRunTime now: " << time_nextcand);
 			break;
-
-		case TYPE_EXDNS:
-			time_nextcand = CAddrInfo::BackgroundCleanup();
-			USRDBG("CAddrInfo::ExpireCache, nextRunTime now: " << time_nextcand);
-			break;
-
 		case TYPE_EXFILEITEM:
 			time_nextcand = fileItemMgmt::BackgroundCleanup();
 			USRDBG("fileitem::DoDelayedUnregAndCheck, nextRunTime now: " << time_nextcand);

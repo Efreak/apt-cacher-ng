@@ -1,3 +1,15 @@
+apt-cacher-ng (2) THE-LAST-JOB-FILMS-LTD; urgency=medium
+
+  * Minor refactoring (DNS cache with fewer mutexes)
+  * FIX: communication for maint jobs now properly considers possible
+    addresses from daemon's configuration. Communication via UDS remains
+    broken which is subject to repairs in the next update of core code
+  * FIX: Correct parsing of unix suffixes for ExStartTradeOff option
+  * FIX: fixes for compilation errors with GCC 5.4 (by Bob Ham)
+  * FIX: try to link with libatomic, some architectures require it
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 22 Nov 2016 21:29:54 +0100
+
 apt-cacher-ng (1) LOGAN-VS-BLADE-RUNNER-3D; urgency=low
 
   * The version numbers change to plain integer. The minor numbers were

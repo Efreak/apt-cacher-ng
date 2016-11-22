@@ -206,10 +206,9 @@ void err(const char *msg, const char *client)
 
 	if(!fErr.is_open())
 	{
-/*#ifdef DEBUG
+#ifdef DEBUG // basic debugging of acngtool
 		cerr << msg <<endl;
 #endif
-*/
 		return;
 	}
 	
