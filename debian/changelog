@@ -1,3 +1,17 @@
+apt-cacher-ng (2-1) unstable; urgency=low
+
+  * New upstream version
+    + Fix for incorrect compilation with gcc-5.4 (closes: #843417, #843410)
+    + Fixes communication of cron job runner on systems where public address
+      was guessed incorrectly and/or connection was not possible
+      (closes: #843834, #841633)
+    + Fix ExStartTradeOff computation with unit suffix (closes: #845245)
+    + Linking libatomic where possible (closes: #841431, now really)
+  * Not rotating apt-cacher.err log when file is empty (notifempty option,
+    closes: #832882)
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 22 Nov 2016 21:39:43 +0100
+
 apt-cacher-ng (1-2) unstable; urgency=low
 
   [ Dejan Latinovic <Dejan.Latinovic@imgtec.com> ]
