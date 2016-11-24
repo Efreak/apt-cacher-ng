@@ -470,7 +470,7 @@ other incoming connections.
 
 \H{acl-inetd} Access control with inetd
 
-In some situations, access filtering by client IP/hostname might be not
+In some situations, access filtering by client IP or hostname might be not
 supported directly or there are other reasons to use inetd to wrap access to
 apt-cacher inetd. For this case, an inetd daemon is shipped with the package
 which makes the use of tcpd possible. Installation is done in following steps:
@@ -503,7 +503,7 @@ stored in system's firewall setup script (or any init script like
 \c{/etc/rc.local}):
 
 \c iptables -A INPUT -p tcp --dport 3142 --source 127.0.0.0/8 -j ACCEPT
-\c iptables -A INPUT -p tcp --dport 3142 --source 192.168.0.0.0/16 -j ACCEPT
+\c iptables -A INPUT -p tcp --dport 3142 --source 192.168.0.0/16 -j ACCEPT
 \c iptables -A INPUT -p tcp --dport 3142  -j REJECT --reject-with tcp-reset
 
 \H{acl-tgtports} Target port filter

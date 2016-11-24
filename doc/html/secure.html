@@ -54,7 +54,7 @@ The libwrap filtering method has a little drawback compared to alternatives. The
 </p>
 <h2><a name="acl-inetd"></a>5.3 Access control with inetd</h2>
 <p>
-In some situations, access filtering by client IP/hostname might be not supported directly or there are other reasons to use inetd to wrap access to apt-cacher inetd. For this case, an inetd daemon is shipped with the package which makes the use of tcpd possible. Installation is done in following steps:
+In some situations, access filtering by client IP or hostname might be not supported directly or there are other reasons to use inetd to wrap access to apt-cacher inetd. For this case, an inetd daemon is shipped with the package which makes the use of tcpd possible. Installation is done in following steps:
 </p>
 <p>
 1. compile the inetd bridge tool "in.acng", if not already done (check <code>/usr/lib/apt-cacher-ng</code>).
@@ -82,7 +82,7 @@ In some situations, access filtering by client IP/hostname might be not supporte
 Looking at performance, the most efficient way to estables access control by source IP is the use of system's native mechanisms. For the Linux kernel, it can be created with iptables rules like in the following example, usually stored in system's firewall setup script (or any init script like <code>/etc/rc.local</code>):
 </p>
 <pre><code>iptables -A INPUT -p tcp --dport 3142 --source 127.0.0.0/8 -j ACCEPT
-iptables -A INPUT -p tcp --dport 3142 --source 192.168.0.0.0/16 -j ACCEPT
+iptables -A INPUT -p tcp --dport 3142 --source 192.168.0.0/16 -j ACCEPT
 iptables -A INPUT -p tcp --dport 3142  -j REJECT --reject-with tcp-reset
 </code></pre>
 <h2><a name="acl-tgtports"></a>5.5 Target port filter</h2>
