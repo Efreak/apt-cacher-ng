@@ -1,4 +1,3 @@
-
 //#define LOCAL_DEBUG
 #include "debug.h"
 
@@ -25,18 +24,27 @@ using namespace std;
 #warning Unlinking parts defused
 #endif
 
-#define TIMEEXPIRED(t) (t < (m_gMaintTimeNow-acfg::extreshhold*86400))
-#define TIME_AGONY (m_gMaintTimeNow-acfg::extreshhold*86400)
+#define TIMEEXPIRED(t) (t < (m_gMaintTimeNow-acng::cfg::extreshhold*86400))
+#define TIME_AGONY (m_gMaintTimeNow-acng::cfg::extreshhold*86400)
 
 #define FNAME_PENDING "_expending_dat"
 #define FNAME_DAMAGED "_expending_damaged"
 #define sFAIL_INI SABSPATH("_exfail_cnt")
 #define FAIL_INI sFAIL_INI.c_str()
 
+namespace acng
+{
+
+// represents the session's current incomming data count at the moment when expr. was run last time
+// it's needed to correct the considerations based on the active session's download stats
+off_t lastCurrentDlCount(0);
+
 void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
-	LOGSTART2("expiration::_HandlePkgEntry:",
+#ifdef DEBUGSPAM
+	LOGSTART2("expiration::HandlePkgEntry:",
 			"\ndir:" << entry.sDirectory << "\nname: " << entry.sFileName << "\nsize: " << entry.fpr.size << "\ncsum: " << entry.fpr.GetCsAsString());
+#endif
 
 #define ECLASS "<span class=\"ERROR\">ERROR: "
 #define WCLASS "<span class=\"WARNING\">WARNING: "
@@ -55,11 +63,11 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				string sPathAbs(CACHE_BASE+sPathRel);
 
 				// end line ending starting from a class and add checkbox as needed
-				auto finish_bad = [&]()->bool
+				auto finish_bad = [&](cmstring& reason)->bool
 				{
 					if (m_damageList.is_open()) m_damageList << sPathRel << "\n";
 					SendChunk(" (treating as damaged file...) ");
-					AddDelCbox(sPathRel);
+					AddDelCbox(sPathRel, reason);
 					SendChunk(CLASSEND);
 					return true;
 				};
@@ -87,7 +95,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				if(m_bVerbose)
 				{
 					SendFmt << WCLASS << sPathRel << " (invalid but volatile, ignoring...) ";
-					AddDelCbox(sPathRel);
+					AddDelCbox(sPathRel, "Bad file state while containing volatile index data");
 					SendChunk(CLASSEND);
 				}
 				ADDSPACE(size);
@@ -114,15 +122,11 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			// Basic header checks. Skip if the file was forcibly updated/reconstructed before.
 			if (m_bSkipHeaderChecks || descHave.bNoHeaderCheck)
 			{
-				LOG("Skipped header check for " << sPathRel);
-			}
-			else if(entry.bInflateForCs)
-			{
-				LOG("Skipped header check for " << sPathRel << ", cannot compare sizes");
+//				LOG("Skipped header check for " << sPathRel);
 			}
 			else if(entry.fpr.size>=0)
 			{
-				LOG("Doing basic header checks");
+//				LOG("Doing basic header checks");
 				header h;
 				auto sHeadAbs(sPathAbs+".head");
 				if (0<h.LoadFromFile(sHeadAbs))
@@ -131,9 +135,9 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 					if(lenFromHeader<0)
 					{
 						// better drop it, properly downloaded ones DO have the length
-						SendFmt << WCLASS "header file of "
-						<< sPathRel << " does not contain content length";
-						return finish_bad();
+						SendFmt << WCLASS << sPathRel << ": " <<
+								"header file does not contain content length";
+						return finish_bad("header file does not contain content length");
 					}
 					if (lenFromHeader < lenFromStat)
 					{
@@ -143,7 +147,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 						<< " reported too small file size (" << lenFromHeader <<
 						" vs. " << lenFromStat
 						<< "); invalidating file, removing header now";
-						return finish_bad();
+						return finish_bad("metadata reports incorrect file size");
 					}
 				}
 				else
@@ -162,8 +166,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 				// can check a bit more against directory info for most cases
 				// also shortcut without scanning
 
-				if( !entry.bInflateForCs &&
-						entry.fpr.size>=0)
+				if(entry.fpr.size>=0)
 				{
 					if(lenFromStat > entry.fpr.size) goto report_oversize;
 					if(lenFromStat < entry.fpr.size) goto handle_incomplete;
@@ -173,8 +176,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			if(!m_bByChecksum) return report_good(lenFromStat);
 
 			//knowing the expected and real size, try a shortcut without scanning
-			if(!entry.bInflateForCs// if we can check quickly with the file size
-					&& entry.fpr.size >= 0)
+			if(entry.fpr.size >= 0)
 			{
 				if(lenFromStat<0) lenFromStat=GetFileSize(sPathAbs, -123);
 				if(lenFromStat >=0 && lenFromStat < entry.fpr.size)
@@ -185,16 +187,13 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			}
 
 			if(entry.fpr.csType != descHave.fpr.csType &&
-					!descHave.fpr.ScanFile(sPathAbs, entry.fpr.csType, entry.bInflateForCs))
+					!descHave.fpr.ScanFile(sPathAbs, entry.fpr.csType))
 			{
 				// IO error? better keep it for now, not sure how to deal with it
 				SendFmt << ECLASS "An error occurred while checksumming "
 				<< sPathRel << ", leaving as-is for now.";
-				if(entry.bInflateForCs)
-					SendFmt << " NOTE: this can be caused by the incomplete compression"
-							" header if the download was not finished.";
-				aclog::err(tSS() << "Error reading " << sPathAbs );
-				AddDelCbox(sPathRel);
+				log::err(tSS() << "Error reading " << sPathAbs );
+				AddDelCbox(sPathRel, "IO error");
 				SendFmt<<CLASSEND;
 				return false;
 			}
@@ -204,7 +203,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 			if(!descHave.fpr.csEquals(entry.fpr))
 			{
 				SendFmt << ECLASS << "checksum mismatch on " << sPathRel;
-				return finish_bad();
+				return finish_bad("checksum mismatch");
 			}
 
 			// good, or cannot check so must be good
@@ -223,11 +222,11 @@ ERROR: size mismatch on debrep/dists/jessie/contrib/i18n/Translation-en.bz2 (add
 repro: check by path, after a minor distro upgrade
 				 */
 				// don't really care but let the user truncate
-				if(rechecks::GetFiletype(sPathRel) == rechecks::FILE_VOLATILE)
+				if(rex::GetFiletype(sPathRel) == rex::FILE_VOLATILE)
 					return report_weird_volatile(lenFromStat);
 
 				SendFmt << ECLASS << "size mismatch on " << sPathRel;
-				return finish_bad();
+				return finish_bad("checksum mismatch");
 			}
 
 			// all remaining cases mean an incomplete download
@@ -239,7 +238,7 @@ repro: check by path, after a minor distro upgrade
 				{
 					SendFmt << WCLASS << sPathRel
 							<< " (incomplete download, ignoring...) ";
-					AddDelCbox(sPathRel);
+					AddDelCbox(sPathRel, "Incomplete download");
 					return finish_good(lenFromStat);
 				}
 				// just continue silently
@@ -261,7 +260,7 @@ repro: check by path, after a minor distro upgrade
 			}
 
 			SendFmt << ECLASS << " incomplete download, invalidating (as requested) "<< sPathRel;
-			return finish_bad();
+			return finish_bad("incomplete download");
 		};
 
 	auto rangeIt = m_trashFile2dir2Info.find(entry.sFileName);
@@ -277,10 +276,14 @@ repro: check by path, after a minor distro upgrade
 				rangeIt->second.erase(it++);
 			};
 
-	// needs to match the exact file location.
+	// needs to match the exact file location if requested.
 	// And for "Index" files, they have always to be at a well defined location, this
 	// constraint is also needed to expire deprecated files
-	if(m_bByPath || entry.sFileName == sIndex)
+	// and in general, all kinds of index files shall be checked at the particular location since
+	// there are too many identical names spread between different repositories
+	bool byPath = (m_bByPath || entry.sFileName == sIndex ||
+			rex::Match(entry.sDirectory + entry.sFileName, rex::FILE_VOLATILE));
+	if(byPath)
 	{
 		// compare full paths (physical vs. remote) with their real paths
 		auto cleanPath(entry.sDirectory);
@@ -301,12 +304,12 @@ repro: check by path, after a minor distro upgrade
 // of gaps in the "package history" when proceeded in linear fashion.
 inline void expiration::DropExceptionalVersions()
 {
-    if(m_trashFile2dir2Info.empty() || !acfg::keepnver)
+    if(m_trashFile2dir2Info.empty() || !cfg::keepnver)
     	return;
     if(system("dpkg --version >/dev/null 2>&1"))
 	{
 		SendFmt << "dpkg not available on this system, cannot identify latest versions to keep "
-				"only " << acfg::keepnver << " of them.";
+				"only " << cfg::keepnver << " of them.";
 		return;
     }
     struct tPkgId
@@ -348,9 +351,9 @@ inline void expiration::DropExceptionalVersions()
     auto procGroup = [&]()
 		{
     	// if more than allowed, keep the highest versions for sure, others are expired as usual
-    	if(version2trashGroup.size() > (uint) acfg::keepnver)
+    	if(version2trashGroup.size() > (uint) cfg::keepnver)
         	std::sort(version2trashGroup.begin(), version2trashGroup.end());
-    	for(unsigned i=0; i<version2trashGroup.size() && i<uint(acfg::keepnver); i++)
+    	for(unsigned i=0; i<version2trashGroup.size() && i<uint(cfg::keepnver); i++)
     		for(auto& j: * version2trashGroup[i].group)
     			j.second.nLostAt=m_gMaintTimeNow;
     	version2trashGroup.clear();
@@ -408,7 +411,7 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 			string sPathRel = dir_props.first + fileGroup.first;
 			auto& desc = dir_props.second;
 			DBGQLOG("Checking " << sPathRel);
-			using namespace rechecks;
+			using namespace rex;
 
 			if (ContHas(m_forceKeepInTrash, sPathRel))
 			{
@@ -416,8 +419,12 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 			}
 			else if (Match(fileGroup.first, FILE_WHITELIST) || Match(sPathRel, FILE_WHITELIST))
 			{
-				LOG("Protected file, not to be removed");
-				continue;
+				// exception is stuff that should have some cover but doesn't
+				if(!ContHas(m_managedDirs, dir_props.first))
+				{
+					LOG("Protected file, not to be removed");
+					continue;
+				}
 			}
 
 			if (dir_props.second.nLostAt<=0) // heh, accidentally added?
@@ -467,82 +474,39 @@ void expiration::Action()
 	}
 	if (m_parms.type==workExList)
 	{
-		LoadPreviousData(true);
-		off_t nSpace(0);
-		unsigned cnt(0);
-		for (auto& i : m_trashFile2dir2Info)
-		{
-			for (auto& j : i.second)
-			{
-				auto rel = (j.first + i.first);
-				auto abspath = SABSPATH(rel);
-				off_t sz = GetFileSize(abspath, -2);
-				if (sz < 0)
-					continue;
-
-				cnt++;
-				SendChunk(rel + "<br>\n");
-				nSpace += sz;
-
-				sz = GetFileSize(abspath + ".head", -2);
-				if (sz >= 0)
-				{
-					nSpace += sz;
-					SendChunk(rel + ".head<br>\n");
-				}
-			}
-		}
-		TellCount(cnt, nSpace);
-
-		mstring delURL(m_parms.cmd);
-		StrSubst(delURL, "justShow", "justRemove");
-		SendFmtRemote << "<a href=\""<<delURL<<"\">Delete all listed files</a> "
-				"(no further confirmation)<br>\n";
+		ListExpiredFiles();
 		return;
 	}
-
 	if(m_parms.type==workExPurgeDamaged || m_parms.type==workExListDamaged || m_parms.type==workExTruncDamaged)
 	{
-		filereader f;
-		if(!f.OpenFile(SABSPATH(FNAME_DAMAGED)))
-		{
-			SendChunk(WITHLEN("List of damaged files not found"));
-			return;
-		}
-		mstring s;
-		while(f.GetOneLine(s))
-		{
-			if(s.empty())
-				continue;
-
-			if(m_parms.type == workExPurgeDamaged)
-			{
-				SendFmt << "Removing " << s << "<br>\n";
-				::unlink(SZABSPATH(s));
-				::unlink(SZABSPATH(s+".head"));
-			}
-			else if(m_parms.type == workExTruncDamaged)
-			{
-				SendFmt << "Truncating " << s << "<br>\n";
-				ignore_value(::truncate(SZABSPATH(s), 0));
-			}
-			else
-				SendFmt << s << "<br>\n";
-		}
+		HandleDamagedFiles();
 		return;
 	}
 
-	SetCommonUserFlags(m_parms.cmd);
+	bool tradeOffCheck = cfg::exstarttradeoff && !StrHas(m_parms.cmd, "ignoreTradeOff") && !m_bByChecksum;
+
+	off_t newLastIncommingOffset = 0;
+
+	if(tradeOffCheck)
+	{
+		newLastIncommingOffset = log::GetCurrentCountersInOut().first;
+
+		auto haveIncomming = newLastIncommingOffset - lastCurrentDlCount
+				+ log::GetOldCountersInOut(true).first;
+		if(haveIncomming < cfg::exstarttradeoff)
+		{
+			SendFmt << "Expiration suppressed due to costs-vs.-benefit considerations "
+					"(see exStartTradeOff setting, " << offttosH(haveIncomming) <<
+					" vs. " << offttosH(cfg::exstarttradeoff) << "\n";
+			return;
+		}
+	}
 
 	m_bIncompleteIsDamaged=StrHas(m_parms.cmd, "incomAsDamaged");
 	m_bScanVolatileContents=StrHas(m_parms.cmd, "scanVolatile");
 
 	SendChunk("<b>Locating potentially expired files in the cache...</b><br>\n");
-
-	//dump_proc_status();
-	DirectoryWalk(acfg::cachedir, this);
-	//dump_proc_status();
-
+	BuildCacheFileList();
 	if(CheckStopSignal())
 		goto save_fail_count;
 	SendFmt<<"Found "<<m_nProgIdx<<" files.<br />\n";
@@ -572,7 +536,28 @@ void expiration::Action()
 	m_damageList.open(SZABSPATH(FNAME_DAMAGED), ios::out | ios::trunc);
 
 	SendChunk(WITHLEN("<b>Validating cache contents...</b><br>\n"));
-	ProcessSeenMetaFiles(*this);
+
+	// by-hash stuff needs special handling...
+	for(const auto& sPathRel : GetGoodReleaseFiles())
+	{
+		auto func = [this](const tRemoteFileInfo &e) {
+			auto hexname(BytesToHexString(e.fpr.csum, GetCSTypeLen(e.fpr.csType)));
+			auto hit = m_trashFile2dir2Info.find(hexname);
+			if(hit == m_trashFile2dir2Info.end())
+				return; // unknown
+			if(!m_bByPath)
+			{
+				m_trashFile2dir2Info.erase(hit);
+				return;
+			}
+			auto sdir = e.sDirectory + "by-hash/" + GetCsNameReleaseFile(e.fpr.csType) + '/';
+			hit->second.erase(sdir);
+		};
+		ParseAndProcessMetaFile(func, sPathRel, EIDX_RELEASE, true);
+	}
+
+	ProcessSeenIndexFiles([this](const tRemoteFileInfo &e) {
+		HandlePkgEntry(e); });
 
 	if(CheckAndReportError() || CheckStopSignal())
 		goto save_fail_count;
@@ -588,7 +573,13 @@ void expiration::Action()
 
 	PrintStats("Allocated disk space");
 
-	SendChunk("<br>Done.");
+	SendChunk("<br>Done.<br>");
+
+	if(tradeOffCheck)
+	{
+		lastCurrentDlCount = newLastIncommingOffset;
+		log::ResetOldCounters();
+	}
 
 	save_fail_count:
 
@@ -622,15 +613,82 @@ void expiration::Action()
 
 }
 
+void expiration::ListExpiredFiles()
+{
+	LoadPreviousData(true);
+	off_t nSpace(0);
+	unsigned cnt(0);
+	for (auto& i : this->m_trashFile2dir2Info)
+		{
+			for (auto& j : i.second)
+			{
+				auto rel = (j.first + i.first);
+				auto abspath = SABSPATH(rel);
+				off_t sz = GetFileSize(abspath, -2);
+				if (sz < 0)
+					continue;
+
+				cnt++;
+				this->SendChunk(rel + "<br>\n");
+				nSpace += sz;
+
+				sz = GetFileSize(abspath + ".head", -2);
+				if (sz >= 0)
+				{
+					nSpace += sz;
+					this->SendChunk(rel + ".head<br>\n");
+				}
+			}
+		}
+	this->TellCount(cnt, nSpace);
+
+	mstring delURL(this->m_parms.cmd);
+	StrSubst(delURL, "justShow", "justRemove");
+	SendFmtRemote << "<a href=\""<<delURL<<"\">Delete all listed files</a> "
+				"(no further confirmation)<br>\n";
+	return;
+}
+
+void expiration::HandleDamagedFiles()
+{
+	filereader f;
+	if(!f.OpenFile(SABSPATH(FNAME_DAMAGED)))
+		{
+			this->SendChunk(WITHLEN("List of damaged files not found"));
+			return;
+		}
+	mstring s;
+	while(f.GetOneLine(s))
+		{
+			if(s.empty())
+				continue;
+
+			if(this->m_parms.type == workExPurgeDamaged)
+			{
+				SendFmt << "Removing " << s << "<br>\n";
+				unlink(SZABSPATH(s));
+				unlink(SZABSPATH(s+".head"));
+			}
+			else if(this->m_parms.type == workExTruncDamaged)
+			{
+				SendFmt << "Truncating " << s << "<br>\n";
+				ignore_value(truncate(SZABSPATH(s), 0));
+			}
+			else
+				SendFmt << s << "<br>\n";
+		}
+	return;
+}
+
 void expiration::PurgeMaintLogs()
 {
-	tStrDeq logs = ExpandFilePattern(acfg::logdir + SZPATHSEP MAINT_PFX "*.log*");
+	tStrDeq logs = ExpandFilePattern(cfg::logdir + SZPATHSEP MAINT_PFX "*.log*");
 	if (logs.size() > 2)
 		SendChunk(WITHLEN(
 				"Found required cleanup tasks: purging maintenance logs...<br>\n"));
 	for (const auto &s: logs)
 	{
-		time_t id = atoofft(s.c_str() + acfg::logdir.size() + 7);
+		time_t id = atoofft(s.c_str() + cfg::logdir.size() + 7);
 		//cerr << "id ist: "<< id<<endl;
 		if (id == GetTaskId())
 			continue;
@@ -700,7 +758,7 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		attr.space += stinfo.st_size;
 		attr.forgiveDlErrors = endsWith(sPathRel, sslIndex);
 	}
-	else if (rechecks::Match(sPathRel, rechecks::FILE_VOLATILE))
+	else if (rex::Match(sPathRel, rex::FILE_VOLATILE))
 		return true; // cannot check volatile files properly so don't care
 
 	// ok, split to dir/file and add to the list
@@ -720,9 +778,9 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 void expiration::LoadHints()
 {
 	filereader reader;
-	if(!reader.OpenFile(acfg::confdir+SZPATHSEP+"ignore_list"))
+	if(!reader.OpenFile(cfg::confdir+SZPATHSEP+"ignore_list"))
 	{
-		if(acfg::suppdir.empty() || !reader.OpenFile(acfg::suppdir+SZPATHSEP+"ignore_list"))
+		if(cfg::suppdir.empty() || !reader.OpenFile(cfg::suppdir+SZPATHSEP+"ignore_list"))
 				return;
 	}
 	string sTmp;
@@ -792,8 +850,8 @@ void expiration::LoadPreviousData(bool bForceInsert)
 		char buf[200];
 
 		// map to to wait
-		int nMax=acfg::extreshhold-((now-oldest)/86400);
-		int nMin=acfg::extreshhold-((now-newest)/86400);
+		int nMax=cfg::extreshhold-((now-oldest)/86400);
+		int nMin=cfg::extreshhold-((now-newest)/86400);
 
 		snprintf(buf, _countof(buf), "Previously detected: %lu rotten package file(s), "
 				"to be deleted in about %d-%d day(s)<br>\n",
@@ -810,7 +868,7 @@ inline bool expiration::CheckAndReportError()
 	if (m_nErrorCount > 0 && m_bErrAbort)
 	{
 		SendFmt << sAbortMsg;
-		if(m_nPrevFailCount+(m_nErrorCount>0) > acfg::exsupcount)
+		if(m_nPrevFailCount+(m_nErrorCount>0) > cfg::exsupcount)
 			SendFmt << "\n<!--\n" maark << int(ControLineType::Error) << "Errors found, aborting expiration...\n-->\n";
 		return true;
 	}
@@ -820,4 +878,24 @@ inline bool expiration::CheckAndReportError()
 void expiration::MarkObsolete(cmstring& sPathRel)
 {
 	m_killBill.emplace_back(sPathRel);
+}
+
+bool expiration::_checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo& entry,
+		cmstring& srcPrefix)
+{
+	if(m_trashFile2dir2Info.find(hexname) == m_trashFile2dir2Info.end())
+		return false;
+	return cacheman::_checkSolidHashOnDisk(hexname, entry, srcPrefix);
+}
+
+bool expiration::_QuickCheckSolidFileOnDisk(cmstring& sPathRel)
+{
+	auto dir=GetDirPart(sPathRel);
+	auto nam=sPathRel.substr(dir.size());
+	auto it = m_trashFile2dir2Info.find(nam);
+	if(it == m_trashFile2dir2Info.end())
+		return false;
+	return it->second.find(dir) != it->second.end();
+}
+
 }

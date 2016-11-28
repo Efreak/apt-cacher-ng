@@ -7,7 +7,6 @@
 #include "expiration.h"
 #include "pkgimport.h"
 #include "showinfo.h"
-#include "jsonstats.h"
 #include "mirror.h"
 #include "aclogger.h"
 #include "filereader.h"
@@ -28,6 +27,8 @@
 using namespace std;
 
 #define MAINT_HTML_DECO "maint.html" 
+
+namespace acng {
 
 tSpecialRequest::tSpecialRequest(const tRunParms& parms) :
 		m_parms(parms)
@@ -198,7 +199,7 @@ LPCSTR tSpecialRequest::GetTaskName()
 	case workTRUNCATECONFIRM: return "Manual File Truncation (Confirmed)";
 	case workCOUNTSTATS: return "Status Report With Statistics";
 	case workSTYLESHEET: return "CSS";
-	case workJStats: return "Stats";
+	// case workJStats: return "Stats";
 	}
 	return "SpecialOperation";
 }
@@ -227,7 +228,7 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 		return workSTYLESHEET;
 
 	// not starting like the maint page?
-	if(cmd.compare(spos, wlen, acfg::reportpage))
+	if(cmd.compare(spos, wlen, cfg::reportpage))
 		return workNotSpecial;
 
 	// ok, filename identical, also the end, or having a parameter string?
@@ -238,7 +239,7 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 	// means needs authorization
 
 	// all of the following need authorization if configured, enforce it
-	switch(acfg::CheckAdminAuth(auth))
+	switch(cfg::CheckAdminAuth(auth))
 	{
      case 0:
 #ifdef HAVE_CHECKSUM
@@ -268,7 +269,7 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 			{"doCount=", workCOUNTSTATS},
 			{"doTraceStart=", workTraceStart},
 			{"doTraceEnd=", workTraceEnd},
-			{"doJStats", workJStats}
+//			{"doJStats", workJStats}
 	};
 	for(auto& needle: matches)
 		if(StrHasFrom(cmd, needle.trigger, epos))
@@ -314,14 +315,19 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 		return new tDeleter(parms, "Truncat");
 	case workSTYLESHEET:
 		return new tStyleCss(parms);
+#if 0
 	case workJStats:
 		return new jsonstats(parms);
+#endif
 	}
 	return nullptr;
 }
 
 void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd)
 {
+	if(cfg::DegradedMode() && jobType != workSTYLESHEET)
+		jobType = workUSERINFO;
+
 	MYTRY {
 		SHARED_PTR<tSpecialRequest> p;
 		p.reset(MakeMaintWorker({fd, jobType, cmd}));
@@ -331,4 +337,6 @@ void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd
 	MYCATCH(...)
 	{
 	}
+}
+
 }

@@ -59,11 +59,11 @@ Run "apt-get update" on client(s) once to teach ACNG about remote locations of (
 
 </li>
 <li>
-Store copies of your .debs, .orig.tar.gz, ... somewhere in the <code>_import</code> subdirectory in the cache, ie. in <code>/var/cache/apt-cacher/_import/</code>. The files may be links or symlinks, does not matter. When done, apt-cacher will move those files to its own internal locations. Example:
+Store copies of your .debs, .orig.tar.gz, ... somewhere in the <code>_import</code> subdirectory in the cache, ie. in <code>/var/cache/apt-cacher-ng/_import/</code>. The files may be links or symlinks, it does not matter. When done, apt-cacher will move those files to its own internal locations. Example:
 <pre><code>cd /var/cache
 mkdir apt-cacher-ng/_import
 cp -laf apt-proxy apt-cacher /var/cache/apt-cacher-ng/_import
-chown -R apt-cacher-ng apt-cacher-ng/_import
+chown -R apt-cacher-ng:apt-cacher-ng apt-cacher-ng/_import
 </code></pre>
 
 </li>

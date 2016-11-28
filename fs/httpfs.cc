@@ -59,8 +59,13 @@
 #endif
 
 using namespace std;
+using namespace acng;
 
-const string sEmptyString;
+// needing some local definitions to make the linker happy w/o the fat source
+namespace acng {
+cmstring sDefPortHTTP("3142"), sDefPortHTTPS("80");
+cmstring sEmptyString;
+}
 
 #ifdef SPAM
 #define _cerr(x) cerr << x
@@ -78,8 +83,6 @@ static struct statfs stfsTemp;
 static tHttpUrl baseUrl, proxyUrl;
 static mstring altPath;
 bool g_bGoodServer=true;
-
-cmstring sDefPortHTTP("3142"), sDefPortHTTPS("80");
 
 struct tDlDesc
 {
@@ -157,7 +160,7 @@ tFileId() : m_size(0) {};
 tFileId(off_t a, mstring b) : m_size(a), m_ctime(b) {};
 bool operator!=(tFileId other) const { return m_size != other.m_size || m_ctime != other.m_ctime;}
 };
-static class : public lockable, public map<string, tFileId>
+static class : public base_with_mutex, public map<string, tFileId>
 {} remote_info_cache;
 
 struct tDlDescRemote : public tDlDesc
@@ -172,7 +175,6 @@ public:
 	{
 		// expire the caches every time, should not cost much anyway
 		g_tcp_con_factory.BackgroundCleanup();
-		CAddrInfo::BackgroundCleanup();
 	};
 
 	int Read(char *retbuf, const char *path, off_t pos, size_t len)
@@ -314,7 +316,7 @@ public:
 		bIsFirst=false;
 
 
-		if (m_ftype == rechecks::FILE_SOLID && fidOrig != fid)
+		if (m_ftype == rex::FILE_SOLID && fidOrig != fid)
 		{
 			lockguard g(remote_info_cache);
 			remote_info_cache[m_path] = fid;
@@ -392,7 +394,7 @@ public:
 			return -EIO;
 		else if (nHttpCode == 200)
 		{
-			if (m_ftype == rechecks::FILE_SOLID) // not caching volatile stuff
+			if (m_ftype == rex::FILE_SOLID) // not caching volatile stuff
 			{
 				lockguard g(remote_info_cache);
 				remote_info_cache[m_path] =
@@ -415,9 +417,9 @@ static int acngfs_getattr(const char *path, struct stat *stbuf)
 	if(!path)
 		return -1;
 
-	rechecks::eMatchType type = rechecks::GetFiletype(path);
+	rex::eMatchType type = rex::GetFiletype(path);
 	_cerr( "type: " << type);
-	if (type == rechecks::FILE_SOLID || type == rechecks::FILE_VOLATILE)
+	if (type == rex::FILE_SOLID || type == rex::FILE_VOLATILE)
 	{
 		if(0 == tDlDescLocal(path, type).Stat(*stbuf))
 			return 0;
@@ -541,12 +543,12 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 
 	tDlDesc *p(nullptr);
 	struct stat stbuf;
-	rechecks::eMatchType ftype = rechecks::GetFiletype(path);
+	rex::eMatchType ftype = rex::GetFiletype(path);
 
 	MYTRY
 	{
 		// ok... if that is a remote object, can we still use local access instead?
-		if(!altPath.empty() && rechecks::FILE_SOLID == ftype)
+		if(!altPath.empty() && rex::FILE_SOLID == ftype)
 		{
 				p = new tDlDescLocal(path, ftype);
 				if(p)
@@ -652,6 +654,7 @@ void _ExitUsage() {
 
 int main(int argc, char *argv[])
 {
+	using namespace acng;
    memset(&acngfs_oper, 0, sizeof(acngfs_oper));
 
    acngfs_oper.getattr	= acngfs_getattr;
@@ -690,12 +693,12 @@ int main(int argc, char *argv[])
    if(argc<4)
       barf("Not enough arguments, try --help.\n");
    
-   acfg::agentname = "ACNGFS";
-   acfg::agentheader="User-Agent: ACNGFS\r\n";
-   acfg::requestapx = "User-Agent: ACNGFS\r\nX-Original-Source: 42\r\n";
+   cfg::agentname = "ACNGFS";
+   cfg::agentheader="User-Agent: ACNGFS\r\n";
+   cfg::requestapx = "User-Agent: ACNGFS\r\nX-Original-Source: 42\r\n";
 #ifdef SPAM
-   acfg::debug=0xff;
-   acfg::verboselog=1;
+   cfg::debug=0xff;
+   cfg::verboselog=1;
 #endif
 
    if(argv[1] && baseUrl.SetHttpUrl(argv[1]))
@@ -726,7 +729,7 @@ int main(int argc, char *argv[])
 
    // all parameters processed, forwarded to fuse call below
 
-   ::rechecks::CompileExpressions();
+   acng::rex::CompileExpressions();
    
 #if 0//def SPAM
    {
@@ -765,8 +768,9 @@ int main(int argc, char *argv[])
 }
 
 #ifndef DEBUG
+namespace acng {
 // for the uber-clever GNU linker and should be removed by strip again
-namespace aclog
+namespace log
 {
    void flush() {};
    void misc(const string &s, const char )
@@ -783,5 +787,6 @@ void err(const char *s, const char* z)
 #endif
 
 };
+}
 }
 #endif

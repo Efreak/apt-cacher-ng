@@ -8,13 +8,15 @@
 #include <cstring>
 #include "csmapping.h"
 
-class pkgimport : public tCacheOperation, ifileprocessor
+namespace acng
+{
+class pkgimport : public cacheman
 {
 
 public:
 	// XXX: c++11 using tCacheOperation::tCacheOperation;
 	inline pkgimport(const tSpecialRequest::tRunParms& parms)
-	: tCacheOperation(parms) {};
+	: cacheman(parms) {};
 
 	void Action() override;
 	
@@ -22,8 +24,8 @@ protected:
 	// FileHandler
 	bool ProcessRegular(const mstring &sPath, const struct stat &) override;
 	//bool ProcessOthers(const mstring &sPath, const struct stat &);
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override;
 	void _LoadKeyCache();
+	void HandlePkgEntry(const tRemoteFileInfo &entry);
 
 private:
 
@@ -48,5 +50,5 @@ private:
 		
 };
 
-
+}
 #endif /*PKGIMPORT_H_*/

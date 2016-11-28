@@ -5,10 +5,15 @@
 #include "config.h"
 #include "meta.h"
 #include "acfg.h"
+#include "sockio.h"
+
+#include <atomic>
 
 using namespace std;
 
-namespace acfg
+namespace acng
+{
+namespace cfg
 {
 
 string cachedir("/var/tmp"), logdir("/var/tmp"), fifopath, pidfile, reportpage,
@@ -31,12 +36,15 @@ string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
 		"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
     "|/[[:alpha:]]{1,2}/[a-f0-9]{64}(-[a-f0-9]{64})?(\\.gz)?" // FreeBSD, after https://alioth.debian.org/tracker/?func=detail&atid=413111&aid=315254&group_id=100566
+    "|/dists/.*/by-hash/.*" // support Debian/Ubuntu by-hash index files
+    "|\\.asc$" // all remaining PGP signatures. Assuming that volatile ones are matched below.
+    "|changelogs/pool/.*/changelog.txt$" // packages.ultimediaos.com
 ")$");
 
 string svfilepat("/development/rawhide/.*"
     // more stuff for ubuntu dist-upgrader
     "|dists/.*dist-upgrader.*/current/.*" // /dists/xenial/main/dist-upgrader-all/current/xenial.tar.gz
-    "|changelogs.ubuntu.com/.*" // changelogs.ubuntu.com/meta-release-lts-development
+    "|changelogs.ubuntu.com/meta.*" // changelogs.ubuntu.com/meta-release-lts-development
     // XXX: signature might change afterwards... any better solution than this location?
     "|" INFOLDER ".*(\\.(d|u)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")\\.gpg$"
     );
@@ -67,6 +75,7 @@ string vfilepat(INFOLDER
 		"|connectivity-check.html|ubiquity/.*update|getubuntu/releasenotes" // Ubuntu installer network check, etc.
 		"|wiki.ubuntu.com/.*/ReleaseNotes" // this is actually for an internal check and therefore contains the hostname
 		"|ubuntu/dists/.*\\.html" // http://archive.ubuntu.com/ubuntu/dists/vivid-updates/main/dist-upgrader-all/current/ReleaseAnnouncement.html
+    "|metadata.(ftp-master.debian|tanglu).org/changelogs/.*" // some of them are not static
 );
 
 //string wfilepat( VPATPREFIX  "(Release|Release\\.gpg|release|meta-release|Translation[^/]*\\.bz2)$");
@@ -74,7 +83,6 @@ string vfilepat(INFOLDER
 string wfilepat(INFOLDER
 		"(Release|InRelease|.*\\.gpg"
 		"|(Packages|Sources)" COMPRLIST "?" // hm... private repos without Release file :-(
-		"|Translation[^/]*" COMPRLIST "?" // to be checked, but they should never really go anywhere
 		"|.*\\.xml" // SUSE
 		"|setup\\.bz2(.sig)?" // Cygwin
 		"|" ALXPATTERN // Arch Linux
@@ -92,7 +100,8 @@ int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
 logxff(false), oldupdate(false), recompbz2(false), nettimeout(60), updinterval(0),
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(10), exsupcount(RESERVED_DEFVAL),
-optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false);
+optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false),
+trackfileuse(false), exstarttradeoff(500000000);
 
 int maxdlspeed(RESERVED_DEFVAL);
 
@@ -125,5 +134,7 @@ string cacheDirSlash; // guaranteed to have a trailing path separator
 int conprotos[2] = { PF_UNSPEC, PF_UNSPEC };
 
 std::atomic_bool degraded(false);
+
+}
 
 }

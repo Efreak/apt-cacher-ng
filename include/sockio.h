@@ -33,7 +33,19 @@ using namespace std;
 #define MSG_MORE 0
 #endif
 
+#ifndef SO_MAXCONN
+#define SO_MAXCONN 250
+#endif
+
+namespace acng
+{
+
+#ifdef HAVE_SSL
+void globalSslInit();
+#endif
+
 void termsocket(int);
+
 inline void termsocket_quick(int fd)
 {
 	if(fd<0)
@@ -55,5 +67,6 @@ inline bool check_read_state(int fd)
 	return (1 == select(fd + 1, &rfds, nullptr, nullptr, &tv) && FD_ISSET(fd, &rfds));
 }
 
+}
 
 #endif /*SOCKIO_H_*/

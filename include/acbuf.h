@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include "meta.h"
 
+namespace acng
+{
+
 /*! \brief Helper class to maintain a memory buffer, i.e. a continuous block of bytes.
  * It also encapsulates some typical operations on it.
  */
@@ -52,14 +55,14 @@ class acbuf
          * \param maxlen Maximum amount of data to write
          * \return Number of written bytes, negative on failures, see write(2)
          */
-        int syswrite(int fd, unsigned int maxlen=MAX_VAL(uint));
+        int syswrite(int fd, unsigned int maxlen=MAX_VAL(unsigned int));
 
         /*
          * Reads from a file descriptor and append to buffered data, update position indexes.
          * \param fd File descriptor
          * \return Number of read bytes, negative on failures, see read(2)
          */
-        int sysread(int fd, unsigned int maxlen=MAX_VAL(uint));
+        int sysread(int fd, unsigned int maxlen=MAX_VAL(unsigned int));
 
 
     protected:
@@ -85,7 +88,7 @@ public:
 	inline tSS & operator<<(cmstring& val) { return add(val); };
 	inline tSS & operator<<(const acbuf& val) { return add(val.rptr(), val.size()); };
 
-#define __tss_nbrfmt(x, h, y) { add(fmtbuf, sprintf(fmtbuf, m_fmtmode == hex ? h : x, y)); return *this; }
+#define __tss_nbrfmt(x, h, y) { reserve_atleast(22); got(sprintf(wptr(), m_fmtmode == hex ? h : x, y)); return *this; }
 	inline tSS & operator<<(int val) __tss_nbrfmt("%d", "%x", val);
 	inline tSS & operator<<(unsigned int val) __tss_nbrfmt("%u", "%x", val);
 	inline tSS & operator<<(long val) __tss_nbrfmt("%ld", "%lx", val);
@@ -96,7 +99,7 @@ public:
 	inline tSS & operator<<(void* val) __tss_nbrfmt("ptr:%llu", "ptr:0x%llx", (long long unsigned) val);
 #endif
 
-    enum fmtflags {	hex, dec };
+    enum fmtflags : bool { hex, dec };
     inline tSS & operator<<(fmtflags mode) { m_fmtmode=mode; return *this;}
 
     operator mstring() const { return mstring(rptr(), size()); }
@@ -124,8 +127,8 @@ public:
 	inline tSS & add(cmstring& val) { return add((const char*) val.data(), (size_t) val.size());}
 
 protected:
-    char fmtbuf[22];
 	fmtflags m_fmtmode;
+	/// make sure to have at least minWriteCapa bytes extra available for writing
 	inline void reserve_atleast(size_t minWriteCapa)
 	{
 		if(w+minWriteCapa+1 < m_nCapacity) return;
@@ -135,6 +138,6 @@ protected:
 	inline tSS & appDosNL() { return add("\r\n", 2);}
 };
 
-cmstring& GetFooter();
+}
 
 #endif

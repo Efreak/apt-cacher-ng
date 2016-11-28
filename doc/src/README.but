@@ -178,7 +178,8 @@ subject to change after first appearance on the server.
 
 \b "Configuration line":
 one single line in the configuration file. Some examples in this chapter may
-contain wrapped lines but should be stored as a single line in the configuration.
+be displayed as wrapped lines but should be stored as a single line in the configuration.
+Some variables (like \c{RequestAppendix}) support multiline data which needs to be separated with \\n delimiter.
 
 \H{cfgfiles} Configuration file types
 
@@ -811,15 +812,15 @@ note on APT below for a workaround.
 
 
 \n Store copies of your .debs, .orig.tar.gz, ... somewhere in the \c{_import}
-subdirectory in the cache, ie. in \c{/var/cache/apt-cacher/_import/}. The files may
-be links or symlinks, does not matter. When done, apt-cacher will move those
+subdirectory in the cache, ie. in \c{/var/cache/apt-cacher-ng/_import/}. The files may
+be links or symlinks, it does not matter. When done, apt-cacher will move those
 files to its own internal locations. Example:
 
 \lcont{
 \c cd /var/cache
 \c mkdir apt-cacher-ng/_import
 \c cp -laf apt-proxy apt-cacher /var/cache/apt-cacher-ng/_import
-\c chown -R apt-cacher-ng apt-cacher-ng/_import
+\c chown -R apt-cacher-ng:apt-cacher-ng apt-cacher-ng/_import
 }
 
 \n Visit the report page and trigger the import action there.
@@ -1308,9 +1309,9 @@ down. If you like, help the author on problem identification. To do that, do:
 \c   apt-get source apt-cacher-ng
 \c   apt-get build-dep apt-cacher-ng
 \c   cd apt-cacher-ng-*
-\c   make distclean all DEBUG=1
+\c   ./build.sh DEBUG
 \c   /etc/init.d/apt-cacher-ng stop
-\c   ./apt-cacher-ng -c /etc/apt-cacher-ng logdir=/tmp foreground=1 debug=7
+\c   builddir/apt-cacher-ng -c /etc/apt-cacher-ng logdir=/tmp foreground=1 debug=7
 \c   # (let apt-get run now, on timeouts just wait >> 20 seconds)
 \c   # stop the daemon with Ctrl-C
 \c   /etc/init.d/apt-cacher-ng start

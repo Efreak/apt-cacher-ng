@@ -16,7 +16,6 @@
 #include <vector>
 #include <deque>
 #include <limits>
-#include <atomic>
 #include <cstdio>
 #include <ctime>
 #include <cstring>
@@ -29,11 +28,30 @@
 
 #define EXTREME_MEMORY_SAVING false
 
+
+#ifdef _MSC_VER
+#define __func__ __FUNCTION__
+#endif
+
+#if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
+#define COMPATGCC47
+#define EMPLACE_PAIR_COMPAT(M,K,V) if((M).find(K) == (M).end()) (M).insert(std::make_pair(K,V))
+#else
+#define EMPLACE_PAIR_COMPAT(M,K,V) (M).emplace(K,V)
+#endif
+
+namespace acng
+{
+
 class acbuf;
 
 typedef std::string mstring;
 typedef const std::string cmstring;
 
+typedef std::pair<mstring, mstring> tStrPair;
+typedef std::vector<mstring> tStrVec;
+typedef std::set<mstring> tStrSet;
+typedef std::deque<mstring> tStrDeq;
 typedef mstring::size_type tStrPos;
 const static tStrPos stmiss(cmstring::npos);
 typedef unsigned short USHORT;
@@ -46,7 +64,7 @@ typedef std::pair<LPCSTR, size_t> tPtrLen;
 #define SZPATHSEPUNIX "/"
 #define CPATHSEPWIN '\\'
 #define SZPATHSEPWIN "\\"
-extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS;
+extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS, hendl;
 
 extern cmstring FAKEDATEMARK;
 
@@ -77,17 +95,23 @@ extern cmstring FAKEDATEMARK;
 #error "Unknown how to configure non-blocking mode (O_NONBLOCK) on this system"
 #endif
 
-#include <sys/socket.h>
-#ifndef SO_MAXCONN
-#define SO_MAXCONN 250
-#endif
-
 //#define PATHSEP "/"
 int getUUID();
 
 #define SPACECHARS " \f\n\r\t\v"
 
+#ifdef COMPATGCC47
+class tStrMap : public std::map<mstring, mstring>
+{
+public:
+	void emplace(cmstring& key, cmstring& value)
+	{
+		EMPLACE_PAIR_COMPAT(*this, key, value);
+	}
+};
+#else
 typedef std::map<mstring, mstring> tStrMap;
+#endif
 
 inline void trimFront(mstring &s, LPCSTR junk=SPACECHARS)
 {
@@ -124,6 +148,9 @@ inline void trimString(mstring &s, LPCSTR junk=SPACECHARS)
 
 mstring GetBaseName(cmstring &in);
 mstring GetDirPart(cmstring &in);
+tStrPair SplitDirPath(cmstring& in);
+
+LPCSTR GetTypeSuffix(cmstring& s);
 
 void trimProto(mstring & sUri);
 tStrPos findHostStart(const mstring & sUri);
@@ -135,8 +162,6 @@ tStrPos findHostStart(const mstring & sUri);
 #define WITHLEN(x) x, (_countof(x)-1)
 #define MAKE_PTR_0_LEN(x) x, 0, (_countof(x)-1)
 
-//extern mstring sPathSep, sPathSepUnix, sCR, sCRLF;
-
 // there is memchr and strpbrk but nothing like the last one acting on specified RAW memory range
 static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_t len)
 {
@@ -147,12 +172,8 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
    return nullptr;
 }
 
-typedef std::vector<mstring> tStrVec;
-typedef std::set<mstring> tStrSet;
-typedef std::deque<mstring> tStrDeq;
-
 // Sometimes I miss Perl...
-tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
+tStrVec::size_type Tokenize(cmstring &in, const char* sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
 /*inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
 {out.clear(); if(tokens.empty()) return; for(const auto& tok: tokens)out+=(sep + tok);}
 */
@@ -223,8 +244,8 @@ public:
 
 #define POKE(x) for(;;) { ssize_t n=write(x, "", 1); if(n>0 || (EAGAIN!=errno && EINTR!=errno)) break;  }
 
-#define MIN_VAL(x) (std::numeric_limits<x>::min()) 
-#define MAX_VAL(x) (std::numeric_limits<x>::max()) 
+#define MIN_VAL(x) (std::numeric_limits< x >::min())
+#define MAX_VAL(x) (std::numeric_limits< x >::max())
 
 void appendLong(mstring &s, long val);
 
@@ -259,15 +280,7 @@ bool CsEqual(LPCSTR a, uint8_t b[], unsigned short binLength);
 #endif
 
 // let the compiler optimize and keep best variant
-inline off_t atoofft(LPCSTR p)
-{
-	using namespace std;
-	if(sizeof(long long) == sizeof(off_t))
-		return atoll(p);
-	if(sizeof(int) == sizeof(off_t))
-		return atoi(p);
-	return atol(p);
-}
+off_t atoofft(LPCSTR p);
 
 inline off_t atoofft(LPCSTR p, off_t nDefVal)
 {
@@ -285,21 +298,10 @@ mstring UrlEscape(cmstring &s);
 void UrlEscapeAppend(cmstring &s, mstring &sTarget);
 bool UrlUnescapeAppend(cmstring &from, mstring & to);
 // Decode with result as return value, no error reporting
-inline mstring UrlUnescape(cmstring &from)
-{
-	mstring ret; // let the compiler optimize
-	UrlUnescapeAppend(from, ret);
-	return ret;
-}
+mstring UrlUnescape(cmstring &from);
 mstring DosEscape(cmstring &s);
 // just the bare minimum to make sure the string does not break HTML formating
-inline mstring html_sanitize(cmstring& in)
-{
-	mstring ret;
-	for(auto c:in)
-		ret += ( strchr("<>'\"&;", (unsigned) c) ? '_' : c);
-	return ret;
-}
+mstring html_sanitize(cmstring& in);
 
 #define pathTidy(s) { if(startsWithSz(s, "." SZPATHSEP)) s.erase(0, 2); tStrPos n(0); \
 	for(n=0;stmiss!=n;) { n=s.find(SZPATHSEP SZPATHSEP, n); if(stmiss!=n) s.erase(n, 1);}; \
@@ -311,62 +313,33 @@ inline mstring html_sanitize(cmstring& in)
 
 #define StrHas(haystack, needle) (haystack.find(needle) != stmiss)
 #define StrHasFrom(haystack, needle, startpos) (haystack.find(needle, startpos) != stmiss)
+#define StrEraseEnd(s,len) (s).erase((s).size() - len)
 
 off_t GetFileSize(cmstring & path, off_t defret);
 
-inline mstring offttos(off_t n)
-{
-	char buf[21];
-	int len=snprintf(buf, 21, OFF_T_FMT, n);
-	return mstring(buf, len);
-}
+mstring offttos(off_t n);
+mstring ltos(long n);
+mstring offttosH(off_t n);
 
-inline mstring ltos(long n)
-{
-	char buf[21];
-	int len=snprintf(buf, 21, "%ld", n);
-	return mstring(buf, len);
-}
+//template<typename charp>
+off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeString, charp *next)
 
-inline mstring offttosH(off_t n)
-{
-	LPCSTR  pref[]={"", " KiB", " MiB", " GiB", " TiB", " PiB", " EiB"};
-	for(unsigned i=0;i<_countof(pref)-1; i++)
-	{
-		if(n<1024)
-			return ltos(n)+pref[i];
-		if(n<10000)
-			return ltos(n/1000)+"."+ltos((n%1000)/100)+pref[i+1];
 
-		n/=1024;
-	}
-	return "INF";
-}
-
-inline void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar)
-{
-	for(mstring::iterator p=s.begin();p!=s.end();p++)
-		for(LPCSTR b=szBadChars;*b;b++)
-			if(*b==*p)
-			{
-				*p=goodChar;
-				break;
-			}
-}
+void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar);
 
 extern cmstring sEmptyString;
 
-//! split-and-extract helper for strings, for convenient use with for-loops
+//! iterator-like helper for string splitting, for convenient use with for-loops
 class tSplitWalk
 {
 	cmstring &s;
-	mstring::size_type start, len, oob;
+	mutable mstring::size_type start, len, oob;
 	LPCSTR m_seps;
 
 public:
 	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, unsigned begin=0)
 	: s(*line), start(begin), len(stmiss), oob(line->size()), m_seps(separators) {}
-	inline bool Next()
+	inline bool Next() const
 	{
 		if(len != stmiss) // not initial state, find the next position
 			start = start + len + 1;
@@ -393,9 +366,9 @@ public:
 
 		return true;
 	}
-	inline mstring str(){ return s.substr(start, len); }
-	inline operator mstring() { return str(); }
-	inline LPCSTR remainder() { return s.c_str() + start; }
+	inline mstring str() const { return s.substr(start, len); }
+	inline operator mstring() const { return str(); }
+	inline LPCSTR remainder() const { return s.c_str() + start; }
 };
 
 //bool CreateDetachedThread(void *(*threadfunc)(void *));
@@ -404,48 +377,7 @@ void DelTree(cmstring &what);
 
 bool IsAbsolute(cmstring &dirToFix);
 
-
-
-inline char unEscape(const char p)
-{
-	switch (p)
-	{
-	case '0':
-		return '\0';
-	case 'a':
-		return '\a';
-	case 'b':
-		return '\b';
-	case 't':
-		return '\t';
-	case 'n':
-		return '\n';
-	case 'r':
-		return '\r';
-	case 'v':
-		return '\v';
-	case 'f':
-		return '\f';
-	default:
-		return p;
-	}
-}
-
-inline mstring unEscape(cmstring &s)
-{
-	mstring ret;
-	for(cmstring::const_iterator it=s.begin();it!=s.end();++it)
-	{
-		if(*it=='\\')
-		{
-			++it;
-			ret+=unEscape(*it);
-		}
-		else
-			ret+=*it;
-	}
-	return ret;
-}
+mstring unEscape(cmstring &s);
 
 std::string BytesToHexString(const uint8_t sum[], unsigned short lengthBin);
 //bool HexToString(const char *a, mstring& ret);
@@ -462,21 +394,13 @@ static inline time_t GetTime()
 
 static const time_t END_OF_TIME(MAX_VAL(time_t)-2);
 
-static inline unsigned FormatTime(char *buf, const time_t cur)
-{
-	struct tm tmp;
-	gmtime_r(&cur, &tmp);
-	asctime_r(&tmp, buf);
-	//memcpy(buf + 24, " GMT", 4); // wrong, only needed for rfc-822 format, not for asctime's
-	//return 28;
-	return 24;
-}
+unsigned FormatTime(char *buf, size_t bufLen, const time_t cur);
 
 struct tCurrentTime
 {
 	char buf[30];
 	unsigned len;
-	inline tCurrentTime() { len=FormatTime(buf, time(nullptr)); }
+	inline tCurrentTime() { len=FormatTime(buf, sizeof(buf), time(nullptr)); }
 	inline operator mstring() { return mstring(buf, len); }
 };
 
@@ -505,14 +429,39 @@ mstring EncodeBase64(LPCSTR data, unsigned len);
 bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData);
 #endif
 
-#if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
-#define COMPATGCC47
-#define EMPLACE_PAIR(M,K,V) if(M.find(K) == M.end()) M.insert(std::make_pair(K,V))
+typedef std::deque<std::pair<std::string, std::string>> tLPS;
+
+#ifdef __GNUC__
+#define AC_LIKELY(x)   __builtin_expect(!!(x), true)
+#define AC_UNLIKELY(x) __builtin_expect(!!(x), false)
 #else
-#define EMPLACE_PAIR(M,K,V) M.emplace(K,V)
+#define AC_LIKELY(x)   x
+#define AC_UNLIKELY(x) x
 #endif
 
-typedef std::vector<std::pair<std::string, std::string>> tLPS;
+// shortcut for the non-invasive lookup and copy of stuff from mapps
+#define ifThereStoreThere(x,y,z) { auto itFind = (x).find(y); if(itFind != (x).end()) z = itFind->second; }
+#define ifThereStoreThereAndBreak(x,y,z) { auto itFind = (x).find(y); if(itFind != (x).end()) { z = itFind->second; break; } }
+
+bool scaseequals(cmstring& a, cmstring& b);
+
+// dirty little RAII helper
+struct tDtorEx {
+	std::function<void(void)> _action;
+	inline tDtorEx(decltype(_action) action) : _action(action) {}
+	inline ~tDtorEx() { _action(); }
+};
+
+// from bgtask.cc
+cmstring GetFooter();
+
+template<typename T>
+std::pair<T,T> pairSum(const std::pair<T,T>& a, const std::pair<T,T>& b)
+{
+	return std::pair<T,T>(a.first+b.first, a.second + b.second);
+}
+
+}
 
 #endif // _META_H
 

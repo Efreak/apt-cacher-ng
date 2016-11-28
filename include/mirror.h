@@ -10,12 +10,14 @@
 
 #include "cacheman.h"
 
-class pkgmirror: public tCacheOperation, ifileprocessor
+namespace acng
+{
+class pkgmirror: public cacheman
 {
 public:
 	// XXX: for c++11... using tCacheOperation::tCacheOperation;
 	inline pkgmirror(const tSpecialRequest::tRunParms& parms)
-	: tCacheOperation(parms) {};
+	: cacheman(parms) {};
 
 	virtual ~pkgmirror() {};
 	void Action() override;
@@ -23,11 +25,10 @@ public:
 protected:
 	// FileHandler
 	bool ProcessRegular(const mstring &sPath, const struct stat &) override;
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override;
+	void HandlePkgEntry(const tRemoteFileInfo &entry);
 	void _LoadKeyCache(const mstring & sFileName);
 
-	bool m_bCalcSize=false, m_bSkipIxUpdate =false,
-			m_bDoDownload=false, m_bAsNeeded=false, m_bUseDelta=false;
+	bool m_bCalcSize=false, m_bDoDownload=false, m_bAsNeeded=false, m_bUseDelta=false;
 	off_t m_totalSize=0, m_totalHave=0;
 	tStrSet m_pathFilter;
 
@@ -36,4 +37,5 @@ protected:
 
 	bool ConfigDelta(cmstring &sPathRel);
 };
+}
 #endif /* MIRROR_H_ */

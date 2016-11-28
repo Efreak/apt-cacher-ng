@@ -20,6 +20,8 @@
 
 using namespace std;
 
+namespace acng
+{
 struct eHeadPos2label
 {
 	header::eHeadPos pos;
@@ -112,7 +114,7 @@ void header::del(eHeadPos i)
 }
 
 int header::Load(LPCSTR const in, unsigned maxlen,
-		std::vector<std::pair<std::string, std::string>> *pNotForUs)
+		const std::function<void(cmstring&, cmstring&)> &unkHandler)
 {
 	if(maxlen<9)
 		return 0;
@@ -172,12 +174,8 @@ int header::Load(LPCSTR const in, unsigned maxlen,
 
 			if(lastLineIdx == HEADPOS_NOTFORUS)
 			{
-				if(pNotForUs)
-				{
-					if(pNotForUs->empty()) // heh?
-						return -4;
-					pNotForUs->back().second.append(szBegin, nlen+2);
-				}
+				if(unkHandler)
+					unkHandler("", string(szBegin, nlen+2));
 				continue;
 			}
 			else if(lastLineIdx == HEADPOS_MAX || !h[lastLineIdx])
@@ -217,20 +215,11 @@ int header::Load(LPCSTR const in, unsigned maxlen,
 			h[xh.pos][l]='\0';
 			break;
 		}
-		if(pNotForUs && lastLineIdx == HEADPOS_NOTFORUS)
-			pNotForUs->emplace_back(string(key,keyLen),
+		if(unkHandler && lastLineIdx == HEADPOS_NOTFORUS)
+			unkHandler(string(key,keyLen),
 					string(szBegin+keyLen, end+2-(szBegin+keyLen)));
 	}
 	return -2;
-}
-
-int header::LoadFromBuf(const char * const in, unsigned maxlen)
-{
-	clear();
-	int ret=Load(in, maxlen);
-	if(ret<0)
-		clear();
-	return ret;
 }
 
 int header::LoadFromFile(const string &sPath)
@@ -243,7 +232,7 @@ int header::LoadFromFile(const string &sPath)
 	acbuf buf;
 	if(!buf.initFromFile(sPath.c_str()))
 		return -1;
-	return LoadFromBuf(buf.rptr(), buf.size());
+	return Load(buf.rptr(), buf.size());
 }
 
 
@@ -274,12 +263,17 @@ void header::set(eHeadPos i, const char *val, size_t len)
 	}
 }
 
-void header::set(eHeadPos key, cmstring &value)
+void header::set(eHeadPos key, const mstring &value)
 {
 	string::size_type l=value.size()+1;
 	h[key]=(char*) realloc(h[key], l);
 	if(h[key])
 		memcpy(h[key], value.c_str(), l);
+}
+
+void header::prep(eHeadPos key, size_t len)
+{
+	h[key]=(char*) malloc(len);
 }
 
 void header::set(eHeadPos key, off_t nValue)
@@ -304,7 +298,7 @@ int header::StoreToFile(cmstring &sPath) const
 {
 	int nByteCount(0);
 	const char *szPath=sPath.c_str();
-	int fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, acfg::fileperms);
+	int fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, cfg::fileperms);
 	if(fd<0)
 	{
 		fd=-errno;
@@ -312,7 +306,7 @@ int header::StoreToFile(cmstring &sPath) const
 		if(::unlink(szPath))
 			return fd;
 
-		fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, acfg::fileperms);
+		fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, cfg::fileperms);
 		if(fd<0)
 			return -errno;
 	}
@@ -371,4 +365,6 @@ bool header::ParseDate(const char *s, struct tm *tm)
 			return true;
 
 	return false;
+}
+
 }

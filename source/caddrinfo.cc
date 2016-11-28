@@ -7,16 +7,35 @@
 #include "lockable.h"
 #include "cleaner.h"
 
-#include <unordered_map>
+#include <queue>
 
 using namespace std;
 
-static class : public unordered_map<string, CAddrInfo::SPtr>, public lockable {} mapDnsCache;
+namespace acng
+{
+static const unsigned DNS_CACHE_MAX=255;
+
+base_with_condition dnsCacheCv;
+map<tStrPair,CAddrInfoPtr> dnsCache;
+
+// simple prio-queue to track the oldest entries
+typedef decltype(dnsCache)::iterator dnsIter;
+struct tDnsCmpEarliest
+{
+	bool operator() (const dnsIter& x,const dnsIter& y)
+	{
+		return (x->second->m_nExpTime > y->second->m_nExpTime);
+	}
+};
+priority_queue<dnsIter, vector<dnsIter>, tDnsCmpEarliest> dnsCleanupQ;
 
 bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 		string & sErrorBuf)
 {
 	LOGSTART2("CAddrInfo::Resolve", "Resolving " << sHostname);
+
+	m_bError = false;
+	m_bResInProgress = true;
 
 	LPCSTR port = sPort.empty() ? nullptr : sPort.c_str();
 
@@ -28,8 +47,8 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 			0, nullptr, nullptr, nullptr };
 
 	// if only one family is specified, filter on this earlier
-	if(acfg::conprotos[0] != PF_UNSPEC && acfg::conprotos[1] == PF_UNSPEC)
-		hints.ai_family = acfg::conprotos[0];
+	if(cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC)
+		hints.ai_family = cfg::conprotos[0];
 
 	if (m_resolvedInfo)
 	{
@@ -44,24 +63,31 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 		sErrorBuf=(tSS()<<"503 DNS error for hostname "<<sHostname<<": "<<gai_strerror(r)
 				<<". If "<<sHostname<<" refers to a configured cache repository, "
 				"please check the corresponding configuration file.");
+		m_bError = true;
+		m_bResInProgress = false;
 		return false;
 	}
 
 	LOG("Host resolved");
-
-	for (auto pCur=m_resolvedInfo; pCur; pCur = pCur->ai_next)
+	
+	// find any suitable-looking entry and keep a pointer to it
+	for (auto pCur=m_resolvedInfo; pCur && m_bResInProgress ; pCur = pCur->ai_next)
 	{
 		if (pCur->ai_socktype == SOCK_STREAM&& pCur->ai_protocol == IPPROTO_TCP)
 		{
 			m_addrInfo=pCur;
+			m_bResInProgress = false;
 			return true;
 		}
 	}
+
+	if(!m_bResInProgress)
+		return true;
+
 	LOG("couldn't find working DNS config");
-
+	m_bError = true;
+	m_bResInProgress = false;
 	sErrorBuf="500 DNS resolution error";
-
-	// TODO: remove me from the map
 	return false;
 }
 
@@ -70,75 +96,88 @@ CAddrInfo::~CAddrInfo()
 	if (m_resolvedInfo)
 		freeaddrinfo(m_resolvedInfo);
 }
-	
 
-CAddrInfo::SPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sPort, string &sErrorMsgBuf)
+CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sPort, string &sErrorMsgBuf)
 {
-	//time_t timeExpired=time(nullptr)+acfg::dnscachetime;
-	time_t now(time(0));
-	mstring dnsKey=sHostname+":"+sPort;
+	// set if someone is responsible for cleaning it up later
+	bool added2cache = false;
+	auto dnsKey=make_pair(sHostname, sPort);
 
-	SPtr p;
+	CAddrInfoPtr job;
+
+	if (!cfg::dnscachetime)
 	{
-		lockguard g(mapDnsCache);
-		SPtr localEntry;
-		SPtr & cand = acfg::dnscachetime>0 ? mapDnsCache[dnsKey] : localEntry;
-		if(cand && cand->m_nExpTime >= now)
-			return cand;
-		cand.reset(new CAddrInfo);
-		p=cand;
-		// lock the internal class and keep it until we are done with preparations
-		p->lock();
+		job.reset(new CAddrInfo);
+		goto plain_resolve;
 	}
 
-	if(!p)
-		return SPtr(); // weird...
+	if(!cfg::dnscachetime)
+		goto plain_resolve;
 
-	if (p->Resolve(sHostname, sPort, sErrorMsgBuf))
 	{
-		p->m_nExpTime = time(0) + acfg::dnscachetime;
-#ifndef MINIBUILD
-		g_victor.ScheduleFor(p->m_nExpTime, cleaner::TYPE_EXDNS);
-#endif
-		p->unlock();
-	}
-	else // not good, remove from the cache again
-	{
-		aclog::err( (tSS()<<"Error resolving "<<dnsKey<<": " <<sErrorMsgBuf).c_str());
-		lockguard g(mapDnsCache);
-		mapDnsCache.erase(dnsKey);
-		p->unlock();
-		p.reset();
-	}
+		lockuniq lg(dnsCacheCv);
 
-	return p;
-}
+		auto now = GetTime();
 
-time_t CAddrInfo::BackgroundCleanup()
-{
-	lockguard g(mapDnsCache);
-	time_t now(GetTime()), ret(END_OF_TIME);
-
-	for(auto it=mapDnsCache.begin(); it!=mapDnsCache.end(); )
-	{
-		if(it->second)
+		// every caller does little cleanup work first
+		while(!dnsCleanupQ.empty())
 		{
-			if(it->second->m_nExpTime<=now)
+			auto p = dnsCleanupQ.top()->second;
+			if(p->m_nExpTime >= now)
 			{
-				mapDnsCache.erase(it++);
-				continue;
+				dnsCache.erase(dnsCleanupQ.top());
+				dnsCleanupQ.pop();
 			}
-			else
-				ret=min(ret, it->second->m_nExpTime);
+			else if(dnsCleanupQ.size() < DNS_CACHE_MAX) // remaining ones are fresh enough unless we need to shrink the cache
+				break;
 		}
 
-		++it;
+		// observe a DNS process in progress if needed
+		auto it = dnsCache.find(dnsKey);
+		if(it != dnsCache.end())
+		{
+			auto p = it->second;
+			while(p->m_bResInProgress)
+				dnsCacheCv.wait(lg);
+			if(p->m_bError)
+			{
+				sErrorMsgBuf = string("Error resolving ") + sHostname;
+				return job; // still invalid pointer
+			}
+			// otherwise it's ok
+			return p;
+		}
+		job = make_shared<CAddrInfo>();
+		added2cache = dnsCache.size() < DNS_CACHE_MAX; // if looks like DOS, don't dirty the temp queue with it
+		if(added2cache)
+			dnsCache.insert(make_pair(dnsKey, job));
 	}
-	return ret;
+	plain_resolve:
+
+	bool ok = job->Resolve(sHostname, sPort, sErrorMsgBuf);
+
+	// there is a slight risk that someone else expired our entry in the meantime, but it's unlikely and should be harmless
+	if(added2cache)
+	{
+		lockguard lg(dnsCacheCv);
+		dnsCacheCv.notifyAll();
+		if(ok)
+		{
+			auto it = dnsCache.find(dnsKey);
+			if(it != dnsCache.end())
+				dnsCleanupQ.push(it);
+		}
+		else
+			dnsCache.erase(dnsKey);
+	}
+	return ok ? job : CAddrInfoPtr();
 }
 
 void DropDnsCache()
 {
-	lockguard g(mapDnsCache);
-	mapDnsCache.clear();
+	lockguard g(dnsCacheCv);
+	dnsCache.clear();
+	dnsCleanupQ = decltype(dnsCleanupQ)();
+}
+
 }

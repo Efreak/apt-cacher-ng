@@ -10,6 +10,9 @@
 
 #define RBUFLEN 16384
 
+namespace acng
+{
+
 class dlcon;
 class job;
 class header;
@@ -24,10 +27,6 @@ class con // : public tRunable
       virtual ~con();
       
       void WorkLoop();
-      
-      void LogDataCounts(const mstring & file,
-    		  const char *xff,
-    		  off_t countIn, off_t countOut, bool bFileIsError);
       
    private:
 	   con& operator=(const con&);// { /* ASSERT(!"Don't copy con objects"); */ };
@@ -58,19 +57,22 @@ class con // : public tRunable
       mstring m_sClientHost;
       header *m_pTmpHead;
       
-      struct __tlogstuff
-      {
-    	  mstring file, client;
-    	  off_t sumIn, sumOut;
-    	  bool bFileIsError;
-    	  void write();
-    	  void reset(const mstring &pNewFile, const mstring &pNewClient, bool bIsError);
-    	  inline __tlogstuff() : sumIn(0), sumOut(0), bFileIsError(false) {}
-      } logstuff;
+      // some accounting
+      mstring logFile, logClient;
+      off_t fileTransferIn = 0, fileTransferOut = 0;
+      bool m_bLogAsError = false;
+	  void writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient);
+
+      // This method collects the logged data counts for certain file.
+	// Since the user might restart the transfer again and again, the counts are accumulated (for each file path)
+	void LogDataCounts(cmstring & file, const char *xff, off_t countIn, off_t countOut,
+			bool bAsError);
 
 #ifdef DEBUG
       unsigned m_nProcessedJobs;
 #endif
 };
+
+}
 
 #endif

@@ -5,6 +5,9 @@
 #include <list>
 #include <unordered_map>
 
+namespace acng
+{
+
 // caching all relevant file identity data and helper flags in such entries
 struct tDiskFileInfo
 {
@@ -15,11 +18,11 @@ struct tDiskFileInfo
 	tFingerprint fpr;
 };
 
-class expiration : public tCacheOperation, public ifileprocessor
+class expiration : public cacheman
 {
 public:
 	// XXX: g++ 4.7 is not there yet... using tCacheOperation::tCacheOperation;
-	inline expiration(const tRunParms& parms) : tCacheOperation(parms) {};
+	inline expiration(const tRunParms& parms) : cacheman(parms) {};
 
 protected:
 
@@ -32,9 +35,7 @@ protected:
 	virtual void Action() override;
 	// for FileHandler
 	virtual bool ProcessRegular(const mstring &sPath, const struct stat &) override;
-
-	// for ifileprocessor
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) override;
+	void HandlePkgEntry(const tRemoteFileInfo &entry);
 
 	void LoadHints();
 
@@ -48,9 +49,17 @@ protected:
 	void MarkObsolete(cmstring&) override;
 	tStrVec m_killBill;
 
+	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry,
+			cmstring& srcPrefix) override;
+	virtual bool _QuickCheckSolidFileOnDisk(cmstring& /* sFilePathRel */) override;
 private:
 	int m_nPrevFailCount =0;
 	bool CheckAndReportError();
+
+	void HandleDamagedFiles();
+	void ListExpiredFiles();
 };
+
+}
 
 #endif /*EXPIRATION_H_*/

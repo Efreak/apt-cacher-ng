@@ -9,17 +9,20 @@
 #include "header.h"
 #include <unordered_map>
 
+namespace acng
+{
+
 class fileitem;
-typedef SHARED_PTR<fileitem> tFileItemPtr;
+typedef std::shared_ptr<fileitem> tFileItemPtr;
 typedef std::unordered_multimap<mstring, tFileItemPtr> tFiGlobMap;
 
 //! Base class containing all required data and methods for communication with the download sources
-class fileitem : public condition
+class fileitem : public base_with_condition
 {
 public:
 
 	// Life cycle (process states) of a file description item
-	enum FiStatus
+	enum FiStatus : char
 	{
 
 	FIST_FRESH, FIST_INITED, FIST_DLPENDING, FIST_DLGOTHEAD, FIST_DLRECEIVING,
@@ -72,6 +75,8 @@ public:
 	/// mark the item as complete as-is, assuming that sizeseen is correct
 	void SetupComplete();
 
+	void UpdateHeadTimestamp();
+
 	uint64_t m_nIncommingCount;
 	off_t m_nSizeSeen;
 	off_t m_nRangeLimit;
@@ -115,8 +120,10 @@ public:
 
 	inline static mstring NormalizePath(cmstring &sPathRaw)
 	{
-		return acfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
+		return cfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
 	}
+protected:
+	int MoveRelease2Sidestore();
 };
 
 #ifndef MINIBUILD
@@ -128,7 +135,7 @@ class fileItemMgmt
 public:
 
 	// public constructor wrapper, get a unique object from the map or a new one
-	bool PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore);
+	bool PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore);
 
 	// related to GetRegisteredFileItem but used for registration of custom file item
 	// implementations created elsewhere (which still need to obey regular work flow)
@@ -145,7 +152,7 @@ public:
 	// when copied around, invalidates the original reference
 	~fileItemMgmt();
 	inline fileItemMgmt() {}
-	inline tFileItemPtr get() {return m_ptr;}
+	inline tFileItemPtr getFiPtr() {return m_ptr;}
 	inline operator bool() const {return (bool) m_ptr;}
 
 
@@ -163,7 +170,5 @@ private:
 #define fileItemMgmt void
 #endif // not MINIBUILD
 
+}
 #endif
-
-
-

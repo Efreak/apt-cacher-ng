@@ -32,16 +32,6 @@ using namespace std;
 #include <signal.h>
 #include <errno.h>
 
-#ifdef HAVE_SSL
-#include <openssl/evp.h>
-#include "openssl/bio.h"
-#include "openssl/ssl.h"
-#include "openssl/err.h"
-#include <openssl/rand.h>
-#include <openssl/sha.h>
-#include <openssl/crypto.h>
-#endif
-
 #include "filereader.h"
 #include "csmapping.h"
 #ifdef DEBUG
@@ -50,6 +40,9 @@ using namespace std;
 
 #include "maintenance.h"
 
+namespace acng
+{
+
 static void usage(int nRetCode=0);
 static void SetupCacheDir();
 void sig_handler(int signum);
@@ -57,6 +50,8 @@ void log_handler(int signum);
 void dump_handler(int signum);
 void handle_sigbus();
 void check_algos();
+
+extern mstring sReplDir;
 
 typedef struct sigaction tSigAct;
 
@@ -96,12 +91,17 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 	bool bExtraVerb=false;
 	LPCSTR szCfgDir=nullptr;
 	std::vector<LPCSTR> cmdvars;
+	bool ignoreCfgErrors = false;
 
 	for (auto p=argv+1; p<argv+argc; p++)
 	{
+		if (!strncmp(*p, "--", 2))
+			break;
 		if (!strncmp(*p, "-h", 2))
 			usage();
-		if (!strncmp(*p, "-v", 2))
+		if (!strncmp(*p, "-i", 2))
+			ignoreCfgErrors = true;
+		else if (!strncmp(*p, "-v", 2))
 			bExtraVerb = true;
 		else if (!strncmp(*p, "-e", 2))
 			bStartCleanup=true;
@@ -118,16 +118,16 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 	}
 
 	if(szCfgDir)
-		acfg::ReadConfigDirectory(szCfgDir);
+		cfg::ReadConfigDirectory(szCfgDir, !ignoreCfgErrors);
 
 	for(auto& keyval : cmdvars)
-		if(!acfg::SetOption(keyval, 0))
+		if(!cfg::SetOption(keyval, 0))
 			usage(EXIT_FAILURE);
 
-	acfg::PostProcConfig();
+	cfg::PostProcConfig();
 
 	if(bExtraVerb)
-		acfg::debug |= (LOG_DEBUG|LOG_MORE);
+		cfg::debug |= (log::LOG_DEBUG|log::LOG_MORE);
 
 }
 
@@ -158,68 +158,6 @@ void setup_sighandler()
 #endif
 }
 
-int main(int argc, const char **argv)
-{
-
-#ifdef HAVE_SSL
-	SSL_load_error_strings();
-	ERR_load_BIO_strings();
-	ERR_load_crypto_strings();
-	ERR_load_SSL_strings();
-	OpenSSL_add_all_algorithms();
-	SSL_library_init();
-#endif
-
-	bool bRunCleanup=false;
-
-	parse_options(argc, argv, bRunCleanup);
-
-	if(!aclog::open())
-	{
-		cerr << "Problem creating log files. Check permissions of the log directory, "
-			<< acfg::logdir<<endl;
-		exit(EXIT_FAILURE);
-	}
-
-	check_algos();
-	setup_sighandler();
-
-	SetupCacheDir();
-
-	extern mstring sReplDir;
-	DelTree(acfg::cacheDirSlash+sReplDir);
-
-	conserver::Setup();
-
-	if (bRunCleanup)
-	{
-		tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
-				acfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
-				fileno(stdout));
-		exit(0);
-	}
-
-	if (!acfg::foreground && !fork_away())
-	{
-		tErrnoFmter ef("Failed to change to daemon mode");
-		cerr << ef << endl;
-		exit(43);
-	}
-
-	if (!acfg::pidfile.empty())
-	{
-		mkbasedir(acfg::pidfile);
-		FILE *PID_FILE = fopen(acfg::pidfile.c_str(), "w");
-		if (PID_FILE != nullptr)
-		{
-			fprintf(PID_FILE, "%d", getpid());
-			checkForceFclose(PID_FILE);
-		}
-	}
-	return conserver::Run();
-
-}
-
 static void usage(int retCode) {
 	cout <<"Usage: apt-cacher-ng [options] [ -c configdir ] <var=value ...>\n\n"
 		"Options:\n"
@@ -227,6 +165,7 @@ static void usage(int retCode) {
 		"-c: configuration directory\n"
 		"-e: on startup, run expiration once\n"
 		"-p: print configuration and exit\n"
+		"-i: ignore configuration loading errors\n"
 #if SUPPWHASH
 		"-H: read a password from STDIN and print its hash\n"
 #endif
@@ -244,15 +183,20 @@ static void usage(int retCode) {
 
 static void SetupCacheDir()
 {
-	using namespace acfg;
-	if(!Cstat(cacheDirSlash))
-	{
-		// well, attempt to create it then
-		mstring path=cacheDirSlash+'/';
-		for(unsigned pos=0; (pos=path.find(SZPATHSEP, pos)) < path.size(); ++pos)
-			mkdir((const char*) path.substr(0,pos).c_str(), (uint) dirperms);
-	}
+	using namespace cfg;
 
+	if(cfg::cachedir.empty())
+		return;	// warning was printed
+
+	auto xstore(cacheDirSlash + cfg::privStoreRelSnapSufix);
+	mkdirhier(xstore);
+	if(!Cstat(xstore))
+	{
+		cerr << "Error: Cannot create any directory in " << cacheDirSlash << endl;
+		exit(EXIT_FAILURE);
+	}
+	mkdirhier(cacheDirSlash + cfg::privStoreRelQstatsSfx + "/i");
+	mkdirhier(cacheDirSlash + cfg::privStoreRelQstatsSfx + "/o");
 	struct timeval tv;
 	gettimeofday(&tv, nullptr);
 	tSS buf;
@@ -273,7 +217,7 @@ static void SetupCacheDir()
 
 void log_handler(int)
 {
-	aclog::close(true);
+	log::close(true);
 }
 
 void sig_handler(int signum)
@@ -288,15 +232,15 @@ void sig_handler(int signum)
 		 * just hope that systemd will restart the daemon.
 		 */
 		handle_sigbus();
-		aclog::flush();
+		log::flush();
 		//no break
 	case (SIGTERM):
 	case (SIGINT):
 	case (SIGQUIT): {
 		g_victor.Stop();
-		aclog::close(false);
-    if (!acfg::pidfile.empty())
-       unlink(acfg::pidfile.c_str());
+		log::close(false);
+    if (!cfg::pidfile.empty())
+       unlink(cfg::pidfile.c_str());
 		// and then terminate, resending the signal to default handler
 		tSigAct act = tSigAct();
 		sigfillset(&act.sa_mask);
@@ -308,4 +252,62 @@ void sig_handler(int signum)
 	default:
 		return;
 	}
+}
+
+}
+
+int main(int argc, const char **argv)
+{
+	using namespace acng;
+#ifdef HAVE_SSL
+	acng::globalSslInit();
+#endif
+
+	bool bRunCleanup=false;
+
+	parse_options(argc, argv, bRunCleanup);
+
+	if(!log::open())
+	{
+		cerr << "Problem creating log files. Check permissions of the log directory, "
+			<< cfg::logdir<<endl;
+		exit(EXIT_FAILURE);
+	}
+
+	check_algos();
+	setup_sighandler();
+
+	SetupCacheDir();
+
+	DelTree(cfg::cacheDirSlash+sReplDir);
+
+	conserver::Setup();
+
+	if (bRunCleanup)
+	{
+		tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
+				cfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
+				fileno(stdout));
+		exit(0);
+	}
+
+	if (!cfg::foreground && !fork_away())
+	{
+		tErrnoFmter ef("Failed to change to daemon mode");
+		cerr << ef << endl;
+		exit(43);
+	}
+
+	if (!cfg::pidfile.empty())
+	{
+		mkbasedir(cfg::pidfile);
+		FILE *PID_FILE = fopen(cfg::pidfile.c_str(), "w");
+		if (PID_FILE != nullptr)
+		{
+			fprintf(PID_FILE, "%d", getpid());
+			checkForceFclose(PID_FILE);
+		}
+	}
+	return conserver::Run();
+
 }

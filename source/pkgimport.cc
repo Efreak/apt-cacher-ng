@@ -23,6 +23,8 @@ using namespace std;
 #define SCACHEFILE (CACHE_BASE+"_impkeycache")
 #define FMTSIG "FMT5"
 
+namespace acng
+{
 /*
  * Algorithm:
  *
@@ -46,14 +48,10 @@ inline bool IsIndexDiff(const string & sPath)
 }
 */
 
-bool pkgimport::ProcessRegular(cmstring &sPath, const struct stat &stinfo)
+bool pkgimport::ProcessRegular(const mstring &sPath, const struct stat &stinfo)
 {
+	if(CheckStopSignal()) return false;
 
-	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
-			return false;
-	}
 	if(endsWithSzAr(sPath, ".head"))
 		return true;
 
@@ -69,7 +67,7 @@ bool pkgimport::ProcessRegular(cmstring &sPath, const struct stat &stinfo)
 
 		AddIFileCandidate(sPath.substr(CACHE_BASE_LEN));
 	}
-	else if(rechecks::FILE_INVALID != rechecks::GetFiletype(sPath))
+	else if(rex::FILE_INVALID != rex::GetFiletype(sPath))
 	{
 		// get a fingerprint by checksumming if not already there from the fpr cache
 
@@ -179,9 +177,7 @@ void pkgimport::Action()
 	m_sSrcPath=CACHE_BASE+"_import";
 	
 	SendFmt << "Importing from " << m_sSrcPath << " directory.<br>Scanning local files...<br>";
-	
-	SetCommonUserFlags(m_parms.cmd);
-	m_bErrAbort=false; // does not f...ing matter, do what we can
+
 	m_bByPath=true; // should act on all locations
 
 	_LoadKeyCache();
@@ -191,13 +187,9 @@ void pkgimport::Action()
 				<<" from the fingerprint cache<br>\n");
 	
 	m_bLookForIFiles=true;
-	DirectoryWalk(acfg::cachedir, this, true);
 
-	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
-			return;
-	}
+	BuildCacheFileList();
+	if(CheckStopSignal()) return;
 	
 	if(m_metaFilesRel.empty())
 	{
@@ -207,12 +199,7 @@ void pkgimport::Action()
 
 
 	UpdateVolatileFiles();
-
-	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
-			return;
-	}
+	if(CheckStopSignal()) return;
 	
 	if(m_bErrAbort && m_nErrorCount>0)
 	{
@@ -223,12 +210,7 @@ void pkgimport::Action()
 	m_bLookForIFiles=false;
 	DBGQLOG("building contents map for " << m_sSrcPath);
 	DirectoryWalk(m_sSrcPath, this, true);
-
-	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
-			return;
-	}
+	if(CheckStopSignal()) return;
 	
 	if(m_importMap.empty())
 	{
@@ -236,13 +218,10 @@ void pkgimport::Action()
 		return;
 	}
 	
-	ProcessSeenMetaFiles(*this);
+	ProcessSeenIndexFiles([this](const tRemoteFileInfo &e) {
+		HandlePkgEntry(e); });
 
-	{
-		lockguard g(&abortMx);
-		if(bSigTaskAbort)
-			return;
-	}
+	if(CheckStopSignal()) return;
 
 	ofstream fList;
 	fList.open(SCACHEFILE.c_str(), ios::out | ios::trunc);
@@ -308,7 +287,7 @@ void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 		return;
 	
 	string sDestAbs=CACHE_BASE;
-	if(acfg::stupidfs)
+	if(cfg::stupidfs)
 		sDestAbs+=DosEscape(entry.sDirectory+entry.sFileName);
 	else
 		sDestAbs+=(entry.sDirectory+entry.sFileName);
@@ -366,7 +345,7 @@ void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 	h.type=header::ANSWER;
 	if (h.StoreToFile(sDestAbs+".head")<=0)
 	{
-		aclog::err("Unable to store generated header");
+		log::err("Unable to store generated header");
 		return; // junk may remain but that's a job for cleanup later
 	}
 	hit->second.bFileUsed=true;
@@ -462,3 +441,5 @@ void pkgimport::_GetCachedKey(const string & sPath, const struct stat &stinfo, s
 }
 
  */
+
+}

@@ -13,6 +13,9 @@
 #include <iostream>
 #include <fstream>
 
+namespace acng
+{
+
 class tSpecOpDetachable : public tSpecialRequest
 {
 public:
@@ -51,37 +54,18 @@ private:
 	// counter. Originally written with some uber-protective considerations in mind like
 	// not letting a listener block the work of an operator by any means.
 
-	// notification of attached processes
-	class tProgressTracker : public condition
-	{
-	public:
-		off_t nEndSize;
-		time_t id;
-		tProgressTracker() : nEndSize(-1), id(0) {};
-		void SetEnd(off_t);
-	};
-	typedef SHARED_PTR<tProgressTracker> tProgTrackPtr;
-	static WEAK_PTR<tProgressTracker> g_pTracker;
-	tProgTrackPtr m_pTracker;
-
 	protected:
 	// value is an ID number assigned to the string (key) in the moment of adding it
-	std::map<mstring,unsigned> m_delCboxFilter;
+	struct pathMemEntry { mstring msg; unsigned id;};
+	std::map<mstring,pathMemEntry> m_pathMemory;
 	// generates a lookup blob as hidden form parameter
 	mstring BuildCompressedDelFileCatalog();
-};
 
-struct tRemoteFileInfo;
-// helper to make the code more robust
-class ifileprocessor
-{
-public:
-	virtual void HandlePkgEntry(const tRemoteFileInfo &entry) = 0;
-	virtual ~ifileprocessor() {};
+	static base_with_condition g_StateCv;
+	static bool g_sigTaskAbort;
+	// to watch the log file
+	int m_logFd = -1;
 };
-
-extern pthread_mutex_t abortMx;
-extern bool bSigTaskAbort;
 
 #ifdef DEBUG
 class tBgTester : public tSpecOpDetachable
@@ -95,5 +79,7 @@ public:
 	void Action() override;
 };
 #endif // DEBUG
+
+}
 
 #endif /* BGTASK_H_ */

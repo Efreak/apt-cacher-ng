@@ -21,6 +21,8 @@
 
 using namespace std;
 
+namespace acng
+{
 bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &)
 {
 	if (endsWithSzAr(sPath, ".head"))
@@ -62,7 +64,7 @@ bool pkgmirror::ProcessRegular(const string &sPath, const struct stat &)
 
 void pkgmirror::Action()
 {
-	if(acfg::mirrorsrcs.empty())
+	if(cfg::mirrorsrcs.empty())
 	{
 		SendChunk("<b>PrecacheFor not set, check configuration!</b><br>\n");
 		return;
@@ -70,12 +72,8 @@ void pkgmirror::Action()
 
 	SendChunk("<b>Locating index files, scanning...</b><br>\n");
 
-	SetCommonUserFlags(m_parms.cmd);
-	m_bErrAbort=false; // does not f...ing matter, do what we can
-
 	m_bCalcSize=(m_parms.cmd.find("calcSize=cs")!=stmiss);
 	m_bDoDownload=(m_parms.cmd.find("doDownload=dd")!=stmiss);
-	m_bSkipIxUpdate=(m_parms.cmd.find("skipIxUp=si")!=stmiss);
 	m_bAsNeeded=(m_parms.cmd.find("asNeeded=an")!=stmiss);
 	m_bUseDelta=(m_parms.cmd.find("useDebDelta=ud")!=stmiss);
 
@@ -95,7 +93,7 @@ void pkgmirror::Action()
 	if(m_bUseDelta)
 		StartDlder();
 
-	DirectoryWalk(acfg::cachedir, this);
+	BuildCacheFileList();
 
 	if(CheckStopSignal())
 		return;
@@ -117,29 +115,21 @@ void pkgmirror::Action()
 
 	// prepare wildcard matching and collecting
 	tStrSet srcs;
-	class __srcpicker : public ifileprocessor
-	{
-	public:
-		tStrSet *pSrcs;
-		tStrVec matchList;
-		__srcpicker(tStrSet *x) : pSrcs(x)
-		{
-			Tokenize(acfg::mirrorsrcs, SPACECHARS, matchList);
-		};
-		void TryAdd(cmstring &s)
-		{
-			for(const auto& match : matchList)
-				if(0==fnmatch(match.c_str(), s.c_str(), FNM_PATHNAME))
-				{
-					pSrcs->insert(s);
-					break;
-				}
-		}
-		void HandlePkgEntry(const tRemoteFileInfo &entry)
-		{
-			TryAdd(entry.sDirectory+entry.sFileName);
-		}
-	} picker(&srcs);
+	tStrVec matchList;
+	Tokenize(cfg::mirrorsrcs, SPACECHARS, matchList);
+	auto TryAdd = [&matchList, &srcs](cmstring &s)
+			{
+				for(const auto& match : matchList)
+					if(0==fnmatch(match.c_str(), s.c_str(), FNM_PATHNAME))
+					{
+#ifdef COMPATGCC47
+						srcs.insert(s);
+#else
+						srcs.emplace(s);
+#endif
+						break;
+					}
+			};
 
 	mstring sErr;
 
@@ -151,24 +141,26 @@ void pkgmirror::Action()
 		{
 			if(!m_bSkipIxUpdate && !GetFlags((cmstring)path2x.first).uptodate)
 				Download((cmstring)path2x.first, true, eMsgShow);
-			ParseAndProcessMetaFile(picker, (cmstring) path2x.first, EIDX_RELEASE);
+			ParseAndProcessMetaFile([&TryAdd](const tRemoteFileInfo &entry) {
+				TryAdd(entry.sDirectory+entry.sFileName); },
+				(cmstring) path2x.first, EIDX_RELEASE);
 		}
 		else
-			picker.TryAdd((cmstring)path2x.first);
+			TryAdd((cmstring)path2x.first);
 	}
 
 	SendChunk("<b>Identifying more index files in cache...</b><br>");
 	// unless found in release files, get the from the local system
-	for (const auto& match: picker.matchList)
+	for (const auto& match: matchList)
 		for(const auto& path : ExpandFilePattern(CACHE_BASE+match, false))
-			picker.TryAdd(path);
+			TryAdd(path);
 
 	auto delBros = [&srcs](cmstring& mine)
 	{
 		string base;
 		int nDeleted = 0;
 		cmstring* pMySuf=nullptr;
-		for(const auto& suf: compSuffixesAndEmpty)
+		for(const auto& suf: sfxXzBz2GzLzmaNone)
 		{
 			if(endsWith(mine, suf))
 			{
@@ -177,7 +169,7 @@ void pkgmirror::Action()
 				break;
 			}
 		}
-		for(const auto& suf : compSuffixesAndEmpty)
+		for(const auto& suf : sfxXzBz2GzLzmaNone)
 		{
 			if(&suf == pMySuf)
 				continue;
@@ -199,7 +191,7 @@ void pkgmirror::Action()
 	// now there may still be something like Sources and Sources.bz2 if they
 	// were added by Release file scan. Choose the preferred one simply by extension.
 	restart_clean2: // start over if the set changed while having a hot iterator
-	for (const auto& s: compSuffixesAndEmptyByRatio)
+	for (const auto& s: sfxXzBz2GzLzma)
 		for (const auto& src : srcs)
 			if (endsWith(src, s)&& delBros(src)) // this is the one
 				goto restart_clean2;
@@ -232,12 +224,13 @@ void pkgmirror::Action()
 		for (auto& src : srcs)
 		{
 #ifdef DEBUG
-			if(LOG_MORE&acfg::debug)
+			if(log::LOG_MORE & cfg::debug)
 				SendFmt << "mirror check: " << src;
 #endif
 			off_t needBefore=(m_totalSize-m_totalHave);
 
-			ParseAndProcessMetaFile(*this, src, GuessMetaTypeFromURL(src));
+			ParseAndProcessMetaFile([this](const tRemoteFileInfo &e) {
+				HandlePkgEntry(e); }, src, GuessMetaTypeFromURL(src));
 
 			SendFmt << src << ": "
 					<< offttosH((m_totalSize-m_totalHave)-needBefore)
@@ -267,7 +260,8 @@ void pkgmirror::Action()
 			if(CheckStopSignal())
 				return;
 			ConfigDelta(src);
-			ParseAndProcessMetaFile(*this, src, GuessMetaTypeFromURL(src));
+			ParseAndProcessMetaFile([this](const tRemoteFileInfo &e) {
+				HandlePkgEntry(e); }, src, GuessMetaTypeFromURL(src));
 		}
 	}
 }
@@ -288,9 +282,9 @@ inline bool pkgmirror::ConfigDelta(cmstring &sPathRel)
 	if (m_repCutLen != stmiss)
 	{
 		vname.resize(m_repCutLen);
-		const acfg::tRepoData *pRepo = acfg::GetRepoData(vname);
+		const cfg::tRepoData *pRepo = cfg::GetRepoData(vname);
 #ifdef DEBUG
-		if(acfg::debug & LOG_MORE)
+		if(cfg::debug & log::LOG_MORE)
 		{
 			if(!pRepo)
 				SendFmt << "hm, no delta provider for " << sPathRel;
@@ -479,4 +473,6 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 			}
 		}
 	}
+}
+
 }

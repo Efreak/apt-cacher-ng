@@ -11,12 +11,19 @@
 #include "bgtask.h"
 #include "fileitem.h"
 #include <unordered_map>
+#include <unordered_set>
 
 // #define USEDUPEFILTER
 
+namespace acng
+{
+
 class dlcon;
+
+// XXX: specific declarations, maybe move to a namespace
 class tDlJobHints;
-struct foo;
+class tFileGroups;
+struct tContentKey;
 
 static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing, "
 		"aborting as requested.</span>");
@@ -24,30 +31,27 @@ static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing,
 static cmstring sIndex("Index");
 static cmstring sslIndex("/Index");
 
-struct tPatchEntry
-{
-	string patchName;
-	tFingerprint fprState, fprPatch;
-};
-typedef deque<tPatchEntry>::const_iterator tPListConstIt;
+static cmstring sfxXzBz2GzLzma[] = { ".xz", ".bz2", ".gz", ".lzma"};
+static cmstring sfxXzBz2GzLzmaNone[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
+
+bool CompDebVerLessThan(cmstring &s1, cmstring s2);
+extern time_t m_gMaintTimeNow;
 
 void DelTree(const string &what);
 
-
-class tCacheOperation :
+class cacheman :
 	public IFileHandler,
 	public tSpecOpDetachable
 {
 
 public:
-	tCacheOperation(const tSpecialRequest::tRunParms& parms);
-	virtual ~tCacheOperation();
+	cacheman(const tSpecialRequest::tRunParms& parms);
+	virtual ~cacheman();
 
-protected:
 	enum enumMetaType
-		: uint_least8_t
+		: uint8_t
 		{
-			EIDX_UNSUPPORTED = 0,
+			EIDX_NOTREFINDEX = 0,
 		EIDX_RELEASE,
 		EIDX_PACKAGES,
 		EIDX_SOURCES,
@@ -57,41 +61,55 @@ protected:
 		EIDX_SUSEREPO,
 		EIDX_XMLRPMLIST,
 		EIDX_RFC822WITHLISTS,
-		EIDX_TRANSIDX,
+		EIDX_TRANSIDX, // XXX: in the old times, there were special i18n/Index files, are they gone for good now?
 		EIDX_MD5DILIST,
 		EIDX_SHA256DILIST
 	};
 	struct tIfileAttribs
 	{
 		bool vfile_ondisk:1, uptodate:1, parseignore:1, hideDlErrors:1,
-				forgiveDlErrors:1, alreadyparsed:1,
-				guessed:1; // file is not on disk, the name is pure calculation from pdiff mechanism
-		enumMetaType eIdxType = EIDX_UNSUPPORTED;
-		const tStrDeq *bros = nullptr;
+				forgiveDlErrors:1, alreadyparsed:1;
+		enumMetaType eIdxType = EIDX_NOTREFINDEX;
+		tIfileAttribs *bro; // point to a related descriptor, circled single-linked list
 		off_t space = 0;
 		inline tIfileAttribs() :
 				vfile_ondisk(false), uptodate(false),
 				parseignore(false), hideDlErrors(false),
-				forgiveDlErrors(false), alreadyparsed(false),
-				guessed(false)
-		{};
+				forgiveDlErrors(false), alreadyparsed(false)
+		{
+			bro = this;
+		};
+#ifdef DEBUG
+		inline tSS toString() const
+		{
+			return tSS() << alreadyparsed << "|"
+					<< forgiveDlErrors << "|"
+					<< hideDlErrors << "|"
+					<< parseignore << "|"
+					<< space << "|"
+					<< uptodate << "|"
+					<< vfile_ondisk;
+		}
+#endif
 	};
 
-	// this is not unordered because sometimes it might need modification
-	// while an iterator still works on it
-	std::map<mstring,tIfileAttribs> m_metaFilesRel;
 	// helpers to keep the code cleaner and more readable
 	const tIfileAttribs &GetFlags(cmstring &sPathRel) const;
+
+protected:
+	// this is not unordered because sometimes we make use of iterator references while
+	// doing modification of the map
+	std::map<mstring,tIfileAttribs> m_metaFilesRel;
 	tIfileAttribs &SetFlags(cmstring &sPathRel);
 
-	void SetCommonUserFlags(cmstring &cmd);
-
+	// evil shortcut, might point to read-only dummy... to be used with care
+	tIfileAttribs &GetRWFlags(cmstring &sPathRel);
 	void UpdateVolatileFiles();
 	void _BusyDisplayLogs();
 	void _Usermsg(mstring m);
 	bool AddIFileCandidate(const mstring &sFileRel);
 
-	// NOOP, implemented here for convinience
+	// NOOP, implemented here for convenience
 	bool ProcessOthers(const mstring &sPath, const struct stat &);
 	bool ProcessDirAfter(const mstring &sPath, const struct stat &);
 
@@ -106,7 +124,7 @@ protected:
 	 *   
 	 * */
 
-	void ProcessSeenMetaFiles(ifileprocessor &pkgHandler);
+	void ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHandler);
 
 	void StartDlder();
 
@@ -118,11 +136,12 @@ protected:
 	};
 	bool Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			eDlMsgPrio msgLevel, tFileItemPtr pForcedItem=tFileItemPtr(),
-			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0);
+			const tHttpUrl *pForcedURL=nullptr, unsigned hints=0, cmstring* sGuessedFrom = nullptr);
 #define DL_HINT_GUESS_REPLACEMENT 0x1
+#define DL_HINT_NOTAG 0x2
 
-	// internal helper variables
-	bool m_bErrAbort, m_bVerbose, m_bForceDownload;
+	// common helper variables
+	bool m_bErrAbort, m_bVerbose, m_bForceDownload, m_bSkipIxUpdate = false;
 	bool m_bScanInternals, m_bByPath, m_bByChecksum, m_bSkipHeaderChecks;
 	bool m_bTruncateDamaged;
 	int m_nErrorCount;
@@ -133,8 +152,11 @@ protected:
 
 	void TellCount(unsigned nCount, off_t nSize);
 
-	bool ParseAndProcessMetaFile(ifileprocessor &output_receiver,
-			const mstring &sPath, enumMetaType idxType);
+	/**
+	 * @param collectAllCsTypes If set, will send callbacks for all identified checksum types. In addition, will set the value of Acquire-By-Hash to the pointed boolean.
+	 */
+	bool ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&)> output_receiver,
+			const mstring &sPath, enumMetaType idxType, bool byHashMode = false);
 
 	std::unordered_map<mstring,bool> m_forceKeepInTrash;
 
@@ -146,56 +168,107 @@ protected:
 	mstring m_processedIfile;
 
 	void ProgTell();
-	void AddDelCbox(cmstring &sFileRel, bool bExtraFile = false);
-
-	typedef std::pair<tFingerprint,mstring> tContId;
-	struct tClassDesc {tStrDeq paths; tContId diffIdxId, bz2VersContId;};
-	typedef std::map<tContId, tClassDesc> tContId2eqClass;
+	void AddDelCbox(cmstring &sFileRel, cmstring& reason, bool bExtraFile = false);
 
 	// add certain files to the kill bill, to be removed after the activity is done
 	virtual void MarkObsolete(cmstring&) {};
 
 	// for compressed map of special stuff
-	inline mstring AddLookupGetKey(cmstring &sFilePathRel, bool& isNew)
+	inline mstring AddLookupGetKey(cmstring &sFilePathRel, cmstring& errorReason)
 	{
-		unsigned id = m_delCboxFilter.size();
-		auto it = m_delCboxFilter.find(sFilePathRel);
-		isNew = it==m_delCboxFilter.end();
-		if(isNew)
-			m_delCboxFilter[sFilePathRel] = id;
+		unsigned id = m_pathMemory.size();
+		auto it = m_pathMemory.find(sFilePathRel);
+		if(it==m_pathMemory.end())
+			m_pathMemory[sFilePathRel] = {errorReason, id};
 		else
-			id = it->second;
+			id = it->second.id;
 		char buf[30];
 		return mstring(buf, snprintf(buf, sizeof(buf), " name=\"kf\" value=\"%x\"", id));
 	}
 
+	// stuff in those directories must be managed by some top-level index files
+	// whitelist patterns do not apply there!
+	tStrSet m_managedDirs;
+
 private:
-	tContId2eqClass m_eqClasses;
 
-	bool Propagate(cmstring &donorRel, tContId2eqClass::iterator eqClassIter,
-			cmstring *psTmpUnpackedAbs=nullptr);
-	void InstallBz2edPatchResult(tContId2eqClass::iterator &eqClassIter);
-	tCacheOperation(const tCacheOperation&);
-	tCacheOperation& operator=(const tCacheOperation&);
-	bool PatchFile(cmstring &srcRel, cmstring &patchIdxLocation,
-			tPListConstIt pit, tPListConstIt itEnd,
-			const tFingerprint *verifData);
-	dlcon *m_pDlcon;
+	void ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups& ret, const tStrDeq& releaseFilesRel);
+	void FilterGroupData(tFileGroups& idxGroups);
+	void SortAndInterconnectGroupData(tFileGroups& idxGroups);
 
+	/**
+	 * Adjust the configuration of related paths (relative to updatePath) to prevent
+	 * smart downloads later, how exactly depends on current execution mode.
+	 *
+	 * If strict path checks are used the content may also be copied over.
+	 */
+	void SyncSiblings(cmstring &srcPathRel, const tStrDeq& targets);
+
+	cacheman(const cacheman&);
+	cacheman& operator=(const cacheman&);
+
+	dlcon *m_pDlcon = nullptr;
+	cmstring& GetFirstPresentPath(const tFileGroups& groups, const tContentKey& ckey);
+
+	/*
+	 * Analyze patch base candidate, fetch patch files as suggested by index, patch, distribute result
+	 */
+	void PatchOne(cmstring& pindexPathRel, const tStrDeq& patchBaseCandidates);
+	void ParseGenericRfc822File(filereader& reader, cmstring& sExtListFilter,
+			map<string, deque<string> >& contents);
+	bool ParseDebianIndexLine(tRemoteFileInfo& info, cmstring& fline);
+
+protected:
+	bool CalculateBaseDirectories(cmstring& sPath, enumMetaType idxType, mstring& sBaseDir, mstring& sBasePkgDir);
 	bool IsDeprecatedArchFile(cmstring &sFilePathRel);
-
+	/**
+	 * @brief Process key:val type files, handling multiline values as lists
+	 * @param ixInflatedChecksum Pass through as struct attribute to ret callback
+	 * @param sExtListFilter If set to non-empty, will only extract value(s) for that key
+	 * @param byHashMode Return without calbacks if AcquireByHash is not set to yes. Not setting list filter also makes sense in this mode.
+	 */
+	bool ParseDebianRfc822Index(filereader& reader, std::function<void(const tRemoteFileInfo&)> &ret,
+			cmstring& sCurFilesReferenceDirRel,
+			cmstring& sPkgBaseDir,
+			enumMetaType ixType, CSTYPES csType,
+			cmstring& sExtListFilter,
+			bool byHashMode);
 	const tIfileAttribs attr_dummy_pure = tIfileAttribs();
 	tIfileAttribs attr_dummy;
+
+	/* Little helper to check existence of specific name on disk, either in cache or replacement directory, depending on what the srcPrefix defines */
+	virtual bool _checkSolidHashOnDisk(cmstring& hexname, const tRemoteFileInfo &entry,
+			cmstring& srcPrefix);
+
+	// "can return false negatives" thing
+	// to be implemented in subclasses
+	virtual bool _QuickCheckSolidFileOnDisk(cmstring& /* sFilePathRel */) { return false; }
+	void BuildCacheFileList();
+	/**
+	 * This is supposed to restore references to files that are no longer
+	 * downloaded by apt directly but via semi-static files identified by hash
+	 * value in their name.
+	 *
+	 * Without this link, the index processing would not be able to parse the
+	 * lists correctly and expiration would eventually "expire" good data.
+	 *
+	 * The code identify the original location of the index
+	 * file by Release file analysis. */
+	bool FixMissingByHashLinks(std::unordered_set<std::string> &oldReleaseFiles);
+
+	/**
+	 * If the specified (In)Release file has By-Hash enabled, look for paths that match
+	 * the hash reference and if found, restore the data contents on the location of the
+	 * file that the by-hash blobs originated from.
+	 * @param releasePathRel cache-relative location of InRelease file
+	 * @param stripPrefix Optional prefix to prepend to releasePathRel but not to referenced files
+	 */
+	bool ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cmstring& stripPrefix);
+
+	// simple helper for use by others as well, and let compiler do RVO
+	tStrDeq GetGoodReleaseFiles();
 };
 
-
-static cmstring compSuffixes[] = { ".xz", ".bz2", ".gz", ".lzma"};
-static cmstring compSuffixesAndEmpty[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
-static cmstring compSuffixesAndEmptyByLikelyhood[] = { "", ".xz", ".bz2", ".gz", ".lzma",};
-static cmstring compSuffixesAndEmptyByRatio[] = { ".xz", ".lzma", ".bz2", ".gz", ""};
-static cmstring compSuffixesByRatio[] = { ".xz", ".lzma", ".bz2", ".gz"};
-
-bool CompDebVerLessThan(cmstring &s1, cmstring s2);
-extern time_t m_gMaintTimeNow;
+}
 
 #endif /*_CACHEMAN_H_*/

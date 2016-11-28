@@ -171,8 +171,10 @@ Chapter 4: Advanced Server Configuration
            after first appearance on the server.
 
         -  "Configuration line": one single line in the configuration file.
-           Some examples in this chapter may contain wrapped lines but
-           should be stored as a single line in the configuration.
+           Some examples in this chapter may be displayed as wrapped lines
+           but should be stored as a single line in the configuration. Some
+           variables (like `RequestAppendix') support multiline data which
+           needs to be separated with \n delimiter.
 
    4.2 Configuration file types
 
@@ -856,14 +858,14 @@ Chapter 8: HOWTOs and FAQ
 
         2. Store copies of your .debs, .orig.tar.gz, ... somewhere in the
            `_import' subdirectory in the cache, ie. in `/var/cache/apt-
-           cacher/_import/'. The files may be links or symlinks, does not
-           matter. When done, apt-cacher will move those files to its own
-           internal locations. Example:
+           cacher-ng/_import/'. The files may be links or symlinks, it does
+           not matter. When done, apt-cacher will move those files to its
+           own internal locations. Example:
 
              cd /var/cache
              mkdir apt-cacher-ng/_import
              cp -laf apt-proxy apt-cacher /var/cache/apt-cacher-ng/_import
-             chown -R apt-cacher-ng apt-cacher-ng/_import
+             chown -R apt-cacher-ng:apt-cacher-ng apt-cacher-ng/_import
 
         3. Visit the report page and trigger the import action there. Check
            the results, look for (red) error messages.
@@ -1431,9 +1433,9 @@ Chapter 9: Troubleshooting
            apt-get source apt-cacher-ng
            apt-get build-dep apt-cacher-ng
            cd apt-cacher-ng-*
-           make distclean all DEBUG=1
+           ./build.sh DEBUG
            /etc/init.d/apt-cacher-ng stop
-           ./apt-cacher-ng -c /etc/apt-cacher-ng logdir=/tmp foreground=1 debug=7
+           builddir/apt-cacher-ng -c /etc/apt-cacher-ng logdir=/tmp foreground=1 debug=7
            # (let apt-get run now, on timeouts just wait >> 20 seconds)
            # stop the daemon with Ctrl-C
            /etc/init.d/apt-cacher-ng start

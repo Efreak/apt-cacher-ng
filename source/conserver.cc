@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <list>
 #include <map>
+#include <unordered_set>
 #include <iostream>
 #include <algorithm>    // std::min_element, std::max_element
 
@@ -37,6 +38,9 @@ using namespace std;
 #define AF_INET6        23              /* IP version 6 */
 #endif
 
+namespace acng
+{
+
 namespace conserver
 {
 
@@ -45,7 +49,7 @@ int yes(1);
 int g_sockunix(-1);
 vector<int> g_vecSocks;
 
-condition g_ThreadPoolCondition;
+base_with_condition g_ThreadPoolCondition;
 list<con*> g_freshConQueue;
 int g_nStandbyThreads(0);
 int g_nAllConThreadCount(0);
@@ -57,13 +61,13 @@ bool bTerminationMode(false);
 
 void * ThreadAction(void *)
 {
-	lockguard g(g_ThreadPoolCondition);
+	lockuniq g(g_ThreadPoolCondition);
 	list<con*> & Qu = g_freshConQueue;
 
 	while (true)
 	{
 		while (Qu.empty() && !bTerminationMode)
-			g_ThreadPoolCondition.wait();
+			g_ThreadPoolCondition.wait(g);
 
 		if (bTerminationMode)
 			break;
@@ -80,7 +84,7 @@ void * ThreadAction(void *)
 		g.reLock();
 		g_nStandbyThreads++;
 
-		if (g_nStandbyThreads >= acfg::tpstandbymax)
+		if (g_nStandbyThreads >= cfg::tpstandbymax)
 			break;
 	}
 	
@@ -110,7 +114,7 @@ inline bool SpawnThreadsAsNeeded()
 	list<con*> & Qu = g_freshConQueue;
 
 	// check the kill-switch
-	if(g_nAllConThreadCount+1>=acfg::tpthreadmax || bTerminationMode)
+	if(g_nAllConThreadCount+1>=cfg::tpthreadmax || bTerminationMode)
 		return false;
 
 	int nNeeded = Qu.size()-g_nStandbyThreads;
@@ -195,7 +199,7 @@ void SetupConAndGo(int fd, const char *szClientName=nullptr)
 }
 
 void CreateUnixSocket() {
-	string & sPath=acfg::fifopath;
+	string & sPath=cfg::fifopath;
 	auto addr_unx = sockaddr_un();
 	
 	size_t size = sPath.length()+1+offsetof(struct sockaddr_un, sun_path);
@@ -203,7 +207,7 @@ void CreateUnixSocket() {
 	auto die=[]() {
 		cerr << "Error creating Unix Domain Socket, ";
 		cerr.flush();
-		perror(acfg::fifopath.c_str());
+		perror(cfg::fifopath.c_str());
 		cerr << "Check socket file and directory permissions" <<endl;
 		exit(EXIT_FAILURE);
 	};
@@ -236,7 +240,7 @@ void CreateUnixSocket() {
 void Setup()
 {
 	LOGSTART2s("Setup", 0);
-	using namespace acfg;
+	using namespace cfg;
 	
 	if (fifopath.empty() && port.empty())
 	{
@@ -257,13 +261,21 @@ void Setup()
 
 		    struct addrinfo *res, *p;
 		    if(0!=getaddrinfo(addi, port.c_str(), &hints, &res))
-			   {
-			    perror("Error resolving address for binding");
-			    return;
-			   }
-		    
+		    {
+		    	perror("Error resolving address for binding");
+		    	return;
+		    }
+
+		    std::unordered_set<std::string> dedup;
 		    for(p=res; p; p=p->ai_next)
 		    {
+		    	if(p->ai_family != AF_INET6 && p->ai_family != AF_INET)
+		    		continue;
+
+		    	// processed before?
+		    	if(!dedup.insert(std::string((LPCSTR)p->ai_addr, p->ai_addrlen)).second)
+		    		continue;
+
 		    	int nSockFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
 				if (nSockFd<0)
 					goto error_socket;
@@ -338,17 +350,23 @@ void Setup()
 		}
 	}
 	else
-		aclog::err("Not creating TCP listening socket, no valid port specified!");
+		log::err("Not creating TCP listening socket, no valid port specified!");
 
-	if ( !acfg::fifopath.empty() )
+	if ( !cfg::fifopath.empty() )
 		CreateUnixSocket();
 	else
-		aclog::err("Not creating Unix Domain Socket, fifo_path not specified");
+		log::err("Not creating Unix Domain Socket, fifo_path not specified");
 }
 
 int Run()
 {
 	LOGSTART2s("Run", "GoGoGo");
+
+	if(g_vecSocks.empty())
+	{
+		cerr << "No valid server sockets configured" <<endl;
+		exit(EXIT_FAILURE);
+	}
 
 #ifdef HAVE_SD_NOTIFY
 	sd_notify(0, "READY=1");
@@ -372,7 +390,7 @@ int Run()
 			if(errno == EINTR)
 				continue;
 			
-			aclog::err("select", "failure");
+			log::err("select", "failure");
 			perror("Select died");
 			exit(EXIT_FAILURE);
 		}
@@ -412,13 +430,13 @@ int Run()
 					if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf),
 									nullptr, 0, NI_NUMERICHOST))
 					{
-						aclog::err("ERROR: could not resolve hostname for incoming TCP host");
+						log::err("ERROR: could not resolve hostname for incoming TCP host");
 						termsocket_quick(fd);
 						sleep(1);
 						continue;
 					}
 
-					if (acfg::usewrap)
+					if (cfg::usewrap)
 					{
 #ifdef HAVE_LIBWRAP
 						// libwrap is non-reentrant stuff, call it from here only
@@ -427,12 +445,12 @@ int Run()
 						fromhost(&req);
 						if (!hosts_access(&req))
 						{
-							aclog::err("ERROR: access not permitted by hosts files", hbuf);
+							log::err("ERROR: access not permitted by hosts files", hbuf);
 							termsocket_quick(fd);
 							continue;
 						}
 #else
-						aclog::err("WARNING: attempted to use libwrap which was not enabled at build time");
+						log::err("WARNING: attempted to use libwrap which was not enabled at build time");
 #endif
 					}
 
@@ -467,6 +485,8 @@ void Shutdown()
 	
 	printf("Closing listening sockets\n");
 	for(auto soc: g_vecSocks) termsocket_quick(soc);
+}
+
 }
 
 }

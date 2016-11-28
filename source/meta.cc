@@ -18,8 +18,11 @@
 #ifdef HAVE_TOMCRYPT
 #include <tomcrypt.h>
 #endif
+
 using namespace std;
 
+namespace acng
+{
 cmstring sPathSep(SZPATHSEP);
 cmstring sPathSepUnix(SZPATHSEPUNIX);
 #ifndef MINIBUILD
@@ -29,6 +32,7 @@ cmstring sDefPortHTTPS("443");
 
 cmstring PROT_PFX_HTTPS(WITHLEN("https://")), PROT_PFX_HTTP(WITHLEN("http://"));
 cmstring FAKEDATEMARK(WITHLEN("Sat, 26 Apr 1986 01:23:39 GMT+3"));
+cmstring hendl("<br>\n");
 
 /*
 int getUUID() {
@@ -170,7 +174,7 @@ bool ParseKeyValLine(const string & sIn, string & sOutKey, string & sOutVal)
 	*/
 
 	string::size_type pos = sOutVal.find(":");
-	if (pos==string::npos)
+	if (AC_UNLIKELY(pos == 0 || pos==string::npos))
 	{
 		//cerr << "Bad configuration directive found, looking for: " << szKey << ", found: "<< sOut << endl;
 		return false;
@@ -205,7 +209,7 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 	else if(0==strncasecmp(url.c_str(), "https://", 8))
 	{
 #ifndef HAVE_SSL
-	aclog::err("E_NOTIMPLEMENTED: SSL");
+	log::err("E_NOTIMPLEMENTED: SSL");
 	return false;
 #else
 		hStart=8;
@@ -721,3 +725,184 @@ bool DecodeBase64(LPCSTR pAscii, size_t len, acbuf& binData)
 }
 #endif
 #endif
+
+mstring GetDirPart(cmstring &in)
+{
+	if(in.empty())
+		return sEmptyString;
+
+	tStrPos end = in.find_last_of(CPATHSEP);
+	if(end == stmiss) // none? don't care then
+		return sEmptyString;
+
+	return in.substr(0, end+1);
+}
+
+std::pair<mstring, mstring> SplitDirPath(cmstring& in)
+		{
+auto dir=GetDirPart(in);
+return std::pair<mstring,mstring>(dir, in.substr(dir.length()));
+		}
+
+
+LPCSTR GetTypeSuffix(cmstring& s)
+{
+	auto pos = s.find_last_of("/.");
+	auto p = s.c_str();
+	return pos == stmiss ? p + s.length() : p + pos;
+}
+
+off_t atoofft(LPCSTR p)
+{
+	using namespace std;
+	if(sizeof(long long) == sizeof(off_t))
+		return atoll(p);
+	if(sizeof(int) == sizeof(off_t))
+		return atoi(p);
+	return atol(p);
+}
+
+mstring UrlUnescape(cmstring &from)
+{
+	mstring ret; // let the compiler optimize
+	UrlUnescapeAppend(from, ret);
+	return ret;
+}
+//mstring DosEscape(cmstring &s);
+// just the bare minimum to make sure the string does not break HTML formating
+mstring html_sanitize(cmstring& in)
+{
+	mstring ret;
+	for(auto c:in)
+		ret += ( strchr("<>'\"&;", (unsigned) c) ? '_' : c);
+	return ret;
+}
+
+mstring offttos(off_t n)
+{
+	char buf[21];
+	int len=snprintf(buf, 21, OFF_T_FMT, n);
+	return mstring(buf, len);
+}
+
+mstring ltos(long n)
+{
+	char buf[21];
+	int len=snprintf(buf, 21, "%ld", n);
+	return mstring(buf, len);
+}
+
+mstring offttosH(off_t n)
+{
+	LPCSTR  pref[]={"", " KiB", " MiB", " GiB", " TiB", " PiB", " EiB"};
+	for(unsigned i=0;i<_countof(pref)-1; i++)
+	{
+		if(n<1024)
+			return ltos(n)+pref[i];
+		if(n<10000)
+			return ltos(n/1000)+"."+ltos((n%1000)/100)+pref[i+1];
+
+		n/=1024;
+	}
+	return "INF";
+}
+
+//template<typename charp>
+off_t strsizeToOfft(const char *sizeString) // XXX: if needed... charp sizeString, charp *next)
+{
+	char *inext(0);
+	auto val = strtoull(sizeString, &inext, 10);
+	if(!val) return 0;
+	if(!*inext) return val; // full length
+	// trim
+	while(*inext && isspace((unsigned)*inext)) ++inext;
+	switch(*inext)
+	{
+	case 'k': return val * 1000;
+	case 'm': return val * 1000000;
+	case 'g': return val * 1000000*1000;
+	case 'p': return val * 1000000*1000000;
+
+	case 'K': return val * 1024;
+	case 'M': return val * 1024*1024;
+	case 'G': return val * 1024*1024*1024;
+	case 'P': return val * 1024*1024*1024*1024;
+	}
+	return val;
+}
+
+void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar)
+{
+	for(mstring::iterator p=s.begin();p!=s.end();p++)
+		for(LPCSTR b=szBadChars;*b;b++)
+			if(*b==*p)
+			{
+				*p=goodChar;
+				break;
+			}
+}
+
+void addUnEscaped(mstring& s, const char p)
+{
+	switch (p)
+	{
+	case '0':
+		s += '\0'; break;
+	case 'a':
+		s += '\a'; break;
+	case 'b':
+		s += '\b'; break;
+	case 't':
+		s += '\t'; break;
+	case 'n':
+		s += '\n'; break;
+	case 'r':
+		s += '\r'; break;
+	case 'v':
+		s += '\v'; break;
+	case 'f':
+		s += '\f'; break;
+	case '\\':
+		s += '\\'; break;
+	default:
+		s += '\\'; s += p; break;
+	}
+}
+
+mstring unEscape(cmstring &s)
+{
+	mstring ret;
+	for(cmstring::const_iterator it=s.begin();it!=s.end();++it)
+        {
+           if(*it != '\\') ret+= *it;
+           else if(++it == s.end()) { ret+='\\'; break; }
+           else addUnEscaped(ret, *it);
+        }
+	return ret;
+}
+
+unsigned FormatTime(char *buf, size_t bufLen, const time_t cur)
+{
+	if(bufLen < 26)
+		return 0;
+	struct tm tmp;
+	gmtime_r(&cur, &tmp);
+	asctime_r(&tmp, buf);
+	//memcpy(buf + 24, " GMT", 4); // wrong, only needed for rfc-822 format, not for asctime's
+	//return 28;
+	buf[24]=0;
+	return 24;
+}
+
+bool scaseequals(cmstring& a, cmstring& b)
+{
+    auto len = a.size();
+    if (b.size() != len)
+        return false;
+    for (unsigned i = 0; i < len; ++i)
+        if (tolower((unsigned) a[i]) != tolower((unsigned)b[i]))
+            return false;
+    return true;
+}
+
+}

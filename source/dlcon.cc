@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <atomic>
+#include <algorithm>
 
 #define LOCAL_DEBUG
 #include "debug.h"
@@ -25,7 +26,18 @@ using namespace std;
 
 #define MAX_RETRY 11
 
+namespace acng
+{
+
 static cmstring sGenericError("567 Unknown download error occured");
+
+// those are not allowed to be forwarded
+static const auto taboo =
+{
+	string("Host"), string("Cache-Control"),
+	string("Proxy-Authorization"), string("Accept"),
+	string("User-Agent")
+};
 
 std::atomic_uint g_nDlCons(0);
 
@@ -73,7 +85,7 @@ struct tDlJob
 #define HINT_KILL_LAST_FILE 128
 #define HINT_TGTCHANGE 256
 
-	const acfg::tRepoData * m_pRepoDesc=nullptr;
+	const cfg::tRepoData * m_pRepoDesc=nullptr;
 
 	/*!
 	 * Returns a reference to http url where host and port and protocol match the current host
@@ -84,12 +96,12 @@ struct tDlJob
 		return m_pCurBackend ? *m_pCurBackend : m_remoteUri;
 	}
 
-	inline acfg::tRepoData::IHookHandler * GetConnStateTracker()
+	inline cfg::tRepoData::IHookHandler * GetConnStateTracker()
 	{
 		return m_pRepoDesc ? m_pRepoDesc->m_pHooks : nullptr;
 	}
 
-	typedef enum
+	typedef enum : char
 	{
 		STATE_GETHEADER, STATE_REGETHEADER, STATE_PROCESS_DATA,
 		STATE_GETCHUNKHEAD, STATE_PROCESS_CHUNKDATA, STATE_GET_CHUNKTRAILER,
@@ -112,7 +124,7 @@ struct tDlJob
 
 	inline tDlJob(dlcon *p, tFileItemPtr pFi,
 			const tHttpUrl *pUri,
-			const acfg::tRepoData * pRepoData,
+			const cfg::tRepoData * pRepoData,
 			const std::string *psPath,
 			int redirmax) :
 			m_pStorage(pFi),
@@ -147,24 +159,19 @@ struct tDlJob
 		if(!reqHead)
 			return;
 		header h;
-		tLPS cheaders;
-		h.Load(reqHead, std::numeric_limits<int>::max(), &cheaders);
-		if(cheaders.empty())
-			return;
-		for(const auto& ch: cheaders)
-		{
-			// some headers are reserved (actually all starting with those prefixes
-			if(strncasecmp(ch.first.c_str(), WITHLEN("Host")) &&
-					strncasecmp(ch.first.c_str(), WITHLEN("Proxy-Authorization")) &&
-					strncasecmp(ch.first.c_str(), WITHLEN("Cache-Control")) &&
-					strncasecmp(ch.first.c_str(), WITHLEN("Accept")) &&
-					strncasecmp(ch.first.c_str(), WITHLEN("User-Agent"))
-					)
-			{
-				m_extraHeaders += ch.first;
-				m_extraHeaders += ch.second;
-			}
-		}
+		bool forbidden=false;
+		h.Load(reqHead, std::numeric_limits<int>::max(),
+				[this, &forbidden](cmstring& key, cmstring& rest)
+				{
+			// heh, continuation of ignored stuff or without start?
+			if(key.empty() && (m_extraHeaders.empty() || forbidden))
+				return;
+			forbidden = taboo.end() != std::find_if(taboo.begin(), taboo.end(),
+					[&key](cmstring &x){return scaseequals(x,key);});
+			if(!forbidden)
+				m_extraHeaders += key + rest;
+				}
+		);
 	}
 
 	inline string RemoteUri(bool bUrlEncoded)
@@ -298,7 +305,7 @@ struct tDlJob
 
 		ldbg(RemoteUri(true));
 
-		head << " HTTP/1.1\r\n" << acfg::agentheader << "Host: " << GetPeerHost().sHost << "\r\n";
+		head << " HTTP/1.1\r\n" << cfg::agentheader << "Host: " << GetPeerHost().sHost << "\r\n";
 
 		if (proxy) // proxy stuff, and add authorization if there is any
 		{
@@ -310,7 +317,7 @@ struct tDlJob
 			}
 			// Proxy-Connection is a non-sensical copy of Connection but some proxy
 			// might listen only to this one so better add it
-			head << (acfg::persistoutgoing ? "Proxy-Connection: keep-alive\r\n"
+			head << (cfg::persistoutgoing ? "Proxy-Connection: keep-alive\r\n"
 									: "Proxy-Connection: close\r\n");
 		}
 
@@ -336,12 +343,12 @@ struct tDlJob
 			{
 				if (pHead.h[header::LAST_MODIFIED])
 				{
-					if (acfg::vrangeops > 0)
+					if (cfg::vrangeops > 0)
 					{
 						bSetIfRange = true;
 						bSetRange = true;
 					}
-					else if(acfg::vrangeops == 0)
+					else if(cfg::vrangeops == 0)
 					{
 						head << "If-Modified-Since: " << pHead.h[header::LAST_MODIFIED] << "\r\n";
 					}
@@ -388,13 +395,15 @@ struct tDlJob
 		if (m_pStorage->m_bCheckFreshness)
 			head << "Cache-Control: no-store,no-cache,max-age=0\r\n";
 
-		if (acfg::exporigin && !xff.empty())
+		if (cfg::exporigin && !xff.empty())
 			head << "X-Forwarded-For: " << xff << "\r\n";
 
-		head << acfg::requestapx
+		head << cfg::requestapx
 				<< m_extraHeaders
-				<< "Accept: */*\r\nAccept-Encoding: identity\r\nConnection: "
-				<< (acfg::persistoutgoing ? "keep-alive\r\n\r\n" : "close\r\n\r\n");
+				<< "Accept: application/octet-stream\r\n"
+				"Accept-Encoding: identity\r\n"
+				"Connection: "
+				<< (cfg::persistoutgoing ? "keep-alive\r\n\r\n" : "close\r\n\r\n");
 
 #ifdef SPAM
 		//head.syswrite(2);
@@ -459,7 +468,12 @@ struct tDlJob
 				bool bHotItem = (m_DlState == STATE_REGETHEADER);
 				dbgline;
 
-				auto hDataLen = h.LoadFromBuf(inBuf.rptr(), inBuf.size());
+				auto hDataLen = h.Load(inBuf.rptr(), inBuf.size(),
+						[&h](cmstring& key, cmstring& rest)
+						{ if(scaseequals(key, "Content-Location"))
+							h.frontLine = "HTTP/1.1 500 Apt-Cacher NG does not like that data";
+						});
+
 				if (0 == hDataLen)
 					return HINT_MORE;
 				if (hDataLen<0)
@@ -483,7 +497,7 @@ struct tDlJob
 
 				int st = h.getStatus();
 
-				if (acfg::redirmax) // internal redirection might be disabled
+				if (cfg::redirmax) // internal redirection might be disabled
 				{
 					if (IS_REDIRECT(st))
 					{
@@ -534,7 +548,7 @@ struct tDlJob
 					m_DlState = STATE_FINISHJOB;
 				}
 				// the only case where we expect a 304
-				else if(st == 304 && acfg::vrangeops == 0)
+				else if(st == 304 && cfg::vrangeops == 0)
 				{
 					m_pStorage->SetupComplete();
 					m_DlState = STATE_FINISHJOB;
@@ -564,11 +578,11 @@ struct tDlJob
 				bool bDoRetry(false);
 
 				// detect bad auto-redirectors (auth-pages, etc.) by the mime-type of their target
-				if(acfg::redirmax
-						&& !acfg::badredmime.empty()
-						&& acfg::redirmax != m_nRedirRemaining
+				if(cfg::redirmax
+						&& !cfg::badredmime.empty()
+						&& cfg::redirmax != m_nRedirRemaining
 						&& h.h[header::CONTENT_TYPE]
-						&& strstr(h.h[header::CONTENT_TYPE], acfg::badredmime.c_str())
+						&& strstr(h.h[header::CONTENT_TYPE], cfg::badredmime.c_str())
 						&& h.getStatus() < 300) // contains the final data/response
 				{
 					if(m_pStorage->m_bCheckFreshness)
@@ -696,7 +710,7 @@ void dlcon::wake()
 }
 
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
-		const acfg::tRepoData *pBackends,
+		const cfg::tRepoData *pBackends,
 		cmstring *sPatSuffix, LPCSTR reqHead)
 {
 	if(!pForcedUrl)
@@ -716,7 +730,7 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 */
 	m_qNewjobs.emplace_back(
 			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,
-							m_bManualMode ? ACFG_REDIRMAX_DEFAULT : acfg::redirmax));
+							m_bManualMode ? ACFG_REDIRMAX_DEFAULT : cfg::redirmax));
 
 	m_qNewjobs.back()->ExtractCustomHeaders(reqHead);
 
@@ -794,7 +808,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 		}
 
 		ldbg("select dlcon");
-		tv.tv_sec = acfg::nettimeout;
+		tv.tv_sec = cfg::nettimeout;
 		tv.tv_usec = 0;
 
 		// jump right into data processing but only once
@@ -898,7 +912,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 #endif
 			))
 		{
-       if(acfg::maxdlspeed != RESERVED_DEFVAL)
+       if(cfg::maxdlspeed != RESERVED_DEFVAL)
        {
           auto nCntNew=g_nDlCons.load();
           if(m_nLastDlCount != nCntNew)
@@ -906,7 +920,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
              m_nLastDlCount=nCntNew;
 
              // well, split the bandwidth
-             auto nSpeedNowKib = uint(acfg::maxdlspeed) / nCntNew;
+             auto nSpeedNowKib = uint(cfg::maxdlspeed) / nCntNew;
              auto nTakesPerSec = nSpeedNowKib / 32;
              if(!nTakesPerSec)
                 nTakesPerSec=1;
@@ -952,7 +966,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 			}
 			if( fakeFail-- < 0)
 			{
-//				LOGLVL(LOG_DEBUG, "\n#################\nFAKING A FAILURE\n###########\n");
+//				LOGLVL(log::LOG_DEBUG, "\n#################\nFAKING A FAILURE\n###########\n");
 				r=0;
 				fakeFail=rand()%123;
 				errno = EROFS;
@@ -1078,15 +1092,15 @@ void dlcon::WorkLoop()
     string sErrorMsg;
     m_inBuf.clear();
     
-	if (!m_inBuf.setsize(acfg::dlbufsize))
+	if (!m_inBuf.setsize(cfg::dlbufsize))
 	{
-		aclog::err("500 Out of memory");
+		log::err("500 Out of memory");
 		return;
 	}
 
 	if(fdWakeRead<0 || fdWakeWrite<0)
 	{
-		aclog::err("Error creating pipe file descriptors");
+		log::err("Error creating pipe file descriptors");
 		return;
 	}
 
@@ -1116,7 +1130,7 @@ void dlcon::WorkLoop()
 		{
 			return cjob->m_pRepoDesc->m_pProxy;
 		}
-		return acfg::GetProxyInfo();
+		return cfg::GetProxyInfo();
 	};
 
 	while(true) // outer loop: jobs, connection handling
@@ -1193,8 +1207,8 @@ void dlcon::WorkLoop()
 				{
 					if(proxy)
 					{
-						con = doconnect(*proxy, acfg::optproxytimeout > 0 ?
-								acfg::optproxytimeout : acfg::nettimeout, false);
+						con = doconnect(*proxy, cfg::optproxytimeout > 0 ?
+								cfg::optproxytimeout : cfg::nettimeout, false);
 						if(con)
 						{
 							if(!con->StartTunnel(peerHost, sErrorMsg, & proxy->sUserPass, true))
@@ -1202,27 +1216,27 @@ void dlcon::WorkLoop()
 						}
 					}
 					else
-						con = doconnect(peerHost, acfg::nettimeout, false);
+						con = doconnect(peerHost, cfg::nettimeout, false);
 				}
 				else
 #endif
 				{
 					if(proxy)
 					{
-						con = doconnect(*proxy, acfg::optproxytimeout > 0 ?
-								acfg::optproxytimeout : acfg::nettimeout, false);
+						con = doconnect(*proxy, cfg::optproxytimeout > 0 ?
+								cfg::optproxytimeout : cfg::nettimeout, false);
 					}
 					else
-						con = doconnect(peerHost, acfg::nettimeout, false);
+						con = doconnect(peerHost, cfg::nettimeout, false);
 				}
 
-        		if(!con && proxy && acfg::optproxytimeout>0)
+        		if(!con && proxy && cfg::optproxytimeout>0)
         		{
         			ldbg("optional proxy broken, disable");
         			m_bProxyTot = true;
         			proxy = nullptr;
-				acfg::MarkProxyFailure();
-        			con = doconnect(peerHost, acfg::nettimeout, false);
+				cfg::MarkProxyFailure();
+        			con = doconnect(peerHost, cfg::nettimeout, false);
         		}
 
         		ldbg("connection valid? " << bool(con) << " was fresh? " << !bUsed);
@@ -1249,7 +1263,7 @@ void dlcon::WorkLoop()
         	// connection should be stable now, prepare all jobs and/or move to pipeline
         	while(!bStopRequesting
         			&& !m_qNewjobs.empty()
-        			&& int(inpipe.size()) <= acfg::pipelinelen)
+        			&& int(inpipe.size()) <= cfg::pipelinelen)
         	{
    				tDlJobPtr &cjob = m_qNewjobs.front();
 
@@ -1378,7 +1392,7 @@ void dlcon::WorkLoop()
 
 			// trying to resume that job secretly, unless user disabled the use of range (we
 			// cannot resync the sending position ATM, throwing errors to user for now)
-			if (acfg::vrangeops <= 0 && inpipe.front()->m_pStorage->m_bCheckFreshness)
+			if (cfg::vrangeops <= 0 && inpipe.front()->m_pStorage->m_bCheckFreshness)
 				loopRes |= EFLAG_JOB_BROKEN;
 			else
 				inpipe.front()->m_DlState = tDlJob::STATE_REGETHEADER;
@@ -1446,4 +1460,6 @@ void dlcon::WorkLoop()
         }
 
 	}
+}
+
 }

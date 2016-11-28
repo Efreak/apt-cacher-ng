@@ -27,34 +27,30 @@ using namespace std;
 "</style></head><body>"
 #define LOG_DECO_END "</body></html>"
 
-bool bSigTaskAbort=false;
-pthread_mutex_t abortMx=PTHREAD_MUTEX_INITIALIZER;
+namespace acng
+{
+
+// for start/stop and abort hint
+base_with_condition tSpecOpDetachable::g_StateCv;
+bool tSpecOpDetachable::g_sigTaskAbort=false;
+// not zero if a task is active
+time_t nBgTimestamp = 0;
 
 tSpecOpDetachable::~tSpecOpDetachable()
 {
-	if(m_pTracker)
-		m_pTracker->SetEnd(m_reportStream.is_open() ? off_t(m_reportStream.tellp()) : off_t(0));
-
 	if(m_reportStream.is_open())
 	{
 		m_reportStream << LOG_DECO_END;
 		m_reportStream.close();
 	}
+	checkforceclose(m_logFd);
 }
 
-// the obligatory definition of static members :-(
-WEAK_PTR<tSpecOpDetachable::tProgressTracker> tSpecOpDetachable::g_pTracker;
-
-cmstring& GetFooter()
+cmstring GetFooter()
 {
-	static mstring footer;
-	if(footer.empty())
-	{
-		footer = string("<hr><address>Server: ") + acfg::agentname +
-		"&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">Flattr this!"
-    "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
-	}
-	return footer;
+        return mstring("<hr><address>Server: ") + cfg::agentname
+                + "&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">Flattr this!"
+                "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
 }
 
 /*
@@ -66,8 +62,9 @@ void tSpecOpDetachable::Run()
 
 	if (m_parms.cmd.find("&sigabort")!=stmiss)
 	{
-		lockguard g(&abortMx);
-		bSigTaskAbort=true;
+		lockguard g(g_StateCv);
+		g_sigTaskAbort=true;
+		g_StateCv.notifyAll();
 		tStrPos nQuest=m_parms.cmd.find("?");
 		if(nQuest!=stmiss)
 		{
@@ -84,9 +81,9 @@ void tSpecOpDetachable::Run()
 	tSS deco;
 	const char *mark(nullptr);
 	if(m_szDecoFile &&
-			( deco.initFromFile((acfg::confdir+SZPATHSEP+m_szDecoFile).c_str())
-					|| (!acfg::suppdir.empty() &&
-							deco.initFromFile((acfg::suppdir+SZPATHSEP+m_szDecoFile).c_str()))))
+			( deco.initFromFile((cfg::confdir+SZPATHSEP+m_szDecoFile).c_str())
+					|| (!cfg::suppdir.empty() &&
+							deco.initFromFile((cfg::suppdir+SZPATHSEP+m_szDecoFile).c_str()))))
 	{
 		mark=::strchr(deco.rptr(), '~');
 		if(mark)
@@ -105,67 +102,59 @@ void tSpecOpDetachable::Run()
 
 	tSS logPath;
 
-	tProgTrackPtr pTracked;
+	time_t other_id=0;
 
 	{ // this is locked just to make sure that only one can register as master
-		lockguard guard(abortMx);
-		pTracked=g_pTracker.lock();
-		if(!pTracked) // ok, not running yet -> become the log source then
+		lockguard guard(g_StateCv);
+		if(0 == nBgTimestamp) // ok, not running yet -> become the log source then
 		{
-			m_pTracker = make_shared<tProgressTracker>();
-			time_t nMaintId=time(0);
+			auto id = time(0);
 
 			logPath.clear();
-			logPath<<acfg::logdir<<CPATHSEP<< MAINT_PFX << nMaintId << ".log.html";
+			logPath<<cfg::logdir<<CPATHSEP<< MAINT_PFX << id << ".log.html";
 			m_reportStream.open(logPath.c_str(), ios::out);
 			if(m_reportStream.is_open())
 			{
 				m_reportStream << LOG_DECO_START;
 				m_reportStream.flush();
-				m_pTracker->id = nMaintId;
-				g_pTracker=m_pTracker;
+				nBgTimestamp = id;
 			}
 			else
 			{
+				nBgTimestamp = 0;
 				SendChunk("Failed to create the log file, aborting.");
 				return;
 			}
 		}
+		else other_id = nBgTimestamp;
 	}
 
-	if(pTracked)
+	if(other_id)
 	{
 		SendChunkSZ("<font color=\"blue\">A maintenance task is already running!</font>\n");
 		SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
 				<< "\">Cancel</a>)";
 		SendChunkSZ("<br>Attempting to attach to the log output... <br>\n");
 
-		off_t nSent(0);
-		int fd(0);
-		acbuf xx;
+		tSS sendbuf(4096);
+		lockuniq g(g_StateCv);
 
 		for(;;)
 		{
-			lockguard g(*pTracked);
-
-			if(!pTracked->id && pTracked->nEndSize==off_t(-1))
-				break; // error? source is gone but end mark not set?
-			// otherwise: end known OR sorce active
-
-			if(nSent==pTracked->nEndSize)
-				break; // DONE!
-
-			if(!fd)
+			if(other_id != nBgTimestamp)
+			{
+				// task is gone or replaced by another?
+				SendChunkSZ("<br><b>End of log output. Please reload to run again.</b>\n");
+				goto finish_action;
+			}
+			if(m_logFd < 0)
 			{
 				logPath.clear();
-				logPath<<acfg::logdir<<CPATHSEP<<MAINT_PFX << pTracked->id << ".log.html";
-				fd=open(logPath.c_str(), O_RDONLY);
+				logPath<<cfg::logdir<<CPATHSEP<<MAINT_PFX << other_id << ".log.html";
+				m_logFd=open(logPath.c_str(), O_RDONLY|O_NONBLOCK);
 
-				if(fd>=0)
-				{
-					set_nb(fd);
+				if(m_logFd>=0)
 					SendChunk("ok:<br>\n");
-				}
 				else
 				{
 					SendChunk("Failed to open log output, please retry later.<br>\n");
@@ -173,19 +162,21 @@ void tSpecOpDetachable::Run()
 				}
 
 			}
-			tSS msg;
-			msg.sysread(fd); // can be more than tracker reported. checks need to consider this
-			SendChunk(msg.data(), msg.length());
-			nSent+=msg.length();
-			msg.clear();
-
-			/* when file is truncated (disk full), the end size might be unreachable
-			 * -> detect the time out
-			 */
-			if(pTracked->wait_until(GetTime()+33, 1))
-				break;
+			while(true)
+			{
+				int r = sendbuf.sysread(m_logFd);
+				if(r < 0)
+					goto finish_action;
+				if(r == 0)
+				{
+					g_StateCv.wait_for(g, 10, 1);
+					break;
+				}
+				SendChunkRemoteOnly(sendbuf.rptr(), sendbuf.size());
+				sendbuf.clear();
+			}
 		}
-		checkforceclose(fd);
+		// unreachable
 		goto finish_action;
 	}
 	else
@@ -193,14 +184,14 @@ void tSpecOpDetachable::Run()
 			/*****************************************************
 			 * This is the worker part
 			 *****************************************************/
-			{
-				lockguard g(&abortMx);
-				bSigTaskAbort=false;
-			}
+			lockuniq g(&g_StateCv);
+			g_sigTaskAbort=false;
+			tDtorEx cleaner([&](){g.reLockSafe(); nBgTimestamp = 0; g_StateCv.notifyAll();});
+			g.unLock();
 
 			SendFmt << "Maintenance task <b>" << GetTaskName()
 					<< "</b>, apt-cacher-ng version: " ACVERSION;
-			string link = "http://" + GetHostname() + ":" + acfg::port + "/" + m_parms.cmd;
+			string link = "http://" + GetHostname() + ":" + cfg::port + "/" + cfg::reportpage;
 			SendFmtRemote << " (<a href=\"" << m_parms.cmd << "&sigabort=" << rand()
 					<< "\">Cancel</a>)"
 					<< "\n<!--\n"
@@ -209,10 +200,8 @@ void tSpecOpDetachable::Run()
 					<< maark << int(ControLineType::BeforeError)
 					<< "See file " << logPath << " for more details.\n"
 					<< maark << int(ControLineType::BeforeError)
-					<< "Server url: " << link
-					<< "\n-->\n"
-//					<< "<!--\n" << maark << int(ControLineType::Error) << "test\n-->\n"
-					;
+					<< "Server control address: " << link
+					<< "\n-->\n";
 			string xlink = "<br>\nServer link: <a href=\"" + link + "\">" + link + "</a><br>\n";
 			SendChunkLocalOnly(xlink.data(), xlink.size());
 			SendFmt << "<br>\n";
@@ -220,8 +209,43 @@ void tSpecOpDetachable::Run()
 
 			Action();
 
-			if (!m_delCboxFilter.empty())
+
+			if (!m_pathMemory.empty())
 			{
+				bool unchint=false;
+				bool ehprinted=false;
+
+				for(const auto& err: m_pathMemory)
+				{
+					if(err.second.msg.empty())
+						continue;
+
+					if(!ehprinted)
+					{
+						ehprinted=true;
+						SendChunkRemoteOnly(WITHLEN(
+								"<br><b>Error summary:</b><br>"));
+					}
+
+					unchint = unchint
+							||endsWithSzAr(err.first, "Packages")
+							||endsWithSzAr(err.first, "Sources");
+
+					SendFmtRemote << err.first << ": <label>"
+							<< err.second.msg
+							<<  "<input type=\"checkbox\" name=\"kf\" value=\""
+							<< tSS::hex << err.second.id << tSS::dec
+							<< "\"</label>" << hendl;
+				}
+
+				if(unchint)
+				{
+					SendChunkRemoteOnly(WITHLEN(
+					"<i>Note: some uncompressed index versions like Packages and Sources are no"
+					" longer offered by most mirrors and can be safely removed if a compressed version exists.</i>\n"
+							));
+				}
+
 				SendChunkRemoteOnly(WITHLEN(
 				"<br><b>Action(s):</b><br>"
 					"<input type=\"submit\" name=\"doDelete\""
@@ -234,7 +258,7 @@ void tSpecOpDetachable::Run()
 				SendChunkRemoteOnly(blob.data(), blob.size());
 			}
 
-			SendFmtRemote << "<br>\n<a href=\"/"<< acfg::reportpage<<"\">Return to main page</a>"
+			SendFmtRemote << "<br>\n<a href=\"/"<< cfg::reportpage<<"\">Return to main page</a>"
 					"</form>";
 			auto& f(GetFooter());
 						SendChunkRemoteOnly(f.data(), f.size());
@@ -247,21 +271,10 @@ void tSpecOpDetachable::Run()
 		SendChunkRemoteOnly(deco.c_str(), deco.size());
 }
 
-void tSpecOpDetachable::tProgressTracker::SetEnd(off_t endSize)
-{
-	lockguard g(this);
-	//lockguard g2(&abortMx); // the master may go out of scope, protect weak_ptr
-	nEndSize=endSize;
-	if(time(0) == id)
-		::sleep(1); // just to make sure that the next id good
-	id=0;
-	notifyAll();
-}
-
 bool tSpecOpDetachable::CheckStopSignal()
 {
-	lockguard g(&abortMx);
-	return bSigTaskAbort;
+	lockguard g(&g_StateCv);
+	return g_sigTaskAbort;
 }
 
 void tSpecOpDetachable::DumpLog(time_t id)
@@ -271,8 +284,8 @@ void tSpecOpDetachable::DumpLog(time_t id)
 	if (id<=0)
 		return;
 
-	tSS path(acfg::logdir.length()+24);
-	path<<acfg::logdir<<CPATHSEP<<MAINT_PFX << id << ".log.html";
+	tSS path(cfg::logdir.length()+24);
+	path<<cfg::logdir<<CPATHSEP<<MAINT_PFX << id << ".log.html";
 	if (!reader.OpenFile(path))
 		SendChunkRemoteOnly(WITHLEN("Log not available"));
 	else
@@ -285,16 +298,14 @@ void tSpecOpDetachable::SendChunkLocalOnly(const char *data, size_t len)
 	{
 		m_reportStream.write(data, len);
 		m_reportStream.flush();
-		if(m_pTracker)
-			m_pTracker->notifyAll();
+		g_StateCv.notifyAll();
 	}
 }
 
 time_t tSpecOpDetachable::GetTaskId()
 {
-	lockguard guard(&abortMx);
-	tProgTrackPtr pTracked = g_pTracker.lock();
-	return pTracked ? pTracked->id : 0;
+	lockguard guard(&g_StateCv);
+	return nBgTimestamp;
 }
 
 #ifdef HAVE_ZLIB
@@ -303,10 +314,10 @@ mstring tSpecOpDetachable::BuildCompressedDelFileCatalog()
 	mstring ret;
 	tSS buf;
 	//auto hm = m_delCboxFilter.size();
-	for(const auto& kv: m_delCboxFilter)
+	for(const auto& kv: m_pathMemory)
 	{
 		unsigned len=kv.first.size();
-		buf.add((const char*) &kv.second, sizeof(kv.second))
+		buf.add((const char*) &kv.second.id, sizeof(kv.second.id))
 		.add((const char*) &len, sizeof(len))
 		.add(kv.first.data(), kv.first.length());
 	}
@@ -346,3 +357,5 @@ void tBgTester::Action()
 }
 
 #endif // DEBUG
+
+}

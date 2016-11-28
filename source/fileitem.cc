@@ -14,13 +14,19 @@
 #include <errno.h>
 #include <algorithm>
 
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/time.h>
+
 using namespace std;
 
-#define MAXTEMPDELAY acfg::maxtempdelay // 27
+namespace acng
+{
+#define MAXTEMPDELAY acng::cfg::maxtempdelay // 27
 mstring sReplDir("_altStore" SZPATHSEP);
 
 static tFiGlobMap mapItems;
-static lockable mapItemsMx;
+static acmutex mapItemsMx;
 
 header const & fileitem::GetHeaderUnlocked()
 {
@@ -36,7 +42,6 @@ string fileitem::GetHttpMsg()
 }
 
 fileitem::fileitem() :
-	condition(),
 	m_nIncommingCount(0),
 	m_nSizeSeen(0),
 	m_nRangeLimit(-1),
@@ -86,8 +91,8 @@ void fileitem::DecDlRefCount(const string &sReason)
 		m_head.frontLine=string("HTTP/1.1 ")+sReason;
 		m_head.type=header::ANSWER;
 
-		if (acfg::debug&LOG_MORE)
-			aclog::misc(string("Download of ")+m_sPathRel+" aborted");
+		if (cfg::debug&log::LOG_MORE)
+			log::misc(string("Download of ")+m_sPathRel+" aborted");
 	}
 	checkforceclose(m_filefd);
 }
@@ -166,7 +171,7 @@ fileitem::FiStatus fileitem::Setup(bool bCheckFreshness)
 			LOG("check freshness, last modified: " << p );
 
 			// that will cause check by if-mo-only later, needs to be sure about the size here
-			if(acfg::vrangeops == 0
+			if(cfg::vrangeops == 0
 					&& m_nSizeSeen != atoofft(m_head.h[header::CONTENT_LENGTH], -17))
 			{
 				m_nSizeSeen = 0;
@@ -256,7 +261,7 @@ bool fileitem::SetupClean(bool bForce)
 	// header allowed to be lost in process...
 //	if(unlink(sPathHead.c_str()))
 //		::ignore_value(::truncate(sPathHead.c_str(), 0));
-	::ignore_value(::truncate(sPathAbs.c_str(), 0));
+	acng::ignore_value(::truncate(sPathAbs.c_str(), 0));
 	Cstat stf(sPathAbs);
 	if(stf && stf.st_size>0)
 		return false; // didn't work. Permissions? Anyhow, too dangerous to act on this now
@@ -284,11 +289,18 @@ void fileitem::SetupComplete()
 	m_status = FIST_COMPLETE;
 }
 
+void fileitem::UpdateHeadTimestamp()
+{
+	if(m_sPathRel.empty())
+		return;
+	utimes(SZABSPATH(m_sPathRel + ".head"), nullptr);
+}
+
 fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)
 {
-	setLockGuard;
+	lockuniq g(this);
 	while(m_status<FIST_COMPLETE)
-		wait();
+		wait(g);
 	if(httpCode)
 		*httpCode=m_head.getStatus();
 	return m_status;
@@ -297,7 +309,7 @@ fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)
 inline void _LogWithErrno(const char *msg, const string & sFile)
 {
 	tErrnoFmter f;
-	aclog::err(tSS() << sFile <<
+	log::err(tSS() << sFile <<
 			" storage error [" << msg << "], last errno: " << f);
 }
 
@@ -308,7 +320,6 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		bool bForcedRestart, bool &bDoCleanRetry)
 {
 	LOGSTART("fileitem::DownloadStartedStoreHeader");
-
 	auto SETERROR = [&](LPCSTR x) {
 		m_bAllowStoreData=false;
 		m_head.frontLine=mstring("HTTP/1.1 ")+x;
@@ -470,8 +481,8 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 					char c;
 					if(1 == read(fd, &c, 1) && c == *pNextData)
 					{
-						if(acfg::debug & LOG_DEBUG)
-							aclog::err(tSS() << "known data hit, don't write to: "<< m_sPathRel);
+						if(cfg::debug & log::LOG_DEBUG)
+							log::err(tSS() << "known data hit, don't write to: "<< m_sPathRel);
 						m_bAllowStoreData=false;
 						m_nSizeChecked=mylen;
 					}
@@ -524,14 +535,16 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		}
 	}
 
-	if(acfg::debug&LOG_MORE)
-		aclog::misc(string("Download of ")+m_sPathRel+" started");
+	if(cfg::debug & log::LOG_MORE)
+		log::misc(string("Download of ")+m_sPathRel+" started");
 
 	if(m_bAllowStoreData)
 	{
 		// using adaptive Delete-Or-Replace-Or-CopyOnWrite strategy
-		
-		// First opening the file first to be sure that it can be written. Header storage is the critical point,
+
+		MoveRelease2Sidestore();
+
+		// First opening the file to be sure that it can be written. Header storage is the critical point,
 		// every error after that leads to full cleanup to not risk inconsistent file contents 
 		
 		int flags = O_WRONLY | O_CREAT | O_BINARY;
@@ -539,7 +552,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 				
 		mkbasedir(sPathAbs);
 
-		m_filefd=open(sPathAbs.c_str(), flags, acfg::fileperms);
+		m_filefd=open(sPathAbs.c_str(), flags, cfg::fileperms);
 		ldbg("file opened?! returned: " << m_filefd);
 		
 		// self-recovery from cache poisoned with files with wrong permissions
@@ -557,7 +570,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 					if(0!=stat(sPathAbs.c_str(), &stbuf) || stbuf.st_size!=m_nSizeSeen)
 						return withError("503 Cannot copy file parts, filesystem full?");
 					
-					m_filefd=open(sPathAbs.c_str(), flags, acfg::fileperms);
+					m_filefd=open(sPathAbs.c_str(), flags, cfg::fileperms);
 					ldbg("file opened after copying around: ");
 				}
 				else
@@ -567,7 +580,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 			else
 			{
 				unlink(sPathAbs.c_str());
-				m_filefd=open(sPathAbs.c_str(), flags, acfg::fileperms);
+				m_filefd=open(sPathAbs.c_str(), flags, cfg::fileperms);
 				ldbg("file force-opened?! returned: " << m_filefd);
 			}
 		}
@@ -659,8 +672,8 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 			m_status = FIST_COMPLETE;
 			m_nTimeDlDone=GetTime();
 
-			if (acfg::debug & LOG_MORE)
-				aclog::misc(tSS() << "Download of " << m_sPathRel << " finished");
+			if (cfg::debug & log::LOG_MORE)
+				log::misc(tSS() << "Download of " << m_sPathRel << " finished");
 
 			// we are done! Fix header from chunked transfers?
 			if (m_filefd >= 0 && !m_head.h[header::CONTENT_LENGTH])
@@ -759,7 +772,7 @@ inline void fileItemMgmt::Unreg()
 }
 
 
-bool fileItemMgmt::PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore)
+bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore)
 {
 	LOGSTART2("fileitem::GetFileItem", sPathUnescaped);
 
@@ -774,7 +787,7 @@ bool fileItemMgmt::PrepageRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 			{
 				// detect items that got stuck somehow
 				time_t now(GetTime());
-				time_t extime(now - acfg::stucksecs);
+				time_t extime(now - cfg::stucksecs);
 				if (it->second->m_nTimeDlDone < extime)
 				{
 					// try to find its sibling which is in good state?
@@ -913,7 +926,7 @@ ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, 
 void fileItemMgmt::dump_status()
 {
 	tSS fmt;
-	aclog::err("File descriptor table:\n");
+	log::err("File descriptor table:\n");
 	for(const auto& item : mapItems)
 	{
 		fmt.clear();
@@ -934,9 +947,9 @@ void fileItemMgmt::dump_status()
 					<< item.second->m_nSizeSeen
 					<< "\n\tGotAt: " << item.second->m_nTimeDlStarted << "\n\n";
 		}
-		aclog::err(fmt.c_str(), nullptr);
+		log::err(fmt.c_str(), nullptr);
 	}
-	aclog::flush();
+	log::flush();
 }
 
 fileitem_with_storage::~fileitem_with_storage()
@@ -948,4 +961,22 @@ fileitem_with_storage::~fileitem_with_storage()
 	}
 }
 
+// special file? When it's rewritten from start, save the old version instead
+int fileitem_with_storage::MoveRelease2Sidestore()
+{
+	if(m_nSizeChecked)
+		return 0;
+	if(!endsWithSzAr(m_sPathRel, "/InRelease") && !endsWithSzAr(m_sPathRel, "/Release"))
+		return 0;
+	auto tgtDir = CACHE_BASE + cfg::privStoreRelSnapSufix + sPathSep + GetDirPart(m_sPathRel);
+	mkdirhier(tgtDir);
+	auto srcAbs = CACHE_BASE + m_sPathRel;
+	Cstat st(srcAbs);
+	auto sideFileAbs = tgtDir + ltos(st.st_ino) + ltos(st.st_mtim.tv_sec) + ltos(st.st_mtim.tv_nsec);
+	return FileCopy(srcAbs, sideFileAbs);
+	//return rename(srcAbs.c_str(), sideFileAbs.c_str());
+}
+
 #endif // MINIBUILD
+
+}

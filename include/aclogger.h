@@ -5,10 +5,8 @@
 #include "meta.h"
 #include "acbuf.h"
 
-#define LOG_FLUSH 1
-#define LOG_MORE 2
-#define LOG_DEBUG 4
-
+namespace acng
+{
 
 #ifdef DEBUG
 
@@ -17,7 +15,7 @@ struct t_logger
 	t_logger(const char *szFuncName, const void * ptr); // starts the logger, shifts stack depth
 	~t_logger();
 	tSS & GetFmter();
-	void Write(const char *pFile=nullptr, unsigned int nLine=0);
+	void Write(const char *pFile = nullptr, unsigned int nLine = 0);
 private:
 	tSS m_strm;
 	pthread_t m_id;
@@ -31,52 +29,77 @@ private:
 #define USRDBG(msg) LOG(msg)
 #else
 // print some extra things when user wants debug with non-debug build
-#define USRDBG(msg) { if(acfg::debug & LOG_DEBUG) {aclog::err( tSS()<<msg); } }
+#define USRDBG(msg) { if(cfg::debug & log::LOG_DEBUG) {log::err( tSS()<<msg); } }
 #endif
 
-
-namespace aclog
+namespace log
 {
 
-      bool open();
-      void close(bool bReopen);
-      void transfer(char cLogType, uint64_t nCount, const char *szClient, const char *szPath);
-      void err(const char *msg, const char *client=nullptr);
-      void misc(const mstring & sLine, const char cLogType='M');
-      inline void err(cmstring &msg) { err(msg.c_str()); }
-      inline void err(const tSS& msg) { err(msg.c_str()); }
-      void flush();
-      
-      void GenerateReport(mstring &);
-      
-      class tRowData
-      {
-      public:
-      	uint64_t byteIn, byteOut;
-      	unsigned long reqIn, reqOut;
-      	time_t from, to;
-      	tRowData() : byteIn(0), byteOut(0), reqIn(0), reqOut(0), from(0), to(0) 
-      	{};
-      	/*
-      	tRowData(const tRowData &a) : 
-      		byteIn(a.byteIn), byteOut(a.byteOut),
-      		reqIn(a.reqIn), reqOut(a.reqOut),
-      		from(a.from), to(a.to)
-      	{
-      	};
-      	*/
-      private:
-    	 // tRowData & operator=(const tRowData &a);
-      };
+enum ETransferType
+	: char
+	{
+		INDATA = 'I', OUTDATA = 'O', ERRORRQ = 'E'
+};
 
-      mstring GetStatReport();
+enum ELogFlags
+	: uint8_t
+	{
+		LOG_FLUSH = 1, LOG_MORE = 2, LOG_DEBUG = 4
+};
+
+// access internal counters
+std::pair<off_t, off_t> GetCurrentCountersInOut();
+void ResetOldCounters();
+std::pair<off_t, off_t> GetOldCountersInOut(bool calcIncomming = true, bool calcOutgoing = true);
+
+bool open();
+void close(bool bReopen);
+void transfer(uint64_t bytesIn, uint64_t bytesOut, cmstring& sClient, cmstring& sPath,
+		bool bAsError);
+void err(const char *msg, const char *client = nullptr);
+void misc(const mstring & sLine, const char cLogType = 'M');
+inline void err(cmstring &msg)
+{
+	err(msg.c_str());
+}
+inline void err(const tSS& msg)
+{
+	err(msg.c_str());
+}
+void flush();
+
+void GenerateReport(mstring &);
+
+class tRowData
+{
+public:
+	uint64_t byteIn, byteOut;
+	unsigned long reqIn, reqOut;
+	time_t from, to;
+	tRowData() :
+			byteIn(0), byteOut(0), reqIn(0), reqOut(0), from(0), to(0)
+	{
+	}
+	;
+	/*
+	 tRowData(const tRowData &a) :
+	 byteIn(a.byteIn), byteOut(a.byteOut),
+	 reqIn(a.reqIn), reqOut(a.reqOut),
+	 from(a.from), to(a.to)
+	 {
+	 };
+	 */
+private:
+	// tRowData & operator=(const tRowData &a);
+};
+
+mstring GetStatReport();
 
 }
 
 //#define TIMEFORMAT "%a %d/%m"
 #define TIMEFORMAT "%Y-%m-%d %H:%M"
 
+}
 
 #endif
-
-

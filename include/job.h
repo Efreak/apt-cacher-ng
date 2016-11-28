@@ -9,6 +9,9 @@
 #include "fileitem.h"
 #include "maintenance.h"
 
+namespace acng
+{
+
 class con;
 
 class job {
@@ -16,12 +19,12 @@ class job {
 
    public:
 
-	   typedef enum
+	   typedef enum : char
 	{
 		R_DONE = 0, R_AGAIN = 1, R_DISCON = 2, R_NOTFORUS = 3
 	} eJobResult;
 
-	   typedef enum {
+	   typedef enum : char {
 	   	STATE_SEND_MAIN_HEAD,
 	   	STATE_HEADER_SENT,
 	   	STATE_SEND_PLAIN_DATA,
@@ -69,7 +72,7 @@ class job {
       off_t m_nAllDataCount;
       
       unsigned long m_nChunkRemainingBytes;
-      rechecks::eMatchType m_type;
+      rex::eMatchType m_type;
       
       job(const job&);
       job & operator=(const job&);
@@ -77,7 +80,7 @@ class job {
       const char * BuildAndEnqueHeader(const fileitem::FiStatus &fistate, const off_t &nGooddataSize, header& respHead);
       fileitem::FiStatus _SwitchToPtItem();
       void SetErrorResponse(const char * errorLine, const char *szLocation=nullptr, const char *bodytext=nullptr);
-      void HandleLocalDownload(const mstring &visPath,
+      void PrepareLocalDownload(const mstring &visPath,
     			const mstring &fsBase, const mstring &fsSubpath);
 
       bool ParseRange();
@@ -86,9 +89,11 @@ class job {
 };
 
 
-class tTraceData: public tStrSet, public lockable {
+class tTraceData: public tStrSet, public base_with_mutex {
 public:
 	static tTraceData& getInstance();
 };
+
+}
 
 #endif

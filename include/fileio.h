@@ -24,6 +24,9 @@
 #define O_BINARY 0 // ignore on Unix
 #endif
 
+namespace acng
+{
+
 int falloc_helper(int fd, off_t start, off_t len);
 
 ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count);
@@ -70,6 +73,7 @@ inline void checkForceFclose(FILE* &fh)
 	}
 }
 
+// more efficient than tDtorEx with lambda
 struct FILE_RAII
 {
 	FILE *p = nullptr;
@@ -82,7 +86,8 @@ private:
 	FILE_RAII operator=(const FILE_RAII&);
 };
 
-
+void mkdirhier(cmstring& path);
+bool xtouch(cmstring &wanted);
 void mkbasedir(const mstring & path);
 
 /*
@@ -98,5 +103,7 @@ public:
 	off_t GetSpace() const;
 };
 */
+
+}
 
 #endif /* FILEIO_H_ */

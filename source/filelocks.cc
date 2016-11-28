@@ -7,7 +7,9 @@
 
 using namespace std;
 
-condition g_mmapLocksMx;
+namespace acng
+{
+base_with_condition g_mmapLocksMx;
 
 decltype(TFileShrinkGuard::g_mmapLocks) TFileShrinkGuard::g_mmapLocks;
 
@@ -21,7 +23,7 @@ TFileShrinkGuard::~TFileShrinkGuard()
 
 unique_ptr<TFileShrinkGuard> TFileShrinkGuard::Acquire(const struct stat& info)
 {
-	lockguard g(g_mmapLocksMx);
+	lockuniq g(g_mmapLocksMx);
 	while(true) {
 #ifdef COMPATGCC47
 		auto res = g_mmapLocks.insert(make_pair(info.st_dev, info.st_ino));
@@ -34,6 +36,8 @@ unique_ptr<TFileShrinkGuard> TFileShrinkGuard::Acquire(const struct stat& info)
 			ret->m_it = res.first;
 			return unique_ptr<TFileShrinkGuard>(ret);
 		}
-		g_mmapLocksMx.wait();
+		g_mmapLocksMx.wait(g);
 	}
+}
+
 }

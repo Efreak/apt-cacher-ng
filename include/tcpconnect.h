@@ -9,7 +9,7 @@
 #define TCPCONNECT_H_
 
 #include <atomic>
-
+#include <memory>
 #include "meta.h"
 #include "sockio.h"
 
@@ -19,6 +19,9 @@
 #include <openssl/bio.h>
 #include "acbuf.h"
 #endif
+
+namespace acng
+{
 
 class tcpconnect;
 class fileitem;
@@ -41,7 +44,7 @@ public:
 protected:
 	tcpconnect operator=(const tcpconnect&);
 	tcpconnect(const tcpconnect&) =default;
-	tcpconnect(acfg::tRepoData::IHookHandler *pStateReport);
+	tcpconnect(cfg::tRepoData::IHookHandler *pStateReport);
 
 	int m_conFd =-1;
 	mstring m_sHostName, m_sPort;
@@ -58,7 +61,7 @@ public:
 
 private:
 	bool _Connect(mstring &sErrOut, int timeout);
-	acfg::tRepoData::IHookHandler *m_pStateObserver=nullptr;
+	cfg::tRepoData::IHookHandler *m_pStateObserver=nullptr;
 
 protected:
 #ifdef HAVE_SSL
@@ -80,7 +83,7 @@ public:
 	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
 				mstring &sErrOut,
 				bool *pbSecondHand,
-				acfg::tRepoData::IHookHandler *pStateTracker
+				cfg::tRepoData::IHookHandler *pStateTracker
 				,bool ssl
 				,int timeout
 				,bool mustbevirgin
@@ -97,7 +100,7 @@ public:
 	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
 				mstring &sErrOut,
 				bool *pbSecondHand,
-				acfg::tRepoData::IHookHandler *pStateTracker
+				cfg::tRepoData::IHookHandler *pStateTracker
 				,bool ssl
 				,int timeout
 				,bool mustbevirgin
@@ -130,5 +133,6 @@ public:
 	unsigned int GetInstCount(unsigned type) { return m_instCount.load();}
 };
 */
+}
 
 #endif /* TCPCONNECT_H_ */

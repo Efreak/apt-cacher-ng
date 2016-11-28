@@ -14,6 +14,30 @@
       <div class="visarea maxwid" style="text-align:left">
          <h2>Transfer statistics</h2>
          <table border=0 cellpadding=2 cellspacing=1 bgcolor="black">
+                 <tr>
+                         <td class="coltitle"> </td>
+                         <td class="coltitle">Since startup</td>
+                         <td class="coltitle">Recent history</td>
+                 </tr>
+                 <tr>
+                         <td class="coltitle" style="text-align:left">Data fetched:</td>
+                         <td class="colcont" style="text-align:left"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA
+                         B3RJTUUH4AoKFBQ7exd8OgAAAAxJREFUCNdjUDC/DwABsQE3XXYqIQAAAABJRU5ErkJggg==" width=${dataIn} height=11> ${dataInHuman}</td>
+                         <td class="colcont" style="text-align:left"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA
+                         B3RJTUUH4AoKFBQ7exd8OgAAAAxJREFUCNdjUDC/DwABsQE3XXYqIQAAAABJRU5ErkJggg==" width=${dataHistIn} height=11> ${dataHistInHuman}</td>
+                 </tr>
+                 <tr>
+                         <td class="coltitle" style="text-align:left">Data served:</td>
+                         <td class="colcont" style="text-align:left"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA
+B3RJTUUH4AoKFBIl10Lm3wAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUH
+AAAADElEQVQI12MQVSgBAAD3AKpQhOaUAAAAAElFTkSuQmCC" width=${dataOut} height=11> ${dataOutHuman}</td>
+                         <td class="colcont" style="text-align:left"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAsTAAALEwEAmpwYAAAA
+B3RJTUUH4AoKFBIl10Lm3wAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUH
+AAAADElEQVQI12MQVSgBAAD3AKpQhOaUAAAAAElFTkSuQmCC" width=${dataHistOut} height=11> ${dataHistOutHuman}</td>
+                 </tr>
+         </table>
+         <h3>Log analysis</h3>
+         <table border=0 cellpadding=2 cellspacing=1 bgcolor="black">
             <tr>
                <td class="coltitle" rowspan=3>Period</td>
                <td class="coltitle" colspan=8>Cache efficiency</td>
@@ -51,7 +75,7 @@
 
          <form action="#bottom">
 
-         <h2>Index update and processing options</h2>
+         <h2>Shared processing options</h2>
          Temporary options for the general behavour and index update
          configuration can set in this user interface. They are only relevant
          to expiration and import features triggered below.
@@ -64,6 +88,7 @@
                <br>
                <!--input type="checkbox" name="jsMode" value="js" checked> Auto-scrolling (requires JavaScript)
                <br-->
+            <label><input type="checkbox" name="skipIxUp" value="si"> Don't update index files (DANGEROUS for expiration tasks!)</label>
 
          <h2>Expiration</h2>
          <p>
@@ -73,11 +98,9 @@
          needed when Stable system distribution is used by the clients, but use of
          unstable branches with high fluctuation requires to clean up the local
          cache from time to time. ACNG includes helper code to identify
-         unreferenced files automatically (executed with the button below).
-         <br>
-         <b>Warning:</b> this operation may redownload all index files. The current
-         implementation does not support delta-based reconstruction of index files
-         ("pdiff" mechanism).
+         unreferenced files automatically and optionally check the cache and
+         verify data against file information in the index files, where
+         available.
          </p>
             <p>
             <h3>Scan and semi-automatic expiration</h3>
@@ -94,6 +117,8 @@
          </tr>
          <tr>
             <td valign=top-->
+               <label><input type="checkbox" name="ignoreTradeOff" value="iTO"> Ignore the threshold that aborts early when there is probably not much to do</label>
+               <br>
                <label><input type="checkbox" name="skipHeadChecks" value="sHC"> Skip header checks (faster, not detecting bad metadata)</label>
                <br>
                <label><input type="checkbox" name="byPath" value="bP" id="idBP" onChange="endis();"> <i>Validate by file name AND file directory (use with care),</i></label>
@@ -186,8 +211,6 @@ function endisCb(idCon, idWhat)
             <label><input type="checkbox" name="doDownload" value="dd"> Download package files</label>
             <br>
             <label><input type="checkbox" name="asNeeded" value="an" checked="checked"> Restrict to packages related to previously cached files</label>
-            <br>
-            <label><input type="checkbox" name="skipIxUp" value="si"> Don't update index files</label>
             <br>
             <label><input type="checkbox" name="useDebDelta" value="ud"> Use Debdelta if possible (experimental)</label>
             <p>
