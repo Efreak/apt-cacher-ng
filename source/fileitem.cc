@@ -145,31 +145,31 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 {
 	LOGSTART2("fileitem::Setup", bCheckFreshness);
 
-	{
-		lockguard g(m_mx);
-		auto xpected = FIST_FRESH;
-		auto ourTurn = m_status == FIST_FRESH;
-		if(!ourTurn) //		.compare_exchange_strong(xpected, FIST_INITIALIZING);
-			return xpected;
-		m_status = FIST_INITIALIZING;
-	}
+	auto xpected = FIST_FRESH;
+	auto ourTurn = m_status.compare_exchange_strong(xpected, FIST_INITIALIZING);
+	if(!ourTurn) // being initialized by someone else
+		return xpected;
 
 	cmstring sPathAbs(CACHE_BASE+m_sPathRel);
+
+	auto withStatus = [this](fileitem::FiStatus fst)
+		{
+		LOG("resulting status: " << (int) fst);
+		return m_status=fst;
+		};
 
 	auto error_clean = [this, &sPathAbs]() -> FiStatus
 	{
 		unlink( (LPCSTR) (sPathAbs+".head").c_str());
 		m_head.clear();
 		m_nSizeSeenInCache=0;
-		m_status=FIST_INITED;
-		return m_status;
+		return withStatus(FIST_INITED);
 	};
 
 	// now we are in the caller thread's turf, can do IO in critical section
 	lockguard g(m_mx);
 
 	m_bCheckFreshness = bCheckFreshness;
-	
 
 	if(m_head.LoadFromFile(sPathAbs+".head") >0 && m_head.type==header::ANSWER )
 	{
@@ -194,6 +194,7 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 			{
 				m_nSizeSeenInCache = 0;
 			}
+			return withStatus(FIST_INITED);
 		}
 		else
 		{
@@ -212,13 +213,15 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 				m_nCheckedSize = m_nSizeSeenInCache;
 
 				// is it complete? and 0 value also looks weird, try to verify later
-				if(m_nSizeSeenInCache == nContLen && nContLen>0)
-					m_status=FIST_COMPLETE;
+				return withStatus(
+						(m_nSizeSeenInCache == nContLen && nContLen>0)
+						? FIST_COMPLETE : FIST_INITED);
 			}
 			else
 			{
 				// no content length known, assume it's ok
 				m_nCheckedSize=m_nSizeSeenInCache;
+				return withStatus(FIST_INITED);
 			}
 		}
 	}
@@ -228,11 +231,8 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 		// Don't thrust volatile data, but otherwise try to reuse?
 		if(!bCheckFreshness)
 			m_nSizeSeenInCache=GetFileSize(sPathAbs, 0);
+		return withStatus(FIST_INITED);
 	}
-	LOG("resulting status: " << (int) m_status);
-	if(m_status < FIST_INITED)
-		m_status = FIST_INITED;
-	return m_status;
 }
 
 /*
@@ -252,6 +252,7 @@ bool fileitem::CheckUsableRange_unlocked(off_t nRangeLastByte)
 }
 */
 
+#if 0
 bool fileitem::ResetCacheState(bool bForce)
 {
 	lockguard g(m_mx);
@@ -281,6 +282,7 @@ bool fileitem::ResetCacheState(bool bForce)
 		return false; // didn't work. Permissions? Anyhow, too dangerous to act on this now
 	header h;
 	h.LoadFromFile(sPathHead);
+#error crap, use resetAllBut... function
 	h.del(header::CONTENT_LENGTH);
 	h.del(header::CONTENT_TYPE);
 	h.del(header::LAST_MODIFIED);
@@ -294,6 +296,7 @@ bool fileitem::ResetCacheState(bool bForce)
 
 	return true;
 }
+#endif
 
 void fileitem::SetComplete()
 {
@@ -314,17 +317,7 @@ void fileitem::UpdateHeadTimestamp()
 	}
 	utimes(SZABSPATHSFX(m_sPathRel, sHead), nullptr);
 }
-/*
-fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)
-{
-	lockuniq g(this);
-	while(m_status<FIST_COMPLETE)
-		wait(g);
-	if(httpCode)
-		*httpCode=m_head.getStatus();
-	return m_status;
-}
-*/
+
 inline void _LogWithErrno(cmstring& msg, const string & sFile)
 {
 	tErrnoFmter f;
@@ -334,20 +327,29 @@ inline void _LogWithErrno(cmstring& msg, const string & sFile)
 
 #ifndef MINIBUILD
 
-bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
-		const char *pNextData,
-		bool bRestartResume, bool &bDoCleanRetry)
+bool tFileItemEx::DownloadStartedTakeHeader(header & head, size_t hDataLen,
+		LPCSTR pNextData,
+		bool &bDoCleanRetry)
 {
 	LOGSTART("fileitem::DownloadStartedStoreHeader");
 
-	// big critical section is ok since all the waiters have to get the state soon anyhow
-	lockguard g(m_mx);
+	// almost always news for someone, even when lost the race
+	ACTION_ON_LEAVING_EX(raiiNotifier, [this]() { notifyObservers();})
+
+	// unless defused, swap the head in the end
+	auto headConsume = [this, &head]()
+	{
+	//	acng::atomic_spinlock lck(m_refLock);
+//		m_head.swap(head);
+		m_head.store(head);
+	};
+	ACTION_ON_LEAVING_EX(raiiHeadConsumer, headConsume);
 
 	auto SETERROR = [this, &h](cmstring& x) {
 		m_bAllowStoreData=false;
 		{
-			m_head.frontLine=mstring("HTTP/1.1 ")+x;
-			m_head.set(header::XORIG, h.h[header::XORIG]);
+			head.frontLine=mstring("HTTP/1.1 ")+x;
+			head.resetAllBut(header::XORIG);
 			m_status=FIST_DLERROR;
 			m_cvState.notify_all();
 		}
@@ -382,22 +384,20 @@ bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 
 	USRDBG( "Download started, storeHeader for " << m_sPathRel << ", current status: " << (int) m_status);
 
-	// always news for someone, even when lost the race
-	auto notifAction = [this]() {
-		// nope, we have a lock already... notifyObservers();
-		for(const auto& n: m_subscribers)
-			if(n != -1)
-				poke(n);
-		m_cvState.notify_all();
-	};
-	ACTION_ON_LEAVING_EX(_notifier, notifAction)
-
 	// legal "transitions"
 	// normally from inited to assigned
 	// for hot restart and volatile:
 
 	bool bStateEntered = false;
 	auto xpect = FIST_INITED;
+	if(!m_status.compare_exchange_strong(xpect, FIST_DLASSIGNED))
+	{
+		// crap, lost the race, cannot be the writer anymore
+		raiiHeadConsumer.disable();
+		return false;
+	}
+
+	/*
 	if(!bRestartResume)
 	{
 		bStateEntered = m_status == xpect;
@@ -420,44 +420,20 @@ bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 	}
 	if(!bStateEntered)
 		return false;
+*/
 
-	if(m_status == FIST_DLASSIGNED)
-		m_dlThreadId = pthread_self();
+	m_dlThreadId = pthread_self();
 
-	// optional optimisation: hints for the filesystem resp. kernel
+	// optional optimization: hints for the filesystem resp. kernel
 	off_t hint_start(0), hint_length(0);
-	
 
 	int serverStatus = h.getStatus();
 	switch(serverStatus)
 	{
 	case 200:
 	{
-		if(m_status < FIST_DLGOTHEAD)
-			bRestartResume = false; // behave normally, set all data
-
-		if (bRestartResume)
-		{
-			if (m_nCheckedSize != 0)
-			{
-				/* shouldn't be here, server should have resumed at the previous position.
-				 * Most likely the remote file was modified after the download started.
-				 */
-				//USRDBG( "state: " << m_status << ", m_nsc: " << m_nSizeChecked);
-				return withError("500 Failed to resume remote download");
-			}
-			if(h.h[header::CONTENT_LENGTH] && atoofft(h.h[header::CONTENT_LENGTH])
-					!= atoofft(h.h[header::CONTENT_LENGTH], -2))
-			{
-				return withError("500 Failed to resume remote download, bad length");
-			}
-			m_head.set(header::XORIG, h.h[header::XORIG]);
-		}
-		else
-		{
-			m_nCheckedSize=0;
-			m_head=h;
-		}
+		m_nCheckedSize=0;
+		m_head=h;
 		hint_length=atoofft(h.h[header::CONTENT_LENGTH], 0);
 		break;
 	}

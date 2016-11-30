@@ -48,9 +48,10 @@ struct fileitem
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow)=0;
 	
 	// dlcon callbacks:
-	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
-			const char *pNextData,
-			bool bForcedRestart, bool &bDoCleanRestart) =0;
+	// @param consumedHeader
+	virtual bool DownloadStartedTakeHeader(header & hConsume, size_t hDataLen,
+			LPCSTR pNextData,
+			bool &bDoCleanRestart) =0;
 	/*!
 	 * \return true IFF ok and caller might continue. False -> caller should abort.
 	 */
@@ -101,9 +102,9 @@ struct fileitem
 
 #if TRACK_OUTCOUNT
 	tInOutCounters m_inOutCounters;
-#else
-	off_t m_nIncommingCount = 0; // written and read by the conn/dlcon thread only
 #endif
+	off_t m_nIncommingCount = 0; // written and read by the conn/dlcon thread only
+
 	off_t m_nSizeSeenInCache = 0;   // the best known information about total size of the file. Initially set by conn thread, updated by ANY other dlcon thread during FIST_DLRECEIVING phase.
 	off_t m_nCheckedSize = 0; // the available validated data range for the current download; policy as for m_nSizeSeenInCache
 	off_t m_nRangeLimit = -1;	// only for pass-though mode, write/read by conn thread only
@@ -115,16 +116,15 @@ struct fileitem
 	// set a new status and notify thread waiting on m_cvState
 	void SetReportStatus(FiStatus);
 
-	// policy: only increasing value; read any time, write before FIST_INITED by creating thread, after by first assigned downloader thread
-	FiStatus m_status {FIST_FRESH};
+	// policy: only increasing; read any time, concurrent write ONCE before FIST_DLASSIGNED
+	std::atomic<FiStatus> m_status {FIST_FRESH};
 
-	// access protected by mutex
-	header m_head;
+	header m_head; // policy: assign when FIST_DLASSIGNED, change never
 
 	mstring m_sPathRel; // policy: assign in ctor, change never
 
 	// protects access to values updated by dl-thread and read by others
-	std::mutex m_mx;
+	//std::mutex m_mx;
 
 	// remember which thread was assigned as downloader
 	pthread_t m_dlThreadId = {0};
@@ -132,7 +132,7 @@ struct fileitem
 	std::vector<int> m_subscribers;
 
 	// only used for blocking clients
-	std::condition_variable m_cvState;
+	//std::condition_variable m_cvState;
 
 	// ... with lock
 	void notifyObservers();
@@ -161,9 +161,10 @@ public:
 	virtual ~tFileItemEx();
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
-	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
-			const char *pNextData,
-			bool bForcedRestart, bool&) override;
+	virtual bool DownloadStartedTakeHeader(header & hConsume, size_t hDataLen,
+				LPCSTR pNextData,
+				bool &bDoCleanRestart) override;
+
 	virtual bool StoreFileData(const char *data, unsigned int size) override;
 
 	inline static mstring NormalizePath(cmstring &sPathRaw)

@@ -468,11 +468,13 @@ struct tDtorExec
 template<typename T>
 struct tDtorExec2
 {
+protected:
 	T &_action;
 	bool defused=false;
+public:
 	inline tDtorExec2(decltype(_action) action) : _action(action) {}
 	inline ~tDtorExec2() { if(!defused) _action(); }
-	inline void defuse() { defused = true; }
+	inline void disable() { defused = true; }
 };
 #define ACTION_ON_LEAVING_EX(oname, lambdacode) \
 		auto __do ## oname = lambdacode; \

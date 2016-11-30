@@ -3,6 +3,10 @@
 
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
+#ifdef HAVE_SHARED_MUTEX
+#include <shared_mutex>
+#endif
 
 namespace acng
 {
@@ -47,6 +51,59 @@ struct base_with_condition : public base_with_mutex
 };
 
 #define setLockGuard std::lock_guard<acmutex> local_helper_lockguard(m_obj_mutex);
+
+struct atomic_spinlock
+{
+	typedef std::atomic_bool flagvariable;
+	flagvariable & m_flagVar;
+	atomic_spinlock(flagvariable &flagVar) : m_flagVar(flagVar)
+	{
+		for(;;)
+		{
+			bool exp=false;
+			if(m_flagVar.compare_exchange_weak(exp, true))
+				return;
+		}
+	}
+	~atomic_spinlock()
+	{
+		m_flagVar.store(false);
+	}
+};
+
+#ifdef HAVE_SHARED_MUTEX
+
+using std::shared_mutex;
+typedef std::shared_lock<std::shared_mutex> reader_lock;
+
+#else
+
+typedef std::mutex shared_mutex;
+typedef std::lock<std::mutex> reader_lock;
+
+#endif
+
+// helper to start and close a semi-critical section (where writes can happen)
+struct seqlock_writesection
+{
+	std::atomic_int& m_var;
+	seqlock_writesection(std::atomic_int& theVar) : m_var(theVar)	{ m_var.fetch_add(1); }
+	~seqlock_writesection() { m_var.fetch_add(1); }
+};
+
+/**
+ * Repeat execution of readfunc until a consistent read was guaranteed.
+ */
+template<typename TFUNC>
+void seqlock_readsection(std::atomic_int& flagVar, TFUNC &readfunc)
+{
+	int refVal;
+	do
+	{
+		refval = flagVar;
+		readfunc();
+	} while ((refVal & 2) || (refVal != flagVar));
+}
 
 }
 
