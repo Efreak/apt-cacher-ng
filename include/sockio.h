@@ -14,9 +14,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <cstddef>
-
-using namespace std;
-
+#include <event.h>
 
 #ifndef AI_NUMERICSERV
 #define AI_NUMERICSERV 0
@@ -66,6 +64,8 @@ inline bool check_read_state(int fd)
 	struct timeval tv = { 0, 0};
 	return (1 == select(fd + 1, &rfds, nullptr, nullptr, &tv) && FD_ISSET(fd, &rfds));
 }
+
+extern event_base *g_ebase;
 
 }
 

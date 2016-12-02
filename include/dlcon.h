@@ -147,7 +147,7 @@ private:
 	tDlStreamHandle con;
 	bool bStopRequesting = false; // hint to stop adding request headers until the connection is restarted
 	int nLostConTolerance = 1;
-	string sErrorMsg;
+	mstring sErrorMsg;
 	bool ResetState(); // set them back to defaults
 	eStateTransition SetupConnectionAndRequests();
 	void BlacklistMirror(tDlJobPtr & job);

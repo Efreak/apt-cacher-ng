@@ -37,7 +37,7 @@ static cmstring sfxXzBz2GzLzmaNone[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
 bool CompDebVerLessThan(cmstring &s1, cmstring s2);
 extern time_t m_gMaintTimeNow;
 
-void DelTree(const string &what);
+void DelTree(const std::string &what);
 
 class cacheman :
 	public IFileHandler,
@@ -215,7 +215,7 @@ private:
 	 */
 	void PatchOne(cmstring& pindexPathRel, const tStrDeq& patchBaseCandidates);
 	void ParseGenericRfc822File(filereader& reader, cmstring& sExtListFilter,
-			map<string, deque<string> >& contents);
+			std::map<std::string, std::deque<mstring> >& contents);
 	bool ParseDebianIndexLine(tRemoteFileInfo& info, cmstring& fline);
 
 protected:

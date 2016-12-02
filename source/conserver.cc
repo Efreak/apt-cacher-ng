@@ -40,14 +40,15 @@ using namespace std;
 
 namespace acng
 {
+event_base *g_ebase = 0;
 
 namespace conserver
 {
 
 int yes(1);
 
-int g_sockunix(-1);
-vector<int> g_vecSocks;
+//int g_sockunix(-1);
+//vector<int> g_vecSocks;
 
 base_with_condition g_ThreadPoolCondition;
 list<conn*> g_freshConQueue;
@@ -198,6 +199,67 @@ void SetupConAndGo(int fd, const char *szClientName=nullptr)
 	termsocket_quick(fd);
 }
 
+void cb_accept(evutil_socket_t fdHot, short what, void *arg)
+{
+	if(arg)
+	{
+		int fd = accept(fdHot, nullptr, nullptr);
+		if (fd>=0)
+		{
+			set_nb(fd);
+//			USRDBG( "Detected incoming connection from the UNIX socket");
+			SetupConAndGo(fd);
+		}
+		else if(errno == EMFILE || errno == ENOMEM || ENOBUFS == errno)
+		{
+			// play nicely, give it a break
+			sleep(1);
+		}
+	}
+	else
+	{
+		struct sockaddr_storage addr;
+
+		socklen_t addrlen = sizeof(addr);
+		int fd=accept(fdHot,(struct sockaddr *)&addr, &addrlen);
+//fd_accepted:
+		if (fd>=0)
+		{
+			set_nb(fd);
+			char hbuf[NI_MAXHOST];
+	//		USRDBG( "Detected incoming connection from the TCP socket");
+
+			if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf),
+							nullptr, 0, NI_NUMERICHOST))
+			{
+				log::err("ERROR: could not resolve hostname for incoming TCP host");
+				termsocket_quick(fd);
+				return;
+			}
+
+			if (cfg::usewrap)
+			{
+#ifdef HAVE_LIBWRAP
+				// libwrap is non-reentrant stuff, call it from here only
+				request_info req;
+				request_init(&req, RQ_DAEMON, "apt-cacher-ng", RQ_FILE, fd, 0);
+				fromhost(&req);
+				if (!hosts_access(&req))
+				{
+					log::err("ERROR: access not permitted by hosts files", hbuf);
+					termsocket_quick(fd);
+					return;
+				}
+#else
+				log::err("WARNING: attempted to use libwrap which was not enabled at build time");
+#endif
+			}
+
+			SetupConAndGo(fd, hbuf);
+		}
+	}
+}
+
 void CreateUnixSocket() {
 	string & sPath=cfg::fifopath;
 	auto addr_unx = sockaddr_un();
@@ -224,17 +286,17 @@ void CreateUnixSocket() {
 	mkbasedir(sPath);
 	unlink(sPath.c_str());
 	
-	g_sockunix = socket(PF_UNIX, SOCK_STREAM, 0);
-	setsockopt(g_sockunix, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+	int fd = socket(PF_UNIX, SOCK_STREAM, 0);
+	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 
-	if (g_sockunix<0)
+	if (fd<0)
 		die();
 	
-	if (::bind(g_sockunix, (struct sockaddr *)&addr_unx, size) < 0)
+	if (::bind(fd, (struct sockaddr *)&addr_unx, size) < 0 || listen(fd, SO_MAXCONN))
 		die();
 	
-	if (0==listen(g_sockunix, SO_MAXCONN))
-		g_vecSocks.emplace_back(g_sockunix);
+	auto uev = event_new(g_ebase, fd, EV_READ | EV_PERSIST, cb_accept, (void*) 1);
+	event_add(uev, nullptr);
 }
 
 void Setup()
@@ -242,6 +304,11 @@ void Setup()
 	LOGSTART2s("Setup", 0);
 	using namespace cfg;
 	
+	if(!g_ebase)
+		g_ebase = event_base_new();
+
+	int nCreated=0;
+
 	if (fifopath.empty() && port.empty())
 	{
 		cerr << "Neither TCP nor UNIX interface configured, cannot proceed.\n";
@@ -255,7 +322,7 @@ void Setup()
 		hints.ai_flags = AI_PASSIVE;
 		hints.ai_family = 0;
 		
-		auto conaddr = [hints](LPCSTR addi)
+		auto conaddr = [hints, &nCreated](LPCSTR addi)
 		{
 			LOGSTART2s("Setup::ConAddr", 0);
 
@@ -297,8 +364,10 @@ void Setup()
 		    		goto error_listen;
 		    	
 		    	USRDBG( "created socket, fd: " << nSockFd);// << ", for bindaddr: "<<bindaddr);
-		    	g_vecSocks.emplace_back(nSockFd);
-		    	
+
+		    	event_add(event_new(g_ebase, nSockFd, EV_READ | EV_PERSIST, cb_accept, (void*) 0), nullptr);
+		    	nCreated++;
+
 		    	continue;
 
 				error_socket:
@@ -342,7 +411,7 @@ void Setup()
 		else
 			conaddr(nullptr);
 
-		if(g_vecSocks.empty())
+		if(!nCreated)
 		{
 			cerr << "No socket(s) could be created/prepared. "
 			"Check the network, check or unset the BindAddress directive.\n";
@@ -353,117 +422,32 @@ void Setup()
 		log::err("Not creating TCP listening socket, no valid port specified!");
 
 	if ( !cfg::fifopath.empty() )
+	{
 		CreateUnixSocket();
+		nCreated++;
+	}
 	else
 		log::err("Not creating Unix Domain Socket, fifo_path not specified");
+
+	if(!nCreated)
+	{
+		cerr << "No valid server sockets configured" <<endl;
+		exit(EXIT_FAILURE);
+	}
+
 }
 
 int Run()
 {
 	LOGSTART2s("Run", "GoGoGo");
 
-	if(g_vecSocks.empty())
-	{
-		cerr << "No valid server sockets configured" <<endl;
-		exit(EXIT_FAILURE);
-	}
-
 #ifdef HAVE_SD_NOTIFY
 	sd_notify(0, "READY=1");
 #endif
 
-	fd_set rfds, wfds;
-	int maxfd = 1 + *max_element(g_vecSocks.begin(), g_vecSocks.end());
 	USRDBG( "Listening to incoming connections...");
 
-	while (1)
-	{ // main accept() loop
-
-		FD_ZERO(&rfds);
-		FD_ZERO(&wfds);
-		for(auto soc: g_vecSocks) FD_SET(soc, &rfds);
-		
-		//cerr << "Polling..." <<endl;
-		int nReady=select(maxfd, &rfds, &wfds, nullptr, nullptr);
-		if (nReady<0)
-		{
-			if(errno == EINTR)
-				continue;
-			
-			log::err("select", "failure");
-			perror("Select died");
-			exit(EXIT_FAILURE);
-		}
-		
-		for(const auto soc: g_vecSocks)
-		{
-			if(!FD_ISSET(soc, &rfds)) 	continue;
-
-			if(g_sockunix == soc)
-			{
-				int fd = accept(g_sockunix, nullptr, nullptr);
-				if (fd>=0)
-				{
-					set_nb(fd);
-					USRDBG( "Detected incoming connection from the UNIX socket");
-					SetupConAndGo(fd);
-				}
-				else if(errno == EMFILE || errno == ENOMEM || ENOBUFS == errno)
-				{
-					// play nicely, give it a break
-					sleep(1);
-				}
-			}
-			else
-			{
-				struct sockaddr_storage addr;
-
-				socklen_t addrlen = sizeof(addr);
-				int fd=accept(soc,(struct sockaddr *)&addr, &addrlen);
-//fd_accepted:
-				if (fd>=0)
-				{
-					set_nb(fd);
-					char hbuf[NI_MAXHOST];
-					USRDBG( "Detected incoming connection from the TCP socket");
-
-					if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf),
-									nullptr, 0, NI_NUMERICHOST))
-					{
-						log::err("ERROR: could not resolve hostname for incoming TCP host");
-						termsocket_quick(fd);
-						sleep(1);
-						continue;
-					}
-
-					if (cfg::usewrap)
-					{
-#ifdef HAVE_LIBWRAP
-						// libwrap is non-reentrant stuff, call it from here only
-						request_info req;
-						request_init(&req, RQ_DAEMON, "apt-cacher-ng", RQ_FILE, fd, 0);
-						fromhost(&req);
-						if (!hosts_access(&req))
-						{
-							log::err("ERROR: access not permitted by hosts files", hbuf);
-							termsocket_quick(fd);
-							continue;
-						}
-#else
-						log::err("WARNING: attempted to use libwrap which was not enabled at build time");
-#endif
-					}
-
-					SetupConAndGo(fd, hbuf);
-				}
-				else if(errno == EMFILE || errno == ENOMEM || ENOBUFS == errno)
-				{
-					// play nicely, give it a break
-					sleep(1);
-				}
-			}
-		}
-	}
+	event_base_loop(g_ebase, 0);
 	return 0;
 }
 
@@ -484,7 +468,11 @@ void Shutdown()
 	g_ThreadPoolCondition.notifyAll();
 	
 	printf("Closing listening sockets\n");
-	for(auto soc: g_vecSocks) termsocket_quick(soc);
+
+	event_base_loopbreak(g_ebase);
+#warning FIXME: how to monitor when the last callback exited? we are currently in a signal handler on some random thread
+	//for(auto soc: g_vecSocks) termsocket_quick(soc);
+#warning after exit, close all sockets
 }
 
 }

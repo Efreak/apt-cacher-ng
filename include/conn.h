@@ -80,7 +80,7 @@ class conn // : public tRunable
 	void Shutdown();
 
 // scratch area for shared used by jobs
-	string j_sErrorMsg;
+	mstring j_sErrorMsg;
 	off_t j_nChunkRemainingBytes = 0;
 	off_t j_nRetDataCount = 0, j_nConfirmedSizeSoFar = 0; // what dler allows to send so far
 	off_t j_nSendPos = 0; // where the reader is
