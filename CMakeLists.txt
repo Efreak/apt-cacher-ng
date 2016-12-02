@@ -324,6 +324,14 @@ endif()
 	endif()
 endif()
 
+pkg_check_modules(libevent libevent)
+if(NOT libevent_FOUND)
+	message(FATAL_ERROR "!! Error: proper libevent installation is required")
+else()
+    string(REPLACE ";" " " ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} ${libevent_CFLAGS}")
+    LIST(APPEND BaseNetworkLibs ${libevent_LDFLAGS})
+endif()
+
 # -DEXTRA_LIBS_INETD=-lsupc++
 # funny hack, link with gcc and avoid libstdc++/libm (since STL is not used
 # there). However, it needs to be tested - the alternative linking makes
