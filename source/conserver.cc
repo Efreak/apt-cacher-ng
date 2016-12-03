@@ -50,153 +50,69 @@ int yes(1);
 //int g_sockunix(-1);
 //vector<int> g_vecSocks;
 
-base_with_condition g_ThreadPoolCondition;
-list<conn*> g_freshConQueue;
-int g_nStandbyThreads(0);
-int g_nAllConThreadCount(0);
 bool bTerminationMode(false);
 
-// safety mechanism, detect when the number of incoming connections
-// is growing A LOT faster than it can be processed 
-#define MAX_BACKLOG 200
-
-void * ThreadAction(void *)
+void cb_conn(evutil_socket_t fd, short what, void *arg)
 {
-	lockuniq g(g_ThreadPoolCondition);
-	list<conn*> & Qu = g_freshConQueue;
+	if(!arg) return;
+	auto c = (conn*) arg;
 
-	while (true)
+	// if frozen, close, if exited without continuation wish, close
+	if( (what & EV_TIMEOUT) || (what = c->socketAction(fd, what), !what) )
 	{
-		while (Qu.empty() && !bTerminationMode)
-			g_ThreadPoolCondition.wait(g);
-
-		if (bTerminationMode)
-			break;
-
-		conn *c=Qu.front();
-		Qu.pop_front();
-
-		g_nStandbyThreads--;
-		g.unLock();
-	
-		c->WorkLoop();
 		delete c;
-
-		g.reLock();
-		g_nStandbyThreads++;
-
-		if (g_nStandbyThreads >= cfg::tpstandbymax)
-			break;
+		termsocket(fd);
 	}
-	
-	g_nAllConThreadCount--;
-	g_nStandbyThreads--;
+	// thread is not dead, just waiting and will be activated by others again
+	if(what&EV_SIGNAL)
+		return;
+#warning need this hack? where?
 
-	return nullptr;
+//	c->m_event->ev_flags
+
+	event_add(c->m_event, & GetNetworkTimeout());
 }
-
-bool CreateDetachedThread(void *(*__start_routine)(void *))
-{
-	pthread_t thr;
-	pthread_attr_t attr; // be detached from the beginning
-
-	if (pthread_attr_init(&attr))
-		return false;
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	bool bOK = (0 == pthread_create(&thr, &attr, __start_routine, nullptr));
-	pthread_attr_destroy(&attr);
-	return bOK;
-}
-
-//! pushes waiting thread(s) and create threads for each waiting task if needed
-inline bool SpawnThreadsAsNeeded()
-{
-	lockguard g(g_ThreadPoolCondition);
-	list<conn*> & Qu = g_freshConQueue;
-
-	// check the kill-switch
-	if(g_nAllConThreadCount+1>=cfg::tpthreadmax || bTerminationMode)
-		return false;
-
-	int nNeeded = Qu.size()-g_nStandbyThreads;
-	
-	while (nNeeded-- > 0)
-	{
-		if (!CreateDetachedThread(ThreadAction))
-			return false;
-		g_nStandbyThreads++;
-		g_nAllConThreadCount++;
-	}
-
-	g_ThreadPoolCondition.notifyAll();
-
-	return true;
-}
-
 
 void SetupConAndGo(int fd, const char *szClientName=nullptr)
 {
 	LOGSTART2s("SetupConAndGo", fd);
 
-	if(!szClientName)
-		szClientName="";
-	
-	USRDBG( "Client name: " << szClientName);
+	if (!szClientName)
+		szClientName = "";
+
+	USRDBG("Client name: " << szClientName);
 	conn *c(nullptr);
-
+	struct event *connEvent(nullptr);
+	// delicate shutdown...
+	auto clean_conn = [&]()
 	{
-		// thread pool control, and also see Shutdown(), protect from
-		// interference of OS on file descriptor management
-		lockguard g(g_ThreadPoolCondition);
-
-		// DOS prevention
-		if (g_freshConQueue.size() > MAX_BACKLOG)
+		USRDBG("Out of memory");
+		if (c)
 		{
-			USRDBG( "Worker queue overrun");
-			goto local_con_failure;
+			c->m_event = nullptr;
+			delete c;
 		}
-
-		try
-		{
-			c = new conn(fd, szClientName);
-			if (!c)
-			{
-#ifdef NO_EXCEPTIONS
-				USRDBG( "Out of memory");
-#endif
-				goto local_con_failure;
-			}
-
-			g_freshConQueue.emplace_back(c);
-			LOG("Connection to backlog, total count: " << g_freshConQueue.size());
-
-
-		} catch (std::bad_alloc&)
-		{
-			USRDBG( "Out of memory");
-			goto local_con_failure;
-		}
-	}
-	
-	if (!SpawnThreadsAsNeeded())
+		if(connEvent)
+		event_free(connEvent);
+		termsocket_quick(fd);
+	};
+	try
 	{
-		tErrnoFmter fer("Cannot start threads, cleaning up. Reason: ");
-		USRDBG(fer);
-		lockguard g(g_ThreadPoolCondition);
-		while(!g_freshConQueue.empty())
-		{
-			delete g_freshConQueue.back();
-			g_freshConQueue.pop_back();
-		}
+		c = new conn(szClientName);
+		if (!c) // weid...
+			throw std::bad_alloc();
+
+		connEvent = event_new(g_ebase, fd, EV_READ, cb_conn, c);
+		if(!connEvent)
+			return clean_conn();
+		c->m_event = connEvent;
+		if(event_add(connEvent, &GetNetworkTimeout()))
+			return clean_conn();
 	}
-
-	return;
-
-	local_con_failure:
-	if (c)
-		delete c;
-	USRDBG( "Connection setup error");
-	termsocket_quick(fd);
+	catch (...)
+	{
+		return clean_conn();
+	}
 }
 
 void cb_accept(evutil_socket_t fdHot, short what, void *arg)
@@ -304,9 +220,6 @@ void Setup()
 	LOGSTART2s("Setup", 0);
 	using namespace cfg;
 	
-	if(!g_ebase)
-		g_ebase = event_base_new();
-
 	int nCreated=0;
 
 	if (fifopath.empty() && port.empty())
@@ -451,6 +364,7 @@ int Run()
 	return 0;
 }
 
+#if 0
 void Shutdown()
 {
 	lockguard g(g_ThreadPoolCondition);
@@ -470,11 +384,28 @@ void Shutdown()
 	printf("Closing listening sockets\n");
 
 	event_base_loopbreak(g_ebase);
-#warning FIXME: how to monitor when the last callback exited? we are currently in a signal handler on some random thread
+
+#warning will be easier when threads deliverd in event thread
+	#warning FIXME: how to monitor when the last callback exited? we are currently in a signal handler on some random thread
 	//for(auto soc: g_vecSocks) termsocket_quick(soc);
 #warning after exit, close all sockets
 }
+#endif
 
 }
 
+/*
+ * Will be added for cleaner shutdown with future libevent version, for now: don't care
+int cb_shutdown_event_socket(const struct event_base *,
+    const struct event *pEv, void *)
+{
+	if(pEv)	termsocket_quick(pEv->ev_fd);
 }
+*/
+void shutdownAllSockets()
+{
+//	event_base_foreach_event(acng::g_ebase, cb_shutdown_event_socket,0);
+}
+
+}
+

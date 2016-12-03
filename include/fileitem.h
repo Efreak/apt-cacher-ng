@@ -60,7 +60,7 @@ struct fileitem
 	void subscribe(int fd);
 	void unsubscribe(int fd);
 
-	FiStatus GetStatus(pthread_t *dlThreadId = nullptr, mstring* psHttpStatusOrErrorMsg = nullptr,
+	FiStatus GetStatus(mstring* psHttpStatusOrErrorMsg = nullptr,
 			off_t *nConfirmedSizeSoFar = nullptr, header *retHead=nullptr);
 	/*!
 	 * Extracts the HTTP status line from the header, in the format "status-code message".
@@ -69,7 +69,8 @@ struct fileitem
 	inline cmstring GetHttpStatus()
 	{
 		mstring ret;
-		GetStatus(0, &ret);
+#warning crap, fix
+		//GetStatus(&ret);
 		if(ret.empty()) ret = "500 Unknown Error";
 		return ret;
 

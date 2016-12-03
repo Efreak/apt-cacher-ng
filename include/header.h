@@ -2,8 +2,7 @@
 #define _HEADER_H
 
 #include <string>
-#include <unordered_set>
-#include <map>
+#include <array>
 #include "meta.h"
 
 namespace acng
@@ -45,7 +44,7 @@ class header {
       eHeadType type = INVALID;
       mstring frontLine;
       
-      char *h[HEADPOS_MAX] = {0};
+      std::array<char*, HEADPOS_MAX> h = {0};
                            
       inline header(){};
       ~header();
@@ -64,6 +63,7 @@ class header {
       void set(eHeadPos, const char *val);
       void set(eHeadPos, const char *s, size_t len);
       void set(eHeadPos, off_t nValue);
+      void resetAllBut(eHeadPos); // unset all header line except for this one
       void prep(eHeadPos, size_t length);
       void del(eHeadPos);
       inline void copy(const header &src, eHeadPos pos) { set(pos, src.h[pos]); };
@@ -90,6 +90,7 @@ class header {
        */
       // XXX: maybe redesign the unkFunc to just use pointer and length instead of strings
       int Load(const char *src, unsigned length, const std::function<void(cmstring&, cmstring&)> &unkFunc = std::function<void(cmstring&, cmstring&)>());
+      void swap( header& other );
 };
 
 inline bool BODYFREECODE(int status)

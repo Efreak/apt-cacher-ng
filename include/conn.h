@@ -6,6 +6,8 @@
 #include "lockable.h"
 #include "dlcon.h"
 
+#include <event.h>
+
 #include <list>
 #include <string>
 
@@ -17,54 +19,47 @@ namespace acng
 class job;
 class header;
 
-class conn;
-typedef SHARED_PTR<conn> tConPtr;
+//class conn;
+//typedef SHARED_PTR<conn> tConPtr;
 
-class conn // : public tRunable
+class conn : public tEventFd // , public std::enable_shared_from_this<conn> // : public tRunable
 {
    public:
-      conn(int fdId, const char *client);
+      conn(cmstring& sClientHost);
       virtual ~conn();
-      
-      void WorkLoop();
-      
-      bool dlPaused = false;
+
+      // when deleted, will release and free this event
+      struct event *m_event = 0;
+
+      short socketAction(int fd, short what);
 
    private:
 	   conn& operator=(const conn&);// { /* ASSERT(!"Don't copy con objects"); */ };
 	   conn(const conn&);// { /* ASSERT(!"Don't copy con objects"); */ };
-
-	      //! Terminate the connection descriptors gracefully
-	      void ShutDown();
-
-      int m_confd;
       
       // descriptors for download progress watching
       // UNSUBSCRIBING MUST BE HANDLED WITH CARE or file descriptor leak would happen
       // (could do that that more safe with a shared_ptr structure and refcounting but
       // feels like overkill for a simple int value)
-#ifdef HAVE_LINUX_EVENTFD
-#warning test legacy pipe
-      int m_wakeventfd = -1;
-#else
-      int m_wakepipe[2] = {-1, -1};
-#endif
+
       /**
        * Setup wake descriptors as needed and subscribe on ptr. User must unsubscribe later!
        */
       bool Subscribe4updates(tFileItemPtr);
       void UnsubscribeFromUpdates(tFileItemPtr);
 
-      std::list<job*> m_jobs2send;
+      acbuf inBuf;
+      std::list<job> m_jobs2send;
       
       // for jobs
       friend class job;
       bool SetupDownloader(const char *xff);
-      dlcon * m_pDlClient;
-      dlcon::tWorkState m_lastDlState = {dlcon::tWorkState::allDone, 0};
+
+      // the slave - must reset the flag there when reseting this pointer
+      dlcon * m_pDlClient = 0;
+      //dlcon::tWorkState m_lastDlState = {dlcon::tWorkState::allDone, 0};
 
       mstring m_sClientHost;
-      header *m_pTmpHead;
       
       // some accounting
       mstring logFile, logClient;
@@ -77,8 +72,6 @@ class conn // : public tRunable
 	void LogDataCounts(cmstring & file, const char *xff, off_t countIn, off_t countOut,
 			bool bAsError);
 
-	void Shutdown();
-
 // scratch area for shared used by jobs
 	mstring j_sErrorMsg;
 	off_t j_nChunkRemainingBytes = 0;
@@ -87,8 +80,7 @@ class conn // : public tRunable
 	off_t j_nFileSendLimit = (MAX_VAL(off_t) - 1); // special limit, abort transmission there
 	tSS j_sendbuf;
 	int j_filefd = -1;
-	pthread_t dlThreadId;
-	header respHead;
+	header j_respHead;
 
 #warning fixme, m_nFileSendLimit is last byte of the byte after?
 
@@ -99,7 +91,7 @@ class conn // : public tRunable
 		j_nFileSendLimit = (MAX_VAL(off_t) - 1);
 		j_sendbuf.clear();
 		j_filefd = -1;
-		respHead.clear();
+		j_respHead.clear();
 	}
 
 

@@ -369,4 +369,11 @@ bool header::ParseDate(const char *s, struct tm *tm)
 	return false;
 }
 
+void header::swap(header& other)
+{
+	std::swap(other.type, type);
+	frontLine.swap(other.frontLine);
+	h.swap(other.h);
+}
+
 }

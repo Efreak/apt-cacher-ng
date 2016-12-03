@@ -11,7 +11,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <string>
-
+#include <thread>
 
 #define LOCAL_DEBUG
 #include "debug.h"
@@ -22,10 +22,11 @@
 #include "fileio.h"
 #include "conserver.h"
 #include "cleaner.h"
+#include "lockable.h"
 
-#include <iostream>
 using namespace std;
 
+#include <iostream>
 #include <cstdio>
 #include <cstring>
 #include <sys/time.h>
@@ -40,14 +41,40 @@ using namespace std;
 
 #include "maintenance.h"
 
+std::deque<std::function< void() > > g_serviceQ;
+acng::base_with_condition g_serviceLockable;
+std::thread g_serviceThread;
+bool g_serviceStopSignal { true };
+acng::tEventFd g_serviceNotifier;
+
+void serviceResultNotify()
+{
+	g_serviceNotifier.eventPoke();
+}
+
+void enqueServiceAction(std::function< void() > action)
+{
+	acng::lockguard g(g_serviceLockable);
+	g_serviceQ.emplace_back(action);
+	g_serviceLockable.notifyAll();
+}
+
+void stopServiceThread()
+{
+	acng::lockuniq g(g_serviceLockable);
+	g_serviceStopSignal = true;
+	g_serviceLockable.notifyAll();
+	g.unLock();
+	g_serviceThread.join();
+}
+
 namespace acng
 {
 
+//pthread_t g_event_thread;
+
 static void usage(int nRetCode=0);
 static void SetupCacheDir();
-void sig_handler(int signum);
-void log_handler(int signum);
-void dump_handler(int signum);
 void handle_sigbus();
 void check_algos();
 
@@ -131,24 +158,17 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 
 }
 
-void setup_sighandler()
+void disable_signals()
 {
 	tSigAct act = tSigAct();
-
 	sigfillset(&act.sa_mask);
-	act.sa_handler = &sig_handler;
+	act.sa_handler = SIG_IGN;
 	sigaction(SIGBUS, &act, nullptr);
 	sigaction(SIGTERM, &act, nullptr);
 	sigaction(SIGINT, &act, nullptr);
 	sigaction(SIGQUIT, &act, nullptr);
-
-	act.sa_handler = &dump_handler;
 	sigaction(SIGUSR2, &act, nullptr);
-
-	act.sa_handler = &log_handler;
 	sigaction(SIGUSR1, &act, nullptr);
-
-	act.sa_handler = SIG_IGN;
 	sigaction(SIGPIPE, &act, nullptr);
 #ifdef SIGIO
 	sigaction(SIGIO, &act, nullptr);
@@ -215,15 +235,19 @@ static void SetupCacheDir()
 	exit(1);
 }
 
-void log_handler(int)
-{
-	log::close(true);
-}
 
-void sig_handler(int signum)
+void cb_signal(evutil_socket_t signum, short what, void *arg)
 {
 	dbgprint("caught signal " << signum);
 	switch (signum) {
+
+	case SIGUSR2:
+		void dump_handler();
+		return dump_handler();
+
+	case SIGUSR1:
+		return log::close(true);
+
 	case (SIGBUS):
 		/* OH NO!
 		 * Something going wrong with the mmaped files.
@@ -236,21 +260,17 @@ void sig_handler(int signum)
 		//no break
 	case (SIGTERM):
 	case (SIGINT):
-	case (SIGQUIT): {
+	case (SIGQUIT):
+	{
+		stopServiceThread();
+		void shutdownAllSockets();
+		shutdownAllSockets();
 		g_victor.Stop();
 		log::close(false);
-    if (!cfg::pidfile.empty())
-       unlink(cfg::pidfile.c_str());
-		// and then terminate, resending the signal to default handler
-		tSigAct act = tSigAct();
-		sigfillset(&act.sa_mask);
-		act.sa_handler = SIG_DFL;
-		if (sigaction(signum, &act, nullptr))
-			abort(); // shouldn't be needed, but have a sane fallback in case
-		raise(signum);
+		if (!cfg::pidfile.empty())
+			unlink(cfg::pidfile.c_str());
+		exit(signum != SIGQUIT);
 	}
-	default:
-		return;
 	}
 }
 
@@ -262,6 +282,46 @@ int main(int argc, const char **argv)
 #ifdef HAVE_SSL
 	acng::globalSslInit();
 #endif
+
+	check_algos();
+
+	SetupCacheDir();
+
+	DelTree(cfg::cacheDirSlash+sReplDir);
+
+
+	g_ebase = event_base_new();
+	if(!g_serviceNotifier.setupEventFd())
+	{
+		cerr << "Error creating basic file descriptors" <<endl;
+		exit(1);
+	}
+
+	disable_signals();
+
+	g_serviceThread = std::thread {
+		[]() {
+			acng::lockuniq ug(g_serviceLockable);
+			g_serviceStopSignal = false;
+
+			while(!g_serviceStopSignal)
+			{
+				if(g_serviceQ.empty())
+				{
+					g_serviceLockable.wait(ug);
+					continue;
+				}
+				auto todo = g_serviceQ.front();
+				g_serviceQ.pop_front();
+				ug.unLock();
+				todo();
+			}
+		}
+	};
+	{
+		acng::lockuniq ug(g_serviceLockable);
+		while(g_serviceStopSignal) g_serviceLockable.wait(ug);
+	}
 
 	bool bRunCleanup=false;
 
@@ -280,14 +340,10 @@ int main(int argc, const char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	check_algos();
-	setup_sighandler();
-
-	SetupCacheDir();
-
-	DelTree(cfg::cacheDirSlash+sReplDir);
-
 	conserver::Setup();
+
+	for(auto signum: {SIGBUS, SIGTERM, SIGINT, SIGQUIT, SIGUSR1, SIGUSR2})
+		event_add(evsignal_new(g_ebase, signum, cb_signal, NULL), 0);
 
 	if (bRunCleanup)
 	{

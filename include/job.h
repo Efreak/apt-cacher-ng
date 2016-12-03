@@ -49,11 +49,11 @@ DLSTATE_NOTNEEDED, // shortcut, tell checks to skip downloader observation
 DLSTATE_OUR, DLSTATE_OTHER
 	} m_eDlType = DLSTATE_OUR;
 
-	job(header *h, conn& pParent);
-	~job();
-	//  __attribute__((externally_visible))
-
 	void PrepareDownload(LPCSTR headBuf);
+	// set values to response a fatal error and close connection
+	// caller can add extra payload to j_sendBuf if needed.
+#warning fixme ,send closecon, http1.1 as needed, and send states...
+	tSS& PrepareErrorResponse();
 
 	/*
 	 * Start or continue returning the file.
@@ -70,7 +70,7 @@ DLSTATE_OUR, DLSTATE_OTHER
 	mstring m_sFileLoc; // local_relative_path_to_file
 	tSpecialRequest::eMaintWorkType m_eMaintWorkType =
 			tSpecialRequest::workNotSpecial;
-	header *m_pReqHead = 0; // copy of users requests header
+	header m_reqHead;
 	off_t m_nReqRangeFrom = -1, m_nReqRangeTo = -1;
 	tFileItemPtr m_pItem;
 	rex::eMatchType m_type = rex::FILE_INVALID;
@@ -89,6 +89,15 @@ DLSTATE_OUR, DLSTATE_OTHER
 			const mstring &fsSubpath);
 
 	bool ParseRange();
+
+public:
+
+	/**
+	 * Main constructor. Takes the ownership of header's data!
+	 */
+	job(header& h, conn& pParent);
+
+	~job();
 
 };
 

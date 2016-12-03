@@ -111,7 +111,8 @@ public:
 			m_nConsumable = size;
 			m_nConsumed = 0;
 
-			m_parent.dlPaused = true;
+#warning fixme
+//			m_parent.dlPaused = true;
 
 			// let the downloader abort?
 			if (m_status >= FIST_DLERROR)
@@ -141,7 +142,8 @@ public:
 		{
 			m_status = FIST_DLERROR;
 			m_head.frontLine = "HTTP/1.1 500 Data passing error";
-			m_parent.dlPaused = false; // needs to shutdown
+#warning fixme
+//			m_parent.dlPaused = false; // needs to shutdown
 		}
 		else if (r > 0)
 		{
@@ -149,8 +151,9 @@ public:
 			m_pData += r;
 			m_nConsumed += r;
 			nSendPos += r;
-			if (m_nConsumable <= 0)
-				m_parent.dlPaused = false;
+#warning fixme
+//			if (m_nConsumable <= 0)
+//				m_parent.dlPaused = false;
 		}
 		return r;
 	}
@@ -211,11 +214,12 @@ public:
 	}
 };
 
-job::job(header *h, conn &pParent) :
-		m_parent(pParent), m_pReqHead(h)
+job::job(header &h, conn &pParent) :
+		m_parent(pParent)
 {
 	LOGSTART2("job::job",
-			"job creating, " << m_pReqHead->frontLine << " and this: " << uintptr_t(this));
+			"job creating, " << h.frontLine << " and this: " << uintptr_t(this));
+	m_reqHead.swap(h);
 }
 
 static const string miscError(" [HTTP error, code: ");
@@ -234,13 +238,12 @@ job::~job()
 
 #warning check logs, counts, etc.
 	m_parent.LogDataCounts(m_sFileLoc + (bErr ? (miscError + ltos(stcode) + ']') : sEmptyString),
-			m_pReqHead->h[header::XFORWARDEDFOR],
+			m_reqHead.h[header::XFORWARDEDFOR],
 			(m_pItem ? m_pItem->m_nIncommingCount : 0), m_parent.j_nRetDataCount, bErr);
 
 #warning when volatile type and finished download, donate this to a quick life-keeping cache for 33s, see cleaner
 	// fileitem_with_storage::ProlongLife(m_pItem);
 	checkforceclose(m_parent.j_filefd);
-	delete m_pReqHead;
 
 	if (m_bFitemWasSubscribed)
 		m_parent.UnsubscribeFromUpdates(m_pItem);
@@ -437,10 +440,10 @@ inline bool job::ParseRange()
 	 * Content-Range: bytes 453291-7725119/7725120
 	 */
 
-	const char *pRange = m_pReqHead->h[header::RANGE];
+	const char *pRange = m_reqHead.h[header::RANGE];
 	// working around a bug in old curl versions
 	if (!pRange)
-		pRange = m_pReqHead->h[header::CONTENT_RANGE];
+		pRange = m_reqHead.h[header::CONTENT_RANGE];
 	if (pRange)
 	{
 		int nRangeItems = sscanf(pRange, "bytes=" OFF_T_FMT
@@ -460,6 +463,20 @@ inline bool job::ParseRange()
 	return false;
 }
 
+tSS& job::PrepareErrorResponse()
+{
+	m_bChunkMode = false;
+	m_bClientWants2Close = true;
+	tSplitWalk tokenizer(&m_reqHead.frontLine, SPACECHARS);
+	trimBack(m_reqHead.frontLine);
+	m_bIsHttp11 = endsWith(m_reqHead.frontLine, sHttp11);
+	m_stateExternal = XSTATE_CAN_SEND;
+	m_stateInternal = STATE_SEND_BUFFER;
+	m_stateBackSend = STATE_FINISHJOB;
+	return m_parent.j_sendbuf;
+
+}
+
 void job::PrepareDownload(LPCSTR headBuf)
 {
 
@@ -467,7 +484,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 
 #ifdef DEBUGLOCAL
 	cfg::localdirs["stuff"]="/tmp/stuff";
-	log::err(m_pReqHead->ToString());
+	log::err(m_reqHead.ToString());
 #endif
 
 // return with impure call is better than goto
@@ -485,8 +502,8 @@ void job::PrepareDownload(LPCSTR headBuf)
 			m_pItem.reset(new tPassThroughFitem(m_sFileLoc, m_parent));
 			m_pItem->m_nSizeSeenInCache = m_nReqRangeFrom;
 			m_pItem->m_nRangeLimit = m_nReqRangeTo;
-			auto ifmo =	m_pReqHead->h[header::IF_MODIFIED_SINCE] ?
-					m_pReqHead->h[header::IF_MODIFIED_SINCE] : m_pReqHead->h[header::IFRANGE];
+			auto ifmo =	m_reqHead.h[header::IF_MODIFIED_SINCE] ?
+					m_reqHead.h[header::IF_MODIFIED_SINCE] : m_reqHead.h[header::IFRANGE];
 			m_pItem->m_head.set(header::LAST_MODIFIED, ifmo);
 			m_pItem->m_bCheckFreshness = ifmo;
 			return (m_pItem->m_status = fileitem::FIST_INITED);
@@ -500,9 +517,9 @@ void job::PrepareDownload(LPCSTR headBuf)
 
 	fileitem::FiStatus fistate(fileitem::FIST_FRESH);
 	bool bForceFreshnessChecks(false); // force update of the file, i.e. on dynamic index files?
-	tSplitWalk tokenizer(&m_pReqHead->frontLine, SPACECHARS);
+	tSplitWalk tokenizer(&m_reqHead.frontLine, SPACECHARS);
 
-	if (m_pReqHead->type != header::GET && m_pReqHead->type != header::HEAD)
+	if (m_reqHead.type != header::GET && m_reqHead.type != header::HEAD)
 		return msg_invpath;
 	if (!tokenizer.Next() || !tokenizer.Next()) // at path...
 		return msg_invpath;
@@ -517,8 +534,8 @@ void job::PrepareDownload(LPCSTR headBuf)
 	// a sane default? normally, close-mode for http 1.0, keep for 1.1.
 	// But if set by the client then just comply!
 	m_bClientWants2Close = !m_bIsHttp11;
-	if (m_pReqHead && m_pReqHead->h[header::CONNECTION])
-		m_bClientWants2Close = !strncasecmp(m_pReqHead->h[header::CONNECTION], "close", 5);
+	if (m_reqHead.h[header::CONNECTION])
+		m_bClientWants2Close = !strncasecmp(m_reqHead.h[header::CONNECTION], "close", 5);
 
 	// "clever" file system browsing attempt?
 	if (rex::Match(sReqPath, rex::NASTY_PATH) || stmiss != sReqPath.find(MAKE_PTR_0_LEN("/_actmp"))
@@ -578,7 +595,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 			if ((!cfg::reportpage.empty() || theUrl.sHost == "style.css"))
 			{
 				m_eMaintWorkType = tSpecialRequest::DispatchMaintWork(sReqPath,
-						m_pReqHead->h[header::AUTHORIZATION]);
+						m_reqHead.h[header::AUTHORIZATION]);
 				if (m_eMaintWorkType != tSpecialRequest::workNotSpecial)
 				{
 					m_sFileLoc = sReqPath;
@@ -619,7 +636,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 		}
 
 		// got something valid, has type now, trace it
-		USRDBG("Processing new job, "<<m_pReqHead->frontLine);
+		USRDBG("Processing new job, "<<m_reqHead.frontLine);
 
 		cfg::GetRepNameAndPathResidual(theUrl, repoMapping);
 		if (repoMapping.psRepoName && !repoMapping.psRepoName->empty())
@@ -661,7 +678,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 	// no matter whether the file is complete or not
 	// handles different cases: GET with range, HEAD with range, HEAD with no range
 	if ((m_nReqRangeFrom >= 0 && m_nReqRangeTo >= 0)
-			|| (m_pReqHead->type == header::HEAD && 0 != (m_nReqRangeTo = -1)))
+			|| (m_reqHead.type == header::HEAD && 0 != (m_nReqRangeTo = -1)))
 	{
 		if (m_pItem->m_nCheckedSize >= m_nReqRangeTo)
 		{
@@ -682,7 +699,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 	if (fistate < fileitem::FIST_DLASSIGNED) // needs a downloader
 	{
 		dbgline;
-		if (!m_parent.SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
+		if (!m_parent.SetupDownloader(m_reqHead.h[header::XFORWARDEDFOR]))
 		{
 			USRDBG("Error creating download handler for "<<m_sFileLoc);
 			return msg_overload;
@@ -711,7 +728,8 @@ void job::PrepareDownload(LPCSTR headBuf)
 					nullptr, cfg::redirmax))
 			{
 				ldbg("Download job enqueued for " << m_sFileLoc);
-				m_parent.m_lastDlState.flags |= dlcon::tWorkState::needConnect;
+#warning fixme
+//			m_parent.m_lastDlState.flags |= dlcon::tWorkState::needConnect;
 			}
 			else
 			{
@@ -732,7 +750,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 		m_sFileLoc = theUrl.ToURI(false);
 		ParseRange();
 		_SwitchToPtItem();
-		if (!m_parent.SetupDownloader(m_pReqHead->h[header::XFORWARDEDFOR]))
+		if (!m_parent.SetupDownloader(m_reqHead.h[header::XFORWARDEDFOR]))
 		{
 			USRDBG("Error creating download handler for "<<m_sFileLoc);
 			return msg_overload;
@@ -741,7 +759,8 @@ void job::PrepareDownload(LPCSTR headBuf)
 				cfg::redirmax))
 		{
 			ldbg("Download job enqueued for " << m_sFileLoc);
-			m_parent.m_lastDlState.flags |= dlcon::tWorkState::needConnect;
+#warning fixme
+//			m_parent.m_lastDlState.flags |= dlcon::tWorkState::needConnect;
 		}
 		else
 		{
@@ -796,10 +815,10 @@ void job::SendData(int confd)
 			if (!skipFetchState && m_pItem)
 			{
 				skipFetchState = false;
-
-				fistate = m_pItem->GetStatus(&m_parent.dlThreadId, &m_parent.j_sErrorMsg,
+#warning finally remove this gigamanic function
+				fistate = m_pItem->GetStatus(&m_parent.j_sErrorMsg,
 						&m_parent.j_nConfirmedSizeSoFar,
-						(m_stateInternal == STATE_SEND_MAIN_HEAD) ? &m_parent.respHead : nullptr);
+						(m_stateInternal == STATE_SEND_MAIN_HEAD) ? &m_parent.j_respHead : nullptr);
 			}
 			if (fistate >= fileitem::FIST_DLERROR)
 				THROW_ERROR(m_parent.j_sErrorMsg);
@@ -832,7 +851,8 @@ void job::SendData(int confd)
 					return;
 				}
 				// ok, assigned, to whom?
-				m_eDlType = (pthread_self() == m_parent.dlThreadId) ? DLSTATE_OUR : DLSTATE_OTHER;
+#warning fixme
+				//m_eDlType = (pthread_self() == m_parent.dlThreadId) ? DLSTATE_OUR : DLSTATE_OTHER;
 				m_stateInternal = STATE_CHECK_DL_PROGRESS;
 				m_stateBackSend = STATE_SEND_MAIN_HEAD;
 				if (m_eDlType == DLSTATE_OTHER) // ok, not our download agent
@@ -869,12 +889,12 @@ void job::SendData(int confd)
 			{
 				ldbg("STATE_FRESH");
 				// nothing to send for special codes (like not-unmodified) or w/ GUARANTEED empty body
-				int statusCode = m_parent.respHead.getStatus();
+				int statusCode = m_parent.j_respHead.getStatus();
 				bool bResponseHasBody = !BODYFREECODE(statusCode)
-						&& (!m_parent.respHead.h[header::CONTENT_LENGTH] // not set, maybe chunked data
-						|| atoofft(m_parent.respHead.h[header::CONTENT_LENGTH])); // set, to non-0
+						&& (!m_parent.j_respHead.h[header::CONTENT_LENGTH] // not set, maybe chunked data
+						|| atoofft(m_parent.j_respHead.h[header::CONTENT_LENGTH])); // set, to non-0
 
-				if (!FormatHeader(fistate, m_pItem->m_nCheckedSize, m_parent.respHead, bResponseHasBody,
+				if (!FormatHeader(fistate, m_pItem->m_nCheckedSize, m_parent.j_respHead, bResponseHasBody,
 						statusCode))
 				{
 					// sErrorMsg was already set
@@ -885,7 +905,7 @@ void job::SendData(int confd)
 				m_stateInternal = STATE_SEND_BUFFER;
 				// just HEAD request was received or no data body to send?
 				m_stateBackSend =
-						(m_pReqHead->type == header::HEAD || !bResponseHasBody) ?
+						(m_reqHead.type == header::HEAD || !bResponseHasBody) ?
 								STATE_FINISHJOB :
 								STATE_HEADER_SENT;
 				skipFetchState = true;
@@ -913,6 +933,7 @@ void job::SendData(int confd)
 					m_stateExternal = XSTATE_WAIT_DL;
 					return;
 				}
+#warning could keep writting for long time. Find a sane limiter for max2send now, maybe 3* sockets send buffer
 				ldbg("~sendfile: on "<< m_parent.j_nSendPos << " up to : " << nMax2SendNow);
 				int n = m_pItem->SendData(confd, m_parent.j_filefd, m_parent.j_nSendPos, nMax2SendNow);
 				ldbg("~sendfile: " << n << " new m_nSendPos: " << m_parent.j_nSendPos);
@@ -1034,7 +1055,7 @@ void job::SendData(int confd)
 						m_parent.j_sendbuf << "Content-Length: " << ltos(m_parent.j_sErrorMsg.length()) << sCRLF;
 					m_parent.j_sendbuf << sCRLF;
 					m_stateInternal = STATE_SEND_BUFFER;
-					m_stateBackSend = STATE_FATAL_ERROR; // will abort then
+					m_stateBackSend = STATE_FINISHJOB; // will abort then
 					continue;
 				}
 			}
@@ -1098,13 +1119,13 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 			// Handle If-Modified-Since and Range headers;
 			// we deal with them equally but need to know which to use
 			const char *pIfmo =
-					m_pReqHead->h[header::RANGE] ?
-							m_pReqHead->h[header::IFRANGE] :
-							m_pReqHead->h[header::IF_MODIFIED_SINCE];
+					m_reqHead.h[header::RANGE] ?
+							m_reqHead.h[header::IFRANGE] :
+							m_reqHead.h[header::IF_MODIFIED_SINCE];
 			const char *pLastMo = respHead.h[header::LAST_MODIFIED];
 
 			// consider contents "fresh" for non-volatile data, or when "our" special client is there, or the client simply doesn't care
-			bool bDataIsFresh = (m_type != rex::FILE_VOLATILE || m_pReqHead->h[header::ACNGFSMARK]
+			bool bDataIsFresh = (m_type != rex::FILE_VOLATILE || m_reqHead.h[header::ACNGFSMARK]
 					|| !pIfmo);
 
 			auto tm1 = tm(), tm2 = tm();
@@ -1140,7 +1161,7 @@ inline bool job::FormatHeader(const fileitem::FiStatus &fistate, const off_t &nG
 					if (fistate == fileitem::FIST_COMPLETE
 					// or can start sending within this range (positive range-from)
 							|| bPermitPartialStart// don't care since found special hint from acngfs (kludge...)
-							|| m_pReqHead->h[header::ACNGFSMARK])
+							|| m_reqHead.h[header::ACNGFSMARK])
 					{
 						// detect errors, out-of-range case
 						if (m_nReqRangeFrom >= nContLen || m_nReqRangeTo < m_nReqRangeFrom)

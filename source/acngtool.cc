@@ -1012,11 +1012,10 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT);
 	if(!dl.WorkLoop())
 		exit(23);
-	header hh;
-	auto fistatus = fi->GetStatus(0, 0, 0, &hh);
+	header hh = fi->m_head;
 	int st=hh.getStatus();
-
-	if(fistatus == fileitem::FIST_COMPLETE && st == 200)
+#warning simplify
+	if(fi->m_status == fileitem::FIST_COMPLETE && st == 200)
 		return EXIT_SUCCESS;
 
 	// don't reveal passwords

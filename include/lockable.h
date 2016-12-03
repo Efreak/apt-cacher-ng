@@ -48,6 +48,29 @@ struct base_with_condition : public base_with_mutex
 
 #define setLockGuard std::lock_guard<acmutex> local_helper_lockguard(m_obj_mutex);
 
+
+class tEventFd
+{
+	#ifdef HAVE_LINUX_EVENTFD
+	int m_wakeventfd = -1;
+#else
+      int m_wakepipe[2] = {-1, -1};
+#endif
+
+public:
+      ~tEventFd();
+      bool setupEventFd();
+#ifdef HAVE_LINUX_EVENTFD
+      int getEventWriteFd() { return m_wakeventfd; }
+      int getEventReadFd() { return m_wakeventfd; }
+#else
+      int getEventWriteFd() { return m_wakepipe[1]; }
+      int getEventReadFd() { return m_wakepipe[0]; }
+#endif
+      void eventFetch();
+      void eventPoke();
+};
+
 }
 
 #endif

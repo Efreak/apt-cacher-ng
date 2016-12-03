@@ -495,5 +495,8 @@ std::pair<T,T> pairSum(const std::pair<T,T>& a, const std::pair<T,T>& b)
 
 }
 
+void serviceResultNotify();
+void enqueServiceAction(std::function< void() > action);
+
 #endif // _META_H
 

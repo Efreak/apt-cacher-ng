@@ -1124,12 +1124,12 @@ void fileitem::notifyObserversNoLock()
 
 #warning sErrorMsg filled out correctly and reliable?
 
-fileitem::FiStatus fileitem::GetStatus(pthread_t* dlThreadId, mstring* sErrorMsg,
+fileitem::FiStatus fileitem::GetStatus(mstring* sErrorMsg,
 		off_t* pnConfirmedSizeSoFar, header* retHead)
 {
 	lguard g(m_mx);
-	if(dlThreadId && m_status >= FIST_DLASSIGNED)
-		*dlThreadId = m_dlThreadId;
+//	if(dlThreadId && m_status >= FIST_DLASSIGNED)
+//		*dlThreadId = m_dlThreadId;
 	if(sErrorMsg)
 		sErrorMsg->assign(m_head.getCodeMessage());
 	if(pnConfirmedSizeSoFar)

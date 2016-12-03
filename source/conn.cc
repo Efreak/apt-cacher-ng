@@ -27,31 +27,29 @@ using namespace std;
 namespace acng
 {
 
-conn::conn(int fdId, const char *c) :
-			m_confd(fdId),
-			m_pDlClient(nullptr),
-			m_pTmpHead(nullptr)
+conn::conn(cmstring& sClientHost) : m_sClientHost(sClientHost)
 {
-	if(c) // if nullptr, pick up later when sent by the wrapper
-		m_sClientHost=c;
-
-	LOGSTART2("con::con", "fd: " << fdId << ", clienthost: " << c);
-
-#ifdef DEBUG
-	m_nProcessedJobs=0;
-#endif
-
+	if(!inBuf.setsize(32*1024))
+		throw std::bad_alloc();
 };
 
 conn::~conn() {
 	LOGSTART("con::~con (Destroying connection...)");
-	termsocket(m_confd);
+
+	m_jobs2send.clear();
+
+	if(m_pDlClient) m_pDlClient->Shutdown();
+
 	writeAnotherLogRecord(sEmptyString, sEmptyString);
-	for(auto& j: m_jobs2send) delete j;
-	delete m_pDlClient;
-	delete m_pTmpHead;
+
+#warning shutdown, fix
+//	if(m_pDlClient)
+//		m_pDlClient->becomeRonin();
+
 	log::flush();
-#warning recycle update fds
+
+	if(m_event)
+		event_free(m_event);
 }
 
 namespace RawPassThrough
@@ -65,6 +63,7 @@ inline static bool CheckListbugs(const header &ph)
 }
 inline static void RedirectBto2https(int fdClient, cmstring& uri)
 {
+#warning error, shit, mach daraus ein item mit error-text und con-close
 	tSS clientBufOut;
 	clientBufOut << "HTTP/1.1 302 Redirect\r\nLocation: " << "https://bugs.debian.org:443/";
 	constexpr auto offset = _countof(POSTMARK) - 6;
@@ -180,27 +179,175 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 }
 }
 
-void conn::WorkLoop() {
 
-	LOGSTART("con::WorkLoop");
+short conn::socketAction(int fd, short what)
+{
+	LOGSTART(__FUNCTION__);
 
-	signal(SIGPIPE, SIG_IGN);
+	// can always get new jobs
+	short ret = EV_READ;
 
-	acbuf inBuf;
-#warning adjust to socket buffer size
-	inBuf.setsize(32*1024);
+	if (!inBuf.empty() || (what & EV_READ))
+	{
+		inBuf.move();
 
-	int maxfd=m_confd;
-	while(true) {
-		fd_set rfds, wfds;
-		FD_ZERO(&wfds);
-		FD_ZERO(&rfds);
+		if (what & EV_READ)
+		{
+			int n = inBuf.sysread(fd);
+			ldbg("got data: " << n <<", inbuf size: "<< inBuf.size());
+			if (n <= 0) // error, incoming junk overflow or closed connection
+			{
+				if (n != -EAGAIN)
+				{
+					ldbg("client closed connection");
+					return 0;
+				}
+			}
+		}
 
-		FD_SET(m_confd, &rfds);
-		if(inBuf.freecapa()==0)
-			return; // shouldn't even get here
+		// split new data into requests
+		while (inBuf.size() > 0)
+		{
+			try
+			{
+				header h;
+				int nHeadBytes = h.Load(inBuf.rptr(), inBuf.size());
+				ldbg("header parsed how? " << nHeadBytes);
 
+				// Either not enough data received, or buffer full; make space and retry later when buffer was shrinked
+				if (nHeadBytes == 0)
+					return EV_READ;
 
+				if (nHeadBytes < 0)
+				{
+					ldbg("Bad request: " << inBuf.rptr() );
+					return 0;
+				}
+
+				// also must be identified before
+				if (h.type == header::POST)
+				{
+					if (cfg::forwardsoap && !m_sClientHost.empty())
+					{
+						if (RawPassThrough::CheckListbugs (h))
+						{
+							tSplitWalk iter(&h.frontLine);
+							if (iter.Next() && iter.Next())
+							{
+#warning ein redirect-response hier einbauen, auch constraint dass es erster request ist
+								RawPassThrough::RedirectBto2https(fd, iter);
+								return EV_WRITE;
+							}
+						}
+						else
+						{
+							ldbg("not bugs.d.o: " << inBuf.rptr());
+						}
+						// disconnect anyhow
+						return 0;
+					} ldbg("not allowed POST request: " << inBuf.rptr());
+					return 0;
+				}
+
+				// handle a request to play as raw tunnel
+				// currently only supported as the first request
+				// if later other handling is needed,
+				// then might need special job item which handles the switch later
+				if (h.type == header::CONNECT)
+				{
+					inBuf.drop(nHeadBytes);
+
+					// connect as non-first request...
+					// :-( support we not right now
+					if(!m_jobs2send.empty())
+					{
+						return 0;
+					}
+
+					tSplitWalk iter(&h.frontLine);
+					if (iter.Next() && iter.Next())
+					{
+						cmstring tgt(iter);
+						if (rex::Match(tgt, rex::PASSTHROUGH))
+						{
+#warning implement pt-mode here, using j_sendbuf as outgoing buffer
+							//Switch2RawPassThrough();
+							return EV_READ | EV_WRITE;
+							// RawPassThrough::PassThrough(inBuf, m_confd, tgt);
+						}
+						else
+						{
+							m_jobs2send.emplace_back(h, *this);
+							m_jobs2send.back().PrepareErrorResponse()
+									<< "HTTP/1." <<
+									( m_jobs2send.back().m_bIsHttp11 ? "1" : "0")
+									<< " 403 CONNECT denied (ask the admin to allow HTTPS tunnels)\r\n\r\n";
+							return EV_WRITE;
+						}
+					}
+					// anything else?
+					return 0;
+				}
+
+				if (m_sClientHost.empty()) // may come from UDS wrapper... MUST identify itself first
+				{
+					inBuf.drop(nHeadBytes);
+
+					if (h.h[header::XORIG] && *(h.h[header::XORIG]))
+					{
+						m_sClientHost = h.h[header::XORIG];
+						continue; // OK, next header?
+					}
+					else
+						return 0;
+				}
+
+				ldbg("Parsed REQUEST:" << h.frontLine); ldbg("Rest: " << (inBuf.size()-nHeadBytes));
+				m_jobs2send.emplace_back(h, *this);
+				m_jobs2send.back().PrepareDownload(inBuf.rptr());
+				inBuf.drop(nHeadBytes);
+
+				ret |= EV_WRITE;
+
+			} catch (bad_alloc&)
+			{
+				return 0;
+			}
+		}
+	}
+
+	if(what&EV_WRITE)
+	{
+		if(m_jobs2send.empty())
+			return 0; // who requested write, wtf?
+
+		auto& j = m_jobs2send.back();
+		j.SendData(fd);
+		ldbg("Job step result: " << int(j.m_stateExternal));
+		switch (j.m_stateExternal)
+		{
+		case job::XSTATE_DISCON:
+			return 0;
+		case job::XSTATE_CAN_SEND:
+			return EV_READ | EV_WRITE;
+		case job::XSTATE_WAIT_DL:
+			return EV_READ; // blocked by download, write-check event will be re-added by downloader when it got data
+		case job::XSTATE_FINISHED:
+			m_jobs2send.pop_front();
+			ClearSharedMembers();
+			ldbg("Remaining jobs to send: " << m_jobs2send.size())
+			;
+		}
+	}
+
+	return ret;
+}
+
+#if 0
+void conn::WorkLoop()
+{
+	while(true)
+	{
 		bool checkDlFd = false;
 		job *pjSender = m_jobs2send.empty() ? nullptr :m_jobs2send.front();
 
@@ -229,11 +376,7 @@ void conn::WorkLoop() {
 			}
 			if (pjSender->m_eDlType == job::DLSTATE_OTHER)
 			{
-#ifdef HAVE_LINUX_EVENTFD
-				int fd = m_wakeventfd;
-#else
-				int fd = m_wakepipe[0];
-#endif
+				int fd = getEventReadFd();
 				if (fd > maxfd)
 					maxfd = fd;
 				FD_SET(fd, &rfds);
@@ -242,10 +385,7 @@ void conn::WorkLoop() {
 
 		ldbg("select con");
 
-		struct timeval tv;
-		tv.tv_sec = cfg::nettimeout;
-		tv.tv_usec = 23;
-		int ready = select(maxfd+1, &rfds, &wfds, nullptr, &tv);
+		int ready = select(maxfd+1, &rfds, &wfds, nullptr, GetNetworkTimeout());
 
 		if(ready == 0)
 		{
@@ -301,109 +441,6 @@ void conn::WorkLoop() {
 			}
 		}
 
-		// split new data into requests
-		while(inBuf.size()>0) {
-			try
-			{
-				if(!m_pTmpHead)
-					m_pTmpHead = new header();
-				if(!m_pTmpHead)
-					return; // no resources? whatever
-
-				m_pTmpHead->clear();
-				int nHeadBytes=m_pTmpHead->Load(inBuf.rptr(), inBuf.size());
-				ldbg("header parsed how? " << nHeadBytes);
-				if(nHeadBytes == 0)
-				{ // Either not enough data received, or buffer full; make space and retry
-					inBuf.move();
-					break;
-				}
-				if(nHeadBytes < 0)
-				{
-					ldbg("Bad request: " << inBuf.rptr() );
-					return;
-				}
-
-				// also must be identified before
-				if (m_pTmpHead->type == header::POST)
-				{
-					if (cfg::forwardsoap && !m_sClientHost.empty())
-					{
-						if (RawPassThrough::CheckListbugs(*m_pTmpHead))
-						{
-							tSplitWalk iter(&m_pTmpHead->frontLine);
-							if(iter.Next() && iter.Next())
-								RawPassThrough::RedirectBto2https(m_confd, iter);
-						}
-						else
-						{
-							ldbg("not bugs.d.o: " << inBuf.rptr());
-						}
-						// disconnect anyhow
-						return;
-					}
-					ldbg("not allowed POST request: " << inBuf.rptr());
-					return;
-				}
-
-				if(m_pTmpHead->type == header::CONNECT)
-				{
-
-					inBuf.drop(nHeadBytes);
-
-					tSplitWalk iter(&m_pTmpHead->frontLine);
-					if(iter.Next() && iter.Next())
-					{
-						cmstring tgt(iter);
-						if(rex::Match(tgt, rex::PASSTHROUGH))
-							RawPassThrough::PassThrough(inBuf, m_confd, tgt);
-						else
-						{
-							tSS response;
-							response << "HTTP/1.0 403 CONNECT denied (ask the admin to allow HTTPS tunnels)\r\n\r\n";
-							while(!response.empty())
-								response.syswrite(m_confd);
-						}
-					}
-					return;
-				}
-
-				if (m_sClientHost.empty()) // may come from wrapper... MUST identify itself
-				{
-
-					inBuf.drop(nHeadBytes);
-
-					if(m_pTmpHead->h[header::XORIG] && *(m_pTmpHead->h[header::XORIG]))
-					{
-						m_sClientHost=m_pTmpHead->h[header::XORIG];
-						continue; // OK
-					}
-					else
-						return;
-				}
-
-				ldbg("Parsed REQUEST:" << m_pTmpHead->frontLine);
-				ldbg("Rest: " << (inBuf.size()-nHeadBytes));
-
-				{
-					job * j = new job(m_pTmpHead, *this);
-#warning clear scratch data here?
-					j->PrepareDownload(inBuf.rptr());
-					inBuf.drop(nHeadBytes);
-
-					m_jobs2send.emplace_back(j);
-#ifdef DEBUG
-					m_nProcessedJobs++;
-#endif
-				}
-
-				m_pTmpHead=nullptr; // owned by job now
-			}
-			catch(bad_alloc&)
-			{
-				return;
-			}
-		}
 
 		if(inBuf.freecapa()==0)
 			return; // cannot happen unless being attacked
@@ -424,46 +461,18 @@ void conn::WorkLoop() {
 				else if (pjSender->m_eDlType == job::DLSTATE_OTHER && FD_ISSET(fd, &rfds))
 				{
 					trySend = true; // and also needs to clean the event fd
-#ifdef HAVE_LINUX_EVENTFD
-					eventfd_t xtmp;
-					int tmp;
-					do
-					{
-						tmp = eventfd_read(fd, &xtmp);
-					} while (tmp < 0 && (errno == EINTR || errno == EAGAIN));
-
-#else
-					for (int tmp; read(fd, &tmp, 1) > 0;)
-					;
-#endif
+					eventFetch();
 				}
 			}
 
 			if (trySend)
 			{
-				pjSender->SendData(m_confd);
-				ldbg("Job step result: " << int(pjSender->m_stateExternal));
-				switch (pjSender->m_stateExternal)
-				{
-				case job::XSTATE_DISCON:
-					return;
-				case job::XSTATE_CAN_SEND:
-					continue; // come back ASAP
-				case job::XSTATE_WAIT_DL:
-					dlPaused = false; // does not make sense anymore
-					break;
-				case job::XSTATE_FINISHED:
-					m_jobs2send.pop_front();
-					delete pjSender;
-					pjSender = nullptr;
-					ClearSharedMembers();
-					ldbg("Remaining jobs to send: " << m_jobs2send.size())
-					;
-				}
+
 			}
 		}
 	}
 }
+#endif
 
 bool conn::SetupDownloader(const char *pszOrigin)
 {
@@ -488,10 +497,11 @@ bool conn::SetupDownloader(const char *pszOrigin)
 
 		if(!m_pDlClient)
 			return false;
+#warning wie leben einhauhen? das ding hüpft von fd zu fd
+//		m_lastDlState = m_pDlClient->Work(dlcon::freshStart);
+//		return ! (dlcon::tWorkState::fatalError & m_lastDlState.flags);
 
-		m_lastDlState = m_pDlClient->Work(dlcon::freshStart);
-		return ! (dlcon::tWorkState::fatalError & m_lastDlState.flags);
-
+		return true;
 	}
 	catch(bad_alloc&)
 	{
@@ -530,61 +540,17 @@ void conn::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewCli
 		logClient = pNewClient;
 }
 
-void conn::Shutdown()
-{
-	for(auto& j: m_jobs2send) delete j;
-	m_jobs2send.clear();
-
-	if(m_pDlClient) m_pDlClient->Shutdown();
-
-#ifdef HAVE_LINUX_EVENTFD
-	forceclose(m_wakeventfd);
-#else
-	forceclose(m_wakepipe[0]);
-	forceclose(m_wakepipe[1]);
-#endif
-}
-
 bool conn::Subscribe4updates(tFileItemPtr fitem)
 {
-#ifdef HAVE_LINUX_EVENTFD
-	if (m_wakeventfd == -1)
-	{
-		m_wakeventfd = eventfd(0, 0);
-		if (m_wakeventfd == -1)
-			return false;
-		else
-			set_nb(m_wakeventfd);
-	}
-	fitem->subscribe(m_wakeventfd);
-#else
-	if(m_wakepipe[0] == -1)
-	{
-		if (0 == pipe(m_wakepipe))
-		{
-			set_nb(m_wakepipe[0]);
-			set_nb(m_wakepipe[1]);
-		}
-		else
+	if(!setupEventFd())
 		return false;
-	}
-	fitem->subscribe(m_wakepipe[1]);
-#endif
+	fitem->subscribe(getEventWriteFd());
 	return true;
 }
 
 void conn::UnsubscribeFromUpdates(tFileItemPtr fitem)
 {
-#ifdef HAVE_LINUX_EVENTFD
-	if (m_wakeventfd == -1)
-		return;
-	fitem->unsubscribe(m_wakeventfd);
-#else
-	if(m_wakepipe[0] == -1)
-	return;
-	fitem->unsubscribe(m_wakepipe[1]);
-#endif
-
+	fitem->unsubscribe(getEventWriteFd());
 }
 }
 

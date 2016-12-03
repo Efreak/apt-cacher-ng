@@ -2,6 +2,7 @@
 #define SOCKIO_H_
 
 #include "meta.h"
+#include "acfg.h"
 
 #include <netinet/in.h>
 #include <netinet/tcp.h>
@@ -67,6 +68,13 @@ inline bool check_read_state(int fd)
 
 extern event_base *g_ebase;
 
+inline const struct timeval& GetNetworkTimeout()
+{
+	static struct timeval tv;
+	tv.tv_sec = cfg::nettimeout;
+	tv.tv_usec = 23;
+	return tv;
+}
 }
 
 #endif /*SOCKIO_H_*/

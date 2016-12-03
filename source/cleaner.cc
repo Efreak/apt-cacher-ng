@@ -167,8 +167,8 @@ void cleaner::dump_status()
 }
 
 
-void dump_handler(int) {
-#warning reenable, as static method
+void dump_handler()
+{
 	//fileItemMgmt::dump_status();
 	g_victor.dump_status();
 	g_tcp_con_factory.dump_status();
