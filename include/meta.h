@@ -462,6 +462,10 @@ struct tDtorExec
 #define ACTION_ON_LEAVING(oname, lambdacode) \
 		auto __do ## oname = lambdacode; \
 		tDtorExec<decltype(__do ## oname)> oname(__do ## oname);
+// even more simplified version, assume object context
+#define ON_RETURN(oname, lambdacode) \
+		auto __do ## oname = [this]() { lambdacode; } ;\
+		tDtorExec<decltype(__do ## oname)> oname(__do ## oname);
 
 // similar, can be turned off... maybe overkill and could be done with external parameters but easier to use
 // in a macro with less headaches
@@ -493,10 +497,16 @@ std::pair<T,T> pairSum(const std::pair<T,T>& a, const std::pair<T,T>& b)
 	return std::pair<T,T>(a.first+b.first, a.second + b.second);
 }
 
+typedef std::function< void() > tAction;
+// add action delegate to background thread queue, schedule its processing
+void postServiceAction(tAction);
+// push delegate into execution within libevent thread
+void postIoAction(tAction);
+// to exclusive thread for maintenance tasks. Will fire up the helper thread when requested first time.
+void postMaintenanceAction();
+
 }
 
-void serviceResultNotify();
-void enqueServiceAction(std::function< void() > action);
 
 #endif // _META_H
 

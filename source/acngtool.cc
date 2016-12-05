@@ -33,6 +33,7 @@
 #include <string>
 #include <list>
 #include <queue>
+#include <unordered_map>
 
 #include "debug.h"
 #include "dlcon.h"
@@ -93,7 +94,7 @@ struct CPrintItemFactory : public IFitemFactory
 			}
 			virtual int GetFileFd() override
 			{	return 1;}; // something, don't care for now
-			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
+			virtual bool DownloadStartedConsumeHeader( header &h, size_t, const char *,
 					bool, bool&) override
 			{
 				m_head = h;
@@ -173,7 +174,7 @@ struct CReportItemFactory : public IFitemFactory
 			}
 			virtual int GetFileFd() override
 			{	return 1;}; // something, don't care for now
-			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
+			virtual bool DownloadStartedConsumeHeader( header &h, size_t, const char *,
 					bool, bool&) override
 			{
 				m_head = h;

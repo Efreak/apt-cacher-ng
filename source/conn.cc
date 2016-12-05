@@ -29,8 +29,6 @@ namespace acng
 
 conn::conn(cmstring& sClientHost) : m_sClientHost(sClientHost)
 {
-	if(!inBuf.setsize(32*1024))
-		throw std::bad_alloc();
 };
 
 conn::~conn() {
@@ -48,8 +46,31 @@ conn::~conn() {
 
 	log::flush();
 
-	if(m_event)
-		event_free(m_event);
+	int fd = getConFd();
+	DeleteEvents();
+	termsocket(fd);
+}
+
+void cb_conn(evutil_socket_t fd, short what, void *arg)
+{
+	if(!arg) return;
+	auto c = (conn*) arg;
+
+	// if frozen, close, if exited without continuation wish, close
+	if( (what & EV_TIMEOUT) || ! c->socketAction(fd, what))
+		delete c;
+}
+
+bool conn::Start(int fd, event_callback_fn cb) noexcept
+{
+	if(!inBuf.setsize(32*1024))
+		return false;
+	return InitEvents(fd, cb);
+}
+
+int conn::getConFd()
+{
+	return m_eventRecv ? event_get_fd(m_eventRecv) : -1;
 }
 
 namespace RawPassThrough
@@ -179,13 +200,19 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 }
 }
 
-
-short conn::socketAction(int fd, short what)
+bool conn::socketAction(int fd, short what)
 {
 	LOGSTART(__FUNCTION__);
-
-	// can always get new jobs
-	short ret = EV_READ;
+	auto doRecv = [this]()
+		{
+		event_add(m_eventRecv, &acng::GetNetworkTimeout());
+		return true;
+		};
+	auto doSendRecv = [this]()
+		{
+		event_add(m_eventSendRecv, &acng::GetNetworkTimeout());
+		return true;
+		};
 
 	if (!inBuf.empty() || (what & EV_READ))
 	{
@@ -200,7 +227,7 @@ short conn::socketAction(int fd, short what)
 				if (n != -EAGAIN)
 				{
 					ldbg("client closed connection");
-					return 0;
+					return false;
 				}
 			}
 		}
@@ -216,12 +243,12 @@ short conn::socketAction(int fd, short what)
 
 				// Either not enough data received, or buffer full; make space and retry later when buffer was shrinked
 				if (nHeadBytes == 0)
-					return EV_READ;
+					return doRecv();
 
 				if (nHeadBytes < 0)
 				{
 					ldbg("Bad request: " << inBuf.rptr() );
-					return 0;
+					return false;
 				}
 
 				// also must be identified before
@@ -236,7 +263,7 @@ short conn::socketAction(int fd, short what)
 							{
 #warning ein redirect-response hier einbauen, auch constraint dass es erster request ist
 								RawPassThrough::RedirectBto2https(fd, iter);
-								return EV_WRITE;
+								return doSendRecv();
 							}
 						}
 						else
@@ -244,9 +271,9 @@ short conn::socketAction(int fd, short what)
 							ldbg("not bugs.d.o: " << inBuf.rptr());
 						}
 						// disconnect anyhow
-						return 0;
+						return false;
 					} ldbg("not allowed POST request: " << inBuf.rptr());
-					return 0;
+					return false;
 				}
 
 				// handle a request to play as raw tunnel
@@ -261,7 +288,7 @@ short conn::socketAction(int fd, short what)
 					// :-( support we not right now
 					if(!m_jobs2send.empty())
 					{
-						return 0;
+						return false;
 					}
 
 					tSplitWalk iter(&h.frontLine);
@@ -272,7 +299,7 @@ short conn::socketAction(int fd, short what)
 						{
 #warning implement pt-mode here, using j_sendbuf as outgoing buffer
 							//Switch2RawPassThrough();
-							return EV_READ | EV_WRITE;
+							return doSendRecv();
 							// RawPassThrough::PassThrough(inBuf, m_confd, tgt);
 						}
 						else
@@ -282,11 +309,11 @@ short conn::socketAction(int fd, short what)
 									<< "HTTP/1." <<
 									( m_jobs2send.back().m_bIsHttp11 ? "1" : "0")
 									<< " 403 CONNECT denied (ask the admin to allow HTTPS tunnels)\r\n\r\n";
-							return EV_WRITE;
+							return doSendRecv();
 						}
 					}
 					// anything else?
-					return 0;
+					return false;
 				}
 
 				if (m_sClientHost.empty()) // may come from UDS wrapper... MUST identify itself first
@@ -299,7 +326,7 @@ short conn::socketAction(int fd, short what)
 						continue; // OK, next header?
 					}
 					else
-						return 0;
+						return false;
 				}
 
 				ldbg("Parsed REQUEST:" << h.frontLine); ldbg("Rest: " << (inBuf.size()-nHeadBytes));
@@ -307,11 +334,11 @@ short conn::socketAction(int fd, short what)
 				m_jobs2send.back().PrepareDownload(inBuf.rptr());
 				inBuf.drop(nHeadBytes);
 
-				ret |= EV_WRITE;
+				return doSendRecv();
 
 			} catch (bad_alloc&)
 			{
-				return 0;
+				return false;
 			}
 		}
 	}
@@ -319,7 +346,7 @@ short conn::socketAction(int fd, short what)
 	if(what&EV_WRITE)
 	{
 		if(m_jobs2send.empty())
-			return 0; // who requested write, wtf?
+			return false; // who requested write, wtf?
 
 		auto& j = m_jobs2send.back();
 		j.SendData(fd);
@@ -327,11 +354,11 @@ short conn::socketAction(int fd, short what)
 		switch (j.m_stateExternal)
 		{
 		case job::XSTATE_DISCON:
-			return 0;
+			return false;
 		case job::XSTATE_CAN_SEND:
-			return EV_READ | EV_WRITE;
-		case job::XSTATE_WAIT_DL:
-			return EV_READ; // blocked by download, write-check event will be re-added by downloader when it got data
+			return doSendRecv();;
+		case job::XSTATE_EXT_TRIGGERED:
+			return doRecv(); // blocked by download, write-check event will be re-added by downloader when it got data
 		case job::XSTATE_FINISHED:
 			m_jobs2send.pop_front();
 			ClearSharedMembers();
@@ -339,8 +366,7 @@ short conn::socketAction(int fd, short what)
 			;
 		}
 	}
-
-	return ret;
+	return doRecv();
 }
 
 #if 0
@@ -454,7 +480,7 @@ void conn::WorkLoop()
 #else
 			int fd = m_wakepipe[0];
 #endif
-			if (pjSender->m_stateExternal == job::XSTATE_WAIT_DL)
+			if (pjSender->m_stateExternal == job::XSTATE_EXT_TRIGGERED)
 			{
 				if (pjSender->m_eDlType == job::DLSTATE_OUR && checkDlResult)
 					trySend = true;
@@ -497,9 +523,8 @@ bool conn::SetupDownloader(const char *pszOrigin)
 
 		if(!m_pDlClient)
 			return false;
-#warning wie leben einhauhen? das ding hüpft von fd zu fd
-//		m_lastDlState = m_pDlClient->Work(dlcon::freshStart);
-//		return ! (dlcon::tWorkState::fatalError & m_lastDlState.flags);
+
+		m_pDlClient->Start();
 
 		return true;
 	}
@@ -540,17 +565,5 @@ void conn::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewCli
 		logClient = pNewClient;
 }
 
-bool conn::Subscribe4updates(tFileItemPtr fitem)
-{
-	if(!setupEventFd())
-		return false;
-	fitem->subscribe(getEventWriteFd());
-	return true;
-}
-
-void conn::UnsubscribeFromUpdates(tFileItemPtr fitem)
-{
-	fitem->unsubscribe(getEventWriteFd());
-}
-}
+} // namespace acng
 

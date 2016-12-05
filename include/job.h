@@ -21,7 +21,7 @@ class job
 		{
 			XSTATE_FINISHED = 0, // processing finished
 		XSTATE_DISCON,
-		XSTATE_WAIT_DL,		// reenter SendData when something received from downloader
+		XSTATE_EXT_TRIGGERED,		// reenter SendData when something received from downloader
 		XSTATE_CAN_SEND,	// can send right away, no trigger needed
 //		XSTATE_WAIT_OUT,	// outgoing client socket is busy
 	} m_stateExternal = XSTATE_CAN_SEND;
@@ -43,12 +43,6 @@ class job
 	,STATE_FATAL_ERROR
 	} m_stateInternal = STATE_WAIT_DL_START, m_stateBackSend = STATE_FATAL_ERROR;
 
-	enum : char
-	{
-DLSTATE_NOTNEEDED, // shortcut, tell checks to skip downloader observation
-DLSTATE_OUR, DLSTATE_OTHER
-	} m_eDlType = DLSTATE_OUR;
-
 	void PrepareDownload(LPCSTR headBuf);
 	// set values to response a fatal error and close connection
 	// caller can add extra payload to j_sendBuf if needed.
@@ -67,6 +61,7 @@ DLSTATE_OUR, DLSTATE_OTHER
 	bool m_bClientWants2Close = false;
 	bool m_bIsHttp11 = false;
 	bool m_bFitemWasSubscribed = false;
+
 	mstring m_sFileLoc; // local_relative_path_to_file
 	tSpecialRequest::eMaintWorkType m_eMaintWorkType =
 			tSpecialRequest::workNotSpecial;
@@ -90,6 +85,13 @@ DLSTATE_OUR, DLSTATE_OTHER
 
 	bool ParseRange();
 
+	void unsubscribeItem()
+	{
+		if(!m_bFitemWasSubscribed && !m_pItem) return;
+		m_pItem->notifiers.erase(this);
+		m_bFitemWasSubscribed = false;
+	}
+	void subscribeItem();
 public:
 
 	/**

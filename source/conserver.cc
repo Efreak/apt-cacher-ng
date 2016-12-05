@@ -52,66 +52,25 @@ int yes(1);
 
 bool bTerminationMode(false);
 
-void cb_conn(evutil_socket_t fd, short what, void *arg)
-{
-	if(!arg) return;
-	auto c = (conn*) arg;
-
-	// if frozen, close, if exited without continuation wish, close
-	if( (what & EV_TIMEOUT) || (what = c->socketAction(fd, what), !what) )
-	{
-		delete c;
-		termsocket(fd);
-	}
-	// thread is not dead, just waiting and will be activated by others again
-	if(what&EV_SIGNAL)
-		return;
-#warning need this hack? where?
-
-//	c->m_event->ev_flags
-
-	event_add(c->m_event, & GetNetworkTimeout());
-}
-
-void SetupConAndGo(int fd, const char *szClientName=nullptr)
+void SetupConAndGo(int fd, cmstring& sClientName)
 {
 	LOGSTART2s("SetupConAndGo", fd);
-
-	if (!szClientName)
-		szClientName = "";
-
-	USRDBG("Client name: " << szClientName);
+	USRDBG("Client name: " << sClientName);
 	conn *c(nullptr);
-	struct event *connEvent(nullptr);
-	// delicate shutdown...
-	auto clean_conn = [&]()
-	{
-		USRDBG("Out of memory");
-		if (c)
-		{
-			c->m_event = nullptr;
-			delete c;
-		}
-		if(connEvent)
-		event_free(connEvent);
-		termsocket_quick(fd);
-	};
 	try
 	{
-		c = new conn(szClientName);
+		c = new conn(sClientName);
 		if (!c) // weid...
 			throw std::bad_alloc();
-
-		connEvent = event_new(g_ebase, fd, EV_READ, cb_conn, c);
-		if(!connEvent)
-			return clean_conn();
-		c->m_event = connEvent;
-		if(event_add(connEvent, &GetNetworkTimeout()))
-			return clean_conn();
+		if(!c->Start(fd))
+			delete c;
 	}
 	catch (...)
 	{
-		return clean_conn();
+		if(c)
+			delete c;
+		else
+			termsocket(fd);
 	}
 }
 
@@ -124,7 +83,7 @@ void cb_accept(evutil_socket_t fdHot, short what, void *arg)
 		{
 			set_nb(fd);
 //			USRDBG( "Detected incoming connection from the UNIX socket");
-			SetupConAndGo(fd);
+			SetupConAndGo(fd, sEmptyString);
 		}
 		else if(errno == EMFILE || errno == ENOMEM || ENOBUFS == errno)
 		{
@@ -142,7 +101,7 @@ void cb_accept(evutil_socket_t fdHot, short what, void *arg)
 		if (fd>=0)
 		{
 			set_nb(fd);
-			char hbuf[NI_MAXHOST];
+			char hbuf[NI_MAXHOST] = {0};
 	//		USRDBG( "Detected incoming connection from the TCP socket");
 
 			if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf),

@@ -3,10 +3,8 @@
 #define _CON_H
 
 #include "config.h"
-#include "lockable.h"
 #include "dlcon.h"
-
-#include <event.h>
+#include "evbase.h"
 
 #include <list>
 #include <string>
@@ -22,31 +20,26 @@ class header;
 //class conn;
 //typedef SHARED_PTR<conn> tConPtr;
 
-class conn : public tEventFd // , public std::enable_shared_from_this<conn> // : public tRunable
+class conn : public tEventBase // : public tEventFd // , public std::enable_shared_from_this<conn> // : public tRunable
 {
    public:
       conn(cmstring& sClientHost);
       virtual ~conn();
 
-      // when deleted, will release and free this event
-      struct event *m_event = 0;
+      bool Start(int fd, event_callback_fn cb) noexcept;
 
-      short socketAction(int fd, short what);
+      bool socketAction(int fd, short what);
+
+      int getConFd();
 
    private:
 	   conn& operator=(const conn&);// { /* ASSERT(!"Don't copy con objects"); */ };
 	   conn(const conn&);// { /* ASSERT(!"Don't copy con objects"); */ };
-      
+
       // descriptors for download progress watching
       // UNSUBSCRIBING MUST BE HANDLED WITH CARE or file descriptor leak would happen
       // (could do that that more safe with a shared_ptr structure and refcounting but
       // feels like overkill for a simple int value)
-
-      /**
-       * Setup wake descriptors as needed and subscribe on ptr. User must unsubscribe later!
-       */
-      bool Subscribe4updates(tFileItemPtr);
-      void UnsubscribeFromUpdates(tFileItemPtr);
 
       acbuf inBuf;
       std::list<job> m_jobs2send;
@@ -75,23 +68,21 @@ class conn : public tEventFd // , public std::enable_shared_from_this<conn> // :
 // scratch area for shared used by jobs
 	mstring j_sErrorMsg;
 	off_t j_nChunkRemainingBytes = 0;
-	off_t j_nRetDataCount = 0, j_nConfirmedSizeSoFar = 0; // what dler allows to send so far
+	off_t j_nRetDataCount = 0;
 	off_t j_nSendPos = 0; // where the reader is
 	off_t j_nFileSendLimit = (MAX_VAL(off_t) - 1); // special limit, abort transmission there
 	tSS j_sendbuf;
 	int j_filefd = -1;
-	header j_respHead;
 
 #warning fixme, m_nFileSendLimit is last byte of the byte after?
 
 	inline void ClearSharedMembers()
 	{
 		j_sErrorMsg.clear();
-		j_nChunkRemainingBytes = j_nRetDataCount = j_nConfirmedSizeSoFar = j_nSendPos = 0;
+		j_nChunkRemainingBytes = j_nRetDataCount = j_nSendPos = 0;
 		j_nFileSendLimit = (MAX_VAL(off_t) - 1);
 		j_sendbuf.clear();
 		j_filefd = -1;
-		j_respHead.clear();
 	}
 
 

@@ -8,8 +8,7 @@
 #include "config.h"
 #include "lockable.h"
 #include "header.h"
-#include <unordered_map>
-#include <atomic>
+#include <map>
 
 namespace acng
 {
@@ -22,6 +21,7 @@ typedef std::shared_ptr<fileitem> tFileItemPtr;
 //! Base class containing all required data and methods for communication with the download sources
 struct fileitem
 {
+
 	// Life cycle (process states) of a file description item
 	enum FiStatus : char
 	{
@@ -48,36 +48,16 @@ struct fileitem
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow)=0;
 	
 	// dlcon callbacks:
-	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+	virtual bool DownloadStartedConsumeHeader(header & h, size_t hDataLen,
 			const char *pNextData,
 			bool bForcedRestart, bool &bDoCleanRestart) =0;
 	/*!
 	 * \return true IFF ok and caller might continue. False -> caller should abort.
 	 */
 	virtual bool StoreFileData(const char *data, unsigned int size)=0;
-	inline header GetHeaderLocking() { lockguard g(m_mx);  return m_head; }
-	
-	void subscribe(int fd);
-	void unsubscribe(int fd);
-
-	FiStatus GetStatus(mstring* psHttpStatusOrErrorMsg = nullptr,
-			off_t *nConfirmedSizeSoFar = nullptr, header *retHead=nullptr);
-	/*!
-	 * Extracts the HTTP status line from the header, in the format "status-code message".
-	 * If status is error, the message will be 500 or higher.
-	 */
-	inline cmstring GetHttpStatus()
-	{
-		mstring ret;
-#warning crap, fix
-		//GetStatus(&ret);
-		if(ret.empty()) ret = "500 Unknown Error";
-		return ret;
-
-	}
 
 	// returns when the state changes to complete or error
-	FiStatus WaitForFinish(int *httpCode=nullptr);
+	FiStatus WaitForFinish(const void *owner);
 
 	bool ResetCacheState(bool bForce=false);
 	
@@ -124,27 +104,11 @@ struct fileitem
 
 	mstring m_sPathRel; // policy: assign in ctor, change never
 
-	// protects access to values updated by dl-thread and read by others
-	std::mutex m_mx;
+	// shall be populated and cleaned by users in the main thread
+	std::map<void*, tAction> notifiers;
 
-	// remember which thread was assigned as downloader
-	pthread_t m_dlThreadId = {0};
+	inline void notifyObservers() {	for(const auto& n: notifiers) n.second();}
 
-	std::vector<int> m_subscribers;
-
-	// only used for blocking clients
-	std::condition_variable m_cvState;
-
-	// ... with lock
-	void notifyObservers();
-
-protected:
-
-	// poke everyone who subscribed for updates
-	void notifyObserversNoLock();
-
-	// just a shortcut
-	void poke(int fd);
 };
 
 /**
@@ -162,7 +126,7 @@ public:
 	virtual ~tFileItemEx();
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
-	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+	virtual bool DownloadStartedConsumeHeader(header & h, size_t hDataLen,
 			const char *pNextData,
 			bool bForcedRestart, bool&) override;
 	virtual bool StoreFileData(const char *data, unsigned int size) override;
@@ -182,7 +146,7 @@ public:
 	tFileItemEx(cmstring &s) {m_sPathRel=s;};
 
 	// attempt to unregister a global item but only if it's unused
-	static bool TryDispose(tFileItemPtr& existingFi);
+	static bool TryDispose(const tFileItemPtr& existingFi);
 protected:
 	int MoveRelease2Sidestore();
 };

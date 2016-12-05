@@ -33,6 +33,7 @@ namespace acng
 #define LOGSTARTFUNC
 #define LOGSTART(x)
 #define LOGSTARTs(x)
+#warning murks, make variadic, prefix: Args:...
 #define LOGSTART2(x,y)
 #define LOGSTART2s(x,y)
 #define DBGQLOG(x)

@@ -23,15 +23,20 @@
 
 using namespace std;
 
+#warning subscriptions als map ist overkill?
+
 namespace acng
 {
+
+#warning where used?
 #define MAXTEMPDELAY acng::cfg::maxtempdelay // 27
 mstring sReplDir("_altStore" SZPATHSEP);
 
-typedef std::unordered_multimap<mstring, std::weak_ptr<fileitem> > tFiGlobMap;
-
+// weak resolution, reference cleanup done by destructor
+typedef std::map<mstring, std::weak_ptr<fileitem> > tFiGlobMap;
 static tFiGlobMap g_sharedItems;
-static acmutex g_sharedItemsMx;
+
+//static acmutex g_sharedItemsMx;
 /*
 header const & fileitem::GetHeaderUnlocked()
 {
@@ -143,16 +148,11 @@ void fileitem::ResetCacheState()
 
 fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 {
-	LOGSTART2("fileitem::Setup", bCheckFreshness);
+	LOGSTART(__FUNCTION__);
 
-	{
-		lockguard g(m_mx);
-		auto xpected = FIST_FRESH;
-		auto ourTurn = m_status == FIST_FRESH;
-		if(!ourTurn) //		.compare_exchange_strong(xpected, FIST_INITIALIZING);
-			return xpected;
-		m_status = FIST_INITIALIZING;
-	}
+	if(m_status != FIST_FRESH)
+		return m_status;
+	m_status = FIST_INITIALIZING;
 
 	cmstring sPathAbs(CACHE_BASE+m_sPathRel);
 
@@ -164,21 +164,16 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 		m_status=FIST_INITED;
 		return m_status;
 	};
-
-	// now we are in the caller thread's turf, can do IO in critical section
-	lockguard g(m_mx);
-
 	m_bCheckFreshness = bCheckFreshness;
-	
 
 	if(m_head.LoadFromFile(sPathAbs+".head") >0 && m_head.type==header::ANSWER )
 	{
 		if(200 != m_head.getStatus())
 			return error_clean();
 
-		LOG("good head");
-
 		m_nSizeSeenInCache=GetFileSize(sPathAbs, 0);
+
+		LOG("have head data, file size: " << m_nSizeSeenInCache);
 
 		// some plausibility checks
 		if(m_bCheckFreshness)
@@ -186,6 +181,7 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 			const char *p=m_head.h[header::LAST_MODIFIED];
 			if(!p)
 				return error_clean(); // suspicious, cannot use it
+
 			LOG("check freshness, last modified: " << p );
 
 			// that will cause check by if-mo-only later, needs to be sure about the size here
@@ -202,6 +198,8 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 			if(pContLen)
 			{
 				off_t nContLen=atoofft(pContLen); // if it's 0 then we assume it's 0
+
+				LOG("check assumed content length, " << nContLen);
 				
 				// file larger than it could ever be?
 				if(nContLen < m_nSizeSeenInCache)
@@ -217,6 +215,8 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 			}
 			else
 			{
+				LOG("no defined content length");
+
 				// no content length known, assume it's ok
 				m_nCheckedSize=m_nSizeSeenInCache;
 			}
@@ -224,6 +224,7 @@ fileitem::FiStatus fileitem::SetupFromCache(bool bCheckFreshness)
 	}
 	else // -> no .head file
 	{
+		LOG("no head file");
 		// maybe there is some left-over without head file?
 		// Don't thrust volatile data, but otherwise try to reuse?
 		if(!bCheckFreshness)
@@ -254,8 +255,8 @@ bool fileitem::CheckUsableRange_unlocked(off_t nRangeLastByte)
 
 bool fileitem::ResetCacheState(bool bForce)
 {
-	lockguard g(m_mx);
-
+#if 0
+#warning meh, need to beam this to main thread?
 	if(bForce)
 	{
 		if(m_status>FIST_FRESH)
@@ -280,6 +281,7 @@ bool fileitem::ResetCacheState(bool bForce)
 	if(stf && stf.st_size>0)
 		return false; // didn't work. Permissions? Anyhow, too dangerous to act on this now
 	header h;
+#warning overcmplicated... purpose?
 	h.LoadFromFile(sPathHead);
 	h.del(header::CONTENT_LENGTH);
 	h.del(header::CONTENT_TYPE);
@@ -291,28 +293,21 @@ bool fileitem::ResetCacheState(bool bForce)
 //		return false; // that's weird too, header still exists with real size
 	m_head.clear();
 	m_nSizeSeenInCache=m_nCheckedSize=0;
-
+#endif
 	return true;
 }
 
 void fileitem::SetComplete()
 {
-	lockguard g(m_mx);
 	m_nCheckedSize = m_nSizeSeenInCache;
 	m_status = FIST_COMPLETE;
-	m_cvState.notify_all();
-	notifyObserversNoLock();
+	notifyObservers();
 }
-
-#warning lock, access?
 void fileitem::UpdateHeadTimestamp()
 {
-	{
-		lockguard g(m_mx);
-		if(m_status < FIST_DLGOTHEAD || m_status > FIST_COMPLETE || m_sPathRel.empty())
-			return;
-	}
-	utimes(SZABSPATHSFX(m_sPathRel, sHead), nullptr);
+	if (m_status < FIST_DLGOTHEAD || m_status > FIST_COMPLETE)
+		return;
+	if (!m_sPathRel.empty()) utimes(SZABSPATHSFX(m_sPathRel, sHead), nullptr);
 }
 /*
 fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)
@@ -334,14 +329,14 @@ inline void _LogWithErrno(cmstring& msg, const string & sFile)
 
 #ifndef MINIBUILD
 
-bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+bool tFileItemEx::DownloadStartedConsumeHeader(header & h, size_t hDataLen,
 		const char *pNextData,
 		bool bRestartResume, bool &bDoCleanRetry)
 {
 	LOGSTART("fileitem::DownloadStartedStoreHeader");
 
-	// big critical section is ok since all the waiters have to get the state soon anyhow
-	lockguard g(m_mx);
+	// almost always news for someone, even when lost the race
+	ON_RETURN(_notifier, notifyObservers())
 
 	auto SETERROR = [this, &h](cmstring& x) {
 		m_bAllowStoreData=false;
@@ -349,7 +344,6 @@ bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 			m_head.frontLine=mstring("HTTP/1.1 ")+x;
 			m_head.set(header::XORIG, h.h[header::XORIG]);
 			m_status=FIST_DLERROR;
-			m_cvState.notify_all();
 		}
 		_LogWithErrno(x, m_sPathRel);
 	};
@@ -382,16 +376,6 @@ bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 
 	USRDBG( "Download started, storeHeader for " << m_sPathRel << ", current status: " << (int) m_status);
 
-	// always news for someone, even when lost the race
-	auto notifAction = [this]() {
-		// nope, we have a lock already... notifyObservers();
-		for(const auto& n: m_subscribers)
-			if(n != -1)
-				poke(n);
-		m_cvState.notify_all();
-	};
-	ACTION_ON_LEAVING_EX(_notifier, notifAction)
-
 	// legal "transitions"
 	// normally from inited to assigned
 	// for hot restart and volatile:
@@ -420,9 +404,6 @@ bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 	}
 	if(!bStateEntered)
 		return false;
-
-	if(m_status == FIST_DLASSIGNED)
-		m_dlThreadId = pthread_self();
 
 	// optional optimisation: hints for the filesystem resp. kernel
 	off_t hint_start(0), hint_length(0);
@@ -541,7 +522,6 @@ bool tFileItemEx::DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 			USRDBG( "Peer denied to resume previous download (transient error) " << m_sPathRel );
 			m_nSizeSeenInCache = 0;
 			bDoCleanRetry=true;
-			_notifier.defuse();
 			return false;
 		}
 		else if(m_bIsGloballyRegistered) // only cleanup when acting on cache
@@ -688,30 +668,23 @@ bool tFileItemEx::StoreFileData(const char *data, unsigned int size)
 {
 	LOGSTART2("fileitem::StoreFileData", "status: " <<  (int) m_status << ", size: " << size);
 
-	// lock carefully to avoid pointless critical sections, especially around IO
+	ON_RETURN(_notifier, notifyObservers())
 
-	off_t tgtsize;
-	{
-		lockguard g(m_mx);
-		if(m_status < FIST_DLGOTHEAD || m_status > FIST_DLRECEIVING)
-			return false;
-		tgtsize = m_nCheckedSize + size;
-		if(size)
-			m_status = FIST_DLRECEIVING;
-	}
+	if (m_status < FIST_DLGOTHEAD || m_status > FIST_DLRECEIVING)
+		return false;
+	auto tgtsize = m_nCheckedSize + size;
+	if (size)
+		m_status = FIST_DLRECEIVING;
 	
 	if (size==0)
 	{
 		if (cfg::debug & log::LOG_MORE)
 			log::misc(tSS() << "Download of " << m_sPathRel << " finished");
 		m_head.StoreToFile(SZABSPATHSFX(m_sPathRel, sHead));
-		lockguard g(m_mx);
 		// we are done! Fix header from chunked transfers?
 		if (m_filefd >= 0 && !m_head.h[header::CONTENT_LENGTH])
 			m_head.set(header::CONTENT_LENGTH, m_nCheckedSize);
 		m_status = FIST_COMPLETE;
-		notifyObserversNoLock();
-		m_cvState.notify_all();
 	}
 	else
 	{
@@ -726,13 +699,10 @@ bool tFileItemEx::StoreFileData(const char *data, unsigned int size)
 						continue;
 
 					tErrnoFmter efmt("HTTP/1.1 503 ");
-					lockguard g(m_mx);
 					m_head.frontLine = efmt;
 					m_status = FIST_DLERROR;
 					// message will be set by the caller
 					_LogWithErrno(efmt.c_str(), m_sPathRel);
-					notifyObserversNoLock();
-					m_cvState.notify_all();
 					return false;
 				}
 				size-=r;
@@ -740,14 +710,10 @@ bool tFileItemEx::StoreFileData(const char *data, unsigned int size)
 			}
 		}
 	}
-
-	lockguard g(m_mx);
 	m_nCheckedSize = tgtsize;
 	// needs to remember the good size, just in case the DL is resumed (restarted in hot state)
 	if(m_nSizeSeenInCache < m_nCheckedSize)
 		m_nSizeSeenInCache = m_nCheckedSize;
-	notifyObserversNoLock();
-	// NOT pinging state watchers
 	return true;
 }
 
@@ -756,42 +722,44 @@ tFileItemPtr tFileItemEx::CreateRegistered(cmstring& sPathUnescaped,
 {
 	mstring sPathRel(tFileItemEx::NormalizePath(sPathUnescaped));
 	tFileItemPtr ret;
-	if(created4caller) *created4caller = false;
-	{
-		lockguard g(g_sharedItemsMx);
+	if (created4caller)
+		*created4caller = false;
 #warning also do house keeping in the stickyItemCache prio-q
-		auto itWeak = g_sharedItems.find(sPathRel);
-		if(itWeak != g_sharedItems.end())
-			ret = itWeak->second.lock();
-		if(ret && existingFi && ret != existingFi) // conflict, report failure
-			return tFileItemPtr();
-		if(!ret)
-		{
-			ret = std::make_shared<tFileItemEx>(sPathRel);
-			EMPLACE_PAIR_COMPAT(g_sharedItems, sPathRel, ret);
-			ret->m_bIsGloballyRegistered = true;
-			if(created4caller) *created4caller = true;
-		}
+	auto itWeak = g_sharedItems.find(sPathRel);
+	if (itWeak != g_sharedItems.end())
+		ret = itWeak->second.lock();
+	if (ret && existingFi && ret != existingFi) // conflict, report failure
+		return tFileItemPtr();
+	if (!ret)
+	{
+		ret = std::make_shared<tFileItemEx>(sPathRel);
+		EMPLACE_PAIR_COMPAT(g_sharedItems, sPathRel, ret);
+		ret->m_bIsGloballyRegistered = true;
+		if (created4caller)
+			*created4caller = true;
 	}
 	return ret;
 }
 
-bool tFileItemEx::TryDispose(tFileItemPtr& existingFi)
+bool tFileItemEx::TryDispose(const tFileItemPtr& existingFi)
 {
-	lockguard g(g_sharedItemsMx);
-	if(!existingFi || existingFi.use_count()>1)
-		return false; // cannot dispose, invalid or still used by others than the caller
-	auto it = g_sharedItems.find(existingFi->m_sPathRel);
-	if(it == g_sharedItems.end())
-		return false; // weird
-	auto sptr = it->second.lock();
-	if(sptr != existingFi) // XXX: report error?
-		return false;
-	// can do this without looking because no other thread can start sending data ATM
-	g_sharedItems.erase(it);
-	// nothing should be reading it anymore anyway
-	sptr->SetReportStatus(FIST_DLERROR);
-	checkforceclose(sptr->m_filefd);
+	// still observed
+	if(!existingFi || !existingFi->notifiers.empty()) return false;
+
+	if(existingFi->m_bIsGloballyRegistered)
+	{
+		auto it = g_sharedItems.find(existingFi->m_sPathRel);
+		if (it == g_sharedItems.end())
+			return false; // weird...
+		if (existingFi != it->second.lock()) // XXX: report error?
+			return false;
+		g_sharedItems.erase(it);
+	}
+	// if not global item then must have been subscribed by someone
+
+	// nothing should be using it anymore anyway but better be sure
+	existingFi->m_status = FIST_DLERROR;
+	checkforceclose(existingFi->m_filefd);
 	return true;
 }
 
@@ -1044,13 +1012,12 @@ tFileItemEx::~tFileItemEx()
 	}
 #endif
 	{
-		lockguard g(g_sharedItemsMx);
 
 		if(!m_bIsGloballyRegistered)
 			return;
 
 		//ASSERT(this == g_sharedItems[m_sPathRel]);
-		auto it = g_sharedItems.find(m_sPathRel);
+		tFiGlobMap::iterator it = g_sharedItems.find(m_sPathRel);
 		if (it != g_sharedItems.end())
 		{
 			auto backRef = it->second.lock();
@@ -1080,48 +1047,7 @@ int tFileItemEx::MoveRelease2Sidestore()
 
 #endif // MINIBUILD
 
-void fileitem::poke(int fd)
-{
-#ifdef HAVE_LINUX_EVENTFD
-       while(eventfd_write(fd, 1)<0) ;
-#else
-       POKE(fd);
-#endif
-}
-
-void fileitem::subscribe(int fd)
-{
-	ASSERT(fd != -1);
-	lockguard g(m_mx);
-	m_subscribers.push_back(fd);
-	// might have changed since lock was issued
-	poke(fd);
-}
-
-void fileitem::unsubscribe(int fd)
-{
-	lguard g(m_mx);
-	for(auto& m: m_subscribers)
-		if(m == fd)
-			m = -1;
-}
-
-void fileitem::notifyObservers()
-{
-	lguard g(m_mx);
-	for(const auto& n: m_subscribers)
-		if(n != -1)
-			poke(n);
-}
-
-
-void fileitem::notifyObserversNoLock()
-{
-	for(const auto& n: m_subscribers)
-		if(n != -1)
-			poke(n);
-}
-
+#if 0
 #warning sErrorMsg filled out correctly and reliable?
 
 fileitem::FiStatus fileitem::GetStatus(mstring* sErrorMsg,
@@ -1138,10 +1064,12 @@ fileitem::FiStatus fileitem::GetStatus(mstring* sErrorMsg,
 		*retHead = m_head;
 	return m_status;
 }
+#endif
 
 #warning implement this and use it again (subscribe for updates on fitem inside and... wait for >= complete)
 
-fileitem::FiStatus fileitem::WaitForFinish(int* httpCode)
+#if 0
+fileitem::FiStatus fileitem::WaitForFinish()
 {
 	ulock g(m_mx);
 	while(m_status < FIST_COMPLETE)
@@ -1150,12 +1078,6 @@ fileitem::FiStatus fileitem::WaitForFinish(int* httpCode)
 		*httpCode = m_head.getStatus();
 	return m_status;
 }
-
-void fileitem::SetReportStatus(FiStatus fistat)
-{
-	lguard g(m_mx);
-	m_status = fistat;
-	m_cvState.notify_all();
-}
+#endif
 
 }

@@ -14,6 +14,7 @@
 #include "fileitem.h"
 #include "acfg.h"
 #include "acbuf.h"
+#include "evbase.h"
 
 namespace acng
 {
@@ -46,7 +47,7 @@ enum eStateTransition
  * In addition, there is a local blacklist which is applied to all download jobs in the queue,
  * i.e. remotes marked as faulty there are no longer considered by the subsequent download jobs.
  */
-class dlcon
+class dlcon : public tEventBase
 {
 public:
 	dlcon(mstring *xff = nullptr, IDlConFactory *pConFactory = &g_tcp_con_factory);
@@ -92,8 +93,12 @@ public:
 	// run Work until job list is empty, return true if not thrown out with fatalError code
 	bool WorkLoop(unsigned initialFlags = eWorkParameter::freshStart);
 
-	// donate internal resources and prepare for termination. Should not be called during glboal shutdown.
-	void Shutdown();
+	// actually make it an active entity WRT libevent
+	void Start();
+
+	// donate internal resources and prepare for termination. Should not be called during global shutdown.
+	// @return true if can be deleted ATM, false if became detached (will suicide later)
+	bool Shutdown();
 
 	bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl, const cfg::tRepoData *pRepoDesc,
 			cmstring *sPatSuffix, LPCSTR reqHead, int nMaxRedirection);
@@ -102,9 +107,12 @@ public:
 	void DisposeJob(const tFileItemPtr& refFitem, off_t &nSent, off_t &nReceived);
 	mstring m_sXForwardedFor;
 
-	//! Returns true the file is or probably will be downloaded by this thread
-	bool IsCommingDownload(const tFileItemPtr &fiptr);
+	static void cb_event(int fd, short what, void *arg);
+
 private:
+
+	// not associated with any master anymore, can self-destruct at any time
+	bool m_bDetached = false;
 
 	//not to be copied
 	dlcon & operator=(const dlcon&);

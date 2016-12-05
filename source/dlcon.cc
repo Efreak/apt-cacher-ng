@@ -59,7 +59,7 @@ struct tDlJob
 
 	inline bool HasBrokenStorage()
 	{
-		return (!m_pStorage || m_pStorage->GetStatus() > fileitem::FIST_COMPLETE);
+		return (!m_pStorage || m_pStorage->m_status > fileitem::FIST_COMPLETE);
 	}
 
 #define HINT_MORE 0
@@ -585,7 +585,7 @@ struct tDlJob
 					}
 				}
 
-				if(!m_pStorage->DownloadStartedStoreHeader(h, hDataLen,
+				if(!m_pStorage->DownloadStartedConsumeHeader(h, hDataLen,
 						inBuf.rptr(), bHotItem, bDoRetry))
 				{
 					if(bDoRetry)
@@ -611,8 +611,7 @@ struct tDlJob
 #ifndef MINIBUILD
 				// faster download abort when the only user disconnected (job object gone)
 				// when active, 2 refs must be there, one in job and one here, others are weak
-				bool isGlobal = m_pStorage->m_bIsGloballyRegistered;
-				if(m_pStorage.use_count() < 2 && (!isGlobal || tFileItemEx::TryDispose(m_pStorage)))
+				if(tFileItemEx::TryDispose(m_pStorage))
 					return HINT_DISCON | EFLAG_JOB_BROKEN | EFLAG_STORE_COLLISION;;
 #endif
 
@@ -694,6 +693,7 @@ private:
 	tDlJob & operator=(const tDlJob&);
 };
 
+#warning all users subscribed?
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const cfg::tRepoData *pBackends,
 		cmstring *sPatSuffix, LPCSTR reqHead,
@@ -718,6 +718,7 @@ dlcon::~dlcon()
 {
 	LOGSTART("dlcon::~dlcon, Destroying dlcon");
 	g_nDlCons--;
+	DeleteEvents();
 }
 
 bool dlcon::ResetState()
@@ -742,20 +743,23 @@ bool dlcon::ResetState()
 	return true;
 }
 
-void dlcon::Shutdown()
+#error murks, braucht sowas wie detach und einen sicheren weg, das ding aus dem externen context zu killen. aber event_active braucht einen event zum notifizieren
+bool dlcon::Shutdown()
 {
 	if (inpipe.empty())
 	{
 		if(con)
 			m_pConFactory->RecycleIdleConnection(con);
+		DeleteEvents();
+		return true;
 	}
 	else
 	{
 		while(inpipe.size()>1)
 			inpipe.pop_back();
-
 		// keep the current download running as long as somebody uses it
-		WorkLoop(0);
+		m_bRonin = true;
+		return false;
 	}
 }
 
@@ -841,6 +845,7 @@ eStateTransition dlcon::SetupConnectionAndRequests()
 		for (tDljQueue::iterator it = m_qNewjobs.begin();
 				it != m_qNewjobs.end();)
 		{
+#warning skip the shit if a downloader is assigned and it is not us
 			if ((**it).SetupJobConfig(sErrorMsg, m_blacklist))
 				++it;
 			else
@@ -1002,6 +1007,12 @@ void dlcon::BlacklistMirror(tDlJobPtr & job)
 				job->GetPeerHost().GetPort())] = sErrorMsg;
 	};
 
+void dlcon::cb_event(int fd, short what, void *arg)
+{
+
+#warning add self-destruction, ronin und keine auftraege
+}
+
 dlcon::tWorkState dlcon::Work(unsigned flags)
 {
 	LOGSTART("dlcon::WorkLoop");
@@ -1019,12 +1030,6 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 			retcmd.fd = con->GetFD();
 		goto returned_for_io;
 	}
-#if 0 // unlikely
-	// not returned -- standalone loop or initialization?
-	if((flags & dlcon::internalIoLooping) && m_qNewjobs.empty())
-		return { tWorkState::fatalError, -1}; // WTF?
-
-#endif
 
 	// nothing to do yet
 	if( (flags & dlcon::freshStart) && m_qNewjobs.empty())
@@ -1483,8 +1488,10 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
         {
         	setIfNotEmpty(inpipe.front()->sErrorMsg, sErrorMsg);
         	if(AC_LIKELY(inpipe.front()->m_pStorage))
-        		inpipe.front()->m_pStorage->SetReportStatus(fileitem::FIST_DLERROR);
-
+        	{
+        		inpipe.front()->m_pStorage->m_status = fileitem::FIST_DLERROR;
+        		inpipe.front()->m_pStorage->notifyObservers();
+        	}
         	inpipe.pop_front();
 
         	if(EFLAG_STORE_COLLISION & loopRes)
@@ -1499,7 +1506,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
         			for(auto it = joblist.begin(); it!= joblist.end();)
         			{
         				if(*it && (**it).m_pStorage
-        						&& (**it).m_pStorage->GetStatus() >= fileitem::FIST_DLASSIGNED)
+        						&& (**it).m_pStorage->m_status >= fileitem::FIST_DLASSIGNED)
         				{
         					// someone else is doing it -> drop
         					joblist.erase(it++);

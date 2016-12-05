@@ -82,13 +82,13 @@ public:
 		return SPECIAL_FD;
 	}
 	; // something, don't care for now
-	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
+	virtual bool DownloadStartedConsumeHeader(header & h, size_t hDataLen,
 			const char *pNextData,
 			bool bRestartResume, bool &bDoCleanRetry) override
 	{
 		// behave like normal item but forbid data modifying operations
 		m_bAllowStoreData = false;
-		return tFileItemEx::DownloadStartedStoreHeader(h, hDataLen, pNextData, bRestartResume, bDoCleanRetry);
+		return tFileItemEx::DownloadStartedConsumeHeader(h, hDataLen, pNextData, bRestartResume, bDoCleanRetry);
 	}
 	virtual bool StoreFileData(const char *data, unsigned int size) override
 	{
@@ -122,8 +122,6 @@ public:
 	}
 	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow) override
 	{
-		lockguard g(m_mx);
-
 		while (0 == m_nConsumable && m_status <= FIST_COMPLETE
 				&& !(m_nCheckedSize == 0 && m_status == FIST_COMPLETE))
 		{
@@ -198,7 +196,7 @@ public:
 		m_head.set(header::CONTENT_LENGTH, m_nCheckedSize);
 	}
 	// never used to store data
-	bool DownloadStartedStoreHeader(const header &, size_t, const char *, bool, bool&) override
+	bool DownloadStartedConsumeHeader( header &, size_t, const char *, bool, bool&) override
 	{
 		return false;
 	}
@@ -227,12 +225,7 @@ static const string miscError(" [HTTP error, code: ");
 job::~job()
 {
 	LOGSTART("job::~job");
-	int stcode = 555;
-	if (m_pItem)
-	{
-#warning optimize
-		stcode = m_pItem->GetHeaderLocking().getStatus();
-	}
+	int stcode = m_pItem ? m_pItem->m_head.getStatus() : 555;
 
 	bool bErr = m_sFileLoc.empty() || stcode >= 400;
 
@@ -244,10 +237,17 @@ job::~job()
 #warning when volatile type and finished download, donate this to a quick life-keeping cache for 33s, see cleaner
 	// fileitem_with_storage::ProlongLife(m_pItem);
 	checkforceclose(m_parent.j_filefd);
+	unsubscribeItem();
+}
 
-	if (m_bFitemWasSubscribed)
-		m_parent.UnsubscribeFromUpdates(m_pItem);
-
+inline void job::subscribeItem()
+{
+	if(!m_pItem) return;
+#warning emplace pair
+	m_pItem->notifiers[this] = [this]() {
+		event_add(m_parent.m_eventSendRecv, &GetNetworkTimeout());
+	};
+	m_bFitemWasSubscribed = true;
 }
 
 inline void job::SetupFileServing(const string &visPath, const string &fsBase,
@@ -499,6 +499,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 	{
 		// Changing to local pass-through file item
 			LOGSTART("job::_SwitchToPtItem");
+			unsubscribeItem();
 			m_pItem.reset(new tPassThroughFitem(m_sFileLoc, m_parent));
 			m_pItem->m_nSizeSeenInCache = m_nReqRangeFrom;
 			m_pItem->m_nRangeLimit = m_nReqRangeTo;
@@ -647,7 +648,8 @@ void job::PrepareDownload(LPCSTR headBuf)
 		bForceFreshnessChecks = (!cfg::offlinemode && m_type == FILE_VOLATILE);
 
 		m_pItem = tFileItemEx::CreateRegistered(m_sFileLoc);
-	} catch (std::out_of_range&) // better safe...
+	}
+	catch (std::out_of_range&) // better safe...
 	{
 		return msg_invpath;
 	}
@@ -683,7 +685,7 @@ void job::PrepareDownload(LPCSTR headBuf)
 		if (m_pItem->m_nCheckedSize >= m_nReqRangeTo)
 		{
 			LOG("Got a partial request for incomplete download but sufficient range is available.");
-			m_eDlType = DLSTATE_NOTNEEDED;
+		//	m_eDlType = DLSTATE_NOTNEEDED;
 			m_stateExternal = XSTATE_CAN_SEND;
 			m_stateInternal = STATE_SEND_MAIN_HEAD;
 			return;
@@ -723,13 +725,14 @@ void job::PrepareDownload(LPCSTR headBuf)
 			if (rex::MatchUncacheable(testUri, rex::NOCACHE_TGT))
 				fistate = _SwitchToPtItem();
 
+			// be sure to receive all updates AND downloader must know that somebody is still listening
+			subscribeItem();
+
 			if (m_parent.m_pDlClient->AddJob(m_pItem, bHaveRedirects ? nullptr : &theUrl,
 					repoMapping.repodata, bHaveRedirects ? &repoMapping.sRestPath : nullptr,
 					nullptr, cfg::redirmax))
 			{
 				ldbg("Download job enqueued for " << m_sFileLoc);
-#warning fixme
-//			m_parent.m_lastDlState.flags |= dlcon::tWorkState::needConnect;
 			}
 			else
 			{
@@ -786,7 +789,6 @@ void job::SendData(int confd)
 		{
 			tSpecialRequest::RunMaintWork(m_eMaintWorkType, m_sFileLoc, confd);
 			m_stateExternal = XSTATE_DISCON;
-
 			return;
 		}
 
@@ -797,20 +799,16 @@ void job::SendData(int confd)
 		}
 	}
 
-	fileitem::FiStatus fistate = fileitem::FIST_FRESH;
-
-	// can avoid data checks when switching around, but only once
-	bool skipFetchState = false;
-
 	// eof?
-#define GOTOENDE { m_stateInternal = STATE_FINISHJOB ; skipFetchState = true; continue; }
+#define GOTOENDE { m_stateInternal = STATE_FINISHJOB ; continue; }
 
 	while (true) // send initial header, chunk header, etc. in a sequence; eventually left by returning
 	{
 		if (m_stateExternal == XSTATE_DISCON)
 			return;
 
-		if(m_stateInternal != STATE_FATAL_ERROR)
+#if 0
+		if(m_stateInternal != STATE_FATAL_ERROR) // don't replace error once it's set
 		{
 			if (!skipFetchState && m_pItem)
 			{
@@ -823,6 +821,15 @@ void job::SendData(int confd)
 			if (fistate >= fileitem::FIST_DLERROR)
 				THROW_ERROR(m_parent.j_sErrorMsg);
 		}
+#endif
+
+		// shortcut
+		auto fistate = m_pItem->m_status;
+		const auto& respHead = m_pItem->m_head;
+
+		// switch to failure mode ASAP unless already in that mode
+		if (m_stateInternal != STATE_FATAL_ERROR && fistate >= fileitem::FIST_DLERROR )
+			THROW_ERROR(respHead.getCodeMessage());
 
 		try // for bad_alloc in members
 		{
@@ -830,54 +837,41 @@ void job::SendData(int confd)
 			{
 			case (STATE_WAIT_DL_START):
 			{
-				if (m_eDlType == DLSTATE_NOTNEEDED)
+
+				if (fistate == fileitem::FIST_COMPLETE || m_pItem->m_nCheckedSize >= m_nReqRangeTo)
 				{
 					m_stateInternal = STATE_SEND_MAIN_HEAD;
 					continue;
 				}
 
-				if (fistate == fileitem::FIST_COMPLETE)
-				{
-					m_stateInternal = STATE_SEND_MAIN_HEAD;
-					continue;
-				}
 				if (!m_parent.m_pDlClient)
 					THROW_ERROR("500 Internal error establishing download");
 				// now needs some trigger, either our thread getting IO or another sending updates (then subscribe to updates)
 
 				if (fistate <= fileitem::FIST_DLASSIGNED)
 				{
-					m_stateExternal = XSTATE_WAIT_DL; // there will be news from downloader
+					m_stateExternal = XSTATE_EXT_TRIGGERED; // there will be news from downloader
 					return;
 				}
-				// ok, assigned, to whom?
-#warning fixme
-				//m_eDlType = (pthread_self() == m_parent.dlThreadId) ? DLSTATE_OUR : DLSTATE_OTHER;
 				m_stateInternal = STATE_CHECK_DL_PROGRESS;
 				m_stateBackSend = STATE_SEND_MAIN_HEAD;
-				if (m_eDlType == DLSTATE_OTHER) // ok, not our download agent
-				{
-					if (!m_parent.Subscribe4updates(m_pItem))
-						THROW_ERROR("500 Internal error on progress tracking");
-					m_bFitemWasSubscribed = true;
-				}
 				continue;
 			}
 			case (STATE_CHECK_DL_PROGRESS):
 			{
 				if (fistate < fileitem::FIST_DLGOTHEAD)
 				{
-					m_stateExternal = XSTATE_WAIT_DL;
+					m_stateExternal = XSTATE_EXT_TRIGGERED;
 					return;
 				}
 
-				if (m_parent.j_nSendPos >= m_parent.j_nConfirmedSizeSoFar)
+				if (m_parent.j_nSendPos >= m_pItem->m_nCheckedSize)
 				{
 					if (fistate >= fileitem::FIST_COMPLETE) // finito...
 						GOTOENDE
 					;
 					LOG("Cannot send more, not enough fresh data yet");
-					m_stateExternal = XSTATE_WAIT_DL;
+					m_stateExternal = XSTATE_EXT_TRIGGERED;
 					return;
 				}
 
@@ -889,12 +883,12 @@ void job::SendData(int confd)
 			{
 				ldbg("STATE_FRESH");
 				// nothing to send for special codes (like not-unmodified) or w/ GUARANTEED empty body
-				int statusCode = m_parent.j_respHead.getStatus();
+				int statusCode = respHead.getStatus();
 				bool bResponseHasBody = !BODYFREECODE(statusCode)
-						&& (!m_parent.j_respHead.h[header::CONTENT_LENGTH] // not set, maybe chunked data
-						|| atoofft(m_parent.j_respHead.h[header::CONTENT_LENGTH])); // set, to non-0
+						&& (!respHead.h[header::CONTENT_LENGTH] // not set, maybe chunked data
+						|| atoofft(respHead.h[header::CONTENT_LENGTH])); // set, to non-0
 
-				if (!FormatHeader(fistate, m_pItem->m_nCheckedSize, m_parent.j_respHead, bResponseHasBody,
+				if (!FormatHeader(fistate, m_pItem->m_nCheckedSize, respHead, bResponseHasBody,
 						statusCode))
 				{
 					// sErrorMsg was already set
@@ -908,7 +902,6 @@ void job::SendData(int confd)
 						(m_reqHead.type == header::HEAD || !bResponseHasBody) ?
 								STATE_FINISHJOB :
 								STATE_HEADER_SENT;
-				skipFetchState = true;
 				USRDBG("Response header to be sent in the next cycle: \n" << m_parent.j_sendbuf);
 				continue;
 			}
@@ -918,22 +911,23 @@ void job::SendData(int confd)
 				m_parent.j_filefd = m_pItem->GetFileFd();
 				if (!IsValidFD(m_parent.j_filefd))
 					THROW_ERROR("503 IO error");
+				set_nb(m_parent.j_filefd); // be sure about that
 				m_stateInternal = m_bChunkMode ? STATE_SEND_CHUNK_HEADER : STATE_SEND_PLAIN_DATA;
 				ldbg("next state will be: " << (int) m_stateInternal);
 				continue;
 			}
 			case (STATE_SEND_PLAIN_DATA):
 			{
-				ldbg("STATE_SEND_PLAIN_DATA, max. " << m_parent.j_nConfirmedSizeSoFar);
-				auto sendLimit = min(m_parent.j_nConfirmedSizeSoFar,
+				ldbg("STATE_SEND_PLAIN_DATA, max. " << m_pItem->m_nCheckedSize);
+				auto sendLimit = min(m_pItem->m_nCheckedSize,
 						m_parent.j_nFileSendLimit + 1);
 				auto nMax2SendNow = sendLimit - m_parent.j_nSendPos;
 				if(nMax2SendNow == 0)
 				{
-					m_stateExternal = XSTATE_WAIT_DL;
+					m_stateExternal = XSTATE_EXT_TRIGGERED;
 					return;
 				}
-#warning could keep writting for long time. Find a sane limiter for max2send now, maybe 3* sockets send buffer
+
 				ldbg("~sendfile: on "<< m_parent.j_nSendPos << " up to : " << nMax2SendNow);
 				int n = m_pItem->SendData(confd, m_parent.j_filefd, m_parent.j_nSendPos, nMax2SendNow);
 				ldbg("~sendfile: " << n << " new m_nSendPos: " << m_parent.j_nSendPos);
@@ -947,7 +941,7 @@ void job::SendData(int confd)
 
 				m_parent.j_nRetDataCount += n;
 				// shortcuts, no need to check state again?
-				if (fistate == fileitem::FIST_COMPLETE && m_parent.j_nSendPos == m_parent.j_nConfirmedSizeSoFar)
+				if (fistate == fileitem::FIST_COMPLETE && m_parent.j_nSendPos == m_pItem->m_nCheckedSize)
 					GOTOENDE
 				;
 				if (m_parent.j_nSendPos > m_parent.j_nFileSendLimit)
@@ -960,7 +954,7 @@ void job::SendData(int confd)
 			}
 			case (STATE_SEND_CHUNK_HEADER):
 			{
-				m_parent.j_nChunkRemainingBytes = min(m_parent.j_nConfirmedSizeSoFar, m_parent.j_nFileSendLimit + 1)
+				m_parent.j_nChunkRemainingBytes = min(m_pItem->m_nCheckedSize, m_parent.j_nFileSendLimit + 1)
 						- m_parent.j_nSendPos;
 				ldbg("STATE_SEND_CHUNK_HEADER for " << m_parent.j_nChunkRemainingBytes);
 				bool bFinalChunk = !m_parent.j_nChunkRemainingBytes ;
@@ -1039,6 +1033,7 @@ void job::SendData(int confd)
 			case (STATE_FATAL_ERROR):
 			{
 				// try to send something meaningful, otherwise disconnect
+				// m_pItem MIGHT BE ZERO in this section!!
 
 				if (m_parent.j_nRetDataCount > 0) // crap, already started sending or that was the error header
 					m_stateExternal = XSTATE_DISCON;

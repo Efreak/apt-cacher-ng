@@ -230,7 +230,7 @@ public:
 			}
 #define SETERROR { nErr=__LINE__; return false;}
 			bool &m_isFirst;
-			bool DownloadStartedStoreHeader(const header &head, size_t, const char*, bool bRestarted, bool&) override
+			bool DownloadStartedConsumeHeader( header &head, size_t, const char*, bool bRestarted, bool&) override
 			{
 				_cerr(head.frontLine<<endl);
 				m_head = head; // XXX: bloat, only status line and contlen required
@@ -313,8 +313,7 @@ public:
 		if(!dler.WorkLoop())
 			exit(1);
 
-		int nHttpCode(100);
-		pFi->WaitForFinish(&nHttpCode);
+		int nHttpCode = pFi->m_head.getStatus();
 		bIsFirst=false;
 
 		if (m_ftype == rex::FILE_SOLID && fidOrig != fid)
@@ -371,7 +370,7 @@ public:
 			{
 				m_bHeadOnly = true;
 			}
-			bool DownloadStartedStoreHeader(const header &head, size_t, const char*,
+			bool DownloadStartedConsumeHeader( header &head, size_t, const char*,
 					bool bRestart, bool&) override
 			{
 				if(bRestart)
@@ -386,8 +385,9 @@ public:
 		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
 		if(!dler.WorkLoop(dlcon::eWorkParameter::freshStart))
 			exit(23);
-		int nHttpCode(100);
-		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
+		int nHttpCode = probe->m_head.getStatus();
+		auto res = probe->m_status;
+//		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
 		stbuf.st_size = atoofft(probe->GetHeaderUnlocked().h[header::CONTENT_LENGTH], 0);
 		stbuf.st_mode &= ~S_IFDIR;
 		stbuf.st_mode |= S_IFREG;

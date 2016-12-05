@@ -251,7 +251,8 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		tFileItemPtr pFi, const tHttpUrl * pForcedURL, unsigned hints,
 		cmstring* sGuessedFrom)
 {
-
+#if 0
+#warning teleport to main
 	LOGSTART("tCacheMan::Download");
 
 	mstring sErr;
@@ -310,10 +311,10 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 		fileitem::FiStatus initState = pFi->SetupFromCache(bIsVolatileFile);
 		if (initState > fileitem::FIST_COMPLETE)
-			GOTOREPMSG(pFi->GetHttpStatus());
+			GOTOREPMSG(pFi->m_head.getCodeMessage());
 		if (fileitem::FIST_COMPLETE == initState)
 		{
-			if(200 != atoi(pFi->GetHttpStatus().c_str()))
+			if(200 != pFi->m_head.getStatus())
 			{
 				SendFmt << "Error downloading " << sFilePathRel << ":\n";
 				goto format_error;
@@ -415,7 +416,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	pFi->WaitForFinish();
 
-	if (pFi->GetStatus() == fileitem::FIST_COMPLETE
+	if (pFi->m_status == fileitem::FIST_COMPLETE
 			&& pFi->GetHeaderUnlocked().getStatus() == 200)
 	{
 		bSuccess = true;
@@ -443,7 +444,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 				SendChunkSZ("<i>(ignored)</i>\n");
 		}
 		else
-			GOTOREPMSG(pFi->GetHttpStatus());
+			GOTOREPMSG(pFi->m_head.getCodeMessage());
 	}
 
 	rep_dlresult:
@@ -581,6 +582,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		SendChunk("\n<br>\n");
 
 	return bSuccess;
+#endif
 }
 
 #define ERRMSGABORT if(m_nErrorCount && m_bErrAbort) { SendChunk(sErr); return; }
@@ -795,6 +797,8 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 {
 	LOGSTART("tCacheMan::Inject");
 
+#warning teleport to main
+#if 0
 	// XXX should it really filter it here?
 	if(GetFlags(toRel).uptodate)
 		return true;
@@ -851,7 +855,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 		{
 		}
 		// noone else should attempt to store file through it
-		virtual bool DownloadStartedStoreHeader(const header &, size_t, const char *,
+		virtual bool DownloadStartedConsumeHeader(header &, size_t, const char *,
 				bool, bool&) override
 		{
 			return false;
@@ -867,12 +871,10 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 
 			if(m_link)
 			{
-				lockguard g(m_mx);
 				if (LinkOrCopy(SABSPATH(fromRel), sPathAbs))
 				{
 					m_status = FIST_COMPLETE;
 					notifyObservers();
-					m_cvState.notify_all();
 					return true;
 				}
 			}
@@ -894,12 +896,12 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 			if (SetupFromCache(true) > fileitem::FIST_COMPLETE)
 				return false;
 			bool bNix(false);
-			if (!tFileItemEx::DownloadStartedStoreHeader(head, 0,
+			if (!tFileItemEx::DownloadStartedConsumeHeader(head, 0,
 					nullptr, false, bNix))
 				return false;
 			if(!StoreFileData(data.GetBuffer(), data.GetSize()) || ! StoreFileData(nullptr, 0))
 				return false;
-			if(GetStatus() != FIST_COMPLETE)
+			if(m_status != FIST_COMPLETE)
 				return false;
 			return true;
 		}
@@ -917,6 +919,8 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 	}
 
 	return bOK;
+
+#endif
 }
 
 void cacheman::StartDlder()
