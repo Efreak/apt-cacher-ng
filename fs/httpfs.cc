@@ -18,7 +18,7 @@
 #include "acfg.h"
 #include "lockable.h"
 #include "cleaner.h"
-#include "tcpconnect.h"
+#include <tcpconnection.h>
 
 #include "fileitem.h"
 #include "dlcon.h"
@@ -383,7 +383,8 @@ public:
 		};
 		auto probe(make_shared<tFitemProbe>());
 		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
-		if(!dler.WorkLoop(dlcon::eWorkParameter::freshStart))
+#warning fixme
+		if(!dler.WorkLoop(/*dlcon::eWorkParameter::freshStart*/))
 			exit(23);
 		int nHttpCode = probe->m_head.getStatus();
 		auto res = probe->m_status;

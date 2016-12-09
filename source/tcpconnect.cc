@@ -11,7 +11,7 @@
 #include "debug.h"
 
 #include "meta.h"
-#include "tcpconnect.h"
+#include <tcpconnect.h>
 
 #include "acfg.h"
 #include "caddrinfo.h"
@@ -22,14 +22,6 @@
 #include <tuple>
 
 using namespace std;
-
-//#warning FIXME, hack
-//#define NOCONCACHE
-
-#ifdef DEBUG
-#include <atomic>
-atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
-#endif
 
 #ifdef HAVE_SSL
 #include <openssl/evp.h>
@@ -46,23 +38,20 @@ atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 namespace acng
 {
 
-std::atomic_uint dl_con_factory::g_nconns(0);
 dl_con_factory g_tcp_con_factory;
+tSpareConPool spareConPool;
 
-tcpconnect::tcpconnect(cfg::tRepoData::IHookHandler *pObserver) : m_pStateObserver(pObserver)
+tcpconnection::tcpconnection(cfg::tRepoData::IHookHandler *pObserver) :
+		m_pStateObserver(pObserver), m_sparePoolIter(spareConPool.end())
 {
-	if(cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
-		dl_con_factory::g_nconns.fetch_add(1);
 	if(pObserver)
 		pObserver->OnAccess();
 }
 
-tcpconnect::~tcpconnect()
+tcpconnection::~tcpconnection()
 {
 	LOGSTART("tcpconnect::~tcpconnect, terminating outgoing connection class");
 	Disconnect();
-	if(cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
-		dl_con_factory::g_nconns.fetch_add(-1);
 #ifdef HAVE_SSL
 	if(m_ctx)
 	{
@@ -184,7 +173,26 @@ inline int connect_timeout(int sockfd, const struct sockaddr *addr,
 	return 0;
 }
 
-inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
+void cb_connection(evutil_socket_t fd, short what, void *arg)
+{
+	if(!arg) return;
+	auto c = (tcpconnection*) arg;
+
+	auto dormant = c->m_sparePoolIter != spareConPool.end();
+
+	// timeout or closed... nevermind, just release it
+	if (dormant)
+	{
+		delete c;
+		return;
+	}
+	// if frozen, close, if exited without continuation wish, close
+	if(! c->socketAction(fd, what))
+		delete c;
+}
+
+
+inline bool tcpconnection::_Connect(string & sErrorMsg, int timeout)
 {
 	LOGSTART2("tcpconnect::_Connect", "hostname: " << m_sHostName);
 
@@ -195,8 +203,6 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 		USRDBG(sErrorMsg);
 		return false; // sErrorMsg got the info already, no other chance to fix it
 	}
-
-	::signal(SIGPIPE, SIG_IGN);
 
 	// always consider first family, afterwards stop when no more specified
 	for (unsigned i=0; i< _countof(cfg::conprotos) && (0==i || cfg::conprotos[i]!=PF_UNSPEC); ++i)
@@ -225,7 +231,8 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			}
 #endif
 			set_nb(m_conFd);
-			if (acng::connect_timeout(m_conFd, pInfo->ai_addr, pInfo->ai_addrlen, timeout, true, m_nRcvBufSize) < 0)
+			if (acng::connect_timeout(m_conFd,
+					pInfo->ai_addr, pInfo->ai_addrlen, timeout, true, m_nRcvBufSize) < 0)
 			{
 				if(errno==ETIMEDOUT)
 					sErrorMsg="Connection timeout";
@@ -239,7 +246,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			nConCount.fetch_add(1);
 #endif
 			ldbg("connect() ok");
-
+			InitEvents(m_conFd, cb_connection);
 			return true;
 		}
 	}
@@ -255,7 +262,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 	return false;
 }
 
-void tcpconnect::Disconnect()
+void tcpconnection::Disconnect()
 {
 	LOGSTART("tcpconnect::_Disconnect");
 
@@ -273,92 +280,83 @@ void tcpconnect::Disconnect()
 	termsocket_quick(m_conFd);
 	m_nRcvBufSize = -1;
 }
-acmutex spareConPoolMx;
-multimap<tuple<string,string SSL_OPT_ARG(bool) >,
-		std::pair<tDlStreamHandle, time_t> > spareConPool;
 
-tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &sPort,
+tcpconnection* dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, cfg::tRepoData::IHookHandler *pStateTracker
-		,bool bSsl, int timeout, bool nocache)
+		,bool bSsl, int timeout, tSocketAction activityHandler)
 {
 	LOGSTART2s("tcpconnect::CreateConnected", "hostname: " << sHostname << ", port: " << sPort
 			<< (bSsl?" with ssl":" , no ssl"));
 
-	tDlStreamHandle p;
+	tcpconnection* ret = 0;
 #ifndef HAVE_SSL
 	if(bSsl)
 	{
 		log::err("E_NOTIMPLEMENTED: SSL");
-		return p;
+		return 0;
 	}
 #endif
 
 	bool bReused=false;
-	auto key = make_tuple(sHostname, sPort SSL_OPT_ARG(bSsl) );
+	tTcpConnCacheKey key(sHostname, sPort SSL_OPT_ARG(bSsl));
 
-#ifdef NOCONCACHE
-	p.reset(new tcpconnect(pStateTracker));
-	if(p)
+	auto it=spareConPool.find(key);
+	if(spareConPool.end() != it)
 	{
-		if(!p->_Connect(sHostname, sPort, sErrOut) || p->GetFD()<0) // failed or worthless
-			p.reset();
-	}
-#else
-	if(!nocache)
-	{
-		// mutex context
-		lockguard __g(spareConPoolMx);
-		auto it=spareConPool.find(key);
-		if(spareConPool.end() != it)
+		ret=it->second;
+		spareConPool.erase(it);
+		ret->m_m_sparePoolIter = spareConPool.end();
+
+		bReused = true;
+
+		ldbg("got connection " << ret << " from the idle pool");
+
+		// it was reset in connection recycling, restart now
+		if(pStateTracker)
 		{
-			p=it->second.first;
-			spareConPool.erase(it);
-			bReused = true;
-			ldbg("got connection " << p.get() << " from the idle pool");
-
-			// it was reset in connection recycling, restart now
-			if(pStateTracker)
-			{
-				p->m_pStateObserver = pStateTracker;
-				pStateTracker->OnAccess();
-			}
-#ifdef DEBUG
-			nReuseCount.fetch_add(1);
-#endif
+			ret->m_pStateObserver = pStateTracker;
+			pStateTracker->OnAccess();
 		}
 	}
-#endif
 
-	if(!p)
+	if (!ret)
 	{
-		p.reset(new tcpconnect(pStateTracker));
-		if(p)
+		ret = new tcpconnection(pStateTracker);
+		if (ret)
 		{
-			p->m_sHostName=sHostname;
-			p->m_sPort=sPort;
-		}
+			ret->m_sHostName = sHostname;
+			ret->m_sPort = sPort;
 
-		if(!p || !p->_Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
-			p.reset();
+			if (ret->_Connect(sErrOut, timeout) || ret->GetFD() < 0) // failed or worthless
+				goto drop_new_connection;
 #ifdef HAVE_SSL
-		else if(bSsl)
-		{
-			if(!p->SSLinit(sErrOut, sHostname, sPort))
+			if (ret && bSsl)
 			{
-				p.reset();
-				LOG("ssl init error");
+				if (!ret->SSLinit(sErrOut, sHostname, sPort))
+				{
+					LOG("ssl init error");
+					goto drop_new_connection;
+				}
 			}
-		}
 #endif
+		}
 	}
 
-	if(pbSecondHand)
-		*pbSecondHand = bReused;
+	if(ret)
+	{
+		ret->socketAction = activityHandler;
 
-	return p;
+		if(pbSecondHand)
+			*pbSecondHand = bReused;
+	}
+	return ret;
+
+	drop_new_connection:
+	delete ret;
+	return 0;
 }
 
-void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
+void dl_con_factory::RecycleIdleConnection(tcpconnection* & handle)
 {
 	if(!handle)
 		return;
@@ -383,25 +381,20 @@ void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
 	auto& host = handle->GetHostname();
 	if (!host.empty())
 	{
-#ifndef NOCONCACHE
-		time_t now = GetTime();
-		lockguard __g(spareConPoolMx);
 		ldbg("caching connection " << handle.get());
-
 		// a DOS?
 		if (spareConPool.size() < 50)
 		{
-			EMPLACE_PAIR_COMPAT(spareConPool, make_tuple(host, handle->GetPort()
-					SSL_OPT_ARG(handle->m_bio) ), make_pair(handle, now));
-#ifndef MINIBUILD
-			g_victor.ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
-#endif
+			tTcpConnCacheKey key(host, handle->GetPort()
+					SSL_OPT_ARG(handle->m_bio != 0));
+			handle->m_sparePoolIter = spareConPool.emplace(key, handle);
 		}
-#endif
 	}
 
-	handle.reset();
+	handle = nullptr;
 }
+
+#if 0
 
 time_t dl_con_factory::BackgroundCleanup()
 {
@@ -442,7 +435,9 @@ time_t dl_con_factory::BackgroundCleanup()
 	return spareConPool.empty() ? END_OF_TIME : GetTime()+TIME_SOCKET_EXPIRE_CLOSE/4+1;
 }
 
-void tcpconnect::KillLastFile()
+#endif
+
+void tcpconnection::KillLastFile()
 {
 #warning fixme, flag setzen, im dtor killen
 	/*
@@ -457,7 +452,8 @@ void tcpconnect::KillLastFile()
 
 void dl_con_factory::dump_status()
 {
-	lockguard __g(spareConPoolMx);
+#warning ever needed?
+#if 0
 	tSS msg;
 	msg << "TCP connection cache:\n";
 	for (const auto& x : spareConPool)
@@ -480,9 +476,11 @@ void dl_con_factory::dump_status()
 #endif
 
 	log::err(msg);
+#endif
+
 }
 #ifdef HAVE_SSL
-bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
+bool tcpconnection::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 {
 	SSL * ssl(nullptr);
 	int hret(0);
@@ -626,7 +624,7 @@ void globalSslInit()
 
 #endif
 
-bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
+bool tcpconnection::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 		cmstring *psAuthorization, bool bDoSSL)
 {
 	/*

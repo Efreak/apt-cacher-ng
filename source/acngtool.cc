@@ -560,9 +560,9 @@ int maint_job()
 			virtual tDlStreamHandle CreateConnected(cmstring &, cmstring &, mstring &, bool *,
 					cfg::tRepoData::IHookHandler *, bool, int, bool) override
 			{
-				struct udsconnection : public tcpconnect
+				struct udsconnection : public tcpconnection
 				{
-					udsconnection(int s) : tcpconnect(nullptr)
+					udsconnection(int s) : tcpconnection(nullptr)
 					{
 						m_conFd = s;
 #ifdef HAVE_SSL

@@ -52,6 +52,16 @@ int yes(1);
 
 bool bTerminationMode(false);
 
+void cb_conn(evutil_socket_t fd, short what, void *arg)
+{
+	if(!arg) return;
+	auto c = (conn*) arg;
+
+	// if frozen, close, if exited without continuation wish, close
+	if( (what & EV_TIMEOUT) || ! c->socketAction(fd, what))
+		delete c;
+}
+
 void SetupConAndGo(int fd, cmstring& sClientName)
 {
 	LOGSTART2s("SetupConAndGo", fd);
@@ -62,7 +72,7 @@ void SetupConAndGo(int fd, cmstring& sClientName)
 		c = new conn(sClientName);
 		if (!c) // weid...
 			throw std::bad_alloc();
-		if(!c->Start(fd))
+		if(!c->Start(fd, cb_conn))
 			delete c;
 	}
 	catch (...)

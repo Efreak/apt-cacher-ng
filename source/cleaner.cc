@@ -5,6 +5,7 @@
  *      Author: ed
  */
 
+#include <tcpconnection.h>
 #include "debug.h"
 #include "meta.h"
 
@@ -13,8 +14,6 @@
 #include "fileitem.h"
 #include "acfg.h"
 #include "caddrinfo.h"
-#include "tcpconnect.h"
-
 #include <limits>
 #include <cstring>
 using namespace std;

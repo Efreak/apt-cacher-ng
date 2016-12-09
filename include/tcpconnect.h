@@ -24,14 +24,19 @@
 namespace acng
 {
 
-class tcpconnect;
+class tcpconnection;
 struct fileitem;
-typedef std::shared_ptr<tcpconnect> tDlStreamHandle;
 
-class tcpconnect
+typedef std::function<void(evutil_socket_t, short)> tSocketAction;
+
+typedef std::tuple<mstring,mstring SSL_OPT_ARG(bool)> tTcpConnCacheKey;
+typedef std::multimap<tTcpConnCacheKey, tcpconnection*> tSpareConPool;
+extern tSpareConPool spareConPool;
+
+class tcpconnection : public tEventBase
 {
 public:
-	virtual ~tcpconnect();
+	virtual ~tcpconnection();
 
 	virtual int GetFD() { return m_conFd; }
 	inline cmstring & GetHostname() { return m_sHostName; }
@@ -44,10 +49,14 @@ public:
 
 	int m_nRcvBufSize = -1;
 
+	// will be "end" if the item is assigned to something, or a valid pool instance otherwise
+	tSpareConPool::iterator m_sparePoolIter;
+	tSocketAction socketAction;
+
 protected:
-	tcpconnect operator=(const tcpconnect&);
-	tcpconnect(const tcpconnect&) =default;
-	tcpconnect(cfg::tRepoData::IHookHandler *pStateReport);
+	tcpconnection operator=(const tcpconnection&);
+	tcpconnection(const tcpconnection&) =default;
+	tcpconnection(cfg::tRepoData::IHookHandler *pStateReport);
 
 	int m_conFd =-1;
 	mstring m_sHostName, m_sPort;
@@ -123,14 +132,13 @@ class IDlConFactory
 public:
 	/// Moves the connection handle to the reserve pool (resets the specified sptr).
 	/// Should only be supplied with IDLE connection handles in a sane state.
-	virtual void RecycleIdleConnection(tDlStreamHandle & handle) =0;
-	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
+	virtual void RecycleIdleConnection(tcpconnection* & handle) =0;
+	virtual tcpconnection* CreateConnected(cmstring &sHostname, cmstring &sPort,
 				mstring &sErrOut,
 				bool *pbSecondHand,
 				cfg::tRepoData::IHookHandler *pStateTracker
 				,bool ssl
-				,int timeout
-				,bool mustbevirgin
+				,int timeout, const tSocketAction& activityHandler
 		) =0;
 	virtual ~IDlConFactory() {};
 };
@@ -140,21 +148,17 @@ class dl_con_factory : public IDlConFactory
 public:
 	/// Moves the connection handle to the reserve pool (resets the specified sptr).
 	/// Should only be supplied with IDLE connection handles in a sane state.
-	virtual void RecycleIdleConnection(tDlStreamHandle & handle) override;
-	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
+	virtual void RecycleIdleConnection(tcpconnection* & handle) override;
+	virtual tcpconnection* CreateConnected(cmstring &sHostname, cmstring &sPort,
 				mstring &sErrOut,
 				bool *pbSecondHand,
 				cfg::tRepoData::IHookHandler *pStateTracker
 				,bool ssl
-				,int timeout
-				,bool mustbevirgin
+				,int timeout, const tSocketAction& activityHandler
 		) override;
 	virtual ~dl_con_factory() {};
 	void dump_status();
 	time_t BackgroundCleanup();
-protected:
-	friend class tcpconnect;
-	static std::atomic_uint g_nconns;
 };
 
 extern dl_con_factory g_tcp_con_factory;

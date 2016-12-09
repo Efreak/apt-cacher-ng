@@ -498,6 +498,8 @@ std::pair<T,T> pairSum(const std::pair<T,T>& a, const std::pair<T,T>& b)
 }
 
 typedef std::function< void() > tAction;
+typedef std::function< bool() > tFuncBool;
+
 // add action delegate to background thread queue, schedule its processing
 void postServiceAction(tAction);
 // push delegate into execution within libevent thread

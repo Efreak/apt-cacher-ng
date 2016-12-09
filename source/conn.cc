@@ -1,5 +1,6 @@
 
 //#define LOCAL_DEBUG
+#include <tcpconnection.h>
 #include "debug.h"
 
 #include "meta.h"
@@ -8,7 +9,6 @@
 #include "header.h"
 #include "dlcon.h"
 #include "acbuf.h"
-#include "tcpconnect.h"
 #include "cleaner.h"
 #include "fileio.h"
 
@@ -49,16 +49,6 @@ conn::~conn() {
 	int fd = getConFd();
 	DeleteEvents();
 	termsocket(fd);
-}
-
-void cb_conn(evutil_socket_t fd, short what, void *arg)
-{
-	if(!arg) return;
-	auto c = (conn*) arg;
-
-	// if frozen, close, if exited without continuation wish, close
-	if( (what & EV_TIMEOUT) || ! c->socketAction(fd, what))
-		delete c;
 }
 
 bool conn::Start(int fd, event_callback_fn cb) noexcept
@@ -524,9 +514,7 @@ bool conn::SetupDownloader(const char *pszOrigin)
 		if(!m_pDlClient)
 			return false;
 
-		m_pDlClient->Start();
-
-		return true;
+		return m_pDlClient->Init();
 	}
 	catch(bad_alloc&)
 	{

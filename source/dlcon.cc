@@ -15,17 +15,27 @@
 #include "fileio.h"
 #include "sockio.h"
 
-#ifdef HAVE_LINUX_EVENTFD
-#include <sys/eventfd.h>
-#endif
+#include <tcpconnect.h>
+#include <string>
+#include <list>
+#include <map>
+#include <set>
+
+//#include <netinet/in.h>
+//#include <netdb.h>
+
+#include "lockable.h"
+#include "fileitem.h"
+#include "acfg.h"
+#include "acbuf.h"
+
+namespace acng
+{
 
 using namespace std;
 
-// evil hack to simulate random disconnects
-//#define DISCO_FAILURE
-#warning FIXME, keeping fd in the dlstate is pointless, will be fetched again anyhow. Simplify...
-namespace acng
-{
+#define IS_REDIRECT(st) (st == 301 || st == 302 || st == 307)
+
 static const int MAX_RETRY = 11;
 
 //static cmstring sGenericError("567 Unknown download error occured");
@@ -37,19 +47,6 @@ static const auto taboo =
 	string("Proxy-Authorization"), string("Accept"),
 	string("User-Agent")
 };
-
-std::atomic_uint g_nDlCons(0);
-
-dlcon::dlcon(string *xff, IDlConFactory *pConFactory) :
-		m_pConFactory(pConFactory),
-		m_nTempPipelineDisable(0),
-		m_bProxyTot(false)
-{
-	LOGSTART("dlcon::dlcon");
-	if (xff)
-		m_sXForwardedFor = *xff;
-  g_nDlCons++;
-}
 
 struct tDlJob
 {
@@ -693,6 +690,139 @@ private:
 	tDlJob & operator=(const tDlJob&);
 };
 
+
+/**
+ * dlcon is a basic connection broker for download processes.
+ * It's defacto a slave of the conn class, the active thread is spawned by conn when needed
+ * and it's finished by its destructor. However, the life time is prolonged if the usage count
+ * is not down to zero, i.e. when there are more users registered as reader for the file
+ * downloaded by the agent here then it will continue downloading and block the conn dtor
+ * until that download is finished or the other client detaches. If a download is active and parent
+ * conn object calls Stop... then the download will be aborted ASAP.
+ *
+ * Internally, a queue of download job items is maintained. Each contains a reference either to
+ * a full target URL or to a tupple of a list of mirror descriptions (url prefix) and additional
+ * path suffix for the required file.
+ *
+ * In addition, there is a local blacklist which is applied to all download jobs in the queue,
+ * i.e. remotes marked as faulty there are no longer considered by the subsequent download jobs.
+ */
+class dlcon : public IDlCon
+{
+	mstring m_sXForwardedFor;
+
+	bool m_bConWasUsed = false;
+
+	// not associated with any master anymore, can self-destruct at any time
+	bool m_bDetached = false;
+
+	bool bStopRequesting = false; // hint to stop adding request headers until the connection is restarted
+
+	// the default behavior or using or not using the proxy. Will be set
+	// if access proxies shall no longer be used.
+	bool m_bProxyTot = false;
+
+
+	friend struct tDlJob;
+
+	/// blacklist for permanently failing hosts, with error message
+	std::map<std::pair<cmstring, cmstring>, mstring> m_blacklist;
+	tSS m_sendBuf, m_inBuf;
+
+	// Disable pipelining for the next # requests. Actually used as crude workaround for the
+	// concept limitation (because of automata over a couple of function) and its
+	// impact on download performance.
+	// The use case: stupid web servers that redirect all requests do that step-by-step, i.e.
+	// they get a bunch of requests but return only the first response and then flush the buffer
+	// so we process this response and wish to switch to the new target location (dropping
+	// the current connection because we don't keep it somehow to background, this is the only
+	// download agent we have). This manner perverts the whole principle and causes permanent
+	// disconnects/reconnects. In this case, it's beneficial to disable pipelining and send
+	// our requests one-by-one. This is done for a while (i.e. the valueof(m_nDisablePling)/2 )
+	// times before the operation mode returns to normal.
+	int m_nTempPipelineDisable = 0;
+
+	int nLostConTolerance = 1;
+
+	int m_nForcedFd = -1;
+
+	// this is a binary factor, meaning how many reads from buffer are OK when
+	// speed limiting is enabled
+	unsigned m_nSpeedLimiterRoundUp = (unsigned(1) << 16) - 1;
+	unsigned m_nSpeedLimitMaxPerTake = MAX_VAL(unsigned);
+	unsigned m_nLastDlCount = 0;
+
+	tcpconnection* con =0;
+	mstring sErrorMsg;
+
+	dlcon(cmstring& xff, int forcedConnectionFd)
+	: m_sXForwardedFor(xff), m_nForcedFd(forcedConnectionFd)
+	{
+	}
+
+	list<tDlJob> m_jobQ;
+
+	// helpers for communication with the outside world
+	enum eWorkParameter
+	{
+	//	internalIoLooping = 2, // "manual mode" - run internal IO and loop until the job list is processed
+		ioretCanRecv = 4,
+		ioretCanSend = 8,
+		ioretGotError = 16,
+		ioretGotTimeout = 32,
+		canConnect = 64 // not an io check result but just donated CPU time
+	};
+	struct tWorkState
+	{
+		enum
+		{
+			allDone = 0, // remain idle
+			needRecv = 1,
+			needSend = 2,
+			needConnect = 4, // there is some connection-related work to do
+			fatalError = 8,
+			needActivity = 1 + 2 + 4 // shortcut for all IO related hints
+		};
+		int flags; // one or multiple ORed from above
+		int fd;
+/*
+		enum
+		{
+			bufUtilizationUnknown = 0,	// don't have reliable buffer information from OS (yet?)
+			bufUtilizationVeryLow,	// -> increase delay QUICKLY
+			bufUtilizationOK,		// -> keep delay or slightly increase
+			bufUtilizationOverrun	// -> decrease delay to half or a quarter
+		} bufferUtilizationRatio;
+	*/
+	};
+
+	/**
+	 * @return true if the object shall be kept alive
+	 */
+	bool Work(evutil_socket_t fd, short what);
+
+	// run Work until job list is empty, return true if not thrown out with fatalError code
+	bool WorkLoop(unsigned initialFlags = eWorkParameter::freshStart);
+
+	// donate internal resources and prepare for termination. Should not be called during global shutdown.
+	// @return true if can be deleted ATM, false if became detached (will suicide later)
+	bool Shutdown();
+
+	bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl, const cfg::tRepoData *pRepoDesc,
+			cmstring *sPatSuffix, LPCSTR reqHead, int nMaxRedirection);
+
+	// take final metadata from a finished job and finally retire it
+	void DisposeJob(const tFileItemPtr& refFitem, off_t &nSent, off_t &nReceived);
+
+	bool Init();
+
+	bool SetupConnectionAndRequests();
+	bool MakeRequests();
+
+	void BlacklistMirror(tDlJobPtr & job);
+};
+
+
 #warning all users subscribed?
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const cfg::tRepoData *pBackends,
@@ -711,39 +841,45 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 
 	m_qNewjobs.back()->ExtractCustomHeaders(reqHead);
 
+
+#error must push the job?
 	return true;
 }
 
 dlcon::~dlcon()
 {
 	LOGSTART("dlcon::~dlcon, Destroying dlcon");
-	g_nDlCons--;
-	DeleteEvents();
+	delete(con);
 }
 
-bool dlcon::ResetState()
+bool dlcon::Init()
 {
-    m_inBuf.clear();
-#warning adjust buffer size for system after every connection?
-#ifdef SO_RCVBUF
-#else
-    int bufsz=cfg::dlbufsize;
-#endif
-	if (!m_inBuf.setsize(cfg::dlbufsize))
+	try
 	{
-		log::err("500 Out of memory");
+		m_inBuf.clear();
+	#warning adjust buffer size for system after every connection?
+	#ifdef SO_RCVBUF
+	#else
+		int bufsz=cfg::dlbufsize;
+	#endif
+		if (!m_inBuf.setsize(cfg::dlbufsize))
+		{
+			log::err("500 Out of memory");
+			return false;
+		}
+
+		inpipe.clear();
+		bStopRequesting = false;
+		nLostConTolerance = MAX_RETRY;
+		sErrorMsg.clear();
+		return true;
+	}
+	catch(...)
+	{
 		return false;
 	}
-
-	inpipe.clear();
-	con.reset();
-	bStopRequesting = false;
-	nLostConTolerance = MAX_RETRY;
-	sErrorMsg.clear();
-	return true;
 }
 
-#error murks, braucht sowas wie detach und einen sicheren weg, das ding aus dem externen context zu killen. aber event_active braucht einen event zum notifizieren
 bool dlcon::Shutdown()
 {
 	if (inpipe.empty())
@@ -751,14 +887,15 @@ bool dlcon::Shutdown()
 		if(con)
 			m_pConFactory->RecycleIdleConnection(con);
 		DeleteEvents();
+		// caller will clean
 		return true;
 	}
 	else
 	{
 		while(inpipe.size()>1)
 			inpipe.pop_back();
-		// keep the current download running as long as somebody uses it
-		m_bRonin = true;
+		// keep the current download running as long as somebody uses it. Some callback must clean.
+		m_bDetached = true;
 		return false;
 	}
 }
@@ -864,15 +1001,26 @@ eStateTransition dlcon::SetupConnectionAndRequests()
 		bool bUsed = false;
 		ASSERT(!m_qNewjobs.empty());
 
-		auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
+		auto doconnect = [&](const tHttpUrl& tgt, int timeout)
 		{
 			return m_pConFactory->CreateConnected(tgt.sHost,
 					tgt.GetPort(),
 					sErrorMsg,
 					&bUsed,
 					m_qNewjobs.front()->GetConnStateTracker(),
-					IFSSLORFALSE(tgt.bSSL),
-					timeout, fresh);
+					tgt.bSSL,
+					timeout,
+					// give it a semi-static callback lambda which it copies and calls back via libevent
+					[this](evutil_socket_t fd, short what)
+					{
+#warning very simple, just redirect. Or can bind optimize this lambda away? Or use a virtual method?
+				if(!Work(fd, what))
+					{
+					delete this;
+					return;
+					}
+			}
+			);
 		};
 
 		auto& cjob = m_qNewjobs.front();
@@ -886,16 +1034,10 @@ eStateTransition dlcon::SetupConnectionAndRequests()
 			{
 				con = doconnect(*proxy,
 						cfg::optproxytimeout > 0 ?
-								cfg::optproxytimeout : cfg::nettimeout, false);
-				if (con)
-				{
-					if (!con->StartTunnel(peerHost, sErrorMsg,
-							&proxy->sUserPass, true))
-						con.reset();
-				}
+								cfg::optproxytimeout : cfg::nettimeout);
 			}
 			else
-				con = doconnect(peerHost, cfg::nettimeout, false);
+				con = doconnect(peerHost, cfg::nettimeout);
 		}
 		else
 #endif
@@ -904,10 +1046,10 @@ eStateTransition dlcon::SetupConnectionAndRequests()
 			{
 				con = doconnect(*proxy,
 						cfg::optproxytimeout > 0 ?
-								cfg::optproxytimeout : cfg::nettimeout, false);
+								cfg::optproxytimeout : cfg::nettimeout);
 			}
 			else
-				con = doconnect(peerHost, cfg::nettimeout, false);
+				con = doconnect(peerHost, cfg::nettimeout);
 		}
 
 		if (!con && proxy && cfg::optproxytimeout > 0)
@@ -916,7 +1058,7 @@ eStateTransition dlcon::SetupConnectionAndRequests()
 			m_bProxyTot = true;
 			proxy = nullptr;
 			cfg::MarkProxyFailure();
-			con = doconnect(peerHost, cfg::nettimeout, false);
+			con = doconnect(peerHost, cfg::nettimeout);
 		}
 
 		ldbg("connection valid? " << bool(con) << " was fresh? " << !bUsed);
@@ -925,11 +1067,12 @@ eStateTransition dlcon::SetupConnectionAndRequests()
 		{
 			ldbg("target? [" << con->GetHostname() << "]:" << con->GetPort());
 
+#error murks, bUsed nach oben geben, dort ggf. recon
 			// must test this connection, just be sure no crap is in the pipe
 			if (bUsed && check_read_state(con->GetFD()))
 			{
 				ldbg("code: MoonWalker");
-				con.reset();
+				delete con; con = 0;
 				return eStateTransition::LOOP_CONTINUE;
 			}
 		}
@@ -1007,129 +1150,76 @@ void dlcon::BlacklistMirror(tDlJobPtr & job)
 				job->GetPeerHost().GetPort())] = sErrorMsg;
 	};
 
-void dlcon::cb_event(int fd, short what, void *arg)
-{
-
-#warning add self-destruction, ronin und keine auftraege
-}
-
-dlcon::tWorkState dlcon::Work(unsigned flags)
+bool dlcon::Work(evutil_socket_t fd, short what)
 {
 	LOGSTART("dlcon::WorkLoop");
-	if( (flags & eWorkParameter::freshStart) && !ResetState())
-		return {tWorkState::fatalError, -1};
 
-	tWorkState retcmd { 0, -1};
+	// no activities anymore?
+	if(inpipe.empty() && m_qNewjobs.empty())
+		return !m_bDetached; // idle, can be removed if orphaned
 
 	unsigned loopRes = 0;
-	bool byPassIoCheck = false; // skip some uneeded IO operations when switchin between outer and inner IO loop
 
-	if (flags & (ioretGotError | ioretGotTimeout | ioretCanRecv | ioretCanSend))
-	{
-		if(con)
-			retcmd.fd = con->GetFD();
+	if (what & (EV_READ | EV_WRITE | EV_TIMEOUT))
 		goto returned_for_io;
-	}
 
-	// nothing to do yet
-	if( (flags & dlcon::freshStart) && m_qNewjobs.empty())
-		return { tWorkState::allDone, -1};
+	// nothing to do yet, add-job will awake
+	if(m_qNewjobs.empty())
+		return true;
 
 	while(true) // outer loop: jobs, connection handling
 	{
-		switch(SetupConnectionAndRequests())
-		{
-		case eStateTransition::DONE: break; // go select now
-		case eStateTransition::FUNC_RETURN: return {tWorkState::allDone, -1};
-		case eStateTransition::LOOP_CONTINUE: continue;
-		}
 
-        if(inpipe.empty() && m_qNewjobs.empty())
-        	return {tWorkState::allDone, -1};
+		bool stillAlive = SetupConnectionAndRequests();
+		if(!con)
+			return stillAlive;
+		if(!MakeRequests())
+			return false;
 
-		// IO loop: plain communication and pushing into job handler until something happens
-#define END_IO_LOOP(x) {loopRes=(x); goto after_io_loop; }
+		// IO block: plain communication and pushing into job handler until something happens
+#define EXIT_IO_BLOCK(x) {loopRes=(x); goto after_io_loop; }
 		{
 			// cannot rely on previous cached value
-			retcmd.fd = -1;
+			int fd = -1;
+			bool needSend(false);
 
-/*			LOGSTART2("dlcon::ExchangeData",
-					"qsize: " << inpipe.size() << ", sendbuf size: "
-					<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
-*/
 			if (inpipe.empty())
 				m_inBuf.clear(); // better be sure about dirty buffer from previous connection
 
-			// no socket operation needed in this case, just process old buffer contents
-			byPassIoCheck = !m_inBuf.empty();
 			if(con)
-				retcmd.fd = con->GetFD();
+				fd = con->GetFD();
 
 			loop_again:
 
 			for (;;)
 			{
-				if (retcmd.fd >= 0)
+#warning wohin
+#if 0
+				if (fd >= 0)
 				{
-					retcmd.flags |= tWorkState::needRecv;
-
-					if (!m_sendBuf.empty())
-					{
-						ldbg("Needs to send " << m_sendBuf.size() << " bytes");
-						retcmd.flags |= tWorkState::needSend;
-					}
+					needSend = !m_sendBuf.empty();
 #ifdef HAVE_SSL
-					else if (con->GetBIO() && BIO_should_write(con->GetBIO()))
-					{
-						ldbg("NOTE: OpenSSL wants to write although send buffer is empty!");
-						retcmd.flags |= tWorkState::needSend;
-					}
+					needSend |= (con->GetBIO() && BIO_should_write(con->GetBIO()));
 #endif
 				}
-
-				// jump right into data processing but only once
-				if (byPassIoCheck)
-				{
-					byPassIoCheck = false;
-					goto proc_data;
-				}
-
-				return retcmd; // return the hints and wait for it to come back to this label:
-
-				/////// TIME PASSES ///////
-
+#endif
 				returned_for_io:
 
-				if (eWorkParameter::ioretGotError & flags)
-				{
-					if (EINTR == errno)
-						continue;
-#ifdef MINIBUILD
-					string fer("select failed");
-#else
-					tErrnoFmter fer("FAILURE: select, ");
-					LOG(fer);
-#endif
-					sErrorMsg = string("500 Internal malfunction, ") + fer;
-					END_IO_LOOP(
-							HINT_DISCON|EFLAG_JOB_BROKEN|EFLAG_MIRROR_BROKEN);
-				}
-				else if (eWorkParameter::ioretGotTimeout & flags)
+				if (EV_TIMEOUT & what)
 				{
 					sErrorMsg = "500 Connection timeout";
 					// was there anything to do at all?
 					if (inpipe.empty())
-						END_IO_LOOP(HINT_SWITCH);
+						EXIT_IO_BLOCK(HINT_SWITCH);
 
 					if (inpipe.front()->IsRecoverableState())
-						END_IO_LOOP(EFLAG_LOST_CON);
+						EXIT_IO_BLOCK(EFLAG_LOST_CON);
 
-					END_IO_LOOP(HINT_DISCON|EFLAG_JOB_BROKEN);
+					EXIT_IO_BLOCK(HINT_DISCON|EFLAG_JOB_BROKEN);
 				}
 
-				if (retcmd.fd >= 0 && (flags & eWorkParameter::ioretCanSend))
+				if (EV_WRITE & what)
 				{
-
 #ifdef HAVE_SSL
 					if (con->GetBIO())
 					{
@@ -1150,7 +1240,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 #endif
 					{
 						ldbg("Sending data...\n" << m_sendBuf);
-						int s = ::send(retcmd.fd, m_sendBuf.data(), m_sendBuf.length(),
+						int s = ::send(fd, m_sendBuf.data(), m_sendBuf.length(),
 						MSG_NOSIGNAL);
 						ldbg(
 								"Sent " << s << " bytes from " << m_sendBuf.length() << " to " << con.get());
@@ -1160,7 +1250,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 							if (errno != EAGAIN && errno != EINTR)
 							{
 								sErrorMsg = "502 Send failed";
-								END_IO_LOOP(EFLAG_LOST_CON);
+								EXIT_IO_BLOCK(EFLAG_LOST_CON);
 							}
 						}
 						else if (s > 0)
@@ -1180,7 +1270,11 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 				{
 					if (cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
 					{
+#warning crap, use timeout events?
+#warning also reuse this count for the other purpose (bigger buffer with delay instead of small buffers)
+#if 0
 						auto nCntNew = g_nDlCons.load();
+#warning count method is bad, just use one single variable for that, inc/dec by create/recycle methods?, keep in tcp_con_factory
 						if (m_nLastDlCount != nCntNew)
 						{
 							m_nLastDlCount = nCntNew;
@@ -1212,7 +1306,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 							usleep(usNext - tv.tv_usec);
 						}
 					}
-
+#endif
 					{
 						int readResult = 0;
 #ifdef HAVE_SSL
@@ -1275,7 +1369,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 						{
 							dbgline;
 							sErrorMsg = "502 Connection closed";
-							END_IO_LOOP(EFLAG_LOST_CON);
+							EXIT_IO_BLOCK(EFLAG_LOST_CON);
 						}
 						else if (readResult < 0) // other error, might reconnect
 						{
@@ -1286,7 +1380,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 							// pickup the error code for later and kill current connection ASAP
 							sErrorMsg = tErrnoFmter("502 ");
 #endif
-							END_IO_LOOP(EFLAG_LOST_CON);
+							EXIT_IO_BLOCK(EFLAG_LOST_CON);
 						}
 						else
 						{
@@ -1305,7 +1399,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 					{
 						ldbg("FIXME: unexpected data returned?");
 						sErrorMsg = "500 Unexpected data";
-						END_IO_LOOP(EFLAG_LOST_CON);
+						EXIT_IO_BLOCK(EFLAG_LOST_CON);
 					}
 
 					while (!m_inBuf.empty())
@@ -1333,7 +1427,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 
 							inpipe.pop_front();
 							if (HINT_DISCON & res)
-							END_IO_LOOP( HINT_DISCON); // with cleaned flags
+							EXIT_IO_BLOCK( HINT_DISCON); // with cleaned flags
 
 							LOG(
 							"job finished. Has more? " << inpipe.size()
@@ -1342,7 +1436,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 							if (inpipe.empty())
 							{
 								LOG("Need more work");
-								END_IO_LOOP( HINT_SWITCH);
+								EXIT_IO_BLOCK( HINT_SWITCH);
 							}
 
 							LOG("Extract more responses");
@@ -1372,21 +1466,22 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 							END_IO_LOOP(
 									HINT_TGTCHANGE | (m_inBuf.empty() ? 0 : HINT_DISCON));
 						}
-
+#warning killlast dingens fixen
 						// else case: error handling, pass to main loop
 						if (HINT_KILL_LAST_FILE & res)
 							con->KillLastFile();
 						setIfNotEmpty(sErrorMsg, inpipe.front()->sErrorMsg);
-						END_IO_LOOP(res);
+						EXIT_IO_BLOCK(res);
 					}
-					END_IO_LOOP(HINT_DONE); // input buffer consumed
+					EXIT_IO_BLOCK(HINT_DONE); // input buffer consumed
 				}
 			}
 
 			ASSERT(!"Unreachable");
 			sErrorMsg = "500 Internal failure";
-			END_IO_LOOP(EFLAG_JOB_BROKEN|HINT_DISCON);
+			EXIT_IO_BLOCK(EFLAG_JOB_BROKEN|HINT_DISCON);
 		}
+		///// END IO BLOCK
 
 		after_io_loop:
 
@@ -1424,7 +1519,7 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
         if( (HINT_DISCON|EFLAG_LOST_CON) & loopRes)
         {
         	dbgline;
-        	con.reset();
+        	delete con; con=0;
         	m_inBuf.clear();
         	m_sendBuf.clear();
         }
@@ -1452,8 +1547,8 @@ dlcon::tWorkState dlcon::Work(unsigned flags)
 				nLostConTolerance=MAX_RETRY;
 			}
 
-			con.reset();
-
+			delete con; con=0;
+#warning wtf
 			timespec sleeptime = { 0, 325000000 };
 			nanosleep(&sleeptime, nullptr);
 

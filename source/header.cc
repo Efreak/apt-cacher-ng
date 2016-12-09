@@ -47,15 +47,6 @@ eHeadPos2label mapId2Headname[] =
 		{ header::XORIG, WITHLEN("X-Original-Source")}
 };
 
-std::vector<tPtrLen> header::GetKnownHeaders()
-{
-	std::vector<tPtrLen> ret;
-	ret.reserve(_countof(mapId2Headname));
-	for (auto& x : mapId2Headname)
-		ret.emplace_back(x.str, x.len);
-	return ret;
-}
-
 #if 0 // nonsense... save a penny, waste an hour
 struct tHeadLabelMap
 {

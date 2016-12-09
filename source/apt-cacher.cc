@@ -289,7 +289,6 @@ int main(int argc, const char **argv)
 
 	DelTree(cfg::cacheDirSlash+sReplDir);
 
-
 	g_ebase = event_base_new();
 	if(!g_serviceNotifier.setupEventFd())
 	{
