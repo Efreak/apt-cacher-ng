@@ -96,6 +96,7 @@ protected:
 	FiStatus m_status;
 	mstring m_sPathRel;
 	time_t m_nTimeDlStarted, m_nTimeDlDone;
+	virtual int Truncate2checkedSize() {return 0;};
 
 private:
 	// helper data for global registration control. Access is synchronized by the global lock,
@@ -111,6 +112,7 @@ public:
 	inline fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
 	inline fileitem_with_storage(cmstring &s, int nUsers) {m_sPathRel=s; usercount=nUsers; };
 	virtual ~fileitem_with_storage();
+        int Truncate2checkedSize() override;
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,

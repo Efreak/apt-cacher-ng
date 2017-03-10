@@ -40,6 +40,7 @@ verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, d
 exporigin, logxff, oldupdate, recompbz2, nettimeout, updinterval, forwardsoap, dirperms, fileperms,
 maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsupcount,
 optproxytimeout, patrace, maxdlspeed, maxredlsize, nsafriendly, trackfileuse, exstarttradeoff;
+extern int allocspace;
 
 // processed config settings
 extern const tHttpUrl* GetProxyInfo();

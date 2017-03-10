@@ -513,8 +513,8 @@ LocalDirs: acng-doc @DOCDIR@
 #
 # BadRedirDetectMime: text/html
 
-# When a BUS signal is received (typically IO issues), a shell command can be
-# execute before the daemon is terminated.
+# When a BUS signal is received (typically on IO errors), a shell command can be
+# executed before the daemon is terminated.
 # Example:
 # BusAction: ls -l /proc/$PPID/ | mail -s SIGBUS! root
 
@@ -530,3 +530,13 @@ LocalDirs: acng-doc @DOCDIR@
 # originally downloaded).
 #
 # TrackFileUse: 0
+
+# Controls preallocation of file system space where this feature is supported.
+# This might reduce disk fragmentation and therefore improve later read
+# performance. However, write performance can be reduced which could be
+# exploited by malicious users.
+# The value defines a size limit of how much to report to the OS as expected
+# file size (starting from the beginning of the file).
+# Set to zero to disable this feature completely. Default: one megabyte
+#
+# ReserveSpace: 1048576

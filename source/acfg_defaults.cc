@@ -135,6 +135,8 @@ int conprotos[2] = { PF_UNSPEC, PF_UNSPEC };
 
 std::atomic_bool degraded(false);
 
+int allocspace = 1024*1024;
+
 }
 
 }

@@ -158,7 +158,9 @@ MapNameToInt n2iTbl[] = {
 		,{  "MaxInresponsiveDlSize",             &maxredlsize,      nullptr,    10, false}
 		,{  "OptProxyCheckInterval",             &optProxyCheckInt, nullptr,    10, false}
 		,{  "TrackFileUse",		             	 &trackfileuse,		nullptr,    10, false}
-		// octal base interpretation of UNIX file permissions
+        ,{  "ReserveSpace",                      &allocspace, 		nullptr ,   10, false}
+
+        // octal base interpretation of UNIX file permissions
 		,{  "DirPerms",                          &dirperms,         nullptr,    8, false}
 		,{  "FilePerms",                         &fileperms,        nullptr,    8, false}
 

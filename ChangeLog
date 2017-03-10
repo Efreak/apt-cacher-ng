@@ -1,3 +1,13 @@
+apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=low
+
+  * FIX: Making sure to truncate the file in case its download is aborted.
+    This is needed in order to avoid hidden filesystem space allocation
+    (Debian bug #856635). Also more delicate use of fallocate calls on Linux
+    due to the potentially syscall execution delay. By default, limit the
+    requested size to the first megabyte of a file.
+
+ -- 
+
 apt-cacher-ng (2) THE-LAST-JOB-FILMS-LTD; urgency=medium
 
   * Minor refactoring (DNS cache with fewer mutexes)
