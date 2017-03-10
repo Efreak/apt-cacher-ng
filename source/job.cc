@@ -816,6 +816,8 @@ job::eJobResult job::SendData(int confd)
 		ASSERT(!"no FileItem assigned and no sensible way to continue");
 		return R_DISCON;
 	}
+#define returnSomething(msg) { LOG(msg); if(m_bClientWants2Close) return R_DISCON; \
+		LOG("Reporting job done"); return R_DONE; };
 
 	for(;;) // left by returning
 	{
@@ -951,24 +953,13 @@ job::eJobResult job::SendData(int confd)
 					}
 					return R_AGAIN;
 				}
-				
 				case(STATE_ALLDONE):
-					LOG("State: STATE_ALLDONE?");
-				// no break
+				returnSomething("STATE_ALLDONE?");
 				case (STATE_ERRORCONT):
-					LOG("or STATE_ERRORCONT?");
-				// no break
+				returnSomething("STATE_ERRORCONT?");
 				case(STATE_FINISHJOB):
-					LOG("or STATE_FINISHJOB");
-					{
-						if(m_bClientWants2Close)
-							return R_DISCON;
-						LOG("Reporting job done")
-						return R_DONE;
-					}
-					break;
+				returnSomething("STATE_FINISHJOB?");
 				case(STATE_TODISCON):
-						// no break
 				default:
 					return R_DISCON;
 			}

@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <ctime>
 #include <cstring>
+#include <functional>
 
 #include <fcntl.h>
 #include <pthread.h>
@@ -38,6 +39,13 @@
 #define EMPLACE_PAIR_COMPAT(M,K,V) if((M).find(K) == (M).end()) (M).insert(std::make_pair(K,V))
 #else
 #define EMPLACE_PAIR_COMPAT(M,K,V) (M).emplace(K,V)
+#endif
+
+// little STFU helper
+#if __GNUC__ >= 7
+#define __just_fall_through [[fallthrough]]
+#else
+#define __just_fall_through
 #endif
 
 namespace acng

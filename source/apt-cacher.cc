@@ -233,7 +233,7 @@ void sig_handler(int signum)
 		 */
 		handle_sigbus();
 		log::flush();
-		//no break
+		__just_fall_through;
 	case (SIGTERM):
 	case (SIGINT):
 	case (SIGQUIT): {
