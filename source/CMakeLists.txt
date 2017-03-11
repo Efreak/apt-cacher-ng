@@ -20,6 +20,7 @@ LIST(APPEND SHAREDSRCS
         "${CMAKE_CURRENT_SOURCE_DIR}/filelocks.cc"
         "${CMAKE_CURRENT_SOURCE_DIR}/caddrinfo.cc"
         "${CMAKE_CURRENT_SOURCE_DIR}/fileio.cc"
+        ${sslworkaroundStuff}
 )
 
 # remaining srcs, only for apt-cacher-ng

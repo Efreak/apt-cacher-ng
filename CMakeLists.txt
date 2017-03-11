@@ -22,6 +22,7 @@ INCLUDE(CheckCXXCompilerFlag)
 INCLUDE(CheckTypeSize)
 INCLUDE(TestBigEndian)
 INCLUDE(CheckLibraryExists)
+INCLUDE(CheckSymbolExists)
 INCLUDE(FindPkgConfig)
 
 set(PACKAGE "apt-cacher-ng")
@@ -76,6 +77,8 @@ TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
 # those are appended later via COMPILER_FLAGS. $CXXFLAGS and CMAKE_CXX_FLAGS
 # also influence it, need to be adjusted carefully by user.
 SET(ACNG_CXXFLAGS_COMMON "-D_FILE_OFFSET_BITS=64")
+
+include_directories(${CMAKE_SOURCE_DIR})
 
 foreach(cxxarg  -pthread -Wall -Wextra -Wno-unused-parameter -fvisibility-inlines-hidden -fvisibility=hidden)
 	STRING(REGEX REPLACE "=|-|," "" optname "${cxxarg}")
@@ -295,6 +298,15 @@ if(USE_SSL)
 		set(HAVE_SSL on)
 		string(REPLACE ";" " " ACNG_CXXFLAGS_COMMON "${ACNG_CXXFLAGS_COMMON} ${openssl_CFLAGS}")
 		string(REPLACE ";" " " SSL_LIB_LIST "${openssl_LDFLAGS}")
+
+    # also check for official host checking code
+    set(CMAKE_REQUIRED_INCLUDES ${openssl_CFLAGS})
+    set(CMAKE_REQUIRED_LIBRARIES ${openssl_LDFLAGS})
+    check_symbol_exists(SSL_get0_param openssl/ssl.h HAVE_SSL_HOST_VALIDATION)
+    if(NOT HAVE_SSL_HOST_VALIDATION)
+            message(WARNING "Detected OpenSSL version lacks hostname validation feature. Using a custom implementationf or now but an update of OpenSSL is advisable!")
+            FILE(GLOB sslworkaroundStuff "oldssl-workaround/*.c")
+    endif()
 	else()
 		message(WARNING "OpenSSL not found, disabling TLS connection support")
 		set(HAVE_SSL off)
@@ -348,6 +360,7 @@ SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
 CONFIGURE_FILE("${CMAKE_SOURCE_DIR}/include/acsyscap.h.in" "${CMAKE_BINARY_DIR}/acsyscap.h")
 
+add_subdirectory(oldssl-workaround)
 add_subdirectory(client)
 add_subdirectory(fs)
 add_subdirectory(source)

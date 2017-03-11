@@ -3,21 +3,19 @@ Author: Eduard Bloch <blade@debian.org>
 Copyright: 
 
 apt-cacher-ng: (C) 2006-2012 Eduard Bloch <blade@debian.org>
-md5 add-on: (C) 1999, 2000, 2002 Aladdin Enterprises.  All rights reserved.
 getaddrinfo emulation: (C) 2001, Jason Gunthorpe <jgg@debian.org>
-sha1 add-on: (C) 2006, The Bitzi Corporation
-sha2 add-on: (C) 2005, 2007 Olivier Gay <olivier.gay@a3.epfl.ch>
+Alternative SSL host validation:
+Copyright (C) 2012, iSEC Partners.
+Copyright (C) 1998 - 2012, Daniel Stenberg, <daniel@haxx.se>, et al.
 
 License:
 
 The source files in this package are provided for use and distribution under
 the terms listed under I unless specified otherwise in the beginning of the
-particular file. The package includes md5 checksumming implementation provided
-under the terms listed under II, getaddrinfo/freeaddrinfo/getnameinfo emulation
-code released under the terms listed under III, and sha1 implementation
-released under the terms listed under IV.
+particular file. The package includes additional code from external source,
+covered by the following licenses.
 
-I. Apt-Cacher NG
+I. Apt-Cacher NG (all files except for specified below)
 
 Copyright (c) 2007-2012 Eduard Bloch.
 All rights reserved.
@@ -48,7 +46,7 @@ LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-II.
+II. */rfc2553emu.*
 
 // $Id: rfc2553emu.cc,v 1.8 2001/02/20 07:03:18 jgg Exp $
 /* ######################################################################
@@ -64,3 +62,49 @@ II.
 
    ##################################################################### */
 
+III. oldssl-workaround/openssl* (alternative OpenSSL hostname validation code)
+/*
+Copyright (C) 2012, iSEC Partners.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+ */
+
+IV. oldssl-workaround/hostcheck*
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright (c) 1996 - 2013, Daniel Stenberg, <daniel@haxx.se>.
+
+All rights reserved.
+
+Permission to use, copy, modify, and distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright
+notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY RIGHTS. IN
+NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder shall not
+be used in advertising or otherwise to promote the sale, use or other dealings
+in this Software without prior written authorization of the copyright holder.

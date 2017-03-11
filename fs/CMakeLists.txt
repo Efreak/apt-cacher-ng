@@ -15,13 +15,14 @@ SET(CMAKE_REQUIRED_FLAGS "${ACNG_CXXFLAGS_COMMON} ${acngfs_cflags}")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_FUSE_25)
 
 if(fuse_FOUND AND HAVE_FUSE_25)
+        # not linking acngstuff lib, too many dependencies
 	list(APPEND fsSRCS httpfs.cc ../source/lockable.cc ../source/header.cc ../source/caddrinfo.cc ../source/acbuf.cc ../source/acfg.cc ../source/acfg_defaults.cc ../source/tcpconnect.cc ../source/dlcon.cc ../source/fileitem.cc ../source/meta.cc ../source/fileio.cc)
 
 	if(CMAKE_BUILD_TYPE MATCHES Debug)
 		list(APPEND fsSRCS ../source/aclogger.cc)
 	endif()
 
-	ADD_EXECUTABLE(acngfs ${fsSRCS})
+	ADD_EXECUTABLE(acngfs ${fsSRCS} ${sslworkaroundStuff})
 	INSTALL(TARGETS acngfs DESTINATION ${LIBDIR})
 
 	#message("uhm: ${fuse_CFLAGS} -- ${acngfs_cflags} -- ${fuse_LDFLAGS} -- ${HAVE_DLOPEN}")

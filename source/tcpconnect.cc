@@ -42,6 +42,12 @@ atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 #include <openssl/x509_vfy.h>
 #include <openssl/x509v3.h>
 #endif
+#ifndef HAVE_SSL_HOST_VALIDATION
+extern "C"
+{
+#include "oldssl-workaround/openssl_hostname_validation.h"
+}
+#endif
 
 namespace acng
 {
@@ -483,16 +489,28 @@ void dl_con_factory::dump_status()
 bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 {
 	SSL * ssl(nullptr);
-	int hret(0);
-	LPCSTR perr(0);
 	mstring ebuf;
+
+	auto withSslError = [&sErr](const char *perr)
+					{
+		sErr="500 SSL error: ";
+		sErr+=(perr?perr:"Generic SSL failure");
+		return false;
+					};
+	auto withLastSslError = [&withSslError]()
+						{
+		return withSslError(ERR_reason_error_string(ERR_get_error()));
+						};
+	auto withRetCode = [&withSslError, &ssl](int hret)
+				{
+		return withSslError(ERR_reason_error_string(SSL_get_error(ssl, hret)));
+				};
 
 	// cleaned up in the destructor on EOL
 	if(!m_ctx)
 	{
 		m_ctx = SSL_CTX_new(SSLv23_client_method());
-		if (!m_ctx)
-			goto ssl_init_fail;
+		if (!m_ctx) return withLastSslError();
 
 		SSL_CTX_load_verify_locations(m_ctx,
 				cfg::cafile.empty() ? nullptr : cfg::cafile.c_str(),
@@ -500,17 +518,18 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	}
 
 	ssl = SSL_new(m_ctx);
-	if(!ssl)
-		goto ssl_init_fail;
+	if (!m_ctx) return withLastSslError();
 
 	// for SNI
 	SSL_set_tlsext_host_name(ssl, sHostname.c_str());
 
 	{
+#ifdef HAVE_SSL_HOST_VALIDATION
 		auto param = SSL_get0_param(ssl);
 		/* Enable automatic hostname checks */
 		X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
 		X509_VERIFY_PARAM_set1_host(param, sHostname.c_str(), 0);
+#endif
 		/* Configure a non-zero callback if desired */
 		SSL_set_verify(ssl, SSL_VERIFY_PEER, 0);
 	}
@@ -521,8 +540,8 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  			| SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
  			| SSL_MODE_ENABLE_PARTIAL_WRITE);
 
- 	if((hret=SSL_set_fd(ssl, m_conFd)) != 1)
- 		goto ssl_init_fail_retcode;
+ 	auto hret=SSL_set_fd(ssl, m_conFd);
+ 	if(hret != 1) return withRetCode(hret);
 
  	while(true)
  	{
@@ -530,7 +549,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  		if(hret == 1 )
  			break;
  		if(hret == 0)
- 			goto ssl_init_fail_retcode;
+ 			return withRetCode(hret);
 
 		fd_set rfds, wfds;
 		FD_ZERO(&rfds);
@@ -544,35 +563,26 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  			FD_SET(m_conFd, &wfds);
  			break;
  		default:
- 			goto ssl_init_fail_retcode;
+ 			return withRetCode(hret);
  		}
  		struct timeval tv;
  		tv.tv_sec = cfg::nettimeout;
  		tv.tv_usec = 0;
 		int nReady=select(m_conFd+1, &rfds, &wfds, nullptr, &tv);
-		if(!nReady)
-		{
-			perr="Socket timeout";
-			goto ssl_init_fail;
-		}
+		if(!nReady) return withSslError("Socket timeout");
 		if (nReady<0)
 		{
 #ifndef MINIBUILD
 			ebuf=tErrnoFmter("Socket error");
-			perr=ebuf.c_str();
+			return withSslError(ebuf.c_str());
 #else
-			perr="Socket error";
+			return withSslError("Socket error");
 #endif
-			goto ssl_init_fail;
 		}
  	}
 
  	m_bio = BIO_new(BIO_f_ssl());
- 	if(!m_bio)
- 	{
- 		perr="IO initialization error";
- 		goto ssl_init_fail;
- 	}
+ 	if(!m_bio) return withSslError("IO initialization error");
  	// not sure we need it but maybe the handshake can access this data
  	BIO_set_conn_hostname(m_bio, sHostname.c_str());
  	BIO_set_conn_port(m_bio, sPort.c_str());
@@ -584,27 +594,28 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 
 	if(!cfg::nsafriendly)
 	{
+		X509* server_cert = nullptr;
 		hret=SSL_get_verify_result(ssl);
 		if( hret != X509_V_OK)
+			return withSslError(X509_verify_cert_error_string(hret));
+		server_cert = SSL_get_peer_certificate(ssl);
+		if(server_cert)
 		{
-			perr=X509_verify_cert_error_string(hret);
-			goto ssl_init_fail;
+			// XXX: maybe extract the real name to a buffer and report it additionally?
+			// X509_NAME_oneline(X509_get_subject_name (server_cert), cert_str, sizeof (cert_str));
+#ifndef HAVE_SSL_HOST_VALIDATION
+			auto hcResult=validate_hostname(sHostname.c_str(), server_cert);
+			X509_free(server_cert);
+			if(hcResult != HostnameValidationResult::MatchFound)
+				return withSslError("Incorrect remote certificate configuration");
+#else
+			X509_free(server_cert);
+#endif
 		}
+		else // The handshake was successful although the server did not provide a certificate
+			return withSslError("Incompatible remote certificate");
 	}
-
 	return true;
-
-	ssl_init_fail_retcode:
-
-	perr=ERR_reason_error_string(SSL_get_error(ssl, hret));
-
-	ssl_init_fail:
-
-	if(!perr)
-		perr=ERR_reason_error_string(ERR_get_error());
-	sErr="500 SSL error: ";
-	sErr+=(perr?perr:"Generic SSL failure");
-	return false;
 }
 
 //! Global initialization helper (might be non-reentrant)
