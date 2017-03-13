@@ -1,27 +1,20 @@
 
 TODO:
 
+BUG (for nextgen): deletetion via checkboxes is done for each checkbox. Even if
+the checkboxes are repeated on the end (deleting twice if user pushed check-all
+button)
+
+IDEA (for nextgen): pre-fallocate the subsequent block of contiguous space in
+chunks of less than 1mb size (repeatedly, when the first region was written)
+
 Raw pass-throough of Location: addresses as long as they follow the minimum
 safety rules, for web services that apply strange rules WRT validation of such
 redirections (https://bugs.launchpad.net/bugs/1625928)
 
 Add a special cleanup page (or just a special mode of Expiration task which
 does not abort on errors and does not remove stuff) which focuses on the
-expiration issue.
-
-Try to reduce thread count: use same thread for connection and downloader with
-more async. IO (probably offload DNS operations to the background thread,
-though).
-Or maybe do even more massive AIO (via libevent or Boost::ASIO or plain ASIO)
-and run as many threads as cores available and do everything (except for DNS)
-in shared threads.
-
-Maybe use lockfree queues for some internal item passing,
-https://github.com/cameron314/concurrentqueue . For example for logging, doing
-actual log writting via the background thread.
-
-Move signal handler to signalfd (on Linux) or a pipe fed from a basic signal
-handler (replacement for non-Linux). Current solution still has potential for dead-locking.
+distro expiration issue.
 
 Add custom job trigger with a command file plus fifo file (for output). This
 might be triggered by SIGUSR2.
@@ -90,6 +83,3 @@ For 0.9:
 
  - write installation makefile target
 
-For 1.0:
-
-list the last error messages in the summary of maint logs
