@@ -1,5 +1,7 @@
 apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=medium
 
+  * NOTE: this release tackles some issues that might be considered security
+    related in certain environments.
   * FIX: Making sure to truncate the file in case its download is aborted.
     This is needed in order to avoid hidden filesystem space allocation
     (Debian bug #856635). Also more delicate use of fallocate calls on Linux
@@ -12,6 +14,8 @@ apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=medium
   * FIX: added workaround code for OpenSSL certificate validation even with
     ancient SSL versions like the one found in Ubuntu 14 LTS; borrowed from
     libevent examples (originally from ssl-conservatory and cURL)
+  * FIX: no printing of requested file name in the 403 HTTP status line
+  * Database update
 
  -- 
 

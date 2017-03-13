@@ -2337,6 +2337,7 @@ void cacheman::BuildCacheFileList()
 bool cacheman::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cmstring& stripPrefix)
 {
 	int errors = 0;
+
 	return ParseAndProcessMetaFile([this, &errors, &stripPrefix](const tRemoteFileInfo &entry) -> void
 	{
 		// ignore, those files are empty and are likely to report false positives
@@ -2372,7 +2373,8 @@ bool cacheman::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cm
 		if(!wantedState || (wantedState.st_size != entry.fpr.size
 				&& (contentMatch = entry.fpr.CheckFile(solidPathAbs))))
 		{
-			SendFmt << "Restoring virtual file " << wantedPathRel
+			if(m_bVerbose)
+				SendFmt << "Restoring virtual file " << wantedPathRel
 					<< " (equal to " << solidPathRel << ")" << hendl;
 
 			// return with increased count if error happens
@@ -2381,17 +2383,29 @@ bool cacheman::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cm
 			header h;
 			// load by-hash header, check URL, rewrite URL, copy the stuff over
 			if(!h.LoadFromFile(SABSPATH(solidPathRel) + ".head") || ! h.h[header::XORIG])
+				{
+				if(m_bVerbose)
+					SendFmt << "Couldn't read" << SABSPATH(solidPathRel) << ".head<br>";
 				return;
+				}
 			string origin(h.h[header::XORIG]);
 			tStrPos pos = origin.rfind("by-hash/");
 			if(pos == stmiss)
-				return;
+			{
+			if(m_bVerbose)
+				SendFmt << SABSPATH(solidPathRel) << " is not from by-hash folder<br>";
+			return;
+			}
 			h.set(header::XORIG, origin.substr(0, pos) + entry.sFileName);
 			// most servers report crap type on by-hash files, use generic one
 			h.set(header::CONTENT_TYPE, "octet/stream");
 			//	should be ok				h.set(header::CONTENT_LENGTH, entry.fpr.size)
 			if(!Inject(solidPathRel, wantedPathRel, false, &h, false))
-				return;
+			{
+			if(m_bVerbose)
+				SendChunk("Couldn't install<br>");
+			return;
+			}
 			auto& flags = SetFlags(wantedPathRel);
 			if(flags.vfile_ondisk)
 				flags.uptodate = true;
@@ -2416,7 +2430,9 @@ bool cacheman::FixMissingByHashLinks(std::unordered_set<std::string> &oldRelease
 		// path relative to cache folder
 		if(!ProcessByHashReleaseFileRestoreFiles(snapPathInXstore, srcPrefix))
 		{
-			SendFmt << "Error at " << snapPathInXstore << hendl;
+			SendFmt << "There were error(s) processing " << snapPathInXstore << ", ignoring..."<< hendl;
+			if(!m_bVerbose)
+				SendChunk("Enable verbosity to see more");
 			return ret;
 		}
 #ifdef DEBUGIDX
