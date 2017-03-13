@@ -26,7 +26,9 @@ namespace acng
 mstring sReplDir("_altStore" SZPATHSEP);
 
 static tFiGlobMap mapItems;
+#ifndef MINIBUILD
 static acmutex mapItemsMx;
+#endif
 
 header const & fileitem::GetHeaderUnlocked()
 {

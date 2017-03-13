@@ -5,7 +5,7 @@ apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=medium
     (Debian bug #856635). Also more delicate use of fallocate calls on Linux
     due to the potentially syscall execution delay. By default, limit the
     requested size to the first megabyte of a file.
-  * FIX: compilation with GCC7
+  * FIX: compilation with GCC7, also warning fixes with Clang4
   * FIX: better checking of possibly invalid remote certificate configuration
     in SSL client code
   * FIX: added workaround code for OpenSSL certificate validation even with
