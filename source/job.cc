@@ -276,25 +276,6 @@ inline void job::PrepareLocalDownload(const string &visPath,
 		}
 		return;
 	}
-/*
-	// simplified version, just converts a string into a page
-	class bufferitem : public tPassThroughFitem, private string
-	{
-	public:
-		bufferitem(const string &sId, const string &sData)
-		: tPassThroughFitem(sId), string(sData)
-		{
-			status = FIST_COMPLETE;
-			m_pData=c_str();
-			m_nConsumable=length();
-			m_nSizeChecked=m_nConsumable;
-			m_head.frontLine.assign(_SZ2PS("HTTP/1.1 200 OK"));
-			m_head.set(header::CONTENT_LENGTH, length());
-			m_head.set(header::CONTENT_TYPE, _SZ2PS("text/html") );
-			m_head.type=header::ANSWER;
-		}
-	};
-*/
 
 	if(S_ISDIR(stbuf.st_mode))
 	{
@@ -713,9 +694,7 @@ report_overload:
     return ;
 
 report_notallowed:
-	SetErrorResponse((tSS() << "403 Forbidden file type or location: " << sReqPath).c_str(),
-			nullptr, "403 Forbidden file type or location");
-//    USRDBG( sRawUriPath + " -- ACCESS FORBIDDEN");
+	SetErrorResponse("403 Forbidden file type or location");
     return ;
 
 report_offlineconf:
@@ -733,12 +712,6 @@ report_degraded:
 report_invport:
 	SetErrorResponse("403 Configuration error (confusing proxy mode) or prohibited port (see AllowUserPorts)");
     return ;
-/*
-report_doubleproxy:
-	SetErrorResponse("403 URL seems to be made for proxy but contains apt-cacher-ng port. "
-    		"Inconsistent apt configuration?");
-    return ;
-*/
 }
 
 #define THROW_ERROR(x) { if(m_nAllDataCount) return R_DISCON; SetErrorResponse(x); return R_AGAIN; }
