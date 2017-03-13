@@ -571,6 +571,8 @@ void expiration::Action()
 
 	DelTree(CACHE_BASE+"_actmp");
 
+	TrimFiles();
+
 	PrintStats("Allocated disk space");
 
 	SendChunk("<br>Done.<br>");
@@ -649,6 +651,36 @@ void expiration::ListExpiredFiles()
 	return;
 }
 
+void expiration::TrimFiles()
+{
+	if(m_oversizedFiles.empty())
+		return;
+	auto now=GetTime();
+	for(const auto& fil: m_oversizedFiles)
+	{
+		// still there and not changed?
+		Cstat stinfo(fil);
+		if(!stinfo)
+			continue;
+		if(now - 86400 > stinfo.st_mtim.tv_sec)
+		{
+//			SendFmt << "let's truncate " << fil << " to " << stinfo.st_size << "<br>";
+			// it's unlikely to be accessed but better protect it
+			fileItemMgmt item;
+			item.PrepareRegisteredFileItemWithStorage(fil, true);
+			if(!item)
+				continue;
+			lockguard g(item.m_ptr.get());
+			off_t nix;
+			if(item.m_ptr->GetStatusUnlocked(nix) >= fileitem::FIST_DLGOTHEAD)
+				continue;
+
+			truncate(fil.c_str(), stinfo.st_size);
+
+		}
+	}
+}
+
 void expiration::HandleDamagedFiles()
 {
 	filereader f;
@@ -719,6 +751,19 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		return false;
 
 	ProgTell();
+
+	// detect invisible holes at the end of files (side effect of properly incorrect hidden allocation)
+	// allow some tolerance of about 10kb, should cover all page alignment effects
+	if(stinfo.st_blocks > 20 && stinfo.st_size/512 < (stinfo.st_blocks - 20))
+	{
+		auto now=GetTime();
+		if(now - 86400 > stinfo.st_mtim.tv_sec)
+		{
+			m_oversizedFiles.emplace_back(sPathAbs);
+			SendFmt << "Trailing allocated space on " << sPathAbs << " (" << stinfo.st_blocks <<
+					" blocks, expected: ~" << (stinfo.st_size/512  + 1) <<"), will be trimmed later<br>";
+		}
+	}
 
 	string sPathRel(sPathAbs, CACHE_BASE_LEN);
 	DBGQLOG(sPathRel);

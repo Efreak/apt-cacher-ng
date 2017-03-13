@@ -157,9 +157,9 @@ public:
 	inline tFileItemPtr getFiPtr() {return m_ptr;}
 	inline operator bool() const {return (bool) m_ptr;}
 
+	tFileItemPtr m_ptr;
 
 private:
-	tFileItemPtr m_ptr;
 	void Unreg();
 
 	fileItemMgmt(const fileItemMgmt &src);

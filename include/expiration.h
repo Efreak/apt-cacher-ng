@@ -27,6 +27,7 @@ public:
 protected:
 
 	std::unordered_map<mstring,std::map<mstring,tDiskFileInfo>> m_trashFile2dir2Info;
+	tStrVec m_oversizedFiles;
 
 	void RemoveAndStoreStatus(bool bPurgeNow);
 	void LoadPreviousData(bool bForceInsert);
@@ -58,6 +59,7 @@ private:
 
 	void HandleDamagedFiles();
 	void ListExpiredFiles();
+	void TrimFiles();
 };
 
 }
