@@ -1,6 +1,14 @@
 
 TODO:
 
+IDEA: create a special control socket, ACLed by local permissions. Requests
+coming from there would be considered as ultimately thrusted and go directly to
+the maintenance handlers (i.e. alternative reportpage access only for local
+administrator even when report page is disabled).
+
+IDEA: a special control command for acng/acngtool to rebind local TCP interfaces.
+For https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=786717
+
 BUG (for nextgen): deletetion via checkboxes is done for each checkbox. Even if
 the checkboxes are repeated on the end (deleting twice if user pushed check-all
 button)
