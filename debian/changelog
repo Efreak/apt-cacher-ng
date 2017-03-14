@@ -1,12 +1,54 @@
-apt-cacher-ng (0.9.3.1-2) unstable; urgency=low
+apt-cacher-ng (2-1) unstable; urgency=low
 
+  * New upstream version
+    + Fix for incorrect compilation with gcc-5.4 (closes: #843417, #843410)
+    + Fixes communication of cron job runner on systems where public address
+      was guessed incorrectly and/or connection was not possible
+      (closes: #843834, #841633)
+    + Fix ExStartTradeOff computation with unit suffix (closes: #845245)
+    + Linking libatomic where possible (closes: #841431, now really)
+  * Not rotating apt-cacher.err log when file is empty (notifempty option,
+    closes: #832882)
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 22 Nov 2016 21:39:43 +0100
+
+apt-cacher-ng (1-2) unstable; urgency=low
+
+  [ Dejan Latinovic <Dejan.Latinovic@imgtec.com> ]
+  * Fixing FTBFS on MIPS (extra libatomic dependency, closes: #841431)
+
+  [Eduard Bloch]
+  * Extended mips/mipsel FTBFS patch to powerpcspe and m68k
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 20 Oct 2016 20:25:39 +0200
+
+apt-cacher-ng (1-1) unstable; urgency=low
+
+  * New upstream version
+    + Better TLS hostname checks (closes: #839751)
+    + Making build reproducible again (closes: #834755)
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 19 Oct 2016 22:14:15 +0200
+
+apt-cacher-ng (0.9.3.2-1) unstable; urgency=low
+
+  * New upstream version
+    + Fix FTBFS with non-Linux kernels (closes: #830736)
   * Better sanity check of data retrieved when looking for Ubuntu mirrors and
     correct checking of curl return code (prevents accidental inclusion of
     garbage from error messages of intermediate proxies into backend mirror
     configuration). Also sets shorter timeouts when fetching mirrors.txt
-    (which closes: #827721 even while upgrading from very old versions).
+    (which closes: #827721 even while upgrading from very old versions)
+  * In postinst, dropped some "smart" code which was trying to setup the
+    default cache directory in case when clueless user deleted the related
+    configuration line. That guessing was probably helping less often than it
+    might have broken things; it contained a bug which (only on the very first
+    installation) could incorrectly add a forced setting of CacheDir
+    (closes: #830578)
+  * Giving the question about pass-through higher debconf priority since some
+    people seem to care a lot about HTTPS forwarding (#813359)
 
- -- Eduard Bloch <blade@debian.org>  Wed, 29 Jun 2016 20:25:55 +0200
+ -- Eduard Bloch <blade@debian.org>  Tue, 12 Jul 2016 22:03:27 +0200
 
 apt-cacher-ng (0.9.3.1-1) unstable; urgency=low
 
