@@ -1,3 +1,11 @@
+apt-cacher-ng (3-1) unstable; urgency=low
+
+  * New upstream version
+    + fixes hidden space allocation issue (closes: #856635)
+  * Spanish translation update (by Matías A. Bellone, closes: #853105)
+
+ -- 
+
 apt-cacher-ng (2-1) unstable; urgency=low
 
   * New upstream version

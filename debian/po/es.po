@@ -7,7 +7,7 @@
 #       Omar Campagne <ocampagne@gmail.com>, 2009, 2010
 #
 #   - Updates
-#       Matías A. Bellone <matiasbellone+debian@gmail.com>, 2013
+#       Matías A. Bellone <matiasbellone+debian@gmail.com>, 2013, 2015
 #
 # Traductores, si no conocen el formato PO, merece la pena leer la
 # de gettext, especialmente las secciones dedicadas a este
@@ -32,7 +32,7 @@ msgstr ""
 "Project-Id-Version: 0.4-1\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
 "POT-Creation-Date: 2015-03-17 19:19+0100\n"
-"PO-Revision-Date: 2014-02-09 13:04-0300\n"
+"PO-Revision-Date: 2015-11-16 00:32-0300\n"
 "Last-Translator: Matías Bellone <matiasbellone+debian@gmail.com>\n"
 "Language-Team: Debian l10n Spanish <debian-l10n-spanish@lists.debian.org>\n"
 "Language: es\n"
@@ -74,12 +74,12 @@ msgid ""
 "URL remapping can be set up automatically, using a configuration based on "
 "the current state of /etc/apt/sources.list."
 msgstr ""
-"Apt-Cacher NG puede descargar paquetes desde otros repositorios distintos a "
-"los solicitados por los clientes. Esto le permite almacenar el contenido "
+"Apt-Cacher NG puede descargar paquetes desde otros repositorios distintos "
+"a los solicitados por los clientes. Esto le permite almacenar el contenido "
 "eficientemente y facilitar al administrador cambiar a otra réplica más "
-"adelante. Se puede configurar automáticamente el remapeo de URLs utilizando "
-"una configuración basada en el estado actual del archivo «/etc/apt/sources."
-"list»."
+"adelante. Se puede configurar automáticamente el remapeo de direcciones "
+"URL utilizando una configuración basada en el estado actual del archivo "
+"«/etc/apt/sources.list»."
 
 #. Type: select
 #. Description
@@ -107,7 +107,7 @@ msgstr ""
 #. Description
 #: ../apt-cacher-ng.templates:3001
 msgid "Listening address(es) for Apt-Cacher NG:"
-msgstr "Dirección(es) en la(s) que escuchará Apt-Cacher NG:"
+msgstr "Direcciones en las que escuchará Apt-Cacher NG:"
 
 #. Type: string
 #. Description
@@ -116,8 +116,8 @@ msgid ""
 "Please specify the local addresses that Apt-Cacher NG should listen on "
 "(multiple entries must be separated by spaces)."
 msgstr ""
-"Indique la(s) dirección(es) local(es) en la(s) que debe escuchar Apt-Cacher "
-"NG (debe separar las direcciones con espacios)."
+"Indique las direcciones locales en las que debe escuchar Apt-Cacher NG "
+"(debe separar las direcciones con espacios)."
 
 #. Type: string
 #. Description
@@ -179,7 +179,7 @@ msgid ""
 "If this field is left empty, the value from the current configuration "
 "remains unchanged."
 msgstr ""
-"Si deja este campo vacío no se modificará el valor actual de laconfiguración."
+"Si deja este campo vacío no se modificará el valor actual de la configuración."
 
 #. Type: string
 #. Description
@@ -205,8 +205,8 @@ msgid ""
 "If this field is left empty, the value from the current configuration "
 "remains unchanged or is set to the default of /var/cache/apt-cacher-ng."
 msgstr ""
-"Si deja este campo vacío se mantendrá el valor acual de la configuración o "
-"se utilizará el valor predeterminado: «/var/cache/apt-cacher-ng»."
+"Si deja este campo vacío se mantendrá el valor actual de la configuración "
+"o se utilizará el valor predeterminado: «/var/cache/apt-cacher-ng»."
 
 #. Type: string
 #. Description
@@ -244,7 +244,7 @@ msgstr ""
 #. Description
 #: ../apt-cacher-ng.templates:7001
 msgid "Allow HTTP tunnels through Apt-Cacher NG?"
-msgstr ""
+msgstr "¿Desea permitir túneles HTTP a través de Apt-Cacher NG?"
 
 #. Type: boolean
 #. Description
@@ -254,6 +254,9 @@ msgid ""
 "can be used to access remote servers that might otherwise be blocked by (for "
 "instance) a firewall filtering HTTPS connections."
 msgstr ""
+"Puede configurar Apt-Cacher NG para permitir a los usuarios crear túneles "
+"HTTP que pueden ser utilizados para acceder a servidores remotos posiblemente "
+"bloqueados, por ejemplo, por un cortafuegos que filtre conexiones HTTPS."
 
 #. Type: boolean
 #. Description
@@ -262,6 +265,8 @@ msgid ""
 "This feature is usually disabled for security reasons; enable it only for "
 "trusted LAN environments."
 msgstr ""
+"Esta opción generalmente se encuentra desactivada por cuestiones de "
+"seguridad; actívela sólo en entornos LAN en los que confíe."
 
 # N.t: update = actualización de la lista de paquetes..., ya que «actualizar»
 # en este contexto puede sugerir la instalación de versiones nuevas de paquetes
