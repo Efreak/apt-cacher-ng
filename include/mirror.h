@@ -10,6 +10,8 @@
 
 #include "cacheman.h"
 
+namespace acng
+{
 class pkgmirror: public cacheman
 {
 public:
@@ -35,4 +37,5 @@ protected:
 
 	bool ConfigDelta(cmstring &sPathRel);
 };
+}
 #endif /* MIRROR_H_ */

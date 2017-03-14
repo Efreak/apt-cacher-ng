@@ -12,6 +12,9 @@
 #include <ctime>
 #include <limits>
 
+namespace acng
+{
+
 /**
  * @brief Primitive task scheduler for internal helper functions
  *
@@ -35,9 +38,9 @@ public:
 	void WorkLoop();
 	void Stop();
 
-	enum eType
+	enum eType : char
 	{
-		TYPE_EXFILEITEM, TYPE_ACFGHOOKS, TYPE_EXDNS, TYPE_EXCONNS,
+		TYPE_EXFILEITEM, TYPE_ACFGHOOKS, /* TYPE_EXDNS,*/ TYPE_EXCONNS,
 		ETYPE_MAX
 	};
 	void ScheduleFor(time_t when, eType what);
@@ -50,5 +53,7 @@ private:
 };
 
 extern cleaner g_victor; // ... down to the nap
+
+}
 
 #endif /* CLEANER_H_ */

@@ -5,14 +5,13 @@
 #include "config.h"
 #include "meta.h"
 #include <bitset>
-#include <atomic>
 
-static const int RESERVED_DEFVAL = -4223;
 #define NUM_PBKDF2_ITERATIONS 1
 // 1757961
 #define ACNG_DEF_PORT "3142"
 
-#define ACFG_REDIRMAX_DEFAULT 5
+namespace acng
+{
 
 struct ltstring {
 	bool operator()(const mstring &s1, const mstring &s2) const {
@@ -22,8 +21,11 @@ struct ltstring {
 
 typedef std::map<mstring, mstring, ltstring> NoCaseStringMap;
 
-namespace acfg
+namespace cfg
 {
+static const int RESERVED_DEFVAL = -4223;
+
+static const int REDIRMAX_DEFAULT = 5;
 
 extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
 reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, adminauthB64,
@@ -37,7 +39,8 @@ extern int debug, numcores, offlinemode, foreground, verbose, stupidfs, forceman
 verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, dlbufsize, usewrap,
 exporigin, logxff, oldupdate, recompbz2, nettimeout, updinterval, forwardsoap, dirperms, fileperms,
 maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsupcount,
-optproxytimeout, patrace, maxdlspeed, maxredlsize, nsafriendly;
+optproxytimeout, patrace, maxdlspeed, maxredlsize, nsafriendly, trackfileuse, exstarttradeoff;
+extern int allocspace;
 
 // processed config settings
 extern const tHttpUrl* GetProxyInfo();
@@ -46,14 +49,14 @@ extern mstring agentheader;
 
 extern int conprotos[2];
 
-extern std::atomic_bool degraded;
-
 bool SetOption(const mstring &line, NoCaseStringMap *pDupeChecker);
 void dump_config(bool includingDelicateValues=false);
 void ReadConfigDirectory(const char*, bool bReadErrorIsFatal=true);
 
 //! Prepare various things resulting from variable combinations, etc.
 void PostProcConfig();
+
+bool DegradedMode();
 
 struct tRepoData
 {
@@ -106,11 +109,11 @@ int CheckAdminAuth(LPCSTR auth);
 extern bool g_bQuiet, g_bNoComplex;
 
 static const cmstring privStoreRelSnapSufix("_xstore/rsnap");
-
+static const cmstring privStoreRelQstatsSfx("_xstore/qstats");
 
 } // namespace acfg
 
-namespace rechecks
+namespace rex
 {
 
 enum NOCACHE_PATTYPE : bool
@@ -119,7 +122,7 @@ enum NOCACHE_PATTYPE : bool
 	NOCACHE_TGT
 };
 
-enum eMatchType
+enum eMatchType : int8_t
 {
 	FILE_INVALID = -1,
 	FILE_SOLID = 0, FILE_VOLATILE, FILE_WHITELIST,
@@ -136,7 +139,7 @@ bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat);
 bool CompileExpressions();
 }
 
-#define CACHE_BASE (acfg::cacheDirSlash)
+#define CACHE_BASE (acng::cfg::cacheDirSlash)
 #define CACHE_BASE_LEN (CACHE_BASE.length()) // where the relative paths begin
 #define SZABSPATH(x) (CACHE_BASE+(x)).c_str()
 #define SABSPATH(x) (CACHE_BASE+(x))
@@ -144,12 +147,14 @@ bool CompileExpressions();
 bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
 
 // XXX: find a better place for this, shared between server and acngtool
-enum ControLineType
+enum ControLineType : uint8_t
 {
 	NotForUs = 0,
 	BeforeError = 1,
 	Error = 2
 };
 #define maark "41d_a6aeb8-26dfa" // random enough to not match anything existing *g*
+
+}
 
 #endif

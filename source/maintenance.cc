@@ -7,7 +7,6 @@
 #include "expiration.h"
 #include "pkgimport.h"
 #include "showinfo.h"
-#include "jsonstats.h"
 #include "mirror.h"
 #include "aclogger.h"
 #include "filereader.h"
@@ -28,6 +27,8 @@
 using namespace std;
 
 #define MAINT_HTML_DECO "maint.html" 
+
+namespace acng {
 
 tSpecialRequest::tSpecialRequest(const tRunParms& parms) :
 		m_parms(parms)
@@ -227,7 +228,7 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 		return workSTYLESHEET;
 
 	// not starting like the maint page?
-	if(cmd.compare(spos, wlen, acfg::reportpage))
+	if(cmd.compare(spos, wlen, cfg::reportpage))
 		return workNotSpecial;
 
 	// ok, filename identical, also the end, or having a parameter string?
@@ -238,7 +239,7 @@ tSpecialRequest::eMaintWorkType tSpecialRequest::DispatchMaintWork(cmstring& cmd
 	// means needs authorization
 
 	// all of the following need authorization if configured, enforce it
-	switch(acfg::CheckAdminAuth(auth))
+	switch(cfg::CheckAdminAuth(auth))
 	{
      case 0:
 #ifdef HAVE_CHECKSUM
@@ -324,6 +325,9 @@ tSpecialRequest* tSpecialRequest::MakeMaintWorker(const tRunParms& parms)
 
 void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd)
 {
+	if(cfg::DegradedMode() && jobType != workSTYLESHEET)
+		jobType = workUSERINFO;
+
 	MYTRY {
 		SHARED_PTR<tSpecialRequest> p;
 		p.reset(MakeMaintWorker({fd, jobType, cmd}));
@@ -333,4 +337,6 @@ void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd
 	MYCATCH(...)
 	{
 	}
+}
+
 }

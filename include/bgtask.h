@@ -13,6 +13,9 @@
 #include <iostream>
 #include <fstream>
 
+namespace acng
+{
+
 class tSpecOpDetachable : public tSpecialRequest
 {
 public:
@@ -53,8 +56,8 @@ private:
 
 	protected:
 	// value is an ID number assigned to the string (key) in the moment of adding it
-	struct errorEntry { mstring msg; unsigned id; };
-	std::map<mstring,errorEntry> m_delCboxFilter;
+	struct pathMemEntry { mstring msg; unsigned id;};
+	std::map<mstring,pathMemEntry> m_pathMemory;
 	// generates a lookup blob as hidden form parameter
 	mstring BuildCompressedDelFileCatalog();
 
@@ -76,5 +79,7 @@ public:
 	void Action() override;
 };
 #endif // DEBUG
+
+}
 
 #endif /* BGTASK_H_ */

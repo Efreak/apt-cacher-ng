@@ -20,25 +20,28 @@
 using namespace std;
 
 
-con::con(int fdId, const char *c) :
-	m_confd(fdId),
-    m_bStopActivity(false),
-    m_dlerthr(0),
-    m_pDlClient(nullptr),
-    m_pTmpHead(nullptr)
+namespace acng
+{
+
+conn::conn(int fdId, const char *c) :
+			m_confd(fdId),
+			m_bStopActivity(false),
+			m_dlerthr(0),
+			m_pDlClient(nullptr),
+			m_pTmpHead(nullptr)
 {
 	if(c) // if nullptr, pick up later when sent by the wrapper
 		m_sClientHost=c;
 
-    LOGSTART2("con::con", "fd: " << fdId << ", clienthost: " << c);
+	LOGSTART2("con::con", "fd: " << fdId << ", clienthost: " << c);
 
 #ifdef DEBUG
-    m_nProcessedJobs=0;
+	m_nProcessedJobs=0;
 #endif
 
 };
 
-con::~con() {
+conn::~conn() {
 	LOGSTART("con::~con (Destroying connection...)");
 	termsocket(m_confd);
 
@@ -49,22 +52,22 @@ con::~con() {
 	for (jit=m_jobs2send.begin(); jit!=m_jobs2send.end(); jit++)
 		delete *jit;
 
-	logstuff.write();
-	
-    if(m_pDlClient) 
-    {
-    	m_pDlClient->SignalStop();
-    	pthread_join(m_dlerthr, nullptr);
-    	
-    	delete m_pDlClient;
-    	m_pDlClient=nullptr;
-    }
-    if(m_pTmpHead)
-    {
-    	delete m_pTmpHead;
-    	m_pTmpHead=nullptr;
-    }
-    aclog::flush();
+	writeAnotherLogRecord(sEmptyString, sEmptyString);
+
+	if(m_pDlClient)
+	{
+		m_pDlClient->SignalStop();
+		pthread_join(m_dlerthr, nullptr);
+
+		delete m_pDlClient;
+		m_pDlClient=nullptr;
+	}
+	if(m_pTmpHead)
+	{
+		delete m_pTmpHead;
+		m_pTmpHead=nullptr;
+	}
+	log::flush();
 }
 
 namespace RawPassThrough
@@ -101,32 +104,32 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 	tHttpUrl url;
 	if (!url.SetHttpUrl(uri))
 		return;
-	auto proxy = acfg::GetProxyInfo();
+	auto proxy = cfg::GetProxyInfo();
 	if (!proxy)
 	{
 		direct_connect:
 		m_spOutCon = g_tcp_con_factory.CreateConnected(url.sHost, url.GetPort(), sErr, 0, 0,
-		false, acfg::nettimeout, true);
+				false, cfg::nettimeout, true);
 	}
 	else
 	{
 		// switch to HTTPS tunnel in order to get a direct connection through the proxy
 		m_spOutCon = g_tcp_con_factory.CreateConnected(proxy->sHost, proxy->GetPort(),
-				sErr, 0, 0, false, acfg::optproxytimeout > 0 ?
-						acfg::optproxytimeout : acfg::nettimeout,
+				sErr, 0, 0, false, cfg::optproxytimeout > 0 ?
+						cfg::optproxytimeout : cfg::nettimeout,
 						true);
 
 		if (m_spOutCon)
 		{
 			if (!m_spOutCon->StartTunnel(tHttpUrl(url.sHost, url.GetPort(),
-			true), sErr, & proxy->sUserPass, false))
+					true), sErr, & proxy->sUserPass, false))
 			{
 				m_spOutCon.reset();
 			}
 		}
-		else if(acfg::optproxytimeout > 0) // ok... try without
+		else if(cfg::optproxytimeout > 0) // ok... try without
 		{
-			acfg::MarkProxyFailure();
+			cfg::MarkProxyFailure();
 			goto direct_connect;
 		}
 	}
@@ -193,81 +196,81 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 }
 }
 
-void con::WorkLoop() {
+void conn::WorkLoop() {
 
 	LOGSTART("con::WorkLoop");
-    
+
 	signal(SIGPIPE, SIG_IGN);
-	
-    acbuf inBuf;
-    inBuf.setsize(32*1024);
-    
-    int maxfd=m_confd;
-    while(!m_bStopActivity) {
-        fd_set rfds, wfds;
-        FD_ZERO(&wfds);
-        FD_ZERO(&rfds);
-        
-        FD_SET(m_confd, &rfds);
-        if(inBuf.freecapa()==0)
-        	return; // shouldn't even get here
-        
-        job *pjSender(nullptr);
-    
-        if ( !m_jobs2send.empty())
+
+	acbuf inBuf;
+	inBuf.setsize(32*1024);
+
+	int maxfd=m_confd;
+	while(!m_bStopActivity) {
+		fd_set rfds, wfds;
+		FD_ZERO(&wfds);
+		FD_ZERO(&rfds);
+
+		FD_SET(m_confd, &rfds);
+		if(inBuf.freecapa()==0)
+			return; // shouldn't even get here
+
+		job *pjSender(nullptr);
+
+		if ( !m_jobs2send.empty())
 		{
 			pjSender=m_jobs2send.front();
 			FD_SET(m_confd, &wfds);
 		}
-		
-        
-        ldbg("select con");
 
-        struct timeval tv;
-        tv.tv_sec = acfg::nettimeout;
-        tv.tv_usec = 23;
-        int ready = select(maxfd+1, &rfds, &wfds, nullptr, &tv);
-        
-        if(ready == 0)
-        {
-        	USRDBG("Timeout occurred, apt client disappeared silently?");
-        	return;
-        }
+
+		ldbg("select con");
+
+		struct timeval tv;
+		tv.tv_sec = cfg::nettimeout;
+		tv.tv_usec = 23;
+		int ready = select(maxfd+1, &rfds, &wfds, nullptr, &tv);
+
+		if(ready == 0)
+		{
+			USRDBG("Timeout occurred, apt client disappeared silently?");
+			return;
+		}
 		else if (ready<0)
 		{
 			if (EINTR == errno)
 				continue;
-			
+
 			ldbg("select error in con, errno: " << errno);
 			return; // FIXME: good error message?
 		}
-        
-        ldbg("select con back");
 
-        if(FD_ISSET(m_confd, &rfds)) {
-            int n=inBuf.sysread(m_confd);
-            ldbg("got data: " << n <<", inbuf size: "<< inBuf.size());
-            if(n<=0) // error, incoming junk overflow or closed connection
-            {
-              if(n==-EAGAIN)
-                continue;
-              else
-              {
-            	  ldbg("client closed connection");
-            	  return;
-              }
-            }
-        }
+		ldbg("select con back");
 
-        // split new data into requests
-        while(inBuf.size()>0) {
-        	MYTRY
-        	{
+		if(FD_ISSET(m_confd, &rfds)) {
+			int n=inBuf.sysread(m_confd);
+			ldbg("got data: " << n <<", inbuf size: "<< inBuf.size());
+			if(n<=0) // error, incoming junk overflow or closed connection
+			{
+				if(n==-EAGAIN)
+					continue;
+				else
+				{
+					ldbg("client closed connection");
+					return;
+				}
+			}
+		}
+
+		// split new data into requests
+		while(inBuf.size()>0) {
+			MYTRY
+			{
 				if(!m_pTmpHead)
 					m_pTmpHead = new header();
 				if(!m_pTmpHead)
 					return; // no resources? whatever
-				
+
 				m_pTmpHead->clear();
 				int nHeadBytes=m_pTmpHead->Load(inBuf.rptr(), inBuf.size());
 				ldbg("header parsed how? " << nHeadBytes);
@@ -285,7 +288,7 @@ void con::WorkLoop() {
 				// also must be identified before
 				if (m_pTmpHead->type == header::POST)
 				{
-					if (acfg::forwardsoap && !m_sClientHost.empty())
+					if (cfg::forwardsoap && !m_sClientHost.empty())
 					{
 						if (RawPassThrough::CheckListbugs(*m_pTmpHead))
 						{
@@ -313,7 +316,7 @@ void con::WorkLoop() {
 					if(iter.Next() && iter.Next())
 					{
 						cmstring tgt(iter);
-						if(rechecks::Match(tgt, rechecks::PASSTHROUGH))
+						if(rex::Match(tgt, rex::PASSTHROUGH))
 							RawPassThrough::PassThrough(inBuf, m_confd, tgt);
 						else
 						{
@@ -325,7 +328,7 @@ void con::WorkLoop() {
 					}
 					return;
 				}
-				
+
 				if (m_sClientHost.empty()) // may come from wrapper... MUST identify itself
 				{
 
@@ -356,39 +359,39 @@ void con::WorkLoop() {
 
 				m_pTmpHead=nullptr; // owned by job now
 			}
-        	MYCATCH(bad_alloc&)
-        	{
-        		return;
-        	}
-        }
-        
-        if(inBuf.freecapa()==0)
-        	return; // cannot happen unless being attacked
+			MYCATCH(bad_alloc&)
+			{
+				return;
+			}
+		}
+
+		if(inBuf.freecapa()==0)
+			return; // cannot happen unless being attacked
 
 		if(FD_ISSET(m_confd, &wfds) && pjSender)
 		{
 			switch(pjSender->SendData(m_confd))
 			{
-				case(job::R_DISCON):
+			case(job::R_DISCON):
 				{
 					ldbg("Disconnect advise received, stopping connection");
 					return;
 				}
-				case(job::R_DONE):
+			case(job::R_DONE):
 				{
-					m_jobs2send.pop_front(); 						
+					m_jobs2send.pop_front();
 					delete pjSender;
 					pjSender=nullptr;
-		
+
 					ldbg("Remaining jobs to send: " << m_jobs2send.size());
 					break;
 				}
-				case(job::R_AGAIN):
-						break;
-				default:
-					break;
+			case(job::R_AGAIN):
+				break;
+			default:
+				break;
 			}
-        }
+		}
 	}
 }
 
@@ -398,14 +401,14 @@ void * _StartDownloader(void *pVoidDler)
 	return nullptr;
 }
 
-bool con::SetupDownloader(const char *pszOrigin)
+bool conn::SetupDownloader(const char *pszOrigin)
 {
 	if (m_pDlClient)
 		return true;
 
 	MYTRY
 	{
-		if(acfg::exporigin)
+		if(cfg::exporigin)
 		{
 			string sXff;
 			if(pszOrigin)
@@ -418,7 +421,7 @@ bool con::SetupDownloader(const char *pszOrigin)
 		}
 		else
 			m_pDlClient=new dlcon(false);
-		
+
 		if(!m_pDlClient)
 			return false;
 	}
@@ -437,21 +440,11 @@ bool con::SetupDownloader(const char *pszOrigin)
 	return false;
 }
 
-void con::__tlogstuff::write()
+void conn::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
+		off_t nNewOut, bool bAsError)
 {
-	if (sumIn>0)
-		aclog::transfer('I', sumIn, client.c_str(), file.c_str());
-	
-	if(sumOut>0)
-		aclog::transfer(bFileIsError ? 'E' : 'O', sumOut, client.c_str(), file.c_str());
-}
-
-void con::LogDataCounts(const std::string & sFile, const char *xff, off_t nNewIn,
-		off_t nNewOut, bool bFileIsError)
-{
-	LOGSTART("con::LogDataCounts");
 	string sClient;
-	if (!acfg::logxff || !xff) // not to be logged or not available
+	if (!cfg::logxff || !xff) // not to be logged or not available
 		sClient=m_sClientHost;
 	else if (xff)
 	{
@@ -461,22 +454,21 @@ void con::LogDataCounts(const std::string & sFile, const char *xff, off_t nNewIn
 		if (pos!=stmiss)
 			sClient.erase(0, pos+1);
 	}
-	if(sFile != logstuff.file || sClient != logstuff.client)
-	{
-		logstuff.write();
-		logstuff.reset(sFile, sClient, bFileIsError);
-	}
-	LOG("heh? state now: " << logstuff.sumIn << " " << logstuff.sumOut);
-	logstuff.sumIn+=nNewIn;
-	logstuff.sumOut+=nNewOut;
-
+	if(sFile != logFile || sClient != logClient)
+		writeAnotherLogRecord(sFile, sClient);
+	fileTransferIn += nNewIn;
+	fileTransferOut += nNewOut;
+	if(bAsError) m_bLogAsError = true;
 }
 
-void con::__tlogstuff::reset(const std::string &pNewFile, const std::string &pNewClient, bool bIsError)
+// sends the stats to logging and replaces file/client identities with the new context
+void conn::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient)
 {
-	bFileIsError=bIsError;
-	file=pNewFile;
-	client=pNewClient;
-	sumIn=0;
-	sumOut=0;
+		log::transfer(fileTransferIn, fileTransferOut, logClient, logFile, m_bLogAsError);
+		fileTransferIn = fileTransferOut = 0;
+		m_bLogAsError = false;
+		logFile = pNewFile;
+		logClient = pNewClient;
+}
+
 }

@@ -9,6 +9,9 @@
 #include "header.h"
 #include <unordered_map>
 
+namespace acng
+{
+
 class fileitem;
 typedef std::shared_ptr<fileitem> tFileItemPtr;
 typedef std::unordered_multimap<mstring, tFileItemPtr> tFiGlobMap;
@@ -19,7 +22,7 @@ class fileitem : public base_with_condition
 public:
 
 	// Life cycle (process states) of a file description item
-	enum FiStatus
+	enum FiStatus : char
 	{
 
 	FIST_FRESH, FIST_INITED, FIST_DLPENDING, FIST_DLGOTHEAD, FIST_DLRECEIVING,
@@ -72,6 +75,8 @@ public:
 	/// mark the item as complete as-is, assuming that sizeseen is correct
 	void SetupComplete();
 
+	void UpdateHeadTimestamp();
+
 	uint64_t m_nIncommingCount;
 	off_t m_nSizeSeen;
 	off_t m_nRangeLimit;
@@ -91,6 +96,7 @@ protected:
 	FiStatus m_status;
 	mstring m_sPathRel;
 	time_t m_nTimeDlStarted, m_nTimeDlDone;
+	virtual int Truncate2checkedSize() {return 0;};
 
 private:
 	// helper data for global registration control. Access is synchronized by the global lock,
@@ -106,6 +112,7 @@ public:
 	inline fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
 	inline fileitem_with_storage(cmstring &s, int nUsers) {m_sPathRel=s; usercount=nUsers; };
 	virtual ~fileitem_with_storage();
+        int Truncate2checkedSize() override;
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
@@ -115,7 +122,7 @@ public:
 
 	inline static mstring NormalizePath(cmstring &sPathRaw)
 	{
-		return acfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
+		return cfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
 	}
 protected:
 	int MoveRelease2Sidestore();
@@ -147,12 +154,12 @@ public:
 	// when copied around, invalidates the original reference
 	~fileItemMgmt();
 	inline fileItemMgmt() {}
-	inline tFileItemPtr get() {return m_ptr;}
+	inline tFileItemPtr getFiPtr() {return m_ptr;}
 	inline operator bool() const {return (bool) m_ptr;}
 
+	tFileItemPtr m_ptr;
 
 private:
-	tFileItemPtr m_ptr;
 	void Unreg();
 
 	fileItemMgmt(const fileItemMgmt &src);
@@ -165,7 +172,5 @@ private:
 #define fileItemMgmt void
 #endif // not MINIBUILD
 
+}
 #endif
-
-
-

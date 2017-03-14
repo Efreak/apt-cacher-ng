@@ -8,9 +8,14 @@
 
 #include <fstream>
 #include <iostream>
-
 #ifdef DEBUG
 #include <assert.h>
+#endif
+
+namespace acng
+{
+
+#ifdef DEBUG
 #define ASSERT(x) assert(x)
 #else
 #define ASSERT(x)
@@ -34,21 +39,21 @@ inline void dump_proc_status(){}; // strip away
 
 #else
 
-#define LOGLVL(n, x) if(acfg::debug&n){ __logobj.GetFmter() << x; __logobj.Write(__FILE__,__LINE__); }
-#define LOG(x) LOGLVL(LOG_DEBUG, x)
+#define LOGLVL(n, x) if(acng::cfg::debug&n){ __logobj.GetFmter() << x; __logobj.Write(__FILE__,__LINE__); }
+#define LOG(x) LOGLVL(log::LOG_DEBUG, x)
 
 #define LOGSTARTFUNC t_logger __logobj(__func__, this);
 #define LOGSTART(x) t_logger __logobj(x, this);
 #define LOGSTARTs(x) t_logger __logobj(x, nullptr);
-#define LOGSTART2(x, y) t_logger __logobj(x, this); LOGLVL(LOG_DEBUG, y /* << "@" __FILE__ ":" << __LINE__  */ )
-#define LOGSTART2s(x, y) t_logger __logobj(x, nullptr); LOGLVL(LOG_DEBUG, y /*<< "@" __FILE__ ":" << __LINE__ */ )
+#define LOGSTART2(x, y) t_logger __logobj(x, this); LOGLVL(log::LOG_DEBUG, y /* << "@" __FILE__ ":" << __LINE__  */ )
+#define LOGSTART2s(x, y) t_logger __logobj(x, nullptr); LOGLVL(log::LOG_DEBUG, y /*<< "@" __FILE__ ":" << __LINE__ */ )
 
 #define dbgprint(x) std::cerr << x << std::endl;
 
 #define ldbg(x) LOG(x)
 
 #define dbgline ldbg("mark")
-#define DBGQLOG(x) {aclog::err(tSS()<< x);}
+#define DBGQLOG(x) {log::err(tSS()<< x);}
 #define dump_proc_status dump_proc_status_always
 
 #endif
@@ -66,5 +71,6 @@ inline void dump_proc_status_always()
 	}
 };
 
+}
 
 #endif // __DEBUG_H__

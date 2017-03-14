@@ -16,6 +16,9 @@
 #include "acfg.h"
 #include "acbuf.h"
 
+namespace acng
+{
+
 struct tDlJob;
 typedef std::shared_ptr<tDlJob> tDlJobPtr;
 typedef std::list<tDlJobPtr> tDljQueue;
@@ -48,8 +51,9 @@ class dlcon : public base_with_mutex
         void SignalStop();
 
         bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
-        		const acfg::tRepoData *pRepoDesc,
-        		cmstring *sPatSuffix, LPCSTR reqHead);
+        		const cfg::tRepoData *pRepoDesc,
+        		cmstring *sPatSuffix, LPCSTR reqHead,
+				int nMaxRedirection);
 
         mstring m_sXForwardedFor;
 
@@ -115,6 +119,6 @@ class dlcon : public base_with_mutex
 
 #define IS_REDIRECT(st) (st == 301 || st == 302 || st == 307)
 
+}
+
 #endif
-
-

@@ -109,10 +109,10 @@ TARARGS += --mtime=@1
 else
 TARARGS += --mtime=@$(SOURCE_DATE_EPOCH)
 endif
-ifneq ($(shell tar --help | grep clamp-mtime),)
+ifneq ($(shell LANG=C tar --help | grep clamp-mtime),)
 TARARGS += --clamp-mtime
 endif
-ifneq ($(shell tar --help | grep "sort.*name"),)
+ifneq ($(shell LANG=C tar --help | grep "sort.*name"),)
 TARARGS += --sort=name
 endif
 

@@ -5,6 +5,9 @@
 #include <list>
 #include <unordered_map>
 
+namespace acng
+{
+
 // caching all relevant file identity data and helper flags in such entries
 struct tDiskFileInfo
 {
@@ -24,6 +27,7 @@ public:
 protected:
 
 	std::unordered_map<mstring,std::map<mstring,tDiskFileInfo>> m_trashFile2dir2Info;
+	tStrVec m_oversizedFiles;
 
 	void RemoveAndStoreStatus(bool bPurgeNow);
 	void LoadPreviousData(bool bForceInsert);
@@ -55,6 +59,9 @@ private:
 
 	void HandleDamagedFiles();
 	void ListExpiredFiles();
+	void TrimFiles();
 };
+
+}
 
 #endif /*EXPIRATION_H_*/

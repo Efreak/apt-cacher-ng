@@ -11,7 +11,11 @@
 #include "dirwalk.h"
 
 using namespace std;
-namespace acfg
+
+namespace acng
+{
+
+namespace cfg
 {
 extern int stupidfs;
 }
@@ -53,12 +57,12 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 		if(r)
 		{
 	/*		errnoFmter f;
-				aclog::err(tSS() << sPath <<
+				log::err(tSS() << sPath <<
 						" IO error [" << f<<"]");
 						*/
 			return true; // slight risk of missing information here... bug ignoring is safer
 		}
-		// dangling symlink?
+		// yeah, and we ignore symlinks here
 		if(S_ISLNK(m_stinfo.st_mode))
 			return true;
 	}
@@ -110,7 +114,7 @@ bool dnode::Walk(IFileHandler *h, dnode::tDupeFilter *pFilter, bool bFollowSymli
 		if (strcmp(dp->d_name, ".") && strcmp(dp->d_name, ".."))
 		{
 			childbuf.sPath=sPath+sPathSepUnix;
-			if(acfg::stupidfs)
+			if(cfg::stupidfs)
 				UrlUnescapeAppend(dp->d_name, childbuf.sPath);
 			else
 				childbuf.sPath+=dp->d_name;
@@ -155,3 +159,5 @@ bool IFileHandler::FindFiles(const mstring & sRootDir, IFileHandler::output_rece
 	return DirectoryWalk(sRootDir, &cb, bFilterDoubleDirVisit, bFollowSymlinks);
 }
 
+
+}

@@ -4,6 +4,8 @@
 #include "maintenance.h"
 #include <list>
 
+namespace acng
+{
 class tMarkupFileSend : public tSpecialRequest
 {
 public:
@@ -57,4 +59,5 @@ struct tMaintPage : public tMarkupFileSend
 	tMaintPage(const tRunParms& parms);
 	virtual void SendProp(cmstring &key) override;
 };
+}
 #endif /*SHOWINFO_H_*/

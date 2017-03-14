@@ -32,17 +32,32 @@ atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 #endif
 
 #ifdef HAVE_SSL
-#include <openssl/bio.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
+#include <openssl/evp.h>
+#include "openssl/bio.h"
+#include "openssl/ssl.h"
+#include "openssl/err.h"
+#include <openssl/rand.h>
+#include <openssl/sha.h>
+#include <openssl/crypto.h>
+#include <openssl/x509_vfy.h>
+#include <openssl/x509v3.h>
 #endif
+#ifndef HAVE_SSL_HOST_VALIDATION
+extern "C"
+{
+#include "oldssl-workaround/openssl_hostname_validation.h"
+}
+#endif
+
+namespace acng
+{
 
 std::atomic_uint dl_con_factory::g_nconns(0);
 dl_con_factory g_tcp_con_factory;
 
-tcpconnect::tcpconnect(acfg::tRepoData::IHookHandler *pObserver) : m_pStateObserver(pObserver)
+tcpconnect::tcpconnect(cfg::tRepoData::IHookHandler *pObserver) : m_pStateObserver(pObserver)
 {
-	if(acfg::maxdlspeed != RESERVED_DEFVAL)
+	if(cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
 		dl_con_factory::g_nconns.fetch_add(1);
 	if(pObserver)
 		pObserver->OnAccess();
@@ -52,7 +67,7 @@ tcpconnect::~tcpconnect()
 {
 	LOGSTART("tcpconnect::~tcpconnect, terminating outgoing connection class");
 	Disconnect();
-	if(acfg::maxdlspeed != RESERVED_DEFVAL)
+	if(cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
 		dl_con_factory::g_nconns.fetch_add(-1);
 #ifdef HAVE_SSL
 	if(m_ctx)
@@ -174,7 +189,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 {
 	LOGSTART2("tcpconnect::_Connect", "hostname: " << m_sHostName);
 
-	CAddrInfo::SPtr dns = CAddrInfo::CachedResolve(m_sHostName, m_sPort, sErrorMsg);
+	auto dns = CAddrInfo::CachedResolve(m_sHostName, m_sPort, sErrorMsg);
 
 	if(!dns)
 	{
@@ -185,11 +200,11 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 	::signal(SIGPIPE, SIG_IGN);
 
 	// always consider first family, afterwards stop when no more specified
-	for (unsigned i=0; i< _countof(acfg::conprotos) && (0==i || acfg::conprotos[i]!=PF_UNSPEC); ++i)
+	for (unsigned i=0; i< _countof(cfg::conprotos) && (0==i || cfg::conprotos[i]!=PF_UNSPEC); ++i)
 	{
 		for (auto pInfo = dns->m_addrInfo; pInfo; pInfo = pInfo->ai_next)
 		{
-			if (acfg::conprotos[i] != PF_UNSPEC && acfg::conprotos[i] != pInfo->ai_family)
+			if (cfg::conprotos[i] != PF_UNSPEC && cfg::conprotos[i] != pInfo->ai_family)
 				continue;
 
 			ldbg("Creating socket for " << m_sHostName);
@@ -211,7 +226,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			}
 #endif
 			set_nb(m_conFd);
-			if (::connect_timeout(m_conFd, pInfo->ai_addr, pInfo->ai_addrlen, timeout, true) < 0)
+			if (acng::connect_timeout(m_conFd, pInfo->ai_addr, pInfo->ai_addrlen, timeout, true) < 0)
 			{
 				if(errno==ETIMEDOUT)
 					sErrorMsg="Connection timeout";
@@ -262,7 +277,7 @@ multimap<tuple<string,string SSL_OPT_ARG(bool) >,
 		std::pair<tDlStreamHandle, time_t> > spareConPool;
 
 tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &sPort,
-		mstring &sErrOut, bool *pbSecondHand, acfg::tRepoData::IHookHandler *pStateTracker
+		mstring &sErrOut, bool *pbSecondHand, cfg::tRepoData::IHookHandler *pStateTracker
 		,bool bSsl, int timeout, bool nocache)
 {
 	LOGSTART2s("tcpconnect::CreateConnected", "hostname: " << sHostname << ", port: " << sPort
@@ -272,7 +287,7 @@ tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &s
 #ifndef HAVE_SSL
 	if(bSsl)
 	{
-		aclog::err("E_NOTIMPLEMENTED: SSL");
+		log::err("E_NOTIMPLEMENTED: SSL");
 		return p;
 	}
 #endif
@@ -355,7 +370,7 @@ void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
 		handle->m_pStateObserver = nullptr;
 	}
 
-	if(! acfg::persistoutgoing)
+	if(! cfg::persistoutgoing)
 	{
 		ldbg("not caching outgoing connections, drop " << handle.get());
 		handle.reset();
@@ -468,33 +483,56 @@ void dl_con_factory::dump_status()
 			<< " , reuse: " << nReuseCount.load() << "\n";
 #endif
 
-	aclog::err(msg);
+	log::err(msg);
 }
 #ifdef HAVE_SSL
 bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 {
 	SSL * ssl(nullptr);
-	int hret(0);
-	LPCSTR perr(0);
 	mstring ebuf;
+
+	auto withSslError = [&sErr](const char *perr)
+					{
+		sErr="500 SSL error: ";
+		sErr+=(perr?perr:"Generic SSL failure");
+		return false;
+					};
+	auto withLastSslError = [&withSslError]()
+						{
+		return withSslError(ERR_reason_error_string(ERR_get_error()));
+						};
+	auto withRetCode = [&withSslError, &ssl](int hret)
+				{
+		return withSslError(ERR_reason_error_string(SSL_get_error(ssl, hret)));
+				};
 
 	// cleaned up in the destructor on EOL
 	if(!m_ctx)
 	{
 		m_ctx = SSL_CTX_new(SSLv23_client_method());
-		if (!m_ctx)
-			goto ssl_init_fail;
+		if (!m_ctx) return withLastSslError();
 
 		SSL_CTX_load_verify_locations(m_ctx,
-				acfg::cafile.empty() ? nullptr : acfg::cafile.c_str(),
-			acfg::capath.empty() ? nullptr : acfg::capath.c_str());
+				cfg::cafile.empty() ? nullptr : cfg::cafile.c_str(),
+			cfg::capath.empty() ? nullptr : cfg::capath.c_str());
 	}
 
 	ssl = SSL_new(m_ctx);
-	if(!ssl)
-		goto ssl_init_fail;
+	if (!m_ctx) return withLastSslError();
 
+	// for SNI
 	SSL_set_tlsext_host_name(ssl, sHostname.c_str());
+
+	{
+#ifdef HAVE_SSL_HOST_VALIDATION
+		auto param = SSL_get0_param(ssl);
+		/* Enable automatic hostname checks */
+		X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+		X509_VERIFY_PARAM_set1_host(param, sHostname.c_str(), 0);
+#endif
+		/* Configure a non-zero callback if desired */
+		SSL_set_verify(ssl, SSL_VERIFY_PEER, 0);
+	}
 
 	// mark it connected and prepare for non-blocking mode
  	SSL_set_connect_state(ssl);
@@ -502,8 +540,8 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  			| SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER
  			| SSL_MODE_ENABLE_PARTIAL_WRITE);
 
- 	if((hret=SSL_set_fd(ssl, m_conFd)) != 1)
- 		goto ssl_init_fail_retcode;
+ 	auto hret=SSL_set_fd(ssl, m_conFd);
+ 	if(hret != 1) return withRetCode(hret);
 
  	while(true)
  	{
@@ -511,7 +549,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  		if(hret == 1 )
  			break;
  		if(hret == 0)
- 			goto ssl_init_fail_retcode;
+ 			return withRetCode(hret);
 
 		fd_set rfds, wfds;
 		FD_ZERO(&rfds);
@@ -525,35 +563,26 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  			FD_SET(m_conFd, &wfds);
  			break;
  		default:
- 			goto ssl_init_fail_retcode;
+ 			return withRetCode(hret);
  		}
  		struct timeval tv;
- 		tv.tv_sec = acfg::nettimeout;
+ 		tv.tv_sec = cfg::nettimeout;
  		tv.tv_usec = 0;
 		int nReady=select(m_conFd+1, &rfds, &wfds, nullptr, &tv);
-		if(!nReady)
-		{
-			perr="Socket timeout";
-			goto ssl_init_fail;
-		}
+		if(!nReady) return withSslError("Socket timeout");
 		if (nReady<0)
 		{
 #ifndef MINIBUILD
 			ebuf=tErrnoFmter("Socket error");
-			perr=ebuf.c_str();
+			return withSslError(ebuf.c_str());
 #else
-			perr="Socket error";
+			return withSslError("Socket error");
 #endif
-			goto ssl_init_fail;
 		}
  	}
 
  	m_bio = BIO_new(BIO_f_ssl());
- 	if(!m_bio)
- 	{
- 		perr="IO initialization error";
- 		goto ssl_init_fail;
- 	}
+ 	if(!m_bio) return withSslError("IO initialization error");
  	// not sure we need it but maybe the handshake can access this data
  	BIO_set_conn_hostname(m_bio, sHostname.c_str());
  	BIO_set_conn_port(m_bio, sPort.c_str());
@@ -563,29 +592,45 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
  	BIO_set_nbio(m_bio, 1);
 	set_nb(m_conFd);
 
-	if(!acfg::nsafriendly)
+	if(!cfg::nsafriendly)
 	{
+		X509* server_cert = nullptr;
 		hret=SSL_get_verify_result(ssl);
 		if( hret != X509_V_OK)
+			return withSslError(X509_verify_cert_error_string(hret));
+		server_cert = SSL_get_peer_certificate(ssl);
+		if(server_cert)
 		{
-			perr=X509_verify_cert_error_string(hret);
-			goto ssl_init_fail;
+			// XXX: maybe extract the real name to a buffer and report it additionally?
+			// X509_NAME_oneline(X509_get_subject_name (server_cert), cert_str, sizeof (cert_str));
+#ifndef HAVE_SSL_HOST_VALIDATION
+			auto hcResult=validate_hostname(sHostname.c_str(), server_cert);
+			X509_free(server_cert);
+			if(hcResult != HostnameValidationResult::MatchFound)
+				return withSslError("Incorrect remote certificate configuration");
+#else
+			X509_free(server_cert);
+#endif
 		}
+		else // The handshake was successful although the server did not provide a certificate
+			return withSslError("Incompatible remote certificate");
 	}
-
 	return true;
+}
 
-	ssl_init_fail_retcode:
-
-	perr=ERR_reason_error_string(SSL_get_error(ssl, hret));
-
-	ssl_init_fail:
-
-	if(!perr)
-		perr=ERR_reason_error_string(ERR_get_error());
-	sErr="500 SSL error: ";
-	sErr+=(perr?perr:"Generic SSL failure");
-	return false;
+//! Global initialization helper (might be non-reentrant)
+void globalSslInit()
+{
+	static bool inited=false;
+	if(inited)
+		return;
+	inited = true;
+	SSL_load_error_strings();
+	ERR_load_BIO_strings();
+	ERR_load_crypto_strings();
+	ERR_load_SSL_strings();
+	OpenSSL_add_all_algorithms();
+	SSL_library_init();
 }
 
 #endif
@@ -666,3 +711,5 @@ bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,
 }
 
 
+
+}

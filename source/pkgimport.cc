@@ -23,6 +23,8 @@ using namespace std;
 #define SCACHEFILE (CACHE_BASE+"_impkeycache")
 #define FMTSIG "FMT5"
 
+namespace acng
+{
 /*
  * Algorithm:
  *
@@ -65,7 +67,7 @@ bool pkgimport::ProcessRegular(const mstring &sPath, const struct stat &stinfo)
 
 		AddIFileCandidate(sPath.substr(CACHE_BASE_LEN));
 	}
-	else if(rechecks::FILE_INVALID != rechecks::GetFiletype(sPath))
+	else if(rex::FILE_INVALID != rex::GetFiletype(sPath))
 	{
 		// get a fingerprint by checksumming if not already there from the fpr cache
 
@@ -285,7 +287,7 @@ void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 		return;
 	
 	string sDestAbs=CACHE_BASE;
-	if(acfg::stupidfs)
+	if(cfg::stupidfs)
 		sDestAbs+=DosEscape(entry.sDirectory+entry.sFileName);
 	else
 		sDestAbs+=(entry.sDirectory+entry.sFileName);
@@ -343,7 +345,7 @@ void pkgimport::HandlePkgEntry(const tRemoteFileInfo &entry)
 	h.type=header::ANSWER;
 	if (h.StoreToFile(sDestAbs+".head")<=0)
 	{
-		aclog::err("Unable to store generated header");
+		log::err("Unable to store generated header");
 		return; // junk may remain but that's a job for cleanup later
 	}
 	hit->second.bFileUsed=true;
@@ -439,3 +441,5 @@ void pkgimport::_GetCachedKey(const string & sPath, const struct stat &stinfo, s
 }
 
  */
+
+}

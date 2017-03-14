@@ -18,8 +18,11 @@
 #ifdef HAVE_TOMCRYPT
 #include <tomcrypt.h>
 #endif
+
 using namespace std;
 
+namespace acng
+{
 cmstring sPathSep(SZPATHSEP);
 cmstring sPathSepUnix(SZPATHSEPUNIX);
 #ifndef MINIBUILD
@@ -206,7 +209,7 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 	else if(0==strncasecmp(url.c_str(), "https://", 8))
 	{
 #ifndef HAVE_SSL
-	aclog::err("E_NOTIMPLEMENTED: SSL");
+	log::err("E_NOTIMPLEMENTED: SSL");
 	return false;
 #else
 		hStart=8;
@@ -765,7 +768,7 @@ mstring UrlUnescape(cmstring &from)
 	UrlUnescapeAppend(from, ret);
 	return ret;
 }
-mstring DosEscape(cmstring &s);
+//mstring DosEscape(cmstring &s);
 // just the bare minimum to make sure the string does not break HTML formating
 mstring html_sanitize(cmstring& in)
 {
@@ -802,6 +805,30 @@ mstring offttosH(off_t n)
 		n/=1024;
 	}
 	return "INF";
+}
+
+//template<typename charp>
+off_t strsizeToOfft(const char *sizeString) // XXX: if needed... charp sizeString, charp *next)
+{
+	char *inext(0);
+	auto val = strtoull(sizeString, &inext, 10);
+	if(!val) return 0;
+	if(!*inext) return val; // full length
+	// trim
+	while(*inext && isspace((unsigned)*inext)) ++inext;
+	switch(*inext)
+	{
+	case 'k': return val * 1000;
+	case 'm': return val * 1000000;
+	case 'g': return val * 1000000*1000;
+	case 'p': return val * 1000000*1000000;
+
+	case 'K': return val * 1024;
+	case 'M': return val * 1024*1024;
+	case 'G': return val * 1024*1024*1024;
+	case 'P': return val * 1024*1024*1024*1024;
+	}
+	return val;
 }
 
 void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar)
@@ -876,4 +903,6 @@ bool scaseequals(cmstring& a, cmstring& b)
         if (tolower((unsigned) a[i]) != tolower((unsigned)b[i]))
             return false;
     return true;
+}
+
 }

@@ -1,3 +1,81 @@
+apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=medium
+
+  * NOTE: this release tackles multiple issues that might be considered
+    security related in certain environments.
+  * FIX: Making sure to truncate the file in case its download is aborted.
+    This is needed in order to avoid hidden filesystem space allocation
+    (Debian bug #856635). Also more delicate use of fallocate calls on Linux
+    due to the potentially syscall execution delay. By default, limit the
+    requested size to the first megabyte of a file.
+  * FIX: detection of incorrectly allocated files and automated trimming in
+    expiration run
+  * FIX: compilation with GCC7, also warning fixes with Clang4
+  * FIX: better checking of possibly invalid remote certificate configuration
+    in SSL client code
+  * FIX: added workaround code for OpenSSL certificate validation even with
+    ancient SSL versions like the one found in Ubuntu 14 LTS; borrowed from
+    libevent examples (originally from ssl-conservatory and cURL)
+  * FIX: no printing of requested file name in the 403 HTTP status line
+  * FIX: typo/wording in manual, iptables examples
+  * Database update
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 14 Mar 2017 16:23:20 +0100
+
+apt-cacher-ng (2) THE-LAST-JOB-FILMS-LTD; urgency=medium
+
+  * Minor refactoring (DNS cache with fewer mutexes)
+  * FIX: communication for maint jobs now properly considers possible
+    addresses from daemon's configuration. Communication via UDS remains
+    broken which is subject to repairs in the next update of core code
+  * FIX: Correct parsing of unix suffixes for ExStartTradeOff option
+  * FIX: fixes for compilation errors with GCC 5.4 (by Bob Ham)
+  * FIX: try to link with libatomic, some architectures require it
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 22 Nov 2016 21:29:54 +0100
+
+apt-cacher-ng (1) LOGAN-VS-BLADE-RUNNER-3D; urgency=low
+
+  * The version numbers change to plain integer. The minor numbers were
+    already hardly used for differentiation between bugfix and feature
+    releases. If this becomes ever needed, the version might be extended to
+    x.y scheme.
+  * FIX: typo in option name ExThreshold, and also hiding obsolete options
+    in configuration dump
+  * FIX: correct display of errors in acngtool curl operation
+  * FIX: strict SSL hostname validation even with peers not supporting SNI
+    (Debian bug #839751)
+  * NEW: simple "live" download statistics display on the maintenance page
+  * NEW: storage of simple download statistics across service restart (until
+    the expiration run)
+  * NEW: default method to abort expiration runs if not much data has been
+    downloaded though the proxy since the last expiration run.
+  * NEW: special command in acngtool ("shrink") to files until
+    the wanted size of the cache directory is reached (considering file type
+    and creation dates). The default strategy is keeping least recently
+    downloaded files in cache.
+  * NEW: optional tagging of used package files which can influence the
+    "shrink" command operation to keep least recently USED files instead of
+    least recently downloaded files.
+  * CHANGE: remote errors now printed as E states in the logging code
+  * Database update
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 19 Oct 2016 22:07:06 +0200
+
+apt-cacher-ng (0.9.3.2) PAINT-IT-AEROGLAZE-Z306; urgency=low
+
+  * FIX: avoid endless looping on startup when a new (not existing) directory
+    was specified as CacheDir
+  * FIX: build failure on non-Linux POSIX systems (Debian bug #830736, now
+    moved namespace tag to general scope)
+  * FIX: Stop printing bogus "error" summary on the end of every maintenance
+    task execution
+  * NEW: allow for omission of CacheDir setting; continues operation in
+    degraded mode with only harmless features which are not needing local
+    storage (HTTPS pass-through, local web server)
+  * Mirror database update
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 12 Jul 2016 21:56:15 +0200
+
 apt-cacher-ng (0.9.3.1) KLENDATHU-AIRLINES-FLIGHT-931; urgency=low
 
   * This is a minor bugfix release, there are more changes to expect soon

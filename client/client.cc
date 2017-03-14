@@ -9,13 +9,15 @@
 #include <sys/select.h>
 #include <signal.h>
 
-namespace acfg
+namespace acng{
+namespace cfg
 {
 	int nettimeout=60;
 }
-
+}
 int main(int argc, char **argv)
 {
+	using namespace acng;
 	signal(SIGPIPE, SIG_IGN);
 	
 	acbuf bufToD, bufFromD;

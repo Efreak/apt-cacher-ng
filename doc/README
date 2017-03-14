@@ -496,7 +496,7 @@ Chapter 5: Security
 
    5.3 Access control with inetd
 
-       In some situations, access filtering by client IP/hostname might
+       In some situations, access filtering by client IP or hostname might
        be not supported directly or there are other reasons to use inetd
        to wrap access to apt-cacher inetd. For this case, an inetd daemon
        is shipped with the package which makes the use of tcpd possible.
@@ -531,7 +531,7 @@ Chapter 5: Security
        (or any init script like `/etc/rc.local'):
 
          iptables -A INPUT -p tcp --dport 3142 --source 127.0.0.0/8 -j ACCEPT
-         iptables -A INPUT -p tcp --dport 3142 --source 192.168.0.0.0/16 -j ACCEPT
+         iptables -A INPUT -p tcp --dport 3142 --source 192.168.0.0/16 -j ACCEPT
          iptables -A INPUT -p tcp --dport 3142  -j REJECT --reject-with tcp-reset
 
    5.5 Target port filter
@@ -858,14 +858,14 @@ Chapter 8: HOWTOs and FAQ
 
         2. Store copies of your .debs, .orig.tar.gz, ... somewhere in the
            `_import' subdirectory in the cache, ie. in `/var/cache/apt-
-           cacher/_import/'. The files may be links or symlinks, does not
-           matter. When done, apt-cacher will move those files to its own
-           internal locations. Example:
+           cacher-ng/_import/'. The files may be links or symlinks, it does
+           not matter. When done, apt-cacher will move those files to its
+           own internal locations. Example:
 
              cd /var/cache
              mkdir apt-cacher-ng/_import
              cp -laf apt-proxy apt-cacher /var/cache/apt-cacher-ng/_import
-             chown -R apt-cacher-ng apt-cacher-ng/_import
+             chown -R apt-cacher-ng:apt-cacher-ng apt-cacher-ng/_import
 
         3. Visit the report page and trigger the import action there. Check
            the results, look for (red) error messages.

@@ -16,10 +16,10 @@
 #include <vector>
 #include <deque>
 #include <limits>
-#include <atomic>
 #include <cstdio>
 #include <ctime>
 #include <cstring>
+#include <functional>
 
 #include <fcntl.h>
 #include <pthread.h>
@@ -28,6 +28,7 @@
 #include <errno.h>
 
 #define EXTREME_MEMORY_SAVING false
+
 
 #ifdef _MSC_VER
 #define __func__ __FUNCTION__
@@ -40,11 +41,25 @@
 #define EMPLACE_PAIR_COMPAT(M,K,V) (M).emplace(K,V)
 #endif
 
+// little STFU helper
+#if __GNUC__ >= 7
+#define __just_fall_through [[fallthrough]]
+#else
+#define __just_fall_through
+#endif
+
+namespace acng
+{
+
 class acbuf;
 
 typedef std::string mstring;
 typedef const std::string cmstring;
 
+typedef std::pair<mstring, mstring> tStrPair;
+typedef std::vector<mstring> tStrVec;
+typedef std::set<mstring> tStrSet;
+typedef std::deque<mstring> tStrDeq;
 typedef mstring::size_type tStrPos;
 const static tStrPos stmiss(cmstring::npos);
 typedef unsigned short USHORT;
@@ -86,11 +101,6 @@ extern cmstring FAKEDATEMARK;
 
 #ifndef O_NONBLOCK
 #error "Unknown how to configure non-blocking mode (O_NONBLOCK) on this system"
-#endif
-
-#include <sys/socket.h>
-#ifndef SO_MAXCONN
-#define SO_MAXCONN 250
 #endif
 
 //#define PATHSEP "/"
@@ -146,7 +156,7 @@ inline void trimString(mstring &s, LPCSTR junk=SPACECHARS)
 
 mstring GetBaseName(cmstring &in);
 mstring GetDirPart(cmstring &in);
-std::pair<mstring, mstring> SplitDirPath(cmstring& in);
+tStrPair SplitDirPath(cmstring& in);
 
 LPCSTR GetTypeSuffix(cmstring& s);
 
@@ -170,12 +180,8 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
    return nullptr;
 }
 
-typedef std::vector<mstring> tStrVec;
-typedef std::set<mstring> tStrSet;
-typedef std::deque<mstring> tStrDeq;
-
 // Sometimes I miss Perl...
-tStrVec::size_type Tokenize(const mstring &in, LPCSTR sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
+tStrVec::size_type Tokenize(cmstring &in, const char* sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
 /*inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
 {out.clear(); if(tokens.empty()) return; for(const auto& tok: tokens)out+=(sep + tok);}
 */
@@ -246,8 +252,8 @@ public:
 
 #define POKE(x) for(;;) { ssize_t n=write(x, "", 1); if(n>0 || (EAGAIN!=errno && EINTR!=errno)) break;  }
 
-#define MIN_VAL(x) (std::numeric_limits<x>::min()) 
-#define MAX_VAL(x) (std::numeric_limits<x>::max()) 
+#define MIN_VAL(x) (std::numeric_limits< x >::min())
+#define MAX_VAL(x) (std::numeric_limits< x >::max())
 
 void appendLong(mstring &s, long val);
 
@@ -320,10 +326,13 @@ mstring html_sanitize(cmstring& in);
 off_t GetFileSize(cmstring & path, off_t defret);
 
 mstring offttos(off_t n);
-
 mstring ltos(long n);
-
 mstring offttosH(off_t n);
+
+//template<typename charp>
+off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeString, charp *next)
+
+
 void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar);
 
 extern cmstring sEmptyString;
@@ -450,6 +459,17 @@ struct tDtorEx {
 	inline tDtorEx(decltype(_action) action) : _action(action) {}
 	inline ~tDtorEx() { _action(); }
 };
+
+// from bgtask.cc
+cmstring GetFooter();
+
+template<typename T>
+std::pair<T,T> pairSum(const std::pair<T,T>& a, const std::pair<T,T>& b)
+{
+	return std::pair<T,T>(a.first+b.first, a.second + b.second);
+}
+
+}
 
 #endif // _META_H
 

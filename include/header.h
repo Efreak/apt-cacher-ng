@@ -6,9 +6,13 @@
 #include <map>
 #include "meta.h"
 
+namespace acng
+{
+
 class header {
    public:
-      enum eHeadType {
+      enum eHeadType : char
+	  {
          INVALID,
          HEAD,
          GET,
@@ -16,7 +20,8 @@ class header {
          CONNECT,
          ANSWER
       };
-      enum eHeadPos {
+      enum eHeadPos : char
+	  {
     	  CONNECTION,			// 0
     	  CONTENT_LENGTH,
     	  IF_MODIFIED_SINCE,
@@ -91,6 +96,8 @@ inline bool BODYFREECODE(int status)
 {
 	// no response if not-modified or similar, following http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
 	return (304 == status || (status>=100 && status<200) || 204==status);
+}
+
 }
 
 #endif

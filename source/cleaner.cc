@@ -21,6 +21,9 @@ using namespace std;
 
 #define TERM_VAL (time_t(-1))
 
+namespace acng
+{
+
 cleaner::cleaner() : m_thr(0)
 {
 	Init();
@@ -42,7 +45,8 @@ void cleaner::WorkLoop()
 	lockuniq g(this);
 	for(;;)
 	{
-		eType what = TYPE_EXDNS;
+		// XXX: review the flow, is this always safe?
+		eType what = TYPE_EXCONNS;
 		time_t when = END_OF_TIME;
 
 		if(m_terminating)
@@ -61,8 +65,10 @@ void cleaner::WorkLoop()
 		auto now=GetTime();
 		if(when > now)
 		{
-			// work around buggy STL, add some years on top and hope it will be fixed everywhere by then
-			wait_until(g, when == END_OF_TIME ? (now | 0x3ffffffe) : when, 111);
+			// work around buggy STL: add some years on top and hope it will be fixed then
+			if(when == END_OF_TIME)
+				when = now | 0x3ffffffe;
+			wait_until(g, when, 111);
 			continue;
 		}
 		stamps[what] = END_OF_TIME;
@@ -73,20 +79,14 @@ void cleaner::WorkLoop()
 		switch(what)
 		{
 		case TYPE_ACFGHOOKS:
-			time_nextcand = acfg::BackgroundCleanup();
-			USRDBG("acfg::ExecutePostponed, nextRunTime now: " << time_nextcand);
+			time_nextcand = cfg::BackgroundCleanup();
+			USRDBG("acng::cfg:ExecutePostponed, nextRunTime now: " << time_nextcand);
 			break;
 
 		case TYPE_EXCONNS:
 			time_nextcand = g_tcp_con_factory.BackgroundCleanup();
 			USRDBG("tcpconnect::ExpireCache, nextRunTime now: " << time_nextcand);
 			break;
-
-		case TYPE_EXDNS:
-			time_nextcand = CAddrInfo::BackgroundCleanup();
-			USRDBG("CAddrInfo::ExpireCache, nextRunTime now: " << time_nextcand);
-			break;
-
 		case TYPE_EXFILEITEM:
 			time_nextcand = fileItemMgmt::BackgroundCleanup();
 			USRDBG("fileitem::DoDelayedUnregAndCheck, nextRunTime now: " << time_nextcand);
@@ -98,7 +98,7 @@ void cleaner::WorkLoop()
 
 		if(time_nextcand <= now || time_nextcand < 1)
 		{
-			aclog::err(tSS() << "ERROR: looping bug candidate on " << what
+			log::err(tSS() << "ERROR: looping bug candidate on " << (int) what
 					<< ", value: " << time_nextcand);
 			time_nextcand=GetTime()+60;
 		}
@@ -162,7 +162,7 @@ void cleaner::dump_status()
 	msg << "Cleanup schedule:\n";
 	for(int i=0; i<cleaner::ETYPE_MAX; ++i)
 		msg << stamps[i] << " (in " << (stamps[i]-GetTime()) << " seconds)\n";
-	aclog::err(msg);
+	log::err(msg);
 }
 
 
@@ -170,6 +170,8 @@ void dump_handler(int) {
 	fileItemMgmt::dump_status();
 	g_victor.dump_status();
 	g_tcp_con_factory.dump_status();
-	acfg::dump_trace();
+	cfg::dump_trace();
 }
 
+
+}

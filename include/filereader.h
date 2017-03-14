@@ -7,6 +7,9 @@
 #include "fileio.h"
 #include "filelocks.h"
 
+namespace acng
+{
+
 class IDecompressor;
 
 
@@ -97,5 +100,6 @@ inline bool CsEqual(const char *sz, uint8_t b[], unsigned short binLen)
 
 bool Bz2compressFile(const char *pathIn, const char*pathOut);
 
-#endif // __FILEREADER_H
+}
 
+#endif // __FILEREADER_H

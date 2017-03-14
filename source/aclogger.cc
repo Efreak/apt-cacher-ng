@@ -1,42 +1,138 @@
 
 #include "meta.h"
 
+#include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/time.h>
+#include <dirent.h>
 
 #include "debug.h"
-
 #include "aclogger.h"
 #include "acfg.h"
 #include "lockable.h"
 #include "filereader.h"
-
 #include "fileio.h"
-#include <unistd.h>
 
 #include <vector>
 #include <deque>
-#include <string.h>
 #include <iostream>
 #include <fstream>
+#include <atomic>
 
 using namespace std;
 
-namespace aclog
+namespace acng
+{
+namespace log
 {
 
 ofstream fErr, fStat;
 static acmutex mx;
+
+bool logIsEnabled = false;
+
+std::atomic<off_t> totalIn(0), totalOut(0);
+
+std::pair<off_t,off_t> GetCurrentCountersInOut()
+		{
+	return std::make_pair(totalIn.load(), totalOut.load());
+		}
+
+std::pair<off_t,off_t> oldCounters(0,0);
+
+void ResetOldCounters()
+{
+	char lbuf[600];
+	// safe some cycles an snprintf
+	auto xl = (CACHE_BASE.size() + cfg::privStoreRelQstatsSfx.size());
+	if (xl > 550)
+		return; // heh?
+	memcpy(lbuf, CACHE_BASE.data(), CACHE_BASE.size());
+	memcpy(lbuf + CACHE_BASE.size(), cfg::privStoreRelQstatsSfx.data(),
+			cfg::privStoreRelQstatsSfx.size());
+
+	for (char foldNam :
+	{ 'i', 'o' })
+	{
+		lbuf[xl] = 0;
+		auto xoff = sprintf(lbuf + xl, "/%c/", foldNam);
+		auto lptr = lbuf + xl + xoff;
+		auto dirp = opendir(lbuf);
+		if (!dirp)
+			continue;
+		while (true)
+		{
+			auto ent = readdir(dirp);
+			if (!ent)
+				break;
+			auto llen = strlen(ent->d_name);
+			if (llen > 25 || llen < 4)
+				continue;
+			memcpy(lptr, ent->d_name, llen + 1);
+			unlink(lbuf);
+		}
+		closedir(dirp);
+	}
+	oldCounters = decltype(oldCounters)();
+}
+
+decltype(oldCounters) GetOldCountersInOut(bool calcIncomming, bool calcOutgoing)
+{
+#ifndef MINIBUILD
+	// needs to do first reading of old stats?
+	char lbuf[600];
+	// safe some cycles an snprintf
+	auto xl=(CACHE_BASE.size() + cfg::privStoreRelQstatsSfx.size());
+	if(xl > 550)
+		return oldCounters; // heh?
+	memcpy(lbuf, CACHE_BASE.data(), CACHE_BASE.size());
+	memcpy(lbuf+CACHE_BASE.size(), cfg::privStoreRelQstatsSfx.data(), cfg::privStoreRelQstatsSfx.size());
+	if (!oldCounters.first && !oldCounters.second)
+	{
+		auto rfunc = [&lbuf, xl](off_t& pRet, char foldNam)
+		{
+			lbuf[xl]=0;
+			auto xoff=sprintf(lbuf+xl, "/%c/", foldNam);
+			auto lptr = lbuf+xl+xoff;
+			auto dirp = opendir(lbuf);
+			if(!dirp)
+				return;
+			char buf[30];
+			while(true)
+			{
+				auto ent = readdir(dirp);
+				if(!ent) break;
+				auto llen=strlen(ent->d_name);
+				if(llen > 25 || llen<4) continue;
+				memcpy(lptr, ent->d_name, llen+1);
+				auto tpos=readlink(lbuf, buf, _countof(buf)-1);
+				if(tpos < 1) continue;
+				buf[tpos]=0;
+				pRet += acng::strsizeToOfft(buf);
+			}
+			closedir(dirp);
+		};
+		if(calcIncomming)
+			rfunc(oldCounters.first, 'i');
+		if(calcOutgoing)
+			rfunc(oldCounters.second, 'o');
+	}
+#endif
+	return oldCounters;
+}
 
 bool open()
 {
 	// only called in the beginning or when reopening, already locked...
 	// lockguard g(&mx);
 
-	if(acfg::logdir.empty())
+	if(cfg::logdir.empty())
 		return true;
 	
-	string apath(acfg::logdir+"/apt-cacher.log"), epath(acfg::logdir+"/apt-cacher.err");
+	logIsEnabled = true;
+
+	string apath(cfg::logdir+"/apt-cacher.log"), epath(cfg::logdir+"/apt-cacher.err");
 	
 	mkbasedir(apath);
 
@@ -51,41 +147,68 @@ bool open()
 	return fStat.is_open() && fErr.is_open();
 }
 
-
-void transfer(char cLogType, uint64_t nCount, const char *szClient, const char *szPath)
+void transfer(uint64_t bytesIn,
+		uint64_t bytesOut,
+		cmstring& sClient,
+		cmstring& sPath,
+		bool bAsError)
 {
+	totalIn.fetch_add(bytesIn);
+	totalOut.fetch_add(bytesOut);
+
+	if(!logIsEnabled)
+		return;
+
 	lockguard g(&mx);
+
 	if(!fStat.is_open())
 		return;
-	fStat << time(0) << '|' << cLogType << '|' << nCount;
-	if(acfg::verboselog)
-		fStat << '|' << szClient << '|' << szPath;
-	fStat << '\n';
-	if(acfg::debug&LOG_FLUSH) fStat.flush();
+	auto tNow=GetTime();
+	if (bytesIn)
+	{
+		fStat << tNow << "|I|" << bytesIn;
+		if (cfg::verboselog)
+			fStat << '|' << sClient << '|' << sPath;
+		fStat << '\n'; // not endl, it might flush
+	}
+	if (bytesOut)
+	{
+		fStat << tNow << (bAsError ? "|E|" : "|O|") << bytesOut;
+		if (cfg::verboselog)
+			fStat << '|' << sClient << '|' << sPath;
+		fStat << '\n'; // not endl, it might flush
+	}
+
+	if(cfg::debug & LOG_FLUSH) fStat.flush();
 }
 
 void misc(const string & sLine, const char cLogType)
 {
+	if(!logIsEnabled)
+		return;
+
 	lockguard g(&mx);
 	if(!fStat.is_open())
 		return;
 
 	fStat << time(0) << '|' << cLogType << '|' << sLine << '\n';
 	
-	if(acfg::debug&LOG_FLUSH)
+	if(cfg::debug & LOG_FLUSH)
 		fStat.flush();
 }
 
 void err(const char *msg, const char *client)
 {
+	if(!logIsEnabled)
+		return;
+
 	lockguard g(&mx);
 
 	if(!fErr.is_open())
 	{
-/*#ifdef DEBUG
+#ifdef DEBUG // basic debugging of acngtool
 		cerr << msg <<endl;
 #endif
-*/
 		return;
 	}
 	
@@ -99,16 +222,19 @@ void err(const char *msg, const char *client)
 	fErr << msg << '\n';
 
 #ifdef DEBUG
-	if(acfg::debug & LOG_DEBUG)
+	if(cfg::debug & log::LOG_DEBUG)
 		cerr << buf << msg <<endl;
 #endif
 
-	if(acfg::debug & LOG_DEBUG)
+	if(cfg::debug & log::LOG_DEBUG)
 		fErr.flush();
 }
 
 void flush()
 {
+	if(!logIsEnabled)
+		return;
+
 	lockguard g(mx);
 	if(fErr.is_open()) fErr.flush();
 	if(fStat.is_open()) fStat.flush();
@@ -116,12 +242,26 @@ void flush()
 
 void close(bool bReopen)
 {
+	auto snapIn = offttos(totalIn.exchange(0));
+	auto snapOut = offttos(totalOut.exchange(0));
+	timeval tp;
+	gettimeofday(&tp, 0);
+	auto inLinkPath = CACHE_BASE + cfg::privStoreRelQstatsSfx + "/i/"
+			+ acng::offttos(tp.tv_sec) + "." + acng::ltos(tp.tv_usec);
+	auto outLinkPath = CACHE_BASE + cfg::privStoreRelQstatsSfx + "/o/"
+			+ acng::offttos(tp.tv_sec) + "." + acng::ltos(tp.tv_usec);
+	symlink(snapIn.c_str(), inLinkPath.c_str());
+	symlink(snapOut.c_str(), outLinkPath.c_str());
+
+	if(!logIsEnabled)
+		return;
+
 	lockguard g(mx);
-	if(acfg::debug>=LOG_MORE) cerr << (bReopen ? "Reopening logs...\n" : "Closing logs...\n");
+	if(cfg::debug >= LOG_MORE) cerr << (bReopen ? "Reopening logs...\n" : "Closing logs...\n");
 	fErr.close();
 	fStat.close();
 	if(bReopen)
-		aclog::open();
+		log::open();
 }
 
 
@@ -131,7 +271,7 @@ void close(bool bReopen)
 #ifndef MINIBUILD
 inline deque<tRowData> GetStats()
 {
-	string sDataFile=acfg::cachedir+SZPATHSEP"_stats_dat";
+	string sDataFile=cfg::cachedir+SZPATHSEP"_stats_dat";
 	deque<tRowData> out;
 	
 	time_t now = time(nullptr);
@@ -144,14 +284,14 @@ inline deque<tRowData> GetStats()
 		out.emplace_back(d);
 	}
 
-	for (auto& log : ExpandFilePattern(acfg::logdir + SZPATHSEP "apt-cacher*.log", false))
+	for (auto& log : ExpandFilePattern(cfg::logdir + SZPATHSEP "apt-cacher*.log", false))
 	{
-		if (acfg::debug >= LOG_MORE)
+		if (cfg::debug >= LOG_MORE)
 			cerr << "Reading log file: " << log << endl;
 		filereader reader;
 		if (!reader.OpenFile(log))
 		{
-			aclog::err("Error opening a log file");
+			log::err("Error opening a log file");
 			continue;
 		}
 		string sLine;
@@ -200,7 +340,7 @@ string GetStatReport()
 {
 	string ret;
 	vector<char> buf(1024);
-	for (auto& entry : aclog::GetStats())
+	for (auto& entry : log::GetStats())
 	{
 		auto reqMax = std::max(entry.reqIn, entry.reqOut);
 		auto dataMax = std::max(entry.byteIn, entry.byteOut);
@@ -290,8 +430,8 @@ tErrnoFmter::tErrnoFmter(const char *prefix)
 
 #ifdef DEBUG
 
-static class : public base_with_mutex, public std::map<pthread_t, int>
-{} stackDepths;
+static struct : public base_with_mutex, public std::map<pthread_t, int>
+{} indentPerThread;
 
 t_logger::t_logger(const char *szFuncName,  const void * ptr)
 {
@@ -299,8 +439,8 @@ t_logger::t_logger(const char *szFuncName,  const void * ptr)
 	m_szName = szFuncName;
 	callobj = uintptr_t(ptr);
 	{
-		lockguard __lockguard(stackDepths);
-		m_nLevel = stackDepths[m_id]++;
+		lockguard __lockguard(indentPerThread);
+		m_nLevel = indentPerThread[m_id]++;
 	}
 	// writing to the level of parent since it's being "created there"
 	GetFmter() << ">> " << szFuncName << " [T:"<<m_id<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
@@ -313,10 +453,10 @@ t_logger::~t_logger()
 	m_nLevel--;
 	GetFmter() << "<< " << m_szName << " [T:"<<m_id<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	Write();
-	lockguard __lockguard(stackDepths);
-	stackDepths[m_id]--;
-	if(0 == stackDepths[m_id])
-		stackDepths.erase(m_id);
+	lockguard __lockguard(indentPerThread);
+	indentPerThread[m_id]--;
+	if(0 == indentPerThread[m_id])
+		indentPerThread.erase(m_id);
 }
 
 tSS & t_logger::GetFmter()
@@ -337,7 +477,9 @@ void t_logger::Write(const char *pFile, unsigned int nLine)
 		m_strm << " [T:" << m_id << " S:" << pFile << ":" << tSS::dec << nLine
 				<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	}
-	aclog::err(m_strm.c_str());
+	log::err(m_strm.c_str());
 }
 
 #endif
+
+}
