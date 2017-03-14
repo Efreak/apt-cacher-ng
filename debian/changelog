@@ -3,6 +3,8 @@ apt-cacher-ng (3-1) unstable; urgency=low
   * New upstream version
     + fixes hidden space allocation issue (closes: #856635)
   * Spanish translation update (by Matías A. Bellone, closes: #853105)
+  * Instructions on how to work around cron job execution and "special needs"
+    of some users to disable the admin page (closes: #855996)
 
  -- 
 

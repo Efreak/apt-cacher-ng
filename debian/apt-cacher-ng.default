@@ -1,12 +1,11 @@
-# Defaults for apt-cacher-ng initscript
-# sourced by /etc/init.d/apt-cacher-ng
-# installed at /etc/default/apt-cacher-ng by the maintainer scripts
+# Defaults for apt-cacher-ng
+# sourced by /etc/init.d/apt-cacher-ng and the cron job script
 
 #
 # This is a POSIX shell fragment
 #
 
-# Set to non-empty value to disable the start of the service at boot time
+# Set to non-empty value to disable the start of the service by the init script at boot time
 # DISABLED=1
 
 # See umask(2) or chmod(1) for details.
@@ -16,3 +15,6 @@
 
 # Additional options that are passed to the Daemon.
 DAEMON_OPTS=" -c /etc/apt-cacher-ng "
+
+# variable can be set to disable the daily cron job
+# NO_CRON_RUN=

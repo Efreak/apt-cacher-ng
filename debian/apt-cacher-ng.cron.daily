@@ -6,5 +6,17 @@
 # HOSTNAME=externallyVisibleHostName
 # export HOSTNAME
 
+. /etc/default/apt-cacher-ng
+test -z "$NO_CRON_RUN" || exit 0 
+
+rpage=$(/usr/lib/apt-cacher-ng/acngtool -c /etc/apt-cacher-ng 2>/dev/null printvar ReportPage)
+
+if test 0 = $(echo $rpage | wc -w)
+then
+	echo Warning: ReportPage setting of apt-cacher-ng was disabled by administrator. >&2
+	echo See /usr/share/doc/apt-cacher-ng/README.Debian for details. >&2
+	exit 42
+fi
+
 test -x /usr/lib/apt-cacher-ng/acngtool || exit 0
 /usr/lib/apt-cacher-ng/acngtool maint -c /etc/apt-cacher-ng SocketPath=/var/run/apt-cacher-ng/socket

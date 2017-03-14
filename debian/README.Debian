@@ -28,6 +28,29 @@ except for temporary maintenance logs which are removed automatically. The
 access mode of /etc/apt-cacher-ng/security.conf is explicitly changed to
 restrict access to members of the apt-cacher-ng group.
 
+CRON JOB PITFALLS
+-----------------
+
+The current version of apt-cacher-ng requires the internal report
+and administration page to be enabled and accessible for the daily cron job.
+Therefore, wild west way of system administration (i.e. turning it off
+ReportPage setting and also disabling TCP service for localhost) will make the
+expiration tasks fail, either invisibly or visibly (complaining via cron mails
+after a while).
+
+If the execution of cron job for expiration is really supposed to be disabled
+without further complaints, one might create and set the NO_CRON_RUN variable
+in /etc/default/apt-cacher-ng file.
+
+This constraint might change in future versions of apt-cacher-ng with a
+dedicated admin control socket or some other channel for delicate communication.
+
+As of now, the best way to create obstacles for evil local users while keeping
+the cron job execution alive is currently only working through obfuscation,
+changing reportpage to something secret, optionally making the configuration
+files not readable for local users, and also setting admin credentials (see
+above).
+
 REMOTE MIRROR CONFIGURATION
 ---------------------------
 
