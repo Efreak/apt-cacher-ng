@@ -497,7 +497,9 @@ void expiration::Action()
 		{
 			SendFmt << "Expiration suppressed due to costs-vs.-benefit considerations "
 					"(see exStartTradeOff setting, " << offttosH(haveIncomming) <<
-					" vs. " << offttosH(cfg::exstarttradeoff) << sBRLF;
+					" vs. " << offttosH(cfg::exstarttradeoff)
+					<< " (<a href=\"" << this->m_parms.cmd << "&ignoreTradeOff=iTO\">Override this check now</a>)"
+					<< sBRLF;
 			return;
 		}
 	}
@@ -656,6 +658,7 @@ void expiration::TrimFiles()
 	if(m_oversizedFiles.empty())
 		return;
 	auto now=GetTime();
+	SendFmt << "<b>Trimming cache files (" << m_oversizedFiles.size() <<")</b>" << sBRLF;
 	for(const auto& fil: m_oversizedFiles)
 	{
 		// still there and not changed?
@@ -675,7 +678,8 @@ void expiration::TrimFiles()
 			if(item.m_ptr->GetStatusUnlocked(nix) >= fileitem::FIST_DLGOTHEAD)
 				continue;
 
-			truncate(fil.c_str(), stinfo.st_size);
+			if(0 != truncate(fil.c_str(), stinfo.st_size))
+				SendFmt << "Error at " << fil << " (" << tErrnoFmter() << ")" << sBRLF;
 
 		}
 	}
@@ -751,17 +755,25 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		return false;
 
 	ProgTell();
+	auto diffMoreThan = [&stinfo](blkcnt_t diff){
+		return stinfo.st_blocks > diff && stinfo.st_size/512 < (stinfo.st_blocks - diff);
+	};
 
 	// detect invisible holes at the end of files (side effect of properly incorrect hidden allocation)
 	// allow some tolerance of about 10kb, should cover all page alignment effects
-	if(stinfo.st_blocks > 20 && stinfo.st_size/512 < (stinfo.st_blocks - 20))
+	if(diffMoreThan(20))
 	{
 		auto now=GetTime();
 		if(now - 86400 > stinfo.st_mtim.tv_sec)
 		{
 			m_oversizedFiles.emplace_back(sPathAbs);
-			SendFmt << "Trailing allocated space on " << sPathAbs << " (" << stinfo.st_blocks <<
-					" blocks, expected: ~" << (stinfo.st_size/512  + 1) <<"), will be trimmed later<br>";
+
+			// don't spam unless the user wants it and the size is really large
+			if(m_bVerbose || diffMoreThan(40))
+			{
+				SendFmt << "Trailing allocated space on " << sPathAbs << " (" << stinfo.st_blocks <<
+						" blocks, expected: ~" << (stinfo.st_size/512  + 1) <<"), will be trimmed later<br>";
+			}
 		}
 	}
 
