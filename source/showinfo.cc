@@ -145,7 +145,7 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 		if(startsWithSz(tok, "kf="))
 		{
 			char *end(0);
-			auto val = strtoul(tok.c_str()+3, &end, 16);
+			auto val = strtoul(tok.c_str()+3, &end, 36);
 			if(*end == 0 || *end=='&')
 #ifdef COMPATGCC47                           
 				files.insert(val);
@@ -221,8 +221,8 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 		for (const auto& path : filePaths)
 			sHidParms << html_sanitize(path) << "<br>\n";
 		for (const auto& pathId : files)
-			sHidParms << "<input type=\"hidden\" name=\"kf\" value=\"" << tSS::fmtflags::hex
-					<< pathId << "\">\n" << tSS::fmtflags::dec;
+			sHidParms << "<input type=\"hidden\" name=\"kf\" value=\"" <<
+			to_base36(pathId) << "\">\n";
 	}
 	else
 	{

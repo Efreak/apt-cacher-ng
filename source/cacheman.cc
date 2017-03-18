@@ -2216,6 +2216,21 @@ void cacheman::TellCount(unsigned nCount, off_t nSize)
 			<< offttosH(nSize) << "." << sBRLF << sBRLF;
 }
 
+mstring cacheman::AddLookupGetKey(cmstring &sFilePathRel, cmstring& errorReason)
+{
+	unsigned id = m_pathMemory.size();
+	auto it = m_pathMemory.find(sFilePathRel);
+	if(it==m_pathMemory.end())
+		m_pathMemory[sFilePathRel] = {errorReason, id};
+	else
+		id = it->second.id;
+
+	mstring ret(WITHLEN(" name=\"kf\" value=\""));
+	ret +=to_base36(id);
+	ret += "\"";
+	return ret;
+}
+
 void cacheman::PrintStats(cmstring &title)
 {
 	multimap<off_t, cmstring*> sorted;

@@ -49,8 +49,18 @@ tSpecOpDetachable::~tSpecOpDetachable()
 cmstring GetFooter()
 {
         return mstring("<hr><address>Server: ") + cfg::agentname
-                + "&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">Flattr this!"
-                "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
+                + "&nbsp;&nbsp;|&nbsp;&nbsp;<a\nhref=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">Flattr this!"
+                "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a\nhref=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
+}
+
+std::string to_base36(unsigned int val)
+{
+	static std::string base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	std::string result;
+	do {
+		result.insert(0, 1, base36[val % 36]);
+	} while (val /= 36);
+	return result;
 }
 
 /*
@@ -234,7 +244,7 @@ void tSpecOpDetachable::Run()
 					SendFmtRemote << err.first << ": <label>"
 							<< err.second.msg
 							<<  "<input type=\"checkbox\" name=\"kf\" value=\""
-							<< tSS::hex << err.second.id << tSS::dec
+							<< to_base36(err.second.id)
 							<< "\"</label>" << hendl;
 				}
 
@@ -337,7 +347,7 @@ mstring tSpecOpDetachable::BuildCompressedDelFileCatalog()
 	if(Z_OK == compress((Bytef*) gzBuf.wptr(), &gzSize,
 			(const Bytef*)buf.rptr(), buf.size()))
 	{
-		ret = "<input type=\"hidden\" name=\"blob\" value=\"";
+		ret = "<input type=\"hidden\" name=\"blob\"\nvalue=\"";
 		ret += EncodeBase64(gzBuf.rptr(), (unsigned short) gzSize+sizeof(uncompSize));
 		ret += "\">";
 		return ret;

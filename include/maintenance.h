@@ -129,6 +129,8 @@ protected:
 	static tSpecialRequest* MakeMaintWorker(const tRunParms& parms);
 };
 
+std::string to_base36(unsigned int val);
+
 }
 
 #endif /*MAINTENANCE_H_*/
