@@ -313,14 +313,21 @@ mstring tSpecOpDetachable::BuildCompressedDelFileCatalog()
 {
 	mstring ret;
 	tSS buf;
-	//auto hm = m_delCboxFilter.size();
+
+	// add the recent command, then the file records
+
+	auto addLine = [&buf](unsigned id, cmstring& s)
+		{
+		unsigned len=s.size();
+		buf.add((const char*) &id, sizeof(id))
+				.add((const char*) &len, sizeof(len))
+				.add(s.data(), s.length());
+		};
+	// don't care about the ID, compression will solve it
+	addLine(0, m_parms.cmd);
 	for(const auto& kv: m_pathMemory)
-	{
-		unsigned len=kv.first.size();
-		buf.add((const char*) &kv.second.id, sizeof(kv.second.id))
-		.add((const char*) &len, sizeof(len))
-		.add(kv.first.data(), kv.first.length());
-	}
+		addLine(kv.second.id, kv.first);
+
 	unsigned uncompSize=buf.size();
 	tSS gzBuf;
 	uLongf gzSize = compressBound(buf.size())+32; // extra space for length header
@@ -331,7 +338,6 @@ mstring tSpecOpDetachable::BuildCompressedDelFileCatalog()
 			(const Bytef*)buf.rptr(), buf.size()))
 	{
 		ret = "<input type=\"hidden\" name=\"blob\" value=\"";
-//		ret += BytesToHexString((const uint8_t*) gzBuf.wptr(), (unsigned short) gzSize);
 		ret += EncodeBase64(gzBuf.rptr(), (unsigned short) gzSize+sizeof(uncompSize));
 		ret += "\">";
 		return ret;

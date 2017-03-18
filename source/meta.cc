@@ -656,6 +656,9 @@ string EncodeBase64(LPCSTR data, unsigned len)
 	unsigned char_count=0;
 	char alphabet[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 	string out;
+	//int newLineAfter = textWidth * 3 / 4;
+	//int linePos=0;
+
 	for(auto p=data; p<data+len; ++p)
 	{
 		uint8_t c=*p;
@@ -681,6 +684,13 @@ string EncodeBase64(LPCSTR data, unsigned len)
 		}
 		else
 			bits <<= 8;
+/*
+		if(newLineAfter > 0 && linePos++ >= newLineAfter)
+		{
+			linePos = 0;
+			out+='\n';
+		}
+		*/
 	}
 	if (char_count != 0)
 	{

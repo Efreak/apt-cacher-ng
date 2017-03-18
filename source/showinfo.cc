@@ -157,11 +157,14 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 			tok.swap(blob);
 	}
 	sHidParms << "<input type=\"hidden\" name=\"blob\" value=\"";
-	sHidParms.append(blob.data()+5, blob.size()-5);
+	if(!blob.empty())
+		sHidParms.append(blob.data()+5, blob.size()-5);
 	sHidParms <<  "\">\n";
 
 	tStrDeq filePaths;
 	acbuf buf;
+	mstring redoLink;
+
 #ifdef HAVE_DECB64 // this page isn't accessible with crippled configuration anyway
 	if (!blob.empty())
 	{
@@ -195,7 +198,9 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 		buf.drop(sizeof(unsigned));
 		if(slen > buf.size()) // looks fishy
 			return;
-		if(ContHas(files, id))
+		if(redoLink.empty()) // don't care about id in the first line
+			redoLink.assign(buf.rptr(), slen);
+		else if(ContHas(files, id))
 			filePaths.emplace_back(buf.rptr(), slen);
 		buf.drop(slen);
 	}
@@ -233,10 +238,11 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 				if (r && errno != ENOENT)
 				{
 					tErrnoFmter ferrno("<span class=\"ERROR\">[ error: ");
-					sHidParms << ferrno << " ]</span><br>\n";
+					sHidParms << ferrno << " ]</span>" << sBRLF;
 				}
 			}
 		}
+		sHidParms << "<br><a href=\""<< redoLink << "\">Repeat the last action</a><br>" << sBRLF;
 	}
 }
 
