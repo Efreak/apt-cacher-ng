@@ -20,6 +20,9 @@ apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=medium
     libevent examples (originally from ssl-conservatory and cURL)
   * FIX: no printing of requested file name in the 403 HTTP status line
   * FIX: typo/wording in manual, iptables examples
+  * FIX: in file truncation wizard (cleanup task), don't truncate the
+    associated .head files (because they might contain the best download
+    source information)
   * Database update
 
  -- Eduard Bloch <blade@debian.org>  Tue, 14 Mar 2017 16:23:20 +0100

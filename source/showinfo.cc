@@ -229,8 +229,7 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 		auto del = (m_parms.type == workDELETE);
 		for (const auto& path : filePaths)
 		{
-			for (auto suf :
-			{ "", ".head" })
+			for (auto suf : { "", ".head" })
 			{
 				sHidParms << (del ? "Deleting " : "Truncating ") << path << suf << "<br>\n";
 				auto p = cfg::cacheDirSlash + path + suf;
@@ -240,6 +239,8 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 					tErrnoFmter ferrno("<span class=\"ERROR\">[ error: ");
 					sHidParms << ferrno << " ]</span>" << sBRLF;
 				}
+				if(!del)
+					break;
 			}
 		}
 		sHidParms << "<br><a href=\""<< redoLink << "\">Repeat the last action</a><br>" << sBRLF;
