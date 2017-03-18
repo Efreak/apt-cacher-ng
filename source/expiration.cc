@@ -435,7 +435,7 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 
 			if (bPurgeNow || TIMEEXPIRED(dir_props.second.nLostAt))
 			{
-				SendFmt << "Removing " << sPathRel << "<br>\n";
+				SendFmt << "Removing " << sPathRel << sBRLF;
 
 #ifdef ENABLED
 				::unlink(sPathAbs.c_str());
@@ -448,7 +448,7 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 				SendFmt << "Tagging " << sPathRel;
 				if (m_bVerbose)
 					SendFmt << " (t-" << (m_gMaintTimeNow - desc.nLostAt) / 3600 << "h)";
-				SendChunk("<br>\n");
+				SendChunk(sBRLF);
 
 				nCount++;
 				tagSpace += desc.fpr.size;
@@ -497,7 +497,7 @@ void expiration::Action()
 		{
 			SendFmt << "Expiration suppressed due to costs-vs.-benefit considerations "
 					"(see exStartTradeOff setting, " << offttosH(haveIncomming) <<
-					" vs. " << offttosH(cfg::exstarttradeoff) << "\n";
+					" vs. " << offttosH(cfg::exstarttradeoff) << sBRLF;
 			return;
 		}
 	}
@@ -514,7 +514,7 @@ void expiration::Action()
 #if 0 //def DEBUG
 	for(auto& i: m_trashFile2dir2Info)
 	{
-		SendFmt << "<br>File: " << i.first <<"<br>\n";
+		SendFmt << "<br>File: " << i.first <<sBRLF;
 		for(auto& j: i.second)
 			 SendFmt << "Dir: " << j.first << " [ "<<j.second.fpr.size << " / " << j.second.nLostAt << " ]<br>\n";
 	}
@@ -631,7 +631,7 @@ void expiration::ListExpiredFiles()
 					continue;
 
 				cnt++;
-				this->SendChunk(rel + "<br>\n");
+				this->SendChunk(rel + sBRLF);
 				nSpace += sz;
 
 				sz = GetFileSize(abspath + ".head", -2);
@@ -697,17 +697,17 @@ void expiration::HandleDamagedFiles()
 
 			if(this->m_parms.type == workExPurgeDamaged)
 			{
-				SendFmt << "Removing " << s << "<br>\n";
+				SendFmt << "Removing " << s << sBRLF;
 				unlink(SZABSPATH(s));
 				unlink(SZABSPATH(s+".head"));
 			}
 			else if(this->m_parms.type == workExTruncDamaged)
 			{
-				SendFmt << "Truncating " << s << "<br>\n";
+				SendFmt << "Truncating " << s << sBRLF;
 				ignore_value(truncate(SZABSPATH(s), 0));
 			}
 			else
-				SendFmt << s << "<br>\n";
+				SendFmt << s << sBRLF;
 		}
 	return;
 }
@@ -734,7 +734,7 @@ void expiration::PurgeMaintLogs()
 		SendChunk(WITHLEN("Removing deprecated files...<br>\n"));
 		for(const auto &s: m_killBill)
 		{
-			SendChunk(s+"<br>\n");
+			SendChunk(s+sBRLF);
 			::unlink(SZABSPATH(s));
 		}
 	}

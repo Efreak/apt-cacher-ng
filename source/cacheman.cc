@@ -806,7 +806,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 
 #ifdef DEBUG_FLAGS
 	bool nix = stmiss!=fromRel.find("debrep/dists/squeeze/non-free/binary-amd64/");
-	SendFmt<<"Replacing "<<toRel<<" with " << fromRel <<  "<br>\n";
+	SendFmt<<"Replacing "<<toRel<<" with " << fromRel <<  sBRLF;
 #endif
 
 	if(!infoFrom)
@@ -1447,7 +1447,7 @@ void cacheman::UpdateVolatileFiles()
 		auto dbgDump = [&](const char *msg, int pfx) {
 			tSS printBuf;
 			printBuf << "#########################################################################<br>\n"
-					<< "## " <<  msg  << "<br>\n"
+					<< "## " <<  msg  << sBRLF
 					<< "#########################################################################<br>\n";
 			for(const auto& cp : idxGroups)
 			{
@@ -2167,7 +2167,7 @@ void cacheman::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHan
 
 		//bool bNix=(it->first.find("experimental/non-free/binary-amd64/Packages.xz") != stmiss);
 
-		SendChunk(string("Parsing metadata in ")+path2att.first+"<br>\n");
+		SendChunk(string("Parsing metadata in ")+path2att.first+sBRLF);
 
 		if( ! ParseAndProcessMetaFile(pkgHandler, path2att.first, itype))
 		{
@@ -2176,7 +2176,7 @@ void cacheman::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHan
 				m_nErrorCount++;
 				SendChunk("<span class=\"ERROR\">An error occurred while reading this file, some contents may have been ignored.</span>\n");
 				AddDelCbox(path2att.first, "Index data processing error");
-				SendChunk("<br>\n");
+				SendChunk(sBRLF);
 			}
 			continue;
 		}
@@ -2211,9 +2211,9 @@ void cacheman::AddDelCbox(cmstring &sFileRel, cmstring& reason, bool bIsOptional
 }
 void cacheman::TellCount(unsigned nCount, off_t nSize)
 {
-	SendFmt << "<br>\n" << nCount <<" package file(s) marked "
+	SendFmt << sBRLF << nCount <<" package file(s) marked "
 			"for removal in few days. Estimated disk space to be released: "
-			<< offttosH(nSize) << ".<br>\n<br>\n";
+			<< offttosH(nSize) << "." << sBRLF << sBRLF;
 }
 
 void cacheman::PrintStats(cmstring &title)

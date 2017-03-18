@@ -6,9 +6,11 @@
 #include "sockio.h"
 #include "acbuf.h"
 
+static const std::string sBRLF("<br>\n");
+
 #ifdef DEBUG
-#define MTLOGDEBUG(x) { SendFmt << x << "\n<br>\n"; }
-#define MTLOGASSERT(x, y) {if(!(x)) SendFmt << "<div class=\"ERROR\">" << y << "</div>\n<br>\n";}
+#define MTLOGDEBUG(x) { SendFmt << x << sBRLF; }
+#define MTLOGASSERT(x, y) {if(!(x)) SendFmt << "<div class=\"ERROR\">" << y << "</div>\n" << sBRLF;}
 //#define MTLOGVERIFY(x, y) MTLOGASSERT(x, y)
 #else
 #define MTLOGASSERT(x, y) {}
