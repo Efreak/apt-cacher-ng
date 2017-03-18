@@ -296,7 +296,7 @@ inline off_t atoofft(LPCSTR p, off_t nDefVal)
 }
 
 mstring offttosH(off_t n);
-
+mstring offttosHdotted(off_t n);
 tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted=false, bool bQuiet=false);
 
 //void MakeAbsolutePath(mstring &dirToFix, const mstring &reldir);

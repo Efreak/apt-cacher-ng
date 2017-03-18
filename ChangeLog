@@ -9,6 +9,9 @@ apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=medium
     requested size to the first megabyte of a file.
   * FIX: detection of incorrectly allocated files and automated trimming in
     expiration run
+  * FIX: acngtool shrink function now uses allocated space for calculation,
+    not the visible size. Also more user friendly verbose output and little
+    performance optimization.
   * FIX: compilation with GCC7, also warning fixes with Clang4
   * FIX: better checking of possibly invalid remote certificate configuration
     in SSL client code

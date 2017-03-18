@@ -792,6 +792,9 @@ mstring ltos(long n)
 	return mstring(buf, len);
 }
 
+/**
+ * Human friendly presentation of numbers, with units and only few bytes after comma
+ */
 mstring offttosH(off_t n)
 {
 	LPCSTR  pref[]={"", " KiB", " MiB", " GiB", " TiB", " PiB", " EiB"};
@@ -806,6 +809,17 @@ mstring offttosH(off_t n)
 	}
 	return "INF";
 }
+
+mstring offttosHdotted(off_t n)
+{
+	mstring ret(to_string(n));
+	auto pos = ret.size()-1;
+	for(unsigned i=1; pos > 0; ++i, --pos)
+		if(0 == i%3)
+			ret.insert(pos, ".");
+	return ret;
+}
+
 
 //template<typename charp>
 off_t strsizeToOfft(const char *sizeString) // XXX: if needed... charp sizeString, charp *next)
