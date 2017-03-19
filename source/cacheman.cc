@@ -29,8 +29,8 @@
 #include <unistd.h>
 
 #ifdef DEBUG
-#define DEBUGIDX
 #warning enable, and it will spam a lot!
+//#define DEBUGIDX
 //#define DEBUGSPAM
 #endif
 
@@ -44,7 +44,7 @@ namespace acng
 static cmstring dis("/binary-");
 static cmstring oldStylei18nIdx("/i18n/Index");
 static cmstring diffIdxSfx(".diff/Index");
-static const string relKey("/Release"), inRelKey("/InRelease");
+
 time_t m_gMaintTimeNow=0;
 
 static cmstring sPatchCombinedRel("_actmp/combined.diff");
@@ -1468,6 +1468,13 @@ void cacheman::UpdateVolatileFiles()
 	dbgState();
 
 	MTLOGDEBUG("<br><br><b>STARTING ULTIMATE INTELLIGENCE</b><br><br>");
+
+	if(m_bSkipIxUpdate)
+	{
+		SendFmt << "<span class=\"ERROR\">"
+				"Warning: Online Activity is disabled, some update errors might be not recoverable without it"
+				"<br></span>\n";
+	}
 
 	// this runs early with the state that is present on disk, before updating any file,
 	// since it deals with the "reality" in the cache

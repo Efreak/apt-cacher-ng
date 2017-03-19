@@ -137,6 +137,8 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 		return;
 	}
 
+	auto del = (m_parms.type == workDELETE);
+
 	mstring params(m_parms.cmd, qpos+1);
 	mstring blob;
 	for(tSplitWalk split(&params, "&"); split.Next();)
@@ -216,6 +218,29 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 		}
 	}
 
+	// XXX: this is wasting some CPU cycles but is good enough for this case
+	for (const auto& path : filePaths)
+	{
+		mstring bname(path);
+		for(const auto& sfx: sfxXzBz2GzLzma)
+			if(endsWith(path, sfx))
+				bname = path.substr(0, path.size()-sfx.size());
+		auto tryAdd=[this,&bname,&path](cmstring& sfx)
+				{
+					auto cand = bname+sfx;
+					if(cand == path || ::access(SZABSPATH(cand), F_OK))
+						return;
+					extraFiles.push_back(cand);
+				};
+		for(const auto& sfx: sfxMiscRelated)
+			tryAdd(sfx);
+		if(endsWith(path, relKey))
+			tryAdd(path.substr(0, path.size()-relKey.size())+inRelKey);
+		if(endsWith(path, inRelKey))
+			tryAdd(path.substr(0, path.size()-inRelKey.size())+relKey);
+	}
+
+
 	if (m_parms.type == workDELETECONFIRM || m_parms.type == workTRUNCATECONFIRM)
 	{
 		for (const auto& path : filePaths)
@@ -223,25 +248,42 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 		for (const auto& pathId : files)
 			sHidParms << "<input type=\"hidden\" name=\"kf\" value=\"" <<
 			to_base36(pathId) << "\">\n";
+		if(m_parms.type == workDELETECONFIRM && !extraFiles.empty())
+		{
+			sHidParms << sBRLF << "<b>Extra files found</b>" << sBRLF
+					<< "<p>It's recommended to delete the related files (see below) as well, otherwise "
+					<< "the removed files might be resurrected by recovery mechanisms later.<p>"
+					<< "<input type=\"checkbox\" name=\"cleanRelated\" value=\"1\" checked=\"checked\">"
+					<< "Yes, please remove all related files<p>Example list:<p>";
+			for (const auto& path : extraFiles)
+				sHidParms << path << sBRLF;
+		}
 	}
 	else
 	{
-		auto del = (m_parms.type == workDELETE);
 		for (const auto& path : filePaths)
 		{
-			for (auto suf : { "", ".head" })
-			{
-				sHidParms << (del ? "Deleting " : "Truncating ") << path << suf << "<br>\n";
-				auto p = cfg::cacheDirSlash + path + suf;
-				int r = del ? unlink(p.c_str()) : truncate(p.c_str(), 0);
-				if (r && errno != ENOENT)
+			auto doFile=[this, &del](cmstring& path)
+					{
+				for (auto suf : { "", ".head" })
 				{
-					tErrnoFmter ferrno("<span class=\"ERROR\">[ error: ");
-					sHidParms << ferrno << " ]</span>" << sBRLF;
+					sHidParms << (del ? "Deleting " : "Truncating ") << path << suf << "<br>\n";
+					auto p = cfg::cacheDirSlash + path + suf;
+					int r = del ? unlink(p.c_str()) : truncate(p.c_str(), 0);
+					if (r && errno != ENOENT)
+					{
+						tErrnoFmter ferrno("<span class=\"ERROR\">[ error: ");
+						sHidParms << ferrno << " ]</span>" << sBRLF;
+					}
+					if(!del)
+						break;
 				}
-				if(!del)
-					break;
-			}
+			};
+			doFile(path);
+			if(StrHas(m_parms.cmd, "cleanRelated="))
+				for (const auto& path : extraFiles)
+					doFile(path);
+
 		}
 		sHidParms << "<br><a href=\""<< redoLink << "\">Repeat the last action</a><br>" << sBRLF;
 	}

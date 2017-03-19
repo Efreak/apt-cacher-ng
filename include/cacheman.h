@@ -31,9 +31,6 @@ static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing,
 static cmstring sIndex("Index");
 static cmstring sslIndex("/Index");
 
-static cmstring sfxXzBz2GzLzma[] = { ".xz", ".bz2", ".gz", ".lzma"};
-static cmstring sfxXzBz2GzLzmaNone[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
-
 bool CompDebVerLessThan(cmstring &s1, cmstring s2);
 extern time_t m_gMaintTimeNow;
 

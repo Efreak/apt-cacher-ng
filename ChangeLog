@@ -24,6 +24,9 @@ apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=medium
   * FIX: in file truncation wizard (cleanup task), don't truncate the
     associated .head files (because they might contain the best download
     source information)
+  * NEW: better index deletion wizard, offering to remove all related files in
+    the same run. This can help to avoid accidental recreation of "incomplete"
+    files later.
   * Database update
 
  -- Eduard Bloch <blade@debian.org>  Tue, 14 Mar 2017 16:23:20 +0100
