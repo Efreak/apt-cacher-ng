@@ -435,11 +435,15 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 
 			if (bPurgeNow || TIMEEXPIRED(dir_props.second.nLostAt))
 			{
-				SendFmt << "Removing " << sPathRel << "<br>\n";
 
 #ifdef ENABLED
-				::unlink(sPathAbs.c_str());
-				::unlink((sPathAbs + ".head").c_str());
+				SendFmt << "Removing " << sPathRel;
+				if(::unlink(sPathAbs.c_str()))
+					SendChunk(tErrnoFmter("<span class=\"ERROR\"> [ERROR] ")+"</span>");
+				SendFmt << sBRLF << "Removing " << sPathRel << ".head";
+				if(::unlink((sPathAbs + ".head").c_str()))
+					SendChunk(tErrnoFmter("<span class=\"ERROR\"> [ERROR] ")+"</span>");
+				SendChunk(sBRLF);
 				::rmdir(SZABSPATH(dir_props.first));
 #endif
 			}
@@ -448,7 +452,7 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 				SendFmt << "Tagging " << sPathRel;
 				if (m_bVerbose)
 					SendFmt << " (t-" << (m_gMaintTimeNow - desc.nLostAt) / 3600 << "h)";
-				SendChunk("<br>\n");
+				SendChunk(sBRLF);
 
 				nCount++;
 				tagSpace += desc.fpr.size;
@@ -497,7 +501,9 @@ void expiration::Action()
 		{
 			SendFmt << "Expiration suppressed due to costs-vs.-benefit considerations "
 					"(see exStartTradeOff setting, " << offttosH(haveIncomming) <<
-					" vs. " << offttosH(cfg::exstarttradeoff) << "\n";
+					" vs. " << offttosH(cfg::exstarttradeoff)
+					<< " (<a href=\"" << this->m_parms.cmd << "&ignoreTradeOff=iTO\">Override this check now</a>)"
+					<< sBRLF;
 			return;
 		}
 	}
@@ -514,7 +520,7 @@ void expiration::Action()
 #if 0 //def DEBUG
 	for(auto& i: m_trashFile2dir2Info)
 	{
-		SendFmt << "<br>File: " << i.first <<"<br>\n";
+		SendFmt << "<br>File: " << i.first <<sBRLF;
 		for(auto& j: i.second)
 			 SendFmt << "Dir: " << j.first << " [ "<<j.second.fpr.size << " / " << j.second.nLostAt << " ]<br>\n";
 	}
@@ -631,7 +637,7 @@ void expiration::ListExpiredFiles()
 					continue;
 
 				cnt++;
-				this->SendChunk(rel + "<br>\n");
+				this->SendChunk(rel + sBRLF);
 				nSpace += sz;
 
 				sz = GetFileSize(abspath + ".head", -2);
@@ -656,6 +662,7 @@ void expiration::TrimFiles()
 	if(m_oversizedFiles.empty())
 		return;
 	auto now=GetTime();
+	SendFmt << "<b>Trimming cache files (" << m_oversizedFiles.size() <<")</b>" << sBRLF;
 	for(const auto& fil: m_oversizedFiles)
 	{
 		// still there and not changed?
@@ -675,7 +682,8 @@ void expiration::TrimFiles()
 			if(item.m_ptr->GetStatusUnlocked(nix) >= fileitem::FIST_DLGOTHEAD)
 				continue;
 
-			truncate(fil.c_str(), stinfo.st_size);
+			if(0 != truncate(fil.c_str(), stinfo.st_size))
+				SendFmt << "Error at " << fil << " (" << tErrnoFmter() << ")" << sBRLF;
 
 		}
 	}
@@ -697,17 +705,17 @@ void expiration::HandleDamagedFiles()
 
 			if(this->m_parms.type == workExPurgeDamaged)
 			{
-				SendFmt << "Removing " << s << "<br>\n";
+				SendFmt << "Removing " << s << sBRLF;
 				unlink(SZABSPATH(s));
 				unlink(SZABSPATH(s+".head"));
 			}
 			else if(this->m_parms.type == workExTruncDamaged)
 			{
-				SendFmt << "Truncating " << s << "<br>\n";
+				SendFmt << "Truncating " << s << sBRLF;
 				ignore_value(truncate(SZABSPATH(s), 0));
 			}
 			else
-				SendFmt << s << "<br>\n";
+				SendFmt << s << sBRLF;
 		}
 	return;
 }
@@ -734,7 +742,7 @@ void expiration::PurgeMaintLogs()
 		SendChunk(WITHLEN("Removing deprecated files...<br>\n"));
 		for(const auto &s: m_killBill)
 		{
-			SendChunk(s+"<br>\n");
+			SendChunk(s+sBRLF);
 			::unlink(SZABSPATH(s));
 		}
 	}
@@ -751,17 +759,25 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 		return false;
 
 	ProgTell();
+	auto diffMoreThan = [&stinfo](blkcnt_t diff){
+		return stinfo.st_blocks > diff && stinfo.st_size/512 < (stinfo.st_blocks - diff);
+	};
 
 	// detect invisible holes at the end of files (side effect of properly incorrect hidden allocation)
 	// allow some tolerance of about 10kb, should cover all page alignment effects
-	if(stinfo.st_blocks > 20 && stinfo.st_size/512 < (stinfo.st_blocks - 20))
+	if(diffMoreThan(20))
 	{
 		auto now=GetTime();
 		if(now - 86400 > stinfo.st_mtim.tv_sec)
 		{
 			m_oversizedFiles.emplace_back(sPathAbs);
-			SendFmt << "Trailing allocated space on " << sPathAbs << " (" << stinfo.st_blocks <<
-					" blocks, expected: ~" << (stinfo.st_size/512  + 1) <<"), will be trimmed later<br>";
+
+			// don't spam unless the user wants it and the size is really large
+			if(m_bVerbose || diffMoreThan(40))
+			{
+				SendFmt << "Trailing allocated space on " << sPathAbs << " (" << stinfo.st_blocks <<
+						" blocks, expected: ~" << (stinfo.st_size/512  + 1) <<"), will be trimmed later<br>";
+			}
 		}
 	}
 

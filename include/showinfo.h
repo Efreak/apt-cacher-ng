@@ -23,8 +23,7 @@ protected:
 
 	// uses fallback lookup map, can be feed with data in subclass constructor
 	virtual void SendProp(cmstring &key);
-	// XXX: could make this virtual and customizable, if needed
-	int CheckCondition(LPCSTR key, size_t len); // 0: true, 1: false, <0: unknown condition
+	virtual int CheckCondition(LPCSTR key, size_t len); // 0: true, 1: false, <0: unknown condition
 
 private:
 	tMarkupFileSend(const tMarkupFileSend&) =delete;
@@ -43,9 +42,12 @@ class tDeleter : public tMarkupFileSend
 	std::set<unsigned> files;
 	tSS sHidParms;
 	mstring sVisualMode; // Truncat or Delet
+	tStrDeq extraFiles;
 public:
 	tDeleter(const tRunParms& parms, cmstring& vmode);
 	virtual void SendProp(cmstring &key) override;
+	//virtual int CheckCondition(LPCSTR key, size_t len) override; // 0: true, 1: false, <0: unknown condition
+
 };
 
 struct tShowInfo : public tMarkupFileSend

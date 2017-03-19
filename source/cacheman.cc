@@ -29,8 +29,8 @@
 #include <unistd.h>
 
 #ifdef DEBUG
-#define DEBUGIDX
 #warning enable, and it will spam a lot!
+//#define DEBUGIDX
 //#define DEBUGSPAM
 #endif
 
@@ -44,7 +44,7 @@ namespace acng
 static cmstring dis("/binary-");
 static cmstring oldStylei18nIdx("/i18n/Index");
 static cmstring diffIdxSfx(".diff/Index");
-static const string relKey("/Release"), inRelKey("/InRelease");
+
 time_t m_gMaintTimeNow=0;
 
 static cmstring sPatchCombinedRel("_actmp/combined.diff");
@@ -806,7 +806,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 
 #ifdef DEBUG_FLAGS
 	bool nix = stmiss!=fromRel.find("debrep/dists/squeeze/non-free/binary-amd64/");
-	SendFmt<<"Replacing "<<toRel<<" with " << fromRel <<  "<br>\n";
+	SendFmt<<"Replacing "<<toRel<<" with " << fromRel <<  sBRLF;
 #endif
 
 	if(!infoFrom)
@@ -1447,7 +1447,7 @@ void cacheman::UpdateVolatileFiles()
 		auto dbgDump = [&](const char *msg, int pfx) {
 			tSS printBuf;
 			printBuf << "#########################################################################<br>\n"
-					<< "## " <<  msg  << "<br>\n"
+					<< "## " <<  msg  << sBRLF
 					<< "#########################################################################<br>\n";
 			for(const auto& cp : idxGroups)
 			{
@@ -1468,6 +1468,13 @@ void cacheman::UpdateVolatileFiles()
 	dbgState();
 
 	MTLOGDEBUG("<br><br><b>STARTING ULTIMATE INTELLIGENCE</b><br><br>");
+
+	if(m_bSkipIxUpdate)
+	{
+		SendFmt << "<span class=\"ERROR\">"
+				"Warning: Online Activity is disabled, some update errors might be not recoverable without it"
+				"<br></span>\n";
+	}
 
 	// this runs early with the state that is present on disk, before updating any file,
 	// since it deals with the "reality" in the cache
@@ -2167,7 +2174,7 @@ void cacheman::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHan
 
 		//bool bNix=(it->first.find("experimental/non-free/binary-amd64/Packages.xz") != stmiss);
 
-		SendChunk(string("Parsing metadata in ")+path2att.first+"<br>\n");
+		SendChunk(string("Parsing metadata in ")+path2att.first+sBRLF);
 
 		if( ! ParseAndProcessMetaFile(pkgHandler, path2att.first, itype))
 		{
@@ -2176,7 +2183,7 @@ void cacheman::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHan
 				m_nErrorCount++;
 				SendChunk("<span class=\"ERROR\">An error occurred while reading this file, some contents may have been ignored.</span>\n");
 				AddDelCbox(path2att.first, "Index data processing error");
-				SendChunk("<br>\n");
+				SendChunk(sBRLF);
 			}
 			continue;
 		}
@@ -2211,9 +2218,24 @@ void cacheman::AddDelCbox(cmstring &sFileRel, cmstring& reason, bool bIsOptional
 }
 void cacheman::TellCount(unsigned nCount, off_t nSize)
 {
-	SendFmt << "<br>\n" << nCount <<" package file(s) marked "
+	SendFmt << sBRLF << nCount <<" package file(s) marked "
 			"for removal in few days. Estimated disk space to be released: "
-			<< offttosH(nSize) << ".<br>\n<br>\n";
+			<< offttosH(nSize) << "." << sBRLF << sBRLF;
+}
+
+mstring cacheman::AddLookupGetKey(cmstring &sFilePathRel, cmstring& errorReason)
+{
+	unsigned id = m_pathMemory.size();
+	auto it = m_pathMemory.find(sFilePathRel);
+	if(it==m_pathMemory.end())
+		m_pathMemory[sFilePathRel] = {errorReason, id};
+	else
+		id = it->second.id;
+
+	mstring ret(WITHLEN(" name=\"kf\" value=\""));
+	ret +=to_base36(id);
+	ret += "\"";
+	return ret;
 }
 
 void cacheman::PrintStats(cmstring &title)

@@ -296,7 +296,7 @@ inline off_t atoofft(LPCSTR p, off_t nDefVal)
 }
 
 mstring offttosH(off_t n);
-
+mstring offttosHdotted(off_t n);
 tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted=false, bool bQuiet=false);
 
 //void MakeAbsolutePath(mstring &dirToFix, const mstring &reldir);
@@ -447,7 +447,7 @@ typedef std::deque<std::pair<std::string, std::string>> tLPS;
 #define AC_UNLIKELY(x) x
 #endif
 
-// shortcut for the non-invasive lookup and copy of stuff from mapps
+// shortcut for the non-invasive lookup and copy of stuff from maps
 #define ifThereStoreThere(x,y,z) { auto itFind = (x).find(y); if(itFind != (x).end()) z = itFind->second; }
 #define ifThereStoreThereAndBreak(x,y,z) { auto itFind = (x).find(y); if(itFind != (x).end()) { z = itFind->second; break; } }
 

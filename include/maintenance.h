@@ -6,9 +6,11 @@
 #include "sockio.h"
 #include "acbuf.h"
 
+static const std::string sBRLF("<br>\n");
+
 #ifdef DEBUG
-#define MTLOGDEBUG(x) { SendFmt << x << "\n<br>\n"; }
-#define MTLOGASSERT(x, y) {if(!(x)) SendFmt << "<div class=\"ERROR\">" << y << "</div>\n<br>\n";}
+#define MTLOGDEBUG(x) { SendFmt << x << sBRLF; }
+#define MTLOGASSERT(x, y) {if(!(x)) SendFmt << "<div class=\"ERROR\">" << y << "</div>\n" << sBRLF;}
 //#define MTLOGVERIFY(x, y) MTLOGASSERT(x, y)
 #else
 #define MTLOGASSERT(x, y) {}
@@ -127,6 +129,11 @@ protected:
 	static tSpecialRequest* MakeMaintWorker(const tRunParms& parms);
 };
 
+std::string to_base36(unsigned int val);
+static const string relKey("/Release"), inRelKey("/InRelease");
+static cmstring sfxXzBz2GzLzma[] = { ".xz", ".bz2", ".gz", ".lzma"};
+static cmstring sfxXzBz2GzLzmaNone[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
+static cmstring sfxMiscRelated[] = { "", ".xz", ".bz2", ".gz", ".lzma", ".gpg", ".diff/Index"};
 }
 
 #endif /*MAINTENANCE_H_*/

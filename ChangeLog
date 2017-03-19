@@ -9,6 +9,10 @@ apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=medium
     requested size to the first megabyte of a file.
   * FIX: detection of incorrectly allocated files and automated trimming in
     expiration run
+  * FIX: acngtool shrink function now uses allocated space for calculation,
+    not the visible size. Also more user friendly verbose output and little
+    performance optimization.
+  * FIX: acngtool shrink function now also considers unknown files as junk
   * FIX: compilation with GCC7, also warning fixes with Clang4
   * FIX: better checking of possibly invalid remote certificate configuration
     in SSL client code
@@ -17,6 +21,12 @@ apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=medium
     libevent examples (originally from ssl-conservatory and cURL)
   * FIX: no printing of requested file name in the 403 HTTP status line
   * FIX: typo/wording in manual, iptables examples
+  * FIX: in file truncation wizard (cleanup task), don't truncate the
+    associated .head files (because they might contain the best download
+    source information)
+  * NEW: better index deletion wizard, offering to remove all related files in
+    the same run. This can help to avoid accidental recreation of "incomplete"
+    files later.
   * Database update
 
  -- Eduard Bloch <blade@debian.org>  Tue, 14 Mar 2017 16:23:20 +0100

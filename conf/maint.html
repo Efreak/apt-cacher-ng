@@ -31,8 +31,9 @@ function show_rest() {
 function copycheck(src, clname)
 {
    var nodes=document.getElementsByClassName(clname);
+   var isChecked = src.checked;
    for(var i=0; i<nodes.length; ++i)
-      nodes[i].checked = src.checked;
+      nodes[i].checked = isChecked;
 }
 
       </script>

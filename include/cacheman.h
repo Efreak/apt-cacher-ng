@@ -31,9 +31,6 @@ static cmstring sAbortMsg("<span class=\"ERROR\">Found errors during processing,
 static cmstring sIndex("Index");
 static cmstring sslIndex("/Index");
 
-static cmstring sfxXzBz2GzLzma[] = { ".xz", ".bz2", ".gz", ".lzma"};
-static cmstring sfxXzBz2GzLzmaNone[] = { ".xz", ".bz2", ".gz", ".lzma", ""};
-
 bool CompDebVerLessThan(cmstring &s1, cmstring s2);
 extern time_t m_gMaintTimeNow;
 
@@ -174,17 +171,7 @@ protected:
 	virtual void MarkObsolete(cmstring&) {};
 
 	// for compressed map of special stuff
-	inline mstring AddLookupGetKey(cmstring &sFilePathRel, cmstring& errorReason)
-	{
-		unsigned id = m_pathMemory.size();
-		auto it = m_pathMemory.find(sFilePathRel);
-		if(it==m_pathMemory.end())
-			m_pathMemory[sFilePathRel] = {errorReason, id};
-		else
-			id = it->second.id;
-		char buf[30];
-		return mstring(buf, snprintf(buf, sizeof(buf), " name=\"kf\" value=\"%x\"", id));
-	}
+	mstring AddLookupGetKey(cmstring &sFilePathRel, cmstring& errorReason);
 
 	// stuff in those directories must be managed by some top-level index files
 	// whitelist patterns do not apply there!

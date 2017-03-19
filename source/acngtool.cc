@@ -270,7 +270,7 @@ struct pkgEntry
 {
 	std::string path;
 	time_t lastDate;
-	off_t size;
+	blkcnt_t blocks;
 	// for prio.queue, oldest shall be on top
 	bool operator<(const pkgEntry &other) const
 	{
@@ -294,10 +294,10 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 	std::priority_queue<pkgEntry/*, vector<pkgEntry>, cmpLessDate */ > delQ;
 	std::unordered_map<string, pair<time_t,off_t> > related;
 
-	off_t totalSize = 0;
+	blkcnt_t totalBlocks = 0;
 
 	IFileHandler::FindFiles(cfg::cachedir,
-			[&delQ, &totalSize, &related, &incIfiles](cmstring & path, const struct stat& finfo) -> bool
+			[&delQ, &totalBlocks, &related, &incIfiles](cmstring & path, const struct stat& finfo) -> bool
 			{
 		// reference date used in the prioqueue heap
 		auto dateLatest = max(finfo.st_ctim.tv_sec, finfo.st_mtim.tv_sec);
@@ -314,26 +314,15 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 			otherName = path + ".head";
 		}
 		auto ftype = rex::GetFiletype(pkgPath);
-		switch(ftype)
-		{
-		case rex::eMatchType::FILE_VOLATILE:
-		case rex::eMatchType::FILE_SPECIAL_VOLATILE:
-			if(!incIfiles)
-				return true;
-			break;
-		// case rechecks::eMatchType::FILE_WHITELIST:
-		default:
+		if((ftype==rex::FILE_SPECIAL_VOLATILE || ftype == rex::FILE_VOLATILE) && !incIfiles)
 			return true;
-		case rex::eMatchType::FILE_SOLID:
-		case rex::eMatchType::FILE_SPECIAL_SOLID:
-			break; // ok
-		}
+		// anything else is considered junk
 
 		auto other = related.find(otherName);
 		if(other == related.end())
 		{
 			// the related file will appear soon
-			related.insert(make_pair(path, make_pair(dateLatest, finfo.st_size)));
+			related.insert(make_pair(path, make_pair(dateLatest, finfo.st_blocks)));
 			return true;
 		}
 		// care only about stamps on .head files (track mode)
@@ -341,11 +330,11 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 		if( (cfg::trackfileuse && !isHead) || (!cfg::trackfileuse && isHead))
 			dateLatest = other->second.first;
 
-		auto bothSize = (finfo.st_size + other->second.second);
+		auto bothBlocks = (finfo.st_blocks + other->second.second);
 		related.erase(other);
 
-		totalSize += bothSize;
-		delQ.push({pkgPath, dateLatest, bothSize});
+		totalBlocks += bothBlocks;
+		delQ.push({pkgPath, dateLatest, bothBlocks});
 
 		return true;
 			}
@@ -356,12 +345,27 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 		delQ.push({kv.first, kv.second.first, kv.second.second});
 	related.clear();
 
+	auto foundSizeString = offttosHdotted(totalBlocks*512);
+	blkcnt_t wantedBlocks = wantedSize / 512;
+
+	if(totalBlocks < wantedBlocks)
+	{
+		if(verbose)
+			cout << "Requested size smaller than current size, nothing to do." << endl;
+		return 0;
+	}
+
 	if(verbose)
-		cout << "Found " << totalSize << " bytes of relevant data, reducing to " << wantedSize << endl;
+	{
+		cout << "Found " << foundSizeString << " bytes of relevant data, reducing to "
+		<< offttosHdotted(wantedSize) << " (~"<< (wantedBlocks*100/totalBlocks) << "%)"
+		<< endl;
+	}
 	while(!delQ.empty())
 	{
-		bool todel = (totalSize > wantedSize);
-		totalSize -= delQ.top().size;
+		bool todel = (totalBlocks > wantedBlocks);
+		if(todel)
+			totalBlocks -= delQ.top().blocks;
 		const char *msg = 0;
 		if(verbose || dryrun)
 			msg = (todel ? "Delete: " : "Keep: " );
@@ -374,6 +378,11 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 			unlink(mstring(delpath + ".head").c_str());
 		}
 		delQ.pop();
+	}
+	if(verbose)
+	{
+		cout << "New size: " << offttosHdotted(totalBlocks*512) << " (before: "
+		<< foundSizeString << ")" << endl;
 	}
 	return 0;
 }
