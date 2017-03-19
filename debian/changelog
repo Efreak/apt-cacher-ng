@@ -7,6 +7,8 @@ apt-cacher-ng (3-1) unstable; urgency=low
   * Spanish translation update (by Matías A. Bellone, closes: #853105)
   * Instructions on how to work around cron job execution and "special needs"
     of some users to disable the admin page (closes: #855996)
+  * Added RequiresMountsFor to systemd service description (closes: #855618,
+    only in Debian patch for now)
 
  -- 
 
