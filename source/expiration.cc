@@ -435,11 +435,15 @@ inline void expiration::RemoveAndStoreStatus(bool bPurgeNow)
 
 			if (bPurgeNow || TIMEEXPIRED(dir_props.second.nLostAt))
 			{
-				SendFmt << "Removing " << sPathRel << sBRLF;
 
 #ifdef ENABLED
-				::unlink(sPathAbs.c_str());
-				::unlink((sPathAbs + ".head").c_str());
+				SendFmt << "Removing " << sPathRel;
+				if(::unlink(sPathAbs.c_str()))
+					SendChunk(tErrnoFmter("<span class=\"ERROR\"> [ERROR] ")+"</span>");
+				SendFmt << sBRLF << "Removing " << sPathRel << ".head";
+				if(::unlink((sPathAbs + ".head").c_str()))
+					SendChunk(tErrnoFmter("<span class=\"ERROR\"> [ERROR] ")+"</span>");
+				SendChunk(sBRLF);
 				::rmdir(SZABSPATH(dir_props.first));
 #endif
 			}
