@@ -314,20 +314,9 @@ int shrink(off_t wantedSize, bool dryrun, bool apply, bool verbose, bool incIfil
 			otherName = path + ".head";
 		}
 		auto ftype = rex::GetFiletype(pkgPath);
-		switch(ftype)
-		{
-		case rex::eMatchType::FILE_VOLATILE:
-		case rex::eMatchType::FILE_SPECIAL_VOLATILE:
-			if(!incIfiles)
-				return true;
-			break;
-		// case rechecks::eMatchType::FILE_WHITELIST:
-		default:
+		if((ftype==rex::FILE_SPECIAL_VOLATILE || ftype == rex::FILE_VOLATILE) && !incIfiles)
 			return true;
-		case rex::eMatchType::FILE_SOLID:
-		case rex::eMatchType::FILE_SPECIAL_SOLID:
-			break; // ok
-		}
+		// anything else is considered junk
 
 		auto other = related.find(otherName);
 		if(other == related.end())
