@@ -1,6 +1,7 @@
 apt-cacher-ng (3-1) unstable; urgency=low
 
   * New upstream version
+    + GCC7 compilation fixes (closes: #853315)
     + fixes hidden space allocation issue (closes: #856635)
     + smarter manual index deletion wizard which covers related files too
       (probably closes: #789706)
