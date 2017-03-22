@@ -1,4 +1,4 @@
-apt-cacher-ng (3-1) unstable; urgency=low
+apt-cacher-ng (3-1) unstable; urgency=medium
 
   * New upstream version
     + GCC7 compilation fixes (closes: #853315)
@@ -11,7 +11,7 @@ apt-cacher-ng (3-1) unstable; urgency=low
   * Added RequiresMountsFor to systemd service description (closes: #855618,
     only in Debian patch for now)
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Wed, 22 Mar 2017 20:30:21 +0100
 
 apt-cacher-ng (2-1) unstable; urgency=low
 
