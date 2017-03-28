@@ -1,3 +1,9 @@
+apt-cacher-ng (3-3) unstable; urgency=medium
+
+  * Updated debian/copyright to match the upstream version (now really)
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 28 Mar 2017 21:01:49 +0200
+
 apt-cacher-ng (3-2) unstable; urgency=medium
 
   * Updated debian/copyright to match the upstream version
