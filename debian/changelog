@@ -1,3 +1,9 @@
+apt-cacher-ng (3-4) unstable; urgency=medium
+
+  * Made cron.daily tolerant to removal of config files (closes: #858952)
+
+ -- Eduard Bloch <blade@debian.org>  Sun, 02 Apr 2017 10:05:38 +0200
+
 apt-cacher-ng (3-3) unstable; urgency=medium
 
   * Updated debian/copyright to match the upstream version (now really)
