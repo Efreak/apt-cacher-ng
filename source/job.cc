@@ -712,9 +712,7 @@ report_overload:
     return ;
 
 report_notallowed:
-	SetErrorResponse((tSS() << "403 Forbidden file type or location: " << sReqPath).c_str(),
-			nullptr, "403 Forbidden file type or location");
-//    USRDBG( sRawUriPath + " -- ACCESS FORBIDDEN");
+	SetErrorResponse("403 Forbidden file type or location");
     return ;
 
 report_offlineconf:

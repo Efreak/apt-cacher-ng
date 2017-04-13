@@ -585,9 +585,17 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	if(!cfg::nsafriendly)
 	{
 		hret=SSL_get_verify_result(ssl);
-		if( hret != X509_V_OK)
+		if(hret != X509_V_OK)
 		{
 			perr=X509_verify_cert_error_string(hret);
+			goto ssl_init_fail;
+		}
+		auto server_cert = SSL_get_peer_certificate(ssl);
+		if(server_cert)
+			X509_free(server_cert);
+		else
+		{
+			perr="Incompatible remote certificate";
 			goto ssl_init_fail;
 		}
 	}

@@ -1,3 +1,17 @@
+apt-cacher-ng (2-2) testing; urgency=high
+
+  * Special version only for Debian Stretch, solving moderate security issues:
+    + hardening against HTTP header splitting attack (no user input printed in
+      the HTTP headers anymore; backport from Sid, related to CVE-2017-7443)
+    + hardening against unintended or malicious triggering of hidden space
+      allocation, by disabling the fallocate completely. This is ultima ratio,
+      trading code simplicity for fragmentation avoiding efforts; a smarter
+      solution is found in upstream version 3; closes: #856635)
+    + handle a corner case of bad TLS handshake with invalid certificate
+      (related to #839751)
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 13 Apr 2017 18:11:17 +0200
+
 apt-cacher-ng (2-1) unstable; urgency=low
 
   * New upstream version

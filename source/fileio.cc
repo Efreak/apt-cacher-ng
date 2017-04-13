@@ -17,7 +17,7 @@ using namespace std;
 namespace acng
 {
 
-#ifdef HAVE_LINUX_FALLOCATE
+#ifdef DISABLED_FOR_NOW
 
 int falloc_helper(int fd, off_t start, off_t len)
 {
