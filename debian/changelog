@@ -1,3 +1,9 @@
+apt-cacher-ng (3-5) unstable; urgency=low
+
+  * Moving RequiresMountsFor to Unit section (closes: #859520)
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 27 Apr 2017 20:12:02 +0200
+
 apt-cacher-ng (3-4) unstable; urgency=medium
 
   * Made cron.daily tolerant to removal of config files (closes: #858952)
