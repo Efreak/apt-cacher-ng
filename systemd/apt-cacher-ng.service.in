@@ -1,6 +1,7 @@
 [Unit]
 Description=Apt-Cacher NG software download proxy
 After=network.target
+RequiresMountsFor=/var/cache/apt-cacher-ng
 
 [Service]
 # the SocketPath option can be removed if the inetd bridge functionality is not needed
@@ -10,7 +11,6 @@ Group=apt-cacher-ng
 # this can be changed to notify if the support was enabled at build time
 Type=@SDTYPE@
 Restart=on-failure
-RequiresMountsFor=/var/cache/apt-cacher-ng
 
 [Install]
 WantedBy=multi-user.target
