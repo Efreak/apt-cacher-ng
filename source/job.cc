@@ -567,7 +567,11 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		if ( m_type == FILE_INVALID )
 		{
 			if(!cfg::patrace)
+			{
+				// just for the log
+				m_sFileLoc = theUrl.sPath;
 				goto report_notallowed;
+			}
 
 			// ok, collect some information helpful to the user
 			m_type = FILE_VOLATILE;
