@@ -39,6 +39,7 @@ string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
     "|/dists/.*/by-hash/.*" // support Debian/Ubuntu by-hash index files
     "|\\.asc$" // all remaining PGP signatures. Assuming that volatile ones are matched below.
     "|changelogs/pool/.*/changelog.txt$" // packages.ultimediaos.com
+    "|/objects/.*/.*\\.(dirtree|filez|commit|commitmeta)|/repo/deltas/.*" // FlatPak
 ")$");
 
 string svfilepat("/development/rawhide/.*"
@@ -76,6 +77,7 @@ string vfilepat(INFOLDER
 		"|wiki.ubuntu.com/.*/ReleaseNotes" // this is actually for an internal check and therefore contains the hostname
 		"|ubuntu/dists/.*\\.html" // http://archive.ubuntu.com/ubuntu/dists/vivid-updates/main/dist-upgrader-all/current/ReleaseAnnouncement.html
     "|metadata.(ftp-master.debian|tanglu).org/changelogs/.*" // some of them are not static
+    "|/refs/heads/app.*|/repo/(summary|config)(\\.sig)?|/Service/News$" // FlatPak
 );
 
 //string wfilepat( VPATPREFIX  "(Release|Release\\.gpg|release|meta-release|Translation[^/]*\\.bz2)$");
