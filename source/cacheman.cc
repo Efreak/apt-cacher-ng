@@ -2382,7 +2382,7 @@ bool cacheman::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cm
 		Cstat wantedState(wantedPathAbs);
 		string solidPathRel, solidPathAbs;
 		// lazy construction for the check below
-		if(wantedState.st_size != entry.fpr.size)
+		if(!wantedState || wantedState.st_size != entry.fpr.size)
 		{
 			solidPathRel = entry.sDirectory.substr(stripPrefix.size()) + "by-hash/" +
 									GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
@@ -2407,7 +2407,7 @@ bool cacheman::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cm
 			if(!h.LoadFromFile(SABSPATH(solidPathRel) + ".head") || ! h.h[header::XORIG])
 				{
 				if(m_bVerbose)
-					SendFmt << "Couldn't read" << SABSPATH(solidPathRel) << ".head<br>";
+					SendFmt << "Couldn't read " << SABSPATH(solidPathRel) << ".head<br>";
 				return;
 				}
 			string origin(h.h[header::XORIG]);
