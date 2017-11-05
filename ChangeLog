@@ -1,3 +1,9 @@
+apt-cacher-ng (3.2) I-NEED-NO-NAME; urgency=low
+
+  * Basic support for FlatPak repositories
+
+ -- 
+
 apt-cacher-ng (3.1) SPACE-COWBOYS-FOREVER; urgency=low
 
   * Hide credentials in acngtool in some corner cases (by astian)
