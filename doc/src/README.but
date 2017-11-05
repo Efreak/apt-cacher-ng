@@ -770,16 +770,14 @@ months when the old release files are finally deleted on the servers, then the
 package expiration will start complaining for some days (the expiration delay)
 and only then the finally unreferenced files will be removed.
 
-To speed up this process, the local administrator can remove the traces of the
+To speed up this process, the local administrator can remove the index files of the
 old distribution release from the archive. Either the top-level "Release"
 files, or even the whole index file trees relevant for certain releases.
 
-To make this task easier, a "brutal" script called distkill.pl is shipped with
-apt-cacher-ng. It runs interactively, it scans the package directory and
-presents an overview of index file trees assumed to represent distro releases.
-Then it provides a command promt to remove some immediately. The script should
-be used with extreme care! See
-\k{cache-overview} for example of its output.
+To make this task easier, there is a special helper mode in the cleanup task of
+the maintenance page. Run this manually (and maybe enable extra verbosity on
+the main page) and use the wizard on the bottom of the log page to delete
+particular index files.
 
 \C{howtos} HOWTOs and FAQ
 
@@ -848,51 +846,6 @@ run:
 \c rm /var/lib/apt/lists/*Sources
 
 on the client to purge APT's internal cache, and then rerun "apt-get update" there.
-
-\H{cache-overview}Cache overview
-
-To get a basic overview of the cache contents, the distkill.pl script may be used. See \k{distkill} for details and warnings.
-
-\c # /usr/lib/apt-cacher-ng/distkill.pl
-\c Scanning /var/cache/apt-cacher-ng, please wait...
-\c Found distributions:
-\c 	1. testing (6 index files)
-\c 	2. sid (63 index files)
-\c 	3. etch-unikl (30 index files)
-\c 	4. etch (30 index files)
-\c 	5. experimental (505 index files)
-\c 	6. lenny (57 index files)
-\c 	7. unstable (918 index files)
-\c 	8. stable (10 index files)
-\c 
-\c WARNING: The removal action would wipe out whole directories containing
-\c          index files. Select d to see detailed list.
-\c 
-\c Which distribution to remove? (Number, 0 to exit, d for details): d
-\c 
-\c Directories to remove:
-\c  1. testing: 
-\c   /var/cache/apt-cacher-ng/debrep/dists/testing 
-\c  2. sid: 
-\c   /var/cache/apt-cacher-ng/localstuff/dists/sid 
-\c   /var/cache/apt-cacher-ng/debrep/dists/sid 
-\c  4. etch: 
-\c   /var/cache/apt-cacher-ng/ftp.debian-unofficial.org/debian/dists/etch 
-\c  5. experimental: 
-\c   /var/cache/apt-cacher-ng/debrep/dists/experimental 
-\c  6. lenny: 
-\c   /var/cache/apt-cacher-ng/security.debian.org/dists/lenny 
-\c   /var/cache/apt-cacher-ng/debrep/dists/lenny 
-\c  7. unstable: 
-\c   /var/cache/apt-cacher-ng/debrep/dists/unstable 
-\c   /var/cache/apt-cacher-ng/localstuff/debian/dists/unstable 
-\c  8. stable: 
-\c   /var/cache/apt-cacher-ng/debrep/dists/stable 
-\c Found distributions:
-\c 
-\c WARNING: The removal action would wipe out whole directories containing
-\c          index files. Select d to see detailed list.
-\c
 
 \H{ssluse}Access to SSL/TLS remotes (HTTPS)
 
@@ -1395,7 +1348,6 @@ There are also a public
 available on the \W{http://alioth.debian.org/projects/apt-cacher-ng/}{Alioth project page}.
 
 And last, but not least: feel free to express your gratitude by donating a
-small amount of money via \W{https://www.paypal.com}{PayPal} (to edi@gmx.de) or just
-\W{https://flattr.com/thing/51105/Apt-Cacher-NG}{Flattr it!}
+small amount of money via \W{https://www.paypal.com}{PayPal} (to edi@gmx.de).
 
 \versionid Eduard Bloch, Sun, 19 Apr 2015 10:25:49 +0200

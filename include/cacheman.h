@@ -76,7 +76,7 @@ public:
 		{
 			bro = this;
 		};
-#ifdef DEBUG
+#if defined(DEBUG) || defined(DEBUGIDX)
 		inline tSS toString() const
 		{
 			return tSS() << alreadyparsed << "|"

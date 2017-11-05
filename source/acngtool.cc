@@ -577,7 +577,7 @@ int maint_job()
 		tSS urlPath;
 		urlPath << "http://";
 		if (!cfg::adminauth.empty())
-			urlPath << cfg::adminauth << "@";
+			urlPath << UserinfoEscape(cfg::adminauth) << "@";
 		if (hostaddr[0] == '/')
 			urlPath << "localhost";
 		else
@@ -1032,7 +1032,7 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	if(!surl)
 		return 2;
 	string xurl(surl);
-	if(!url.SetHttpUrl(xurl))
+	if(!url.SetHttpUrl(xurl, false))
 		return -2;
 	dlcon dl(true, nullptr, pDlconFac);
 

@@ -252,11 +252,11 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 	
 	sHost=url.substr(hStart, hEndSuc-hStart);
 
-	// credentials might in there, strip them of
+	// credentials might be in there, strip them off
 	l=sHost.rfind('@');
 	if(l!=mstring::npos)
 	{
-		sUserPass=sHost.substr(0, l);
+		sUserPass = UrlUnescape(sHost.substr(0, l));
 		sHost.erase(0, l+1);
 	}
 
@@ -275,16 +275,22 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 	
 	strip_ipv6_junk:
 	
+	bool host_appears_to_be_ipv6 = false;
 	if(sHost[0]=='[')
 	{
+		host_appears_to_be_ipv6 = true;
 		bCheckBrac=true;
 		sHost.erase(0,1);
 	}
 	
-	if(sHost[sHost.length()-1]==']')
+	if (sHost[sHost.length()-1] == ']') {
+		bCheckBrac = !bCheckBrac;
 		sHost.erase(sHost.length()-1);
-	else if(bCheckBrac) // must have been present here
+	}
+	if (bCheckBrac) // Unmatched square brackets.
 		return false;
+	if (!host_appears_to_be_ipv6)
+		sHost = UrlUnescape(sHost);
 	
 	return true;
 	
@@ -576,6 +582,63 @@ mstring UrlEscape(cmstring &s)
 	mstring ret;
 	ret.reserve(s.size());
 	UrlEscapeAppend(s, ret);
+	return ret;
+}
+
+/* From RFC3986 [0]:
+ *
+ *      sub-delims  = "!" / "$" / "&" / "'" / "(" / ")"
+ *                  / "*" / "+" / "," / ";" / "="
+ *
+ *      unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
+ *
+ *      authority   = [ userinfo "@" ] host [ ":" port ]
+ *
+ *      userinfo    = *( unreserved / pct-encoded / sub-delims / ":" )
+ *
+ * 0: https://www.ietf.org/rfc/rfc3986.txt
+ */
+static bool is_allowed_unencoded_userinfo_char(char c)
+{
+	switch (c) {
+	// unreserved:
+	case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G':
+	case 'H': case 'I': case 'J': case 'K': case 'L': case 'M': case 'N':
+	case 'O': case 'P': case 'Q': case 'R': case 'S': case 'T': case 'U':
+	case 'V': case 'W': case 'X': case 'Y': case 'Z':
+	case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g':
+	case 'h': case 'i': case 'j': case 'k': case 'l': case 'm': case 'n':
+	case 'o': case 'p': case 'q': case 'r': case 's': case 't': case 'u':
+	case 'v': case 'w': case 'x': case 'y': case 'z':
+	case '0': case '1': case '2': case '3': case '4':
+	case '5': case '6': case '7': case '8': case '9':
+	case '-': case '.': case '_': case '~':
+	// sub-delims:
+	case '!': case '$': case '&': case '\'': case '(': case ')':
+	case '*': case '+': case ',': case ';':  case '=':
+	// colon:
+	case ':':
+		return true;
+	default:
+		return false;
+	}
+}
+
+mstring UserinfoEscape(cmstring &s)
+{
+	mstring ret;
+	ret.reserve(s.size());
+
+	for (const auto& c : s) {
+		if (is_allowed_unencoded_userinfo_char(c)) {
+			ret += c;
+		} else {
+			char pct_encoded[4] = { '%', h2t_map[uint8_t(c) >> 4],
+			                             h2t_map[uint8_t(c) & 0x0f], '\0'};
+			ret += pct_encoded;
+		}
+	}
+
 	return ret;
 }
 

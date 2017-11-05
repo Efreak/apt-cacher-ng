@@ -242,6 +242,7 @@ void flush()
 
 void close(bool bReopen)
 {
+	// let's try to store a snapshot of the current stats
 	auto snapIn = offttos(totalIn.exchange(0));
 	auto snapOut = offttos(totalOut.exchange(0));
 	timeval tp;
@@ -250,8 +251,9 @@ void close(bool bReopen)
 			+ acng::offttos(tp.tv_sec) + "." + acng::ltos(tp.tv_usec);
 	auto outLinkPath = CACHE_BASE + cfg::privStoreRelQstatsSfx + "/o/"
 			+ acng::offttos(tp.tv_sec) + "." + acng::ltos(tp.tv_usec);
-	symlink(snapIn.c_str(), inLinkPath.c_str());
-	symlink(snapOut.c_str(), outLinkPath.c_str());
+	ignore_value(symlink(snapIn.c_str(), inLinkPath.c_str()));
+	ignore_value(symlink(snapOut.c_str(), outLinkPath.c_str()));
+
 
 	if(!logIsEnabled)
 		return;

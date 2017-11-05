@@ -1,3 +1,14 @@
+apt-cacher-ng (3.1) SPACE-COWBOYS-FOREVER; urgency=low
+
+  * Hide credentials in acngtool in some corner cases (by astian)
+  * Dropped references to distkill.pl script which was superseeded by acngtool
+  * Made default PassThroughPattern setting (bugs.d.o) stricter
+
+  [ Carlos Maddela ]
+  * Avoid expiration failure when some index files are missing
+
+ -- 
+
 apt-cacher-ng (3) THIS-IS-NOT-THE-END; urgency=medium
 
   * NOTE: this release tackles multiple issues that might be considered

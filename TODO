@@ -1,3 +1,39 @@
+Fresh issues:
+
+Strange message formating:
+  503  Cache storage error - Permission denied/var/cache/apt-cacher-ng/www.scootersoftware.com/dists/bcompare4/Release [IP: ::1 3142]
+
+
+
+DontCache mode might causes hanging when the filter matches some files and some not:
+
+Fehl:1 http://packages.microsoft.com/repos/vscode stable InRelease
+  503  Cache storage error - Permission denied/var/cache/apt-cacher-ng/packages.microsoft.com/repos/vscode/dists/stable/InRelease [IP: ::1 3142]
+  Holen:2 http://security.debian.org jessie/updates InRelease [63,1 kB]                             
+  OK:3 http://ftp2.de.debian.org/debian experimental InRelease                                                
+  Holen:4 http://security.debian.org jessie/updates/main Sources [222 kB]                                                     
+  Ign:5 http://archive.zfsonlinux.org/debian jessie InRelease                                                                   
+  Ign:6 http://www.scootersoftware.com bcompare4 InRelease                                          
+  Holen:7 http://security.debian.org jessie/updates/main amd64 Packages [444 kB]
+  Fehl:8 http://www.scootersoftware.com bcompare4 Release                                                  
+    503  Cache storage error - Permission denied/var/cache/apt-cacher-ng/www.scootersoftware.com/dists/bcompare4/Release [IP: ::1 3142]
+    Holen:9 http://security.debian.org jessie/updates/main i386 Packages [444 kB]                            
+    Fehl:10 http://archive.zfsonlinux.org/debian jessie Release                                         
+      404  Not Found [IP: ::1 3142]
+      0% [Warten auf Kopfzeilen]^C    
+
+
+
+
+% curl http://localhost:3142/debian/pool/main/o/openssl/openssl_1.1.0f.orig.tar.gz.asc
+<!DOCTYPE html>
+<html lang="en"><head><title>403 Forbidden file type or location</title>
+...
+
+This is hit by "apt source" in sid. You can test this with Docker, if
+Docker is your thing:
+
+
 
 TODO:
 

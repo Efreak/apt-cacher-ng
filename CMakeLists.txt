@@ -106,7 +106,7 @@ if(CXX_VIHI)
         _append(ACNG_CXXFLAGS -fvisibility-inlines-hidden)
 endif()
 
-foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1 -Wl,-fuse-ld=gold -Wl,--threads)
+foreach(linkarg -Wl,--as-needed -latomic -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1 -Wl,-fuse-ld=gold -Wl,--threads)
 	STRING(REGEX REPLACE "=|-|," "" optname "${linkarg}")
 	set(CMAKE_REQUIRED_FLAGS "${linkarg}")
 	CHECK_CXX_COMPILER_FLAG("" "LD_${optname}")
@@ -188,12 +188,6 @@ FIND_LIBRARY(HAVE_SOCKETLIB socket) # separate socket lib looks like Solaris-lik
 if(HAVE_SOCKETLIB)
    LIST(APPEND BaseNetworkLibs socket nsl)
 endif(HAVE_SOCKETLIB)
-
-FIND_LIBRARY(HAVE_ATOMICLIB atomic) # needed for global atomic vars on some 32bit architectures
-if(HAVE_ATOMICLIB)
-        MESSAGE("-- Found libatomic development files, will link libatomic")
-        LIST(APPEND BaseNetworkLibs atomic)
-endif()
 
 SET(CMAKE_REQUIRED_LIBRARIES wrap ${BaseNetworkLibs})
 FILE(READ test/build/HAVE_LIBWRAP.cc TESTSRC)
