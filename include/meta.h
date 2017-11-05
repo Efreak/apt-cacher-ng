@@ -311,6 +311,8 @@ mstring DosEscape(cmstring &s);
 // just the bare minimum to make sure the string does not break HTML formating
 mstring html_sanitize(cmstring& in);
 
+mstring UserinfoEscape(cmstring &s);
+
 #define pathTidy(s) { if(startsWithSz(s, "." SZPATHSEP)) s.erase(0, 2); tStrPos n(0); \
 	for(n=0;stmiss!=n;) { n=s.find(SZPATHSEP SZPATHSEP, n); if(stmiss!=n) s.erase(n, 1);}; \
 	for(n=0;stmiss!=n;) { n=s.find(SZPATHSEP "." SZPATHSEP, n); if(stmiss!=n) s.erase(n, 2);}; }
