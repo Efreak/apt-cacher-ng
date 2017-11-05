@@ -2,8 +2,8 @@ Source: apt-cacher-ng
 Section: net
 Priority: optional
 Maintainer: Eduard Bloch <blade@debian.org>
-Build-Depends: debhelper (>= 9), cmake (>= 2.6.2), libbz2-dev, zlib1g-dev, liblzma-dev, libfuse-dev [!hurd-i386], pkg-config, libwrap0-dev, lsb-base (>> 3.0-6), dh-systemd (>= 1.5), po-debconf, libssl-dev, libsystemd-dev (>= 210) [linux-any] | libsystemd-daemon-dev [linux-any]
-Standards-Version: 3.9.8
+Build-Depends: debhelper (>= 9), cmake (>= 2.6.2), libbz2-dev, zlib1g-dev, liblzma-dev, libfuse-dev [!hurd-i386], pkg-config, libwrap0-dev, lsb-base (>> 3.0-6), debhelper (>= 9.20160709) | dh-systemd (>= 1.5), po-debconf, libssl-dev, libsystemd-dev (>= 210) [linux-any] | libsystemd-daemon-dev [linux-any]
+Standards-Version: 4.1.1
 Homepage: http://www.unix-ag.uni-kl.de/~bloch/acng/
 Vcs-Git: https://alioth.debian.org/anonscm/git/apt-cacher-ng/apt-cacher-ng.git
 Vcs-Browser: https://alioth.debian.org/plugins/scmgit/cgi-bin/gitweb.cgi?p=apt-cacher-ng/apt-cacher-ng.git;a=shortlog;h=refs/heads/debian/sid

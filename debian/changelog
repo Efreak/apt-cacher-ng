@@ -7,6 +7,7 @@ apt-cacher-ng (3.1-1) unstable; urgency=low
     + fixes credential printing in logs (closes: #877135)
     + hardens default pass-through mask for bugs.debian.org (closes: #874349)
   * Portuguese translation update (by Traduz, closes: #874609)
+  * Policy definition and build-deps update (no related changes)
 
  -- Eduard Bloch <blade@debian.org>  Sun, 05 Nov 2017 20:55:20 +0100
 
