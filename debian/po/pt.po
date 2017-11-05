@@ -1,20 +1,21 @@
 # Portuguese translation or apt-cacher-ng debconf messages
 # Copyright (C) 2009, The apt-cacher-ng's authors
 # This file is distributed under the same license as the apt-cacher-ng package.
-# Pedro Ribeiro <p.m42.ribeiro@gmail.com>.
+# 2017, Pedro Ribeiro <p.m42.ribeiro@gmail.com>.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: apt-cacher-ng_0.4-2\n"
+"Project-Id-Version: apt-cacher-ng_3-5\n"
 "Report-Msgid-Bugs-To: apt-cacher-ng@packages.debian.org\n"
 "POT-Creation-Date: 2015-03-17 19:19+0100\n"
-"PO-Revision-Date: 2014-02-12 22:00+0000\n"
-"Last-Translator: Pedro Ribeiro<p.m42.ribeiro@gmail.com>\n"
-"Language-Team: Portuguese<traduz@debianpt.org>\n"
-"Language: \n"
+"PO-Revision-Date: 2017-09-07 22:09+0100\n"
+"Last-Translator: Pedro Ribeiro <p.m42.ribeiro@gmail.com>\n"
+"Language-Team: Portuguese <traduz@debianpt.org>\n"
+"Language: pt\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #. Type: select
 #. Choices
@@ -50,11 +51,12 @@ msgid ""
 "URL remapping can be set up automatically, using a configuration based on "
 "the current state of /etc/apt/sources.list."
 msgstr ""
-"O Apt-Cacher NG pode fazer o download de pacotes de repositórios além dos "
-"pedidos pelos clientes. Isto permite fazer a cache de conteúdos mais "
-"eficientemente e facilita a mudança posterior de mirror por parte de um "
-"administrador. O mapeamento de URL pode ser configurado automaticamente, "
-"através duma configuração baseada no estado actual do /etc/apt/sources.list."
+"O Apt-Cacher NG pode fazer o download de pacotes a partir de outros "
+"repositórios além dos pedidos pelos clientes. Isto permite fazer a cache de "
+"conteúdos mais eficientemente e facilita a mudança posterior de mirror por "
+"parte de um administrador. O mapeamento de URL pode ser configurado "
+"automaticamente, através duma configuração baseada no estado actual do /etc/"
+"apt/sources.list."
 
 #. Type: select
 #. Description
@@ -104,7 +106,8 @@ msgid ""
 msgstr ""
 "Cada entrada tem que ser um endereço IP ou nome de máquina associado com uma "
 "interface de rede local. Endereços genéricos específicos de protocolo são "
-"também suportados, como por exemplo 0.0.0.0 para interfaces com IPv4."
+"também suportados, como por exemplo 0.0.0.0 para escutar em todas as "
+"interfaces com IPv4."
 
 #. Type: string
 #. Description
@@ -180,8 +183,7 @@ msgid ""
 "remains unchanged or is set to the default of /var/cache/apt-cacher-ng."
 msgstr ""
 "Se este campo for deixado em branco, o valor configurado actualmente "
-"permanece inalterado ou conforme o que estiver definido em /var/cache/apt-"
-"cacher-ng."
+"permanece inalterado ou é definido para /var/cache/apt-cacher-ng."
 
 #. Type: string
 #. Description
@@ -219,7 +221,7 @@ msgstr ""
 #. Description
 #: ../apt-cacher-ng.templates:7001
 msgid "Allow HTTP tunnels through Apt-Cacher NG?"
-msgstr ""
+msgstr "Permitir túneis HTTP para o Apt-Cacher NG?"
 
 #. Type: boolean
 #. Description
@@ -229,6 +231,9 @@ msgid ""
 "can be used to access remote servers that might otherwise be blocked by (for "
 "instance) a firewall filtering HTTPS connections."
 msgstr ""
+"O Apt-Cacher NG pode ser configurado para permitir a criação de túneis HTTP, "
+"que podem ser usados para aceder a servidores remotos que seriam bloqueados "
+"por firewalls que filtrem ligações HTTPS, por exemplo."
 
 #. Type: boolean
 #. Description
@@ -237,6 +242,8 @@ msgid ""
 "This feature is usually disabled for security reasons; enable it only for "
 "trusted LAN environments."
 msgstr ""
+"Esta funcionalidade está normalmente desabilitada por razões de segurança; "
+"active-a apenas em ambientes LAN de confiança."
 
 #~ msgid ""
 #~ "This remapping of URLs can be configured now in an automated way based on "

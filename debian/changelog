@@ -1,3 +1,9 @@
+apt-cacher-ng (3.1-1) unstable; urgency=low
+
+  * Portuguese translation update (by Traduz, closes: #874609)
+
+ -- 
+
 apt-cacher-ng (3-5) unstable; urgency=low
 
   * Moving RequiresMountsFor to Unit section (closes: #859520)
