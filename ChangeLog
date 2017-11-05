@@ -2,6 +2,7 @@ apt-cacher-ng (3.1) SPACE-COWBOYS-FOREVER; urgency=low
 
   * Hide credentials in acngtool in some corner cases (by astian)
   * Dropped references to distkill.pl script which was superseeded by acngtool
+  * Made default PassThroughPattern setting more strict
 
  -- 
 
