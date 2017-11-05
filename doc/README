@@ -142,7 +142,7 @@ Chapter 3: Basic Configuration
        eventually become not resolvable and the downloads will just fail.
 
        Using SSL/TLS transport (i.e. https urls) is also possible with some
-       restrictions, see section 8.3 for details.
+       restrictions, see section 8.2 for details.
 
 Chapter 4: Advanced Server Configuration
 ----------------------------------------
@@ -406,7 +406,7 @@ Chapter 4: Advanced Server Configuration
            .debdelta files. The path hierarchy below this URL should
            correspond to the source URLs and file paths in the cache. Only
            one URL can be specified at the moment. It is used for explicit
-           mirroring operations, see section 8.15 for details.
+           mirroring operations, see section 8.14 for details.
 
         -  `proxy=proxyspec' Configures an alternative proxy URL which
            overrides the global proxy setting in the context of this
@@ -473,7 +473,7 @@ Chapter 5: Security
 
        A simple control method for incoming connections is listening only
        to network interfaces which are inside a secure perimeter, e.g.
-       belong to the local network. See section 8.11 for details on this
+       belong to the local network. See section 8.10 for details on this
        configuration parameter. The default setting is listening to all
        interfaces.
 
@@ -816,16 +816,14 @@ Chapter 7: Maintenance
        finally unreferenced files will be removed.
 
        To speed up this process, the local administrator can remove the
-       traces of the old distribution release from the archive. Either
+       index files of the old distribution release from the archive. Either
        the top-level "Release" files, or even the whole index file trees
        relevant for certain releases.
 
-       To make this task easier, a "brutal" script called distkill.pl is
-       shipped with apt-cacher-ng. It runs interactively, it scans the
-       package directory and presents an overview of index file trees
-       assumed to represent distro releases. Then it provides a command
-       promt to remove some immediately. The script should be used with
-       extreme care! See section 8.2 for example of its output.
+       To make this task easier, there is a special helper mode in the
+       cleanup task of the maintenance page. Run this manually (and maybe
+       enable extra verbosity on the main page) and use the wizard on the
+       bottom of the log page to delete particular index files.
 
 Chapter 8: HOWTOs and FAQ
 -------------------------
@@ -900,53 +898,7 @@ Chapter 8: HOWTOs and FAQ
        on the client to purge APT's internal cache, and then rerun "apt-get
        update" there.
 
-   8.2 Cache overview
-
-       To get a basic overview of the cache contents, the distkill.pl
-       script may be used. See section 7.2 for details and warnings.
-
-         # /usr/lib/apt-cacher-ng/distkill.pl
-         Scanning /var/cache/apt-cacher-ng, please wait...
-         Found distributions:
-         	1. testing (6 index files)
-         	2. sid (63 index files)
-         	3. etch-unikl (30 index files)
-         	4. etch (30 index files)
-         	5. experimental (505 index files)
-         	6. lenny (57 index files)
-         	7. unstable (918 index files)
-         	8. stable (10 index files)
-         
-         WARNING: The removal action would wipe out whole directories containing
-                  index files. Select d to see detailed list.
-         
-         Which distribution to remove? (Number, 0 to exit, d for details): d
-         
-         Directories to remove:
-          1. testing: 
-           /var/cache/apt-cacher-ng/debrep/dists/testing 
-          2. sid: 
-           /var/cache/apt-cacher-ng/localstuff/dists/sid 
-           /var/cache/apt-cacher-ng/debrep/dists/sid 
-          4. etch: 
-           /var/cache/apt-cacher-ng/ftp.debian-unofficial.org/debian/dists/etch 
-          5. experimental: 
-           /var/cache/apt-cacher-ng/debrep/dists/experimental 
-          6. lenny: 
-           /var/cache/apt-cacher-ng/security.debian.org/dists/lenny 
-           /var/cache/apt-cacher-ng/debrep/dists/lenny 
-          7. unstable: 
-           /var/cache/apt-cacher-ng/debrep/dists/unstable 
-           /var/cache/apt-cacher-ng/localstuff/debian/dists/unstable 
-          8. stable: 
-           /var/cache/apt-cacher-ng/debrep/dists/stable 
-         Found distributions:
-         
-         WARNING: The removal action would wipe out whole directories containing
-                  index files. Select d to see detailed list.
-         
-
-   8.3 Access to SSL/TLS remotes (HTTPS)
+   8.2 Access to SSL/TLS remotes (HTTPS)
 
        It is possible to have encrypted access to remote sites via HTTPS
        protocol with recent versions of apt-cacher-ng if the OpenSSL
@@ -992,7 +944,7 @@ Chapter 8: HOWTOs and FAQ
            the client has separated configuration options to set this. For
            Debian based distros, this can be done by adding a configuration
            like this: `Acquire::https::proxy "DIRECT";' to apt.conf or
-           one of the apt.conf.d files. See section 8.5 for further
+           one of the apt.conf.d files. See section 8.4 for further
            information.
 
         -  The "backend configuration method": if the clients access the
@@ -1028,7 +980,7 @@ Chapter 8: HOWTOs and FAQ
          # Basically the same just with access to apt-cacher-ng through
          # URL rewritting instead of setting http proxy.
 
-   8.4 JIGDO usage
+   8.3 JIGDO usage
 
        It's possible to use apt-cacher-ng source with the jigdo-lite
        utility. There are some limitations, though:
@@ -1060,7 +1012,7 @@ Chapter 8: HOWTOs and FAQ
        That's all, jigdo-lite will fetch the package files using apt-
        cacher-ng proxy.
 
-   8.5 Avoid use of apt-cacher-ng for certain hosts
+   8.4 Avoid use of apt-cacher-ng for certain hosts
 
        Sometimes clients might need to access some remote side directly
        to do some non-file-transfer oriented work but still passing the
@@ -1071,14 +1023,14 @@ Chapter 8: HOWTOs and FAQ
          Acquire::HTTP::Proxy::archive.example.org "DIRECT";
          //or Acquire::HTTP::Proxy::archive.example.org  "other.proxy:port"
 
-   8.6 Avoid caching for certain domains or certain file types
+   8.5 Avoid caching for certain domains or certain file types
 
        Sometimes clients to download through apt-cacher-ng but the data
        shall not be stored on the harddisk of the server. To get it, use
        the DontCache directive (see examples for details) to define such
        files.
 
-   8.7 How to make big download series faster
+   8.6 How to make big download series faster
 
        Symptom: A common situation is a periodic download of hundreds of
        files through apt-cacher-ng where just a half is present in the
@@ -1100,11 +1052,11 @@ Chapter 8: HOWTOs and FAQ
        there is a higher chance to get the server connection "preheated"
        before a stall occurs.
 
-   8.8 How to import DVDs or ISO images
+   8.7 How to import DVDs or ISO images
 
        First, it should be clear what is needed to be done. In order to
        integrate the packages from a DVD or ISO image, read on in section
-       8.9.
+       8.8.
 
        The situation with ISO files import is complicated. They are not
        supported by the cache and there is also no expiration mode for
@@ -1114,7 +1066,7 @@ Chapter 8: HOWTOs and FAQ
        What is possible now is publishing a directory with ISO files using
        its web server mode, see `LocalDirs' config option for details.
 
-   8.9 How to integrate DVDs or ISO image data
+   8.8 How to integrate DVDs or ISO image data
 
        Integrating package files from DVD or ISO images is not much
        different to the usual import operation, see above for instructions.
@@ -1139,7 +1091,7 @@ Chapter 8: HOWTOs and FAQ
        up the symlinks and continue using them as links istead of file
        copies.
 
-  8.10 How to execute commands before and after going online?
+   8.9 How to execute commands before and after going online?
 
        It is possible to configure custom commands which are executed
        before the internet connection attempt and after a certain period
@@ -1149,7 +1101,7 @@ Chapter 8: HOWTOs and FAQ
        section 4.3.2, `conf/*.hooks' and `/usr/share/doc/apt-cacher-
        ng/examples/*.hooks' files for details.
 
-  8.11 Listen to only specific interfaces or IP protocols
+  8.10 Listen to only specific interfaces or IP protocols
 
        Unless configured explicitely, the server listens to any interface
        with IPv4 or IPv6 protocol. To disable some of this, use the
@@ -1166,7 +1118,7 @@ Chapter 8: HOWTOs and FAQ
        interfaces configured for the specific protocol, like 0.0.0.0 for
        IPv4.
 
-  8.12 How to avoid use of IPv4 (or IPv6) where possible?
+  8.11 How to avoid use of IPv4 (or IPv6) where possible?
 
        Usually, outgoing hosts are accessed by the protocol and with the
        target IP reported as the first candidate by operating system
@@ -1175,7 +1127,7 @@ Chapter 8: HOWTOs and FAQ
        and then use IPv4 as alternative (or vice versa). See option
         ConnectProto  in configuration examples.
 
-  8.13 Use the proxy without storing all data twice
+  8.12 Use the proxy without storing all data twice
 
        There is a general use case where the data storing behavior of APT
        is not so fortunate. Imagine an old laptop with a slow and small
@@ -1212,7 +1164,7 @@ Chapter 8: HOWTOs and FAQ
        acngfs parameters, and then it gets files directly from the cache if
        they are completely downloaded and don't have volatile contents.
 
-  8.14 Optional semi-automatic use of proxy
+  8.13 Optional semi-automatic use of proxy
 
        Apt-Cacher NG daemon has some optional operations modes regading the
        use of external proxy (configured with "Proxy" setting). The default
@@ -1245,7 +1197,7 @@ Chapter 8: HOWTOs and FAQ
        (see above) and another ACNG proxy in the home LAN to get smart
        caching for laptop users.
 
-  8.15 Partial Mirroring
+  8.14 Partial Mirroring
 
        It is possible to create a partial local mirror of a remote package
        repository. The method to do this is usually known as pre-caching. A
@@ -1503,7 +1455,7 @@ Chapter 10: Known Bugs and Limitations
         -  Only HTTP HEAD and GET commands are supported properly.
 
         -  CONNECT (for https/SSL/TLS tunnels) is supported but needs to be
-           enabled by local administrators, see section 8.3 for details
+           enabled by local administrators, see section 8.2 for details
 
         -  POST support is restricted to apt-listbugs actions and is
            actually implemented as simple data forwarding with minor header
@@ -1533,7 +1485,6 @@ Chapter 11: Contact
        on the Alioth project page.
 
        And last, but not least: feel free to express your gratitude by
-       donating a small amount of money via PayPal (to edi@gmx.de) or just
-       Flattr it!
+       donating a small amount of money via PayPal (to edi@gmx.de).
 
 [Eduard Bloch, Sun, 19 Apr 2015 10:25:49 +0200]

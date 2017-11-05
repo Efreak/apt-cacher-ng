@@ -19,7 +19,7 @@ Only the "Basic" type of HTTP proxy authentication is supported at the moment
 Only HTTP HEAD and GET commands are supported properly.
 </li>
 <li>
-CONNECT (for https/SSL/TLS tunnels) is supported but needs to be enabled by local administrators, see <a href="howtos.html#ssluse">section 8.3</a> for details
+CONNECT (for https/SSL/TLS tunnels) is supported but needs to be enabled by local administrators, see <a href="howtos.html#ssluse">section 8.2</a> for details
 </li>
 <li>
 POST support is restricted to apt-listbugs actions and is actually implemented as simple data forwarding with minor header manipulation. If additional proxy is configured, the client will be redirected to the HTTPS version of bugs.debian.org service, i.e. switching to the CONNECT method (see above)

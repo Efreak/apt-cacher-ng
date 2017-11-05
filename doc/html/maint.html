@@ -144,10 +144,10 @@ However, this solution will fail if the release files are still available on the
 After all, if the old release is no longer used by local cache users then the extra disk usage becomes a problem. This problem will go away after many months when the old release files are finally deleted on the servers, then the package expiration will start complaining for some days (the expiration delay) and only then the finally unreferenced files will be removed.
 </p>
 <p>
-To speed up this process, the local administrator can remove the traces of the old distribution release from the archive. Either the top-level "Release" files, or even the whole index file trees relevant for certain releases.
+To speed up this process, the local administrator can remove the index files of the old distribution release from the archive. Either the top-level "Release" files, or even the whole index file trees relevant for certain releases.
 </p>
 <p>
-To make this task easier, a "brutal" script called distkill.pl is shipped with apt-cacher-ng. It runs interactively, it scans the package directory and presents an overview of index file trees assumed to represent distro releases. Then it provides a command promt to remove some immediately. The script should be used with extreme care! See <a href="howtos.html#cache-overview">section 8.2</a> for example of its output.
+To make this task easier, there is a special helper mode in the cleanup task of the maintenance page. Run this manually (and maybe enable extra verbosity on the main page) and use the wizard on the bottom of the log page to delete particular index files.
 </p>
 
 <hr><address>Comments to <a href='mailto:blade@debian.org'>blade@debian.org</a>
