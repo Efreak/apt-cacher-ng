@@ -1,6 +1,12 @@
 apt-cacher-ng (3.1-1) unstable; urgency=low
 
-  * Portuguese translation update (by Traduz, closes: #874609)
+  * New upstream version
+    + removed doc references to distkill.pl (closes: #877703, LP: #1635029)
+    + includes fix for rare expiration failure on missing index files
+      (closes: #872830)
+    + fixes credential printing in logs (closes: #877135)
+    + hardens default pass-through mask for bugs.debian.org (closes: #874349)
+    * Portuguese translation update (by Traduz, closes: #874609)
 
  -- 
 
