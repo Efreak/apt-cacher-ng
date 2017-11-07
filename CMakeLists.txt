@@ -106,7 +106,7 @@ if(CXX_VIHI)
         _append(ACNG_CXXFLAGS -fvisibility-inlines-hidden)
 endif()
 
-foreach(linkarg -Wl,--as-needed -latomic -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1 -Wl,-fuse-ld=gold -Wl,--threads)
+foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1 -Wl,-fuse-ld=gold -Wl,--threads)
 	STRING(REGEX REPLACE "=|-|," "" optname "${linkarg}")
 	set(CMAKE_REQUIRED_FLAGS "${linkarg}")
 	CHECK_CXX_COMPILER_FLAG("" "LD_${optname}")
@@ -199,6 +199,14 @@ ELSE(HAVE_LIBWRAP)
    SET(HAVE_LIBWRAP)
 ENDIF(HAVE_LIBWRAP)
 SET(CMAKE_REQUIRED_LIBRARIES "")
+
+# lib is not in the standard path so FIND_LIBRARY is not reliable
+set(CMAKE_REQUIRED_FLAGS "-latomic")
+CHECK_CXX_COMPILER_FLAG("" LD_ATOMIC)
+if(LD_ATOMIC)
+_append(BaseNetworkLibs atomic)
+endif()
+set(CMAKE_REQUIRED_FLAGS "")
 
 if(CYGWIN)
 message("!! Not using wordexp on Cygwin, not reliable")
