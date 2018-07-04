@@ -330,17 +330,13 @@ void Setup()
 		    freeaddrinfo(res);
 		};
 
-		tSplitWalk sp(&bindaddr);
-		if(sp.Next())
+		bool addedServer=false;
+		for(const auto& sp: tSplitWalk(&bindaddr))
 		{
-			do
-			{
-				conaddr(sp.str().c_str());
-			}
-			while(sp.Next());
+			conaddr(sp.c_str());
+			addedServer = true;
 		}
-		else
-			conaddr(nullptr);
+		if(!addedServer) conaddr(nullptr);
 
 		if(g_vecSocks.empty())
 		{

@@ -340,6 +340,7 @@ void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar);
 extern cmstring sEmptyString;
 
 //! iterator-like helper for string splitting, for convenient use with for-loops
+// Works exactly once!
 class tSplitWalk
 {
 	cmstring &s;
@@ -379,6 +380,22 @@ public:
 	inline mstring str() const { return s.substr(start, len); }
 	inline operator mstring() const { return str(); }
 	inline LPCSTR remainder() const { return s.c_str() + start; }
+
+	struct iterator
+	{
+		tSplitWalk* _walker = nullptr;
+		// default is end sentinel
+		bool bEol = true;
+		iterator() {}
+		iterator(tSplitWalk& walker) : _walker(&walker) { bEol = !walker.Next(); }
+		// just good enough for basic iteration and end detection
+		bool operator==(const iterator& other) const { return (bEol && other.bEol); }
+		bool operator!=(const iterator& other) const { return !(other == *this); }
+		iterator operator++() { bEol = !_walker->Next(); return *this; }
+		std::string operator*() { return _walker->str(); }
+	};
+	iterator begin() {return iterator(*this); }
+	iterator end() { return iterator(); }
 };
 
 //bool CreateDetachedThread(void *(*threadfunc)(void *));
