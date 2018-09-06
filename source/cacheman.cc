@@ -941,7 +941,7 @@ void cacheman::ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups& idxGro
 			typedef map<string, tContentKey> tFile2Cid;
 			// pull all contents into a sorted dictionary for later filtering
 			tFile2Cid file2cid;
-			auto recvInfo = [&file2cid, this](const tRemoteFileInfo &entry)
+			auto recvInfo = [&file2cid](const tRemoteFileInfo &entry)
 									{
 #if 0 // bad, keeps re-requesting update of such stuff forever. Better let the quick content check analyze and skip them.
 				tStrPos compos=FindCompSfxPos(entry.sFileName);
@@ -1511,7 +1511,7 @@ void cacheman::UpdateVolatileFiles()
 	{
 		std::unordered_set<std::string> oldReleaseFiles;
 		auto baseFolder = cfg::cacheDirSlash + cfg::privStoreRelSnapSufix;
-		IFileHandler::FindFiles(baseFolder, [&baseFolder, &oldReleaseFiles, this](cmstring &sPath, const struct stat &st)
+		IFileHandler::FindFiles(baseFolder, [&baseFolder, &oldReleaseFiles](cmstring &sPath, const struct stat &st)
 				-> bool {
 			oldReleaseFiles.emplace(sPath.substr(baseFolder.size() + 1));
 			return true;
