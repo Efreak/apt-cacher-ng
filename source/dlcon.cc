@@ -160,7 +160,7 @@ struct tDlJob
 			return;
 		header h;
 		bool forbidden=false;
-		h.Load(reqHead, std::numeric_limits<int>::max(),
+		h.Load(reqHead, (unsigned) std::numeric_limits<int>::max(),
 				[this, &forbidden](cmstring& key, cmstring& rest)
 				{
 			// heh, continuation of ignored stuff or without start?
