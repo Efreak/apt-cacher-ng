@@ -28,11 +28,23 @@ The command-line options supported by \c{apt-cacher-ng} are:
 \dt \cw{-c} \e{confdir}
 
 \dd Scan the specified configuration directory and interpret configuration
-  files find there.
+  files found there.
 
 \dt \cw{-h}
 
 \dd Short option summary
+
+\dt \cw{-i}
+
+\dd Ignore some non-critical configuration errors on startup. Regular operation with this switch is not recommended.
+
+\dt \cw{-v}
+
+\dd Enable additional verbosity in log output.
+
+\dt \cw{-e}
+
+\dd Invoke expiration task immediately after startup. This option exists for legacy compatibility and can be dangerous to use due to filesystem permission issues (i.e. danger to cause them). Using acngtool to control such operations instead is advisable.
 
 \dt \e{varname=varopt}
 
@@ -43,11 +55,11 @@ The command-line options supported by \c{apt-cacher-ng} are:
 Apt-Cacher NG is configured by a multi-config directory, i.e. the configuration
 is split into many configuration files having names with suffix \e{.conf} and
 stored in a single directory. Variables can override previously configured
-settings from other files, sometimes that settings are merged (depending on the
+settings from other files, sometimes those settings are merged (depending on the
 variable).
 
 The configuration directory is typically \e{/etc/apt-cacher-ng} but it can be
-adjusted with the -C option (see systemd service file for details or wherever
+adjusted with the -c option (see systemd service file for details or wherever
 the init system starts the daemon).
 
 On Debian systems, there are at least three files installed by default:

@@ -17,16 +17,22 @@ Apt-Cacher NG is a caching proxy for software packages which are downloaded by U
 .PP
 The command-line options supported by \fBapt-cacher-ng\fP are:
 .IP "\fB-c\fP \fIconfdir\fP"
-Scan the specified configuration directory and interpret configuration files find there.
+Scan the specified configuration directory and interpret configuration files found there.
 .IP "\fB-h\fP"
 Short option summary
+.IP "\fB-i\fP"
+Ignore some non-critical configuration errors on startup. Regular operation with this switch is not recommended.
+.IP "\fB-v\fP"
+Enable additional verbosity in log output.
+.IP "\fB-e\fP"
+Invoke expiration task immediately after startup. This option exists for legacy compatibility and can be dangerous to use due to filesystem permission issues (i.e. danger to cause them). Using acngtool to control such operations instead is advisable.
 .IP "\fIvarname=varopt\fP"
 The options from the configuration can be passed on the command line as key=value pairs.
 .SH "CONFIGURATION"
 .PP
-Apt-Cacher NG is configured by a multi-config directory, i.e. the configuration is split into many configuration files having names with suffix \fI.conf\fP and stored in a single directory. Variables can override previously configured settings from other files, sometimes that settings are merged (depending on the variable).
+Apt-Cacher NG is configured by a multi-config directory, i.e. the configuration is split into many configuration files having names with suffix \fI.conf\fP and stored in a single directory. Variables can override previously configured settings from other files, sometimes those settings are merged (depending on the variable).
 .PP
-The configuration directory is typically \fI/etc/apt-cacher-ng\fP but it can be adjusted with the -C option (see systemd service file for details or wherever the init system starts the daemon).
+The configuration directory is typically \fI/etc/apt-cacher-ng\fP but it can be adjusted with the -c option (see systemd service file for details or wherever the init system starts the daemon).
 .PP
 On Debian systems, there are at least three files installed by default: acng.conf (containing documented examples), security.conf (containing sensible data and only readable for special users) and zz_debconf.conf (containing popular settings which are set by the Debian Configuration mechanism).
 .SH "SIGNALS"
