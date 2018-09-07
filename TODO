@@ -1,12 +1,5 @@
 Features:
 
-Fresh issues:
-
-Strange message formating:
-  503  Cache storage error - Permission denied/var/cache/apt-cacher-ng/www.scootersoftware.com/dists/bcompare4/Release [IP: ::1 3142]
-
-
-
 DontCache mode might causes hanging when the filter matches some files and some not:
 
 Fehl:1 http://packages.microsoft.com/repos/vscode stable InRelease
@@ -25,19 +18,10 @@ Fehl:1 http://packages.microsoft.com/repos/vscode stable InRelease
       0% [Warten auf Kopfzeilen]^C    
 
 
-
-
-% curl http://localhost:3142/debian/pool/main/o/openssl/openssl_1.1.0f.orig.tar.gz.asc
-<!DOCTYPE html>
-<html lang="en"><head><title>403 Forbidden file type or location</title>
-...
-
-This is hit by "apt source" in sid. You can test this with Docker, if
-Docker is your thing:
-
-
-
 TODO:
+
+Redesign the config file format to add sections for remap-stuff instead of pushing everything into the same config line.
+Basic idea: git-config extended ini format.
 
 Better cleanup for orphaned .gpg files
 
