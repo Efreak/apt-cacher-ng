@@ -416,8 +416,8 @@ LocalDirs: acng-doc @DOCDIR@
 # PassThroughPattern: private-ppa\.launchpad\.net:443$
 # PassThroughPattern: .* # this would allow CONNECT to everything
 #
-# Default:
-PassThroughPattern: ^(bugs\.debian\.org|changelogs\.ubuntu\.com):443$
+# Default: ^(bugs\.debian\.org|changelogs\.ubuntu\.com):443$
+# PassThroughPattern: ^(bugs\.debian\.org|changelogs\.ubuntu\.com):443$
 
 # It's possible that an evil client requests a volatile file but does not
 # retrieve the response and keeps the connection effectively stuck over
