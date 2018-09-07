@@ -1,3 +1,17 @@
+apt-cacher-ng (3.2-1) unstable; urgency=low
+
+  * New upstream version
+    + Allow tunnel mode per default for some Debian and Ubuntu services
+      closes: #906113
+    + Adding remap config for security.d.o
+      closes: #900325
+    + Fix incorrect -C option in manpage and other minor errors
+      closes: #901292, #901294, #901295
+    + Remove obsolete option from config output
+      closes: #859680
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 07 Sep 2018 11:30:33 +0200
+
 apt-cacher-ng (3.1-1) unstable; urgency=low
 
   * New upstream version
