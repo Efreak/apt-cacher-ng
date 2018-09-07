@@ -264,7 +264,7 @@ void conn::WorkLoop() {
 
 		// split new data into requests
 		while(inBuf.size()>0) {
-			MYTRY
+			try
 			{
 				if(!m_pTmpHead)
 					m_pTmpHead = new header();
@@ -359,7 +359,7 @@ void conn::WorkLoop() {
 
 				m_pTmpHead=nullptr; // owned by job now
 			}
-			MYCATCH(bad_alloc&)
+			catch(bad_alloc&)
 			{
 				return;
 			}
@@ -406,7 +406,7 @@ bool conn::SetupDownloader(const char *pszOrigin)
 	if (m_pDlClient)
 		return true;
 
-	MYTRY
+	try
 	{
 		if(cfg::exporigin)
 		{
@@ -425,7 +425,7 @@ bool conn::SetupDownloader(const char *pszOrigin)
 		if(!m_pDlClient)
 			return false;
 	}
-	MYCATCH(bad_alloc&)
+	catch(bad_alloc&)
 	{
 		return false;
 	}

@@ -328,13 +328,13 @@ void tSpecialRequest::RunMaintWork(eMaintWorkType jobType, cmstring& cmd, int fd
 	if(cfg::DegradedMode() && jobType != workSTYLESHEET)
 		jobType = workUSERINFO;
 
-	MYTRY {
+	try {
 		SHARED_PTR<tSpecialRequest> p;
 		p.reset(MakeMaintWorker({fd, jobType, cmd}));
 		if(p)
 			p->Run();
 	}
-	MYCATCH(...)
+	catch(...)
 	{
 	}
 }
