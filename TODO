@@ -1,8 +1,5 @@
 Features:
 
-Would you be open to fixing by-hash for flat archives too?
-Well it's flat, so ./by-hash/$HASH, which is either md5, sha(1,256,512)
-
 Fresh issues:
 
 Strange message formating:
