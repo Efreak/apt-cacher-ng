@@ -68,11 +68,7 @@ Remap-fedora: file:fedora_mirrors # Fedora Linux
 Remap-epel:   file:epel_mirrors # Fedora EPEL
 Remap-slrep:  file:sl_mirrors # Scientific Linux
 Remap-gentoo: file:gentoo_mirrors.gz /gentoo ; file:backends_gentoo # Gentoo Archives
-
-# This is usually not needed for security.debian.org because it's always the
-# same DNS hostname. However, it might be enabled in order to use hooks
-# or ForceManaged mode or special flags in this context. Not set by default.
-# Remap-secdeb: security.debian.org
+Remap-secdeb: security.debian.org ; security.debian.org deb.debian.org/debian-security
 
 # Virtual page accessible in a web browser to see statistics and status
 # information, i.e. under http://localhost:3142/acng-report.html
@@ -420,8 +416,8 @@ LocalDirs: acng-doc @DOCDIR@
 # PassThroughPattern: private-ppa\.launchpad\.net:443$
 # PassThroughPattern: .* # this would allow CONNECT to everything
 #
-# Default:
-# PassThroughPattern: ^bugs\.debian\.org:443$
+# Default: ^(bugs\.debian\.org|changelogs\.ubuntu\.com):443$
+# PassThroughPattern: ^(bugs\.debian\.org|changelogs\.ubuntu\.com):443$
 
 # It's possible that an evil client requests a volatile file but does not
 # retrieve the response and keeps the connection effectively stuck over

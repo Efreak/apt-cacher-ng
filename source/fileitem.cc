@@ -786,7 +786,7 @@ bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 {
 	LOGSTART2("fileitem::GetFileItem", sPathUnescaped);
 
-	MYTRY
+	try
 	{
 		mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
 		lockguard lockGlobalMap(mapItemsMx);
@@ -834,7 +834,7 @@ bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 		m_ptr = sp;
 		return true;
 	}
-	MYCATCH(std::bad_alloc&)
+	catch(std::bad_alloc&)
 	{
 	}
 	return false;

@@ -488,7 +488,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 			|| startsWithSz(sReqPath, "/_"))
 		goto report_notallowed;
 
-    MYTRY
+    try
 	{
 		if (startsWithSz(sReqPath, "/HTTPS///"))
 			sReqPath.replace(0, 6, PROT_PFX_HTTPS);
@@ -567,7 +567,11 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		if ( m_type == FILE_INVALID )
 		{
 			if(!cfg::patrace)
+			{
+				// just for the log
+				m_sFileLoc = theUrl.sPath;
 				goto report_notallowed;
+			}
 
 			// ok, collect some information helpful to the user
 			m_type = FILE_VOLATILE;
@@ -588,7 +592,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 		m_pItem.PrepareRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
 	}
-	MYCATCH(std::out_of_range&) // better safe...
+	catch(std::out_of_range&) // better safe...
 	{
     	goto report_invpath;
     }
@@ -648,7 +652,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
     	}
     	
     	dbgline;
-MYTRY
+try
 		{
     		auto bHaveRedirects=(repoMapping.repodata && !repoMapping.repodata->m_backends.empty());
 
@@ -680,7 +684,7 @@ MYTRY
 					goto report_overload;
 				}
 		}
-		MYCATCH(std::bad_alloc&) // OOM, may this ever happen here?
+		catch(std::bad_alloc&) // OOM, may this ever happen here?
 		{
 			USRDBG( "Out of memory");
 			goto report_overload;
@@ -795,7 +799,7 @@ job::eJobResult job::SendData(int confd)
 
 	for(;;) // left by returning
 	{
-		MYTRY // for bad_alloc in members
+		try // for bad_alloc in members
 		{
 			switch(m_state)
 			{
@@ -901,7 +905,7 @@ job::eJobResult job::SendData(int confd)
 					/* Sends data from the local buffer, used for page or chunk headers.
 					* -> DELICATE STATE, should not be interrupted by exception or throw
 					* to another state path uncontrolled. */
-					MYTRY
+					try
 					{
 						ldbg("prebuf sending: "<< m_sendbuf.c_str());
 						auto r=send(confd, m_sendbuf.rptr(), m_sendbuf.size(),
@@ -921,7 +925,7 @@ job::eJobResult job::SendData(int confd)
 							continue;
 						}
 					}
-					MYCATCH(...)
+					catch(...)
 					{
 						return R_DISCON;
 					}
@@ -938,7 +942,7 @@ job::eJobResult job::SendData(int confd)
 					return R_DISCON;
 			}
 		}
-		MYCATCH(bad_alloc&) {
+		catch(bad_alloc&) {
 			// TODO: report memory failure?
 			return R_DISCON;
 		}

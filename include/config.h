@@ -30,14 +30,6 @@ namespace acng
 #define WEAK_PTR std::weak_ptr
 #define SCOPED_PTR std::auto_ptr
 
-#ifdef NO_EXCEPTIONS
-#define MYTRY
-#define MYCATCH(x) if(false)
-#else
-#define MYTRY try
-#define MYCATCH catch
-#endif
-
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif

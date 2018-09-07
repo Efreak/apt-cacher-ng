@@ -164,8 +164,8 @@ static void usage(int retCode) {
 		"-h: this help message\n"
 		"-c: configuration directory\n"
 		"-e: on startup, run expiration once\n"
-		"-p: print configuration and exit\n"
 		"-i: ignore configuration loading errors\n"
+		"-v: extra verbosity in logging\n"
 #if SUPPWHASH
 		"-H: read a password from STDIN and print its hash\n"
 #endif
@@ -176,7 +176,8 @@ static void usage(int retCode) {
 		"CacheDir: /directory/for/storage\n"
 		"LogDir: /directory/for/logfiles\n"
 		"\n"
-		"See configuration examples for all directives.\n\n";
+		"See configuration examples for all directives or run:\n"
+		"acngtool cfgdump\n\n";
 	exit(retCode);
 }
 

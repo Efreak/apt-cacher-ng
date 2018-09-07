@@ -36,9 +36,10 @@ string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
 		"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
 		"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
     "|/[[:alpha:]]{1,2}/[a-f0-9]{64}(-[a-f0-9]{64})?(\\.gz)?" // FreeBSD, after https://alioth.debian.org/tracker/?func=detail&atid=413111&aid=315254&group_id=100566
-    "|/dists/.*/by-hash/.*" // support Debian/Ubuntu by-hash index files
+    "|/by-hash/(SHA|MD)[0-9]+/.*" // support Debian/Ubuntu by-hash index files
     "|\\.asc$" // all remaining PGP signatures. Assuming that volatile ones are matched below.
     "|changelogs/pool/.*/changelog.txt$" // packages.ultimediaos.com
+    "|/objects/.*/.*\\.(dirtree|filez|commit|commitmeta)|/repo/deltas/.*" // FlatPak
 ")$");
 
 string svfilepat("/development/rawhide/.*"
@@ -76,6 +77,7 @@ string vfilepat(INFOLDER
 		"|wiki.ubuntu.com/.*/ReleaseNotes" // this is actually for an internal check and therefore contains the hostname
 		"|ubuntu/dists/.*\\.html" // http://archive.ubuntu.com/ubuntu/dists/vivid-updates/main/dist-upgrader-all/current/ReleaseAnnouncement.html
     "|metadata.(ftp-master.debian|tanglu).org/changelogs/.*" // some of them are not static
+    "|/refs/heads/app.*|/repo/(summary|config)(\\.sig)?|/Service/News$" // FlatPak
 );
 
 //string wfilepat( VPATPREFIX  "(Release|Release\\.gpg|release|meta-release|Translation[^/]*\\.bz2)$");

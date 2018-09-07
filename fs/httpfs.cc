@@ -545,7 +545,7 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 	struct stat stbuf;
 	rex::eMatchType ftype = rex::GetFiletype(path);
 
-	MYTRY
+	try
 	{
 		// ok... if that is a remote object, can we still use local access instead?
 		if(!altPath.empty() && rex::FILE_SOLID == ftype)
@@ -570,7 +570,7 @@ static int acngfs_open(const char *path, struct fuse_file_info *fi)
 			return -EIO;
 		}
 	}
-	MYCATCH(std::bad_alloc&)
+	catch(std::bad_alloc&)
 	{
 		return -EIO;
 	}

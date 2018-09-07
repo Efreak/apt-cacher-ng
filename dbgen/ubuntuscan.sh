@@ -25,7 +25,7 @@ src="$2"
 tempdir=${3:-$(mktemp -d)}
 sfx=${4:-/dists}
 # Debian is easy, Ubuntu is bad... no symbolic name. Try to match well known release names
-testkey=${5:-'updates\|stable\|unstable\|security\|backports\|feisty\|gutsy\|hardy\|intrepid\|jaunty\|karmic\|lucid\|maverick\|depper\|natty\|oneiric\|dapper\|edgy\|precise\|quantal\|raring\|saucy\|trusty\|vivid\|wily'}
+testkey=${5:-'updates\|stable\|unstable\|security\|backports\|feisty\|gutsy\|hardy\|intrepid\|jaunty\|karmic\|lucid\|maverick\|depper\|natty\|oneiric\|dapper\|edgy\|precise\|quantal\|raring\|saucy\|trusty\|vivid\|wily\|xenial\|yakkety\|zesty\|artful\|bionic\|cosmic'}
 
 mkdir -p $tempdir
 rm -f $tempdir/url.* $tempdir/log.*

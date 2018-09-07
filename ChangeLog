@@ -1,3 +1,14 @@
+apt-cacher-ng (3.2) MY-NAME-IS-ANYBODY; urgency=medium
+
+  * Maintenance release
+  * Basic support for FlatPak repositories
+  * Added flat by-hash structure to file patterns
+  * Allowing some Debian and Ubuntu services in default PassThroughPattern
+  * Various fixes in manpage and configuration examples
+  * Mirror database update
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 07 Sep 2018 12:55:46 +0200
+
 apt-cacher-ng (3.1) SPACE-COWBOYS-FOREVER; urgency=low
 
   * Hide credentials in acngtool in some corner cases (by astian)
