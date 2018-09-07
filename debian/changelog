@@ -9,6 +9,11 @@ apt-cacher-ng (3.2-1) unstable; urgency=low
       closes: #901292, #901294, #901295
     + Remove obsolete option from config output
       closes: #859680
+  * Removed the DISABLED flag from the init script (current Debian policy,
+    section 9.3.3.1)
+  * Raised the debconf priority to high for the question about proxy tunnel
+    permissions (like HTTPS) since there is no perfect default.
+    closes: #814359
 
  -- Eduard Bloch <blade@debian.org>  Fri, 07 Sep 2018 11:30:33 +0200
 

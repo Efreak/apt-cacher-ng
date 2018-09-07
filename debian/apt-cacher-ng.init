@@ -29,8 +29,6 @@ if [ -f /etc/default/apt-cacher-ng ] ; then
 	. /etc/default/apt-cacher-ng
 fi
 
-test -z "$DISABLED" || exit 0
-
 # our runtime state files directory, will be purged on startup!
 RUNDIR="/var/run/$NAME"
 
