@@ -3,6 +3,8 @@ DBTMP=tmp
 export DBTMP
 CONFDIR=conf
 export CONFDIR
+DEBMASTERLIST=https://salsa.debian.org/mirror-team/masterlist/raw/master/Mirrors.masterlist
+ARCHJSON=https://www.archlinux.de/mirrors/datatables
 
 # Main rule to be called to update all databases. Does two things, first get
 # and pre-filter raw data, second: check the sources and generate final lists,
@@ -23,8 +25,8 @@ $(DBTMP):
 # the get_* targets are intended to fetch data, but only change the key file (prerequisite for other rules) if the data has really changed
 # this is the first stage of the gendbs target. 
 get_deb_input: $(DBTMP)
-	wget -q -O $(DBTMP)/dsnap_raw 'http://anonscm.debian.org/viewvc/webwml/webwml/english/mirror/Mirrors.masterlist?view=markup'
-	grep file.line.text $(DBTMP)/dsnap_raw | sed -e 's,.*>,,' > $(DBTMP)/dsnap
+	wget -q -O $(DBTMP)/dsnap '$(DEBMASTERLIST)'
+	#grep file.line.text $(DBTMP)/dsnap_raw | sed -e 's,.*>,,' > $(DBTMP)/dsnap
 	md5sum $(DBTMP)/dsnap > $(DBTMP)/sig-debian
 	cmp sig-debian $(DBTMP)/sig-debian 2>/dev/null || cp $(DBTMP)/sig-debian sig-debian
 
@@ -86,8 +88,8 @@ $(CONFDIR)/cygwin_mirrors:
 	grep ^http: $(DBTMP)/cyg_raw | cut -f1 -d\; | sort -u > $(CONFDIR)/cygwin_mirrors
 
 $(CONFDIR)/archlx_mirrors:
-	wget -q --no-check-certificate -O $(DBTMP)/arch_raw 'https://archlinux.de/?page=MirrorStatus'
-	grep nofollow $(DBTMP)/arch_raw | cut -f2 -d'"'  | grep ^http: | sort -u > $(CONFDIR)/archlx_mirrors
+	wget -q -O $(DBTMP)/arch_raw '$(ARCHJSON)'
+	jq '.data[]' $(DBTMP)/arch_raw | jq .url -r | sort -u > $(CONFDIR)/archlx_mirrors
 
 $(CONFDIR)/deb_mirrors.gz: sig-debian deburlgen.pl
 	perl deburlgen.pl Archive-http < $(DBTMP)/dsnap > $(DBTMP)/dsnap.urls
@@ -122,4 +124,4 @@ package: $(DBTMP)
 install:
 	cp conf/*mirrors* /usr/lib/apt-cacher-ng/
 
-.PHONY: $(CONFDIR)/gentoo_mirrors.gz
+.PHONY: $(CONFDIR)/gentoo_mirrors.gz $(CONFDIR)/archlx_mirrors
