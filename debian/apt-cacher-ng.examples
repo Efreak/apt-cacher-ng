@@ -1,5 +1,0 @@
-conf/*.conf
-conf/debrep.hooks
-contrib/*.conf
-doc/000apt-cacher-ng-proxy
-dbgen/dbgenerator.tgz
