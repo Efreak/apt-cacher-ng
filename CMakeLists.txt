@@ -1,16 +1,10 @@
-cmake_minimum_required(VERSION 2.6.2)
+cmake_minimum_required(VERSION 3.0.2)
 
 set(CMAKE_LEGACY_CYGWIN_WIN32 0) # don't care for now... just expecting POSIX
 
-# we want the old policy to support cmake 2.x
-IF(POLICY CMP0056) # added in CMake 3.2
-   cmake_policy (SET CMP0056 OLD)
-ENDIF()
-IF (POLICY CMP0053) # added in CMake 3.1
-	cmake_policy (SET CMP0053 OLD) # use old-style @VAR@ expansion
-ENDIF (POLICY CMP0053)
+set(PACKAGE "apt-cacher-ng")
 
-PROJECT(ACNG CXX C)
+PROJECT(${PACKAGE} CXX C)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
@@ -24,37 +18,17 @@ INCLUDE(TestBigEndian)
 INCLUDE(CheckLibraryExists)
 INCLUDE(CheckSymbolExists)
 INCLUDE(FindPkgConfig)
+INCLUDE(GNUInstallDirs)
 
-set(PACKAGE "apt-cacher-ng")
 IF(NOT DEFINED(CMAKE_INSTALL_PREFIX))
 set(CMAKE_INSTALL_PREFIX "/usr/local" CACHE STRING "Target file space")
-ENDIF()
-IF(NOT DEFINED(DATADIR))
-	set(DATADIR "${CMAKE_INSTALL_PREFIX}/share" CACHE STRING "Shared data files directory")
 ENDIF()
 IF(NOT DEFINED(LIBDIR))
 	set(LIBDIR "${CMAKE_INSTALL_PREFIX}/lib/${PACKAGE}" CACHE STRING "Location of ${PACKAGE} extra files")
 ENDIF()
-IF(NOT DEFINED(DOCDIR))
-	set(DOCDIR "${DATADIR}/doc/${PACKAGE}" CACHE STRING "Location of documentation files")
-ENDIF()
-
-IF(NOT DEFINED(SYSCONFDIR))
-   if("${CMAKE_INSTALL_PREFIX}" STREQUAL "/usr")
-      set(SYSCONFDIR /etc)
-   else()
-      set(SYSCONFDIR ${CMAKE_INSTALL_PREFIX}/etc)
-   endif()
-ENDIF()
-
 if(NOT DEFINED(CFGDIR))
-set(CFGDIR "${SYSCONFDIR}/${PACKAGE}")
+	set(CFGDIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/${PACKAGE}")
 endif()
-
-if(NOT DEFINED(SBINDIR))
-set(SBINDIR "${CMAKE_INSTALL_PREFIX}/sbin")
-endif()
-
 if(NOT DEFINED(RUNDIR))
 	set(RUNDIR "/run")
 endif()
@@ -389,19 +363,13 @@ add_subdirectory(systemd)
 ###
 ### Extra install rules for static files
 ###
-if(NOT DEFINED(HTMLDIR))
-		set(HTMLDIR ${DOCDIR}/html)
-endif()
-if(NOT DEFINED(MANDIR))
-   set(MANDIR ${DATADIR}/man)
-endif()
-install(FILES doc/README doc/apt-cacher-ng.pdf DESTINATION ${DOCDIR})
-install(DIRECTORY doc/html/ DESTINATION ${HTMLDIR}
+install(FILES doc/README doc/${PACKAGE}.pdf DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(DIRECTORY doc/html/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/html
    FILES_MATCHING PATTERN "*.*")
-install(DIRECTORY doc/man/ DESTINATION ${MANDIR}/man8
+install(DIRECTORY doc/man/ DESTINATION ${CMAKE_INSTALL_MANDIR}/man8
    FILES_MATCHING PATTERN "*.8")
 if(NOT DEFINED(AVAHIDIR))
-   set(AVAHIDIR "${SYSCONFDIR}/avahi/services")
+	set(AVAHIDIR "${CMAKE_INSTALL_SYSCONFDIR}/avahi/services")
 endif()
 install(FILES contrib/apt-cacher-ng.service DESTINATION ${AVAHIDIR})
 
@@ -409,10 +377,7 @@ message("Installation settings:
 PACKAGE: ${PACKAGE}
 VERSION: ${ACVERSION}
 CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}
-DATADIR: ${DATADIR}
+CMAKE_INSTALL_FULL_SYSCONFDIR: ${CMAKE_INSTALL_FULL_SYSCONFDIR}
 LIBDIR: ${LIBDIR}
-DOCDIR: ${DOCDIR}
-SYSCONFDIR: ${SYSCONFDIR}
-CFGDIR: ${CFGDIR}
-SBINDIR: ${SBINDIR}
+AVAHIDIR: ${AVAHIDIR}
 ")

@@ -25,9 +25,9 @@
 #cmakedefine HAVE_SD_NOTIFY
 #cmakedefine HAVE_LINUX_EVENTFD
 #cmakedefine ACVERSION "@ACVERSION@"
-#cmakedefine CFGDIR "@CFGDIR@"
-#cmakedefine LIBDIR "@LIBDIR@"
-#cmakedefine DOCDIR "@DOCDIR@"
-#cmakedefine BINDIR "@BINDIR@"
-#cmakedefine SBINDIR "@SBINDIR@"
+#cmakedefine CFGDIR  "@CFGDIR@"
+#cmakedefine LIBDIR  "@LIBDIR@"
+#define DOCDIR  "@CMAKE_INSTALL_FULL_DOCDIR@"
+#define BINDIR  "@CMAKE_INSTALL_FULL_BINDIR@"
+#define SBINDIR "@CMAKE_INSTALL_FULL_SBINDIR@"
 #cmakedefine HAVE_CHECKSUM

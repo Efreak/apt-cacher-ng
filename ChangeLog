@@ -1,5 +1,9 @@
 apt-cacher-ng (3.3) FIXME; urgency=low
 
+  * Dropping support for CMake before v3.0.2, dropped most custom variables
+    for target locations, now relying on public CMake variables from
+    GNUInstallDirs module; for details, see
+    https://cmake.org/cmake/help/v3.2/module/GNUInstallDirs.html
   * INTERNAL: Overhauling code deployment, using a shared library (reducing
     installed file size by almost 20%)
 

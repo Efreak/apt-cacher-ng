@@ -35,13 +35,17 @@ Troubleshooting and integrator notes:
    compiler error" appears, first try -DUSE_LTO=off. Some installations also
    have a broken GNU linker, disabling LTO or installing gold (and restarting
    build process) might be advisable.
- - -DCMAKE_INSTALL_PREFIX=... specificies main directory to install (/usr/local is default)
- - -DCFGDIR=... (config directory, default is "etc" under CMAKE_INSTALL_PREFIX
-   or just /etc if CMAKE_INSTALL_PREFIX is /usr)
- - -DDOCDIR=... and -DLIBDIR=... specify target directories for docs resp.
-   supplementary files
- - see CMakeLists.txt for more paths that can be customized
- - Install halibut tool to rebuild the documentation, if needed
+ - CMAKE_INSTALL_... type of variables is used for most of the target directory
+   resolution, see
+   https://cmake.org/cmake/help/latest/module/GNUInstallDirs.html for details
+ - -DCMAKE_INSTALL_PREFIX=... specificies main directory to install (/usr/local
+   is default)
+ - -DCFGDIR=... for custom config directory, default is apt-cacher-ng under
+   CMAKE_INSTALL_SYSCONFDIR)
+ - -DLIBDIR=... for directory with utilities and supplementary files, default
+   is lib/apt-cacher-ng under $CMAKE_INSTALL_PREFIX
+ - see CMakeLists.txt for more variables that can be customized
+ - NOTE: install halibut tool to rebuild the documentation, if needed
 
 Configure to run on system startup:
 
