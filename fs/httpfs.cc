@@ -8,8 +8,6 @@
 #define LOCAL_DEBUG
 #include "debug.h"
 
-#include "acsyscap.h"
-
 #include "meta.h"
 #include "header.h"
 #include "caddrinfo.h"
@@ -22,9 +20,8 @@
 
 #include "fileitem.h"
 #include "dlcon.h"
+#include "fileio.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
 #ifdef HAVE_SYS_MOUNT_H
 #include <sys/param.h>
 #include <sys/mount.h>
@@ -32,19 +29,6 @@
 #ifdef HAVE_SYS_VFS_H
 #include <sys/vfs.h>
 #endif
-
-#include <unistd.h>
-#include <inttypes.h>
-#include <stdint.h>
-#include <pthread.h>
-#include <errno.h>
-#include <signal.h>
-
-#include <cstdio>
-#include <algorithm>
-#include <iostream>
-#include <list>
-
 
 #define FUSE_USE_VERSION 25
 #include <fuse.h>
@@ -60,12 +44,6 @@
 
 using namespace std;
 using namespace acng;
-
-// needing some local definitions to make the linker happy w/o the fat source
-namespace acng {
-cmstring sDefPortHTTP("3142"), sDefPortHTTPS("80");
-cmstring sEmptyString;
-}
 
 #ifdef SPAM
 #define _cerr(x) cerr << x
@@ -750,8 +728,6 @@ int main(int argc, char *argv[])
 	   nMyArgCount=3;
 	   altPath = argv[3];
    }
-
-
    
    // test mount point
    const char *mpoint = argv[nMyArgCount+1];

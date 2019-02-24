@@ -237,7 +237,7 @@ void CreateUnixSocket() {
 		g_vecSocks.emplace_back(g_sockunix);
 }
 
-void Setup()
+void ACNG_API Setup()
 {
 	LOGSTART2s("Setup", 0);
 	using namespace cfg;
@@ -354,7 +354,7 @@ void Setup()
 		log::err("Not creating Unix Domain Socket, fifo_path not specified");
 }
 
-int Run()
+int ACNG_API Run()
 {
 	LOGSTART2s("Run", "GoGoGo");
 

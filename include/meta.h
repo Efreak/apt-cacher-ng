@@ -72,7 +72,8 @@ typedef std::pair<LPCSTR, size_t> tPtrLen;
 #define SZPATHSEPUNIX "/"
 #define CPATHSEPWIN '\\'
 #define SZPATHSEPWIN "\\"
-extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS, hendl;
+extern std::string sDefPortHTTP, sDefPortHTTPS;
+extern cmstring sPathSep, sPathSepUnix, hendl;
 
 extern cmstring FAKEDATEMARK;
 
@@ -193,7 +194,7 @@ bool ParseKeyValLine(const mstring & sIn, mstring & sOutKey, mstring & sOutVal);
 
 extern cmstring PROT_PFX_HTTPS, PROT_PFX_HTTP;
 
-class tHttpUrl
+class ACNG_API tHttpUrl
 {
 
 private:
@@ -295,8 +296,8 @@ inline off_t atoofft(LPCSTR p, off_t nDefVal)
 	return p ? atoofft(p) : nDefVal;
 }
 
-mstring offttosH(off_t n);
-mstring offttosHdotted(off_t n);
+ACNG_API mstring offttosH(off_t n);
+ACNG_API mstring offttosHdotted(off_t n);
 tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted=false, bool bQuiet=false);
 
 //void MakeAbsolutePath(mstring &dirToFix, const mstring &reldir);
@@ -311,7 +312,7 @@ mstring DosEscape(cmstring &s);
 // just the bare minimum to make sure the string does not break HTML formating
 mstring html_sanitize(cmstring& in);
 
-mstring UserinfoEscape(cmstring &s);
+ACNG_API mstring UserinfoEscape(cmstring &s);
 
 #define pathTidy(s) { if(startsWithSz(s, "." SZPATHSEP)) s.erase(0, 2); tStrPos n(0); \
 	for(n=0;stmiss!=n;) { n=s.find(SZPATHSEP SZPATHSEP, n); if(stmiss!=n) s.erase(n, 1);}; \
@@ -332,7 +333,7 @@ mstring ltos(long n);
 mstring offttosH(off_t n);
 
 //template<typename charp>
-off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeString, charp *next)
+ACNG_API off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeString, charp *next)
 
 
 void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar);
@@ -441,14 +442,14 @@ struct extended_bool
 	inline extended_bool(bool val, Textra xtra = defval) : value(val), xdata(xtra) {};
 };
 
-void DelTree(cmstring &what);
+void ACNG_API DelTree(cmstring &what);
 
-struct tErrnoFmter: public mstring
+struct ACNG_API tErrnoFmter: public mstring
 {
 	tErrnoFmter(LPCSTR prefix = nullptr);
 };
 
-mstring EncodeBase64Auth(cmstring &sPwdString);
+ACNG_API mstring EncodeBase64Auth(cmstring &sPwdString);
 mstring EncodeBase64(LPCSTR data, unsigned len);
 
 #if defined(HAVE_SSL) || defined(HAVE_TOMCRYPT)

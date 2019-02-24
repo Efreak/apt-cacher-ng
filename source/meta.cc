@@ -26,8 +26,7 @@ namespace acng
 cmstring sPathSep(SZPATHSEP);
 cmstring sPathSepUnix(SZPATHSEPUNIX);
 #ifndef MINIBUILD
-cmstring sDefPortHTTP("80");
-cmstring sDefPortHTTPS("443");
+std::string ACNG_API sDefPortHTTP = "80", sDefPortHTTPS = "443";
 #endif
 
 cmstring PROT_PFX_HTTPS(WITHLEN("https://")), PROT_PFX_HTTP(WITHLEN("http://"));
@@ -125,7 +124,7 @@ void find_base_name(const char *in, const char * &pos, UINT &len)
 /*!
  * \brief Simple split function, outputs resulting tokens into a string vector, with or without purging the previous contents
  */
-tStrVec::size_type Tokenize(const string & in, const char *sep,
+ACNG_API tStrVec::size_type Tokenize(const string & in, const char *sep,
 		tStrVec & out, bool bAppend, std::string::size_type nStartOffset)
 {
 	if(!bAppend)
@@ -825,7 +824,7 @@ LPCSTR GetTypeSuffix(cmstring& s)
 	return pos == stmiss ? p + s.length() : p + pos;
 }
 
-off_t atoofft(LPCSTR p)
+off_t ACNG_API atoofft(LPCSTR p)
 {
 	using namespace std;
 	if(sizeof(long long) == sizeof(off_t))

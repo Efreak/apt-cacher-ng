@@ -27,7 +27,7 @@ class tcpconnect;
 class fileitem;
 typedef std::shared_ptr<tcpconnect> tDlStreamHandle;
 
-class tcpconnect
+class ACNG_API tcpconnect
 {
 public:
 	virtual ~tcpconnect();
@@ -91,7 +91,7 @@ public:
 	virtual ~IDlConFactory() {};
 };
 
-class dl_con_factory : public IDlConFactory
+class ACNG_API dl_con_factory : public IDlConFactory
 {
 public:
 	/// Moves the connection handle to the reserve pool (resets the specified sptr).

@@ -14,7 +14,7 @@ namespace acng
  * It also encapsulates some typical operations on it.
  */
 
-class acbuf
+class ACNG_API acbuf
 {
     public:
         inline acbuf() : r(0), w(0), m_nCapacity(0), m_buf(nullptr) {};
@@ -80,7 +80,7 @@ class acbuf
  * What it also makes possible: use itself as a string, use alternative add() operators
  * for strings which can also specify the length, and it runs faster with zero-terminated strings.
  */
-class tSS : public acbuf
+class ACNG_API tSS : public acbuf
 {
 public:
 // map char array to buffer pointer and size

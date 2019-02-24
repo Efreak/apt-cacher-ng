@@ -39,7 +39,7 @@ typedef std::list<tDlJobPtr> tDljQueue;
  * In addition, there is a local blacklist which is applied to all download jobs in the queue,
  * i.e. remotes marked as faulty there are no longer considered by the subsequent download jobs.
  */
-class dlcon : public base_with_mutex
+class ACNG_API dlcon : public base_with_mutex
 { 
     public:
         dlcon(bool bManualExecution, mstring *xff=nullptr,

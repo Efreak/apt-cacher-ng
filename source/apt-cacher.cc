@@ -55,8 +55,6 @@ extern mstring sReplDir;
 
 typedef struct sigaction tSigAct;
 
-cleaner g_victor;
-
 #ifdef HAVE_DAEMON
 inline bool fork_away()
 {
@@ -238,7 +236,7 @@ void sig_handler(int signum)
 	case (SIGTERM):
 	case (SIGINT):
 	case (SIGQUIT): {
-		g_victor.Stop();
+		cleaner::GetInstance().Stop();
 		log::close(false);
     if (!cfg::pidfile.empty())
        unlink(cfg::pidfile.c_str());
@@ -249,6 +247,7 @@ void sig_handler(int signum)
 		if (sigaction(signum, &act, nullptr))
 			abort(); // shouldn't be needed, but have a sane fallback in case
 		raise(signum);
+		return;
 	}
 	default:
 		return;

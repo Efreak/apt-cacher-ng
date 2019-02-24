@@ -23,7 +23,7 @@ using namespace std;
 namespace acng
 {
 #define MAXTEMPDELAY acng::cfg::maxtempdelay // 27
-mstring sReplDir("_altStore" SZPATHSEP);
+mstring ACNG_API sReplDir("_altStore" SZPATHSEP);
 
 static tFiGlobMap mapItems;
 #ifndef MINIBUILD
@@ -763,7 +763,7 @@ inline void fileItemMgmt::Unreg()
 				m_ptr->m_status == fileitem::FIST_COMPLETE &&
 				((when=m_ptr->m_nTimeDlStarted+MAXTEMPDELAY) > GetTime()))
 		{
-			g_victor.ScheduleFor(when, cleaner::TYPE_EXFILEITEM);
+			cleaner::GetInstance().ScheduleFor(when, cleaner::TYPE_EXFILEITEM);
 			return;
 		}
 

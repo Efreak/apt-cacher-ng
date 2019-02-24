@@ -1,3 +1,10 @@
+apt-cacher-ng (3.3) FIXME; urgency=low
+
+  * INTERNAL: Overhauling code deployment, using a shared library (reducing
+    installed file size by almost 20%)
+
+ -- 
+
 apt-cacher-ng (3.2) MY-NAME-IS-ANYBODY; urgency=medium
 
   * Maintenance release

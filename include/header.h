@@ -9,7 +9,7 @@
 namespace acng
 {
 
-class header {
+class ACNG_API header {
    public:
       enum eHeadType : char
 	  {

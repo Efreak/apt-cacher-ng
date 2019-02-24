@@ -7,10 +7,6 @@
 #include <dirwalk.h>
 #include <fcntl.h>
 
-#ifdef HAVE_SSL
-#include <openssl/evp.h>
-#endif
-
 #include <stddef.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -39,15 +35,6 @@
 #include "fileio.h"
 #include "fileitem.h"
 
-#ifdef HAVE_SSL
-#include "openssl/bio.h"
-#include "openssl/ssl.h"
-#include "openssl/err.h"
-#include <openssl/rand.h>
-#include <openssl/sha.h>
-#include <openssl/crypto.h>
-#endif
-
 #include "filereader.h"
 #include "csmapping.h"
 #include "cleaner.h"
@@ -57,23 +44,13 @@ using namespace acng;
 
 bool g_bVerbose = false;
 
-// dummies to satisfy references
-namespace acng
-{
-LPCSTR ReTest(LPCSTR);
-cleaner::cleaner() : m_thr(pthread_t()) {}
-cleaner::~cleaner() {}
-void cleaner::ScheduleFor(time_t, cleaner::eType) {}
-cleaner g_victor;
-}
-
-struct IFitemFactory
+struct ACNG_API IFitemFactory
 {
 	virtual SHARED_PTR<fileitem> Create() =0;
 	virtual ~IFitemFactory() =default;
 };
 
-struct CPrintItemFactory : public IFitemFactory
+struct ACNG_API CPrintItemFactory : public IFitemFactory
 {
 	virtual SHARED_PTR<fileitem> Create()
 	{
@@ -968,6 +945,8 @@ std::unordered_map<string, parm> parms = {
 int main(int argc, const char **argv)
 {
 	using namespace acng;
+	// ensure a harmless object just in case any activity wants to run anything there
+	cleaner::GetInstance(false).notifyAll();
 
 	string exe(argv[0]);
 	unsigned aOffset=1;

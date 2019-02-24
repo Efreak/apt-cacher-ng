@@ -230,7 +230,7 @@ void err(const char *msg, const char *client)
 		fErr.flush();
 }
 
-void flush()
+void ACNG_API flush()
 {
 	if(!logIsEnabled)
 		return;

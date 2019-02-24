@@ -39,7 +39,7 @@ bool CompileExpressions();
 
 namespace cfg {
 
-bool g_bQuiet=false, g_bNoComplex=false;
+bool ACNG_API g_bQuiet=false, g_bNoComplex=false;
 
 extern std::atomic_bool degraded;
 
@@ -369,7 +369,8 @@ tProperty* GetPropPtr(cmstring& key)
 	return nullptr;
 }
 
-int * GetIntPtr(LPCSTR key) {
+int * GetIntPtr(LPCSTR key)
+{
 	for(auto &ent : n2iTbl)
 		if(0==strcasecmp(key, ent.name))
 			return ent.ptr;
@@ -620,7 +621,7 @@ struct tHookHandler: public tRepoData::IHookHandler, public base_with_mutex
 		{
 			//system(cmdRel.c_str());
 			downTimeNext = ::time(0) + downDuration;
-			g_victor.ScheduleFor(downTimeNext, cleaner::TYPE_ACFGHOOKS);
+			cleaner::GetInstance().ScheduleFor(downTimeNext, cleaner::TYPE_ACFGHOOKS);
 		}
 	}
 	virtual void OnAccess() override
@@ -1408,7 +1409,7 @@ namespace rex
 	struct { regex_t *pat=nullptr, *extra=nullptr; } rex[ematchtype_max];
 	vector<regex_t> vecReqPatters, vecTgtPatterns;
 
-bool CompileExpressions()
+bool ACNG_API CompileExpressions()
 {
 	auto compat = [](regex_t* &re, LPCSTR ps)
 	{
@@ -1462,7 +1463,7 @@ bool Match(cmstring &in, eMatchType type)
 		|| (type == FILE_VOLATILE && MatchType(in, FILE_SPECIAL_VOLATILE));
 }
 
-eMatchType GetFiletype(const string & in)
+ACNG_API eMatchType GetFiletype(const string & in)
 {
 	if (MatchType(in, FILE_SPECIAL_VOLATILE))
 		return FILE_VOLATILE;

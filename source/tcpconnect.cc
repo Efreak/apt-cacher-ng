@@ -52,8 +52,8 @@ extern "C"
 namespace acng
 {
 
-std::atomic_uint dl_con_factory::g_nconns(0);
-dl_con_factory g_tcp_con_factory;
+ACNG_API std::atomic_uint dl_con_factory::g_nconns(0);
+ACNG_API dl_con_factory g_tcp_con_factory;
 
 tcpconnect::tcpconnect(cfg::tRepoData::IHookHandler *pObserver) : m_pStateObserver(pObserver)
 {
@@ -401,7 +401,7 @@ void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
 			EMPLACE_PAIR_COMPAT(spareConPool, make_tuple(host, handle->GetPort()
 					SSL_OPT_ARG(handle->m_bio) ), make_pair(handle, now));
 #ifndef MINIBUILD
-			g_victor.ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
+			cleaner::GetInstance().ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
 #endif
 		}
 #endif
@@ -619,7 +619,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 }
 
 //! Global initialization helper (might be non-reentrant)
-void globalSslInit()
+void ACNG_API globalSslInit()
 {
 	static bool inited=false;
 	if(inited)

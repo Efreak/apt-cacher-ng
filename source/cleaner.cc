@@ -24,7 +24,7 @@ using namespace std;
 namespace acng
 {
 
-cleaner::cleaner() : m_thr(0)
+cleaner::cleaner(bool noop) : m_thr(0), m_noop(noop)
 {
 	Init();
 }
@@ -118,6 +118,8 @@ inline void * CleanerThreadAction(void *pVoid)
 
 void cleaner::ScheduleFor(time_t when, eType what)
 {
+	if(m_noop) return;
+
 	setLockGuard;
 	if(m_thr == 0)
 	{
@@ -166,12 +168,17 @@ void cleaner::dump_status()
 }
 
 
-void dump_handler(int) {
+void ACNG_API dump_handler(int) {
 	fileItemMgmt::dump_status();
-	g_victor.dump_status();
+	cleaner::GetInstance().dump_status();
 	g_tcp_con_factory.dump_status();
 	cfg::dump_trace();
 }
 
+cleaner& cleaner::GetInstance(bool initAsNoop)
+{
+	static cleaner g_victor(initAsNoop);
+	return g_victor;
+}
 
 }
