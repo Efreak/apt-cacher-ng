@@ -48,8 +48,8 @@ dlcon::dlcon(bool bManualExecution, string *xff, IDlConFactory *pConFactory) :
 {
 	LOGSTART("dlcon::dlcon");
 #ifdef HAVE_LINUX_EVENTFD
-	m_wakeventfd=eventfd(0, 0);
-	if(m_wakeventfd>=0)
+	m_wakeventfd = eventfd(0, 0);
+	if(m_wakeventfd >= 0)
 		set_nb(m_wakeventfd);
 #else
 	if (0 == pipe(m_wakepipe))
