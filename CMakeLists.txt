@@ -80,7 +80,7 @@ if(CXX_VIHI)
         _append(ACNG_CXXFLAGS -fvisibility-inlines-hidden)
 endif()
 
-foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1 -Wl,-fuse-ld=gold -Wl,--threads)
+foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1 -Wl,fuse-ld=gold)
 	STRING(REGEX REPLACE "=|-|," "" optname "${linkarg}")
 	set(CMAKE_REQUIRED_FLAGS "${linkarg}")
 	CHECK_CXX_COMPILER_FLAG("" "LD_${optname}")
@@ -89,6 +89,13 @@ foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl
 	endif()
 	set(CMAKE_REQUIRED_FLAGS "")
 endforeach(linkarg)
+
+#set(CMAKE_REQUIRED_FLAGS "-Wl,-fuse-ld=gold -Wl,--threads")
+#CHECK_CXX_COMPILER_FLAG("" LD_GOLDLINKER)
+#if(LD_GOLDLINKER)
+#        _append(CMAKE_EXE_LINKER_FLAGS "-Wl,-fuse-ld=gold -Wl,--threads")
+#endif()
+#set(CMAKE_REQUIRED_FLAGS "")
 
 option(USE_SSL "Use OpenSSL library for TLS and other crypto functionality" on)
 
