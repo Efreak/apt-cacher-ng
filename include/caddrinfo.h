@@ -2,19 +2,10 @@
 #define CADDRINFO_H_
 
 #include "meta.h"
-#include "rfc2553emu.h"
 #include "lockable.h"
- 
-#ifndef HAVE_GETADDRINFO
 
-#warning Not sure about gai_strerror, and this define check is stupid/incorrect too
-#warning but most likely it is missing too -> fake it
-
-#ifndef gai_strerror
-#define gai_strerror(x) "Generic DNS error"
-#endif
-
-#endif
+#include <event2/util.h>
+#include "sockio.h"
 
 namespace acng
 {
@@ -28,7 +19,7 @@ public:
 	time_t m_nExpTime=0;
 
 	// hint to the first descriptor of any TCP type
-	struct addrinfo * m_addrInfo=nullptr;
+	evutil_addrinfo * m_addrInfo=nullptr;
 	
 	CAddrInfo() =default;
 	bool Resolve(const mstring & sHostname, const mstring &sPort, mstring & sErrorBuf);
@@ -38,7 +29,7 @@ public:
 			mstring &sErrorMsgBuf);
 
 protected:
-	struct addrinfo * m_resolvedInfo=nullptr; // getaddrinfo excrements, to cleanup
+	evutil_addrinfo * m_resolvedInfo=nullptr; // getaddrinfo excrements, to cleanup
 private:
 	// not to be copied ever
 	CAddrInfo(const CAddrInfo&) = delete;

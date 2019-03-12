@@ -271,6 +271,15 @@ SET(CMAKE_REQUIRED_LIBRARIES "")
 
 set(HAVE_CHECKSUM on)
 
+pkg_check_modules(libevent libevent)
+if(NOT libevent_FOUND)
+        message(FATAL_ERROR "!! Error: proper libevent installation is required")
+else()
+        string(REPLACE ";" " " ACNG_COMPFLAGS "${ACNG_COMPFLAGS} ${libevent_CFLAGS}")
+        LIST(APPEND BaseNetworkLibs ${libevent_LDFLAGS})
+endif()
+
+
 if(USE_SSL)
 	pkg_check_modules(openssl "openssl>=1.0.2")
 	if(openssl_FOUND)

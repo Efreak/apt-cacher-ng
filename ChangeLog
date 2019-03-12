@@ -7,6 +7,8 @@ apt-cacher-ng (3.3) SO-LONG-AND-THANKS-FOR-THE-LOBSTER; urgency=low
   * Dropping support for OpenSSL before 1.0.2
   * INTERNAL: Overhauling code deployment, using a shared library (reducing
     installed file size by almost 20%)
+  * INTERNAL: dropped rfc2553emu code from old APT, using the platform
+    abstraction from libevent instead
 
  -- 
 

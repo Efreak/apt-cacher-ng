@@ -39,7 +39,7 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 
 	LPCSTR port = sPort.empty() ? nullptr : sPort.c_str();
 
-	static struct addrinfo hints =
+	static evutil_addrinfo hints =
 	{
 	// we provide numbers, no resolution needed; only supported addresses
 			(port ? AI_NUMERICSERV:0) | AI_ADDRCONFIG,
@@ -56,7 +56,7 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 		m_resolvedInfo=nullptr;
 	}
 
-	int r=getaddrinfo(sHostname.c_str(), port, &hints, &m_resolvedInfo);
+	int r=evutil_getaddrinfo(sHostname.c_str(), port, &hints, &m_resolvedInfo);
 
 	if (0!=r)
 	{

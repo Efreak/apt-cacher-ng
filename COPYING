@@ -2,11 +2,7 @@ Author: Eduard Bloch <blade@debian.org>
 
 Copyright: 
 
-apt-cacher-ng: (C) 2006-2012 Eduard Bloch <blade@debian.org>
-getaddrinfo emulation: (C) 2001, Jason Gunthorpe <jgg@debian.org>
-Alternative SSL host validation:
-Copyright (C) 2012, iSEC Partners.
-Copyright (C) 1998 - 2012, Daniel Stenberg, <daniel@haxx.se>, et al.
+apt-cacher-ng: (C) 2006-2019 Eduard Bloch <blade@debian.org>
 
 License:
 
@@ -15,7 +11,7 @@ the terms listed under I unless specified otherwise in the beginning of the
 particular file. The package includes additional code from external source,
 covered by the following licenses.
 
-I. Apt-Cacher NG (all files except for specified below)
+I. Apt-Cacher NG (all files except where specified otherwise)
 
 Copyright (c) 2007-2012 Eduard Bloch.
 All rights reserved.
@@ -45,20 +41,4 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
 LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-II. */rfc2553emu.*
-
-// $Id: rfc2553emu.cc,v 1.8 2001/02/20 07:03:18 jgg Exp $
-/* ######################################################################
-
-   RFC 2553 Emulation - Provides emulation for RFC 2553 getaddrinfo,
-                        freeaddrinfo and getnameinfo
-
-   This is really C code, it just has a .cc extensions to play nicer with
-   the rest of APT.
-   
-   Originally written by Jason Gunthorpe <jgg@debian.org> and placed into
-   the Public Domain, do with it what you will.
-
-   ##################################################################### */
 

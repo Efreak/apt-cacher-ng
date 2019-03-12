@@ -3,9 +3,8 @@
 #include "meta.h"
 #include "lockable.h"
 #include "conn.h"
-#include "rfc2553emu.h"
 #include "acfg.h"
-
+#include <event2/util.h>
 #include "sockio.h"
 #include "fileio.h"
 #include <signal.h>
@@ -250,7 +249,7 @@ void ACNG_API Setup()
 	
 	if (atoi(port.c_str())>0)
 	{
-		auto hints = addrinfo();
+		auto hints = evutil_addrinfo();
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE;
 		hints.ai_family = 0;
@@ -259,8 +258,8 @@ void ACNG_API Setup()
 		{
 			LOGSTART2s("Setup::ConAddr", 0);
 
-		    struct addrinfo *res, *p;
-		    if(0!=getaddrinfo(addi, port.c_str(), &hints, &res))
+		    evutil_addrinfo *res, *p;
+		    if(0!=evutil_getaddrinfo(addi, port.c_str(), &hints, &res))
 		    {
 		    	perror("Error resolving address for binding");
 		    	return;
