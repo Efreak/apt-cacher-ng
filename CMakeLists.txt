@@ -1,6 +1,11 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.1)
 
-set(CMAKE_LEGACY_CYGWIN_WIN32 0) # don't care for now... just expecting POSIX
+# enforce minimal C++ language level
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED on)
+
+# don't care for now... just expecting POSIX
+set(CMAKE_LEGACY_CYGWIN_WIN32 0)
 
 set(PACKAGE "apt-cacher-ng")
 
@@ -124,29 +129,6 @@ else()
            _append(CMAKE_SHARED_LINKER_FLAGS -Wl,--gc-sections)
    endif()
    set(CMAKE_REQUIRED_FLAGS "")
-endif()
-
-# XXX: could use the modern macros instead but they were not available in CMake 2.x
-FILE(READ test/build/testcxx11.cc CXX11_TESTSRC)
-CHECK_CXX_SOURCE_COMPILES("${CXX11_TESTSRC}" COMPILER_SUPPORTS_DEFAULT_CXX11)
-if(NOT COMPILER_SUPPORTS_DEFAULT_CXX11)
-   # prefer that style if possible since since Cygwin seems to have an old bug with missing definitions, http://cygwin.com/ml/cygwin/2012-04/msg00140.html
-   CHECK_CXX_COMPILER_FLAG(-std=gnu++11 COMPILER_SUPPORTS_GNU11)
-   if(COMPILER_SUPPORTS_GNU11)
-           _append(ACNG_CXXFLAGS -std=gnu++11)
-   else()
-      CHECK_CXX_COMPILER_FLAG(-std=c++11 COMPILER_SUPPORTS_CXX11)
-      if(COMPILER_SUPPORTS_CXX11)
-           _append(ACNG_CXXFLAGS -std=c++11)
-      else()
-         CHECK_CXX_COMPILER_FLAG(-std=c++0x COMPILER_SUPPORTS_CXX0X)
-         if(COMPILER_SUPPORTS_CXX0X)
-           _append(ACNG_CXXFLAGS -std=c++0x)
-         else()
-            message(FATAL_ERROR "!! Error: failed to configure compiler for C++11 support. For GCC, version 4.7 or newer is required.")
-         endif()
-      endif()
-   endif()
 endif()
 
 option(USE_LTO "Enable Link Time Optimization (requires modern compilers)" ${USE_LTO_DEFAULT})

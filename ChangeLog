@@ -1,6 +1,6 @@
-apt-cacher-ng (3.3) FIXME; urgency=low
+apt-cacher-ng (3.3) SO-LONG-AND-THANKS-FOR-THE-LOBSTER; urgency=low
 
-  * Dropping support for CMake before v3.0.2, dropped most custom variables
+  * Dropping support for CMake prior to v3.1, dropped most custom variables
     for target locations, now relying on public CMake variables from
     GNUInstallDirs module; for details, see
     https://cmake.org/cmake/help/v3.2/module/GNUInstallDirs.html
