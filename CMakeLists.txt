@@ -358,7 +358,7 @@ install(DIRECTORY doc/html/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/html
 install(DIRECTORY doc/man/ DESTINATION ${CMAKE_INSTALL_MANDIR}/man8
    FILES_MATCHING PATTERN "*.8")
 if(NOT DEFINED(AVAHIDIR))
-	set(AVAHIDIR "${CMAKE_INSTALL_SYSCONFDIR}/avahi/services")
+        set(AVAHIDIR "${CMAKE_INSTALL_FULL_SYSCONFDIR}/avahi/services")
 endif()
 install(FILES contrib/apt-cacher-ng.service DESTINATION ${AVAHIDIR})
 
