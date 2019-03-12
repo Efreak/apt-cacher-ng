@@ -42,12 +42,6 @@ atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 #include <openssl/x509_vfy.h>
 #include <openssl/x509v3.h>
 #endif
-#ifndef HAVE_SSL_HOST_VALIDATION
-extern "C"
-{
-#include "oldssl-workaround/openssl_hostname_validation.h"
-}
-#endif
 
 namespace acng
 {
@@ -524,12 +518,10 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	SSL_set_tlsext_host_name(ssl, sHostname.c_str());
 
 	{
-#ifdef HAVE_SSL_HOST_VALIDATION
 		auto param = SSL_get0_param(ssl);
 		/* Enable automatic hostname checks */
 		X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
 		X509_VERIFY_PARAM_set1_host(param, sHostname.c_str(), 0);
-#endif
 		/* Configure a non-zero callback if desired */
 		SSL_set_verify(ssl, SSL_VERIFY_PEER, 0);
 	}
@@ -603,14 +595,7 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 		{
 			// XXX: maybe extract the real name to a buffer and report it additionally?
 			// X509_NAME_oneline(X509_get_subject_name (server_cert), cert_str, sizeof (cert_str));
-#ifndef HAVE_SSL_HOST_VALIDATION
-			auto hcResult=validate_hostname(sHostname.c_str(), server_cert);
 			X509_free(server_cert);
-			if(hcResult != HostnameValidationResult::MatchFound)
-				return withSslError("Incorrect remote certificate configuration");
-#else
-			X509_free(server_cert);
-#endif
 		}
 		else // The handshake was successful although the server did not provide a certificate
 			return withSslError("Incompatible remote certificate");

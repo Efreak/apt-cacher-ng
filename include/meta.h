@@ -328,9 +328,9 @@ ACNG_API mstring UserinfoEscape(cmstring &s);
 
 off_t GetFileSize(cmstring & path, off_t defret);
 
-mstring offttos(off_t n);
-mstring ltos(long n);
-mstring offttosH(off_t n);
+ACNG_API mstring offttos(off_t n);
+ACNG_API mstring ltos(long n);
+ACNG_API mstring offttosH(off_t n);
 
 //template<typename charp>
 ACNG_API off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeString, charp *next)

@@ -283,19 +283,11 @@ SET(CMAKE_REQUIRED_LIBRARIES "")
 set(HAVE_CHECKSUM on)
 
 if(USE_SSL)
-	pkg_check_modules(openssl openssl)
+	pkg_check_modules(openssl "openssl>=1.0.2")
 	if(openssl_FOUND)
 		set(HAVE_SSL on)
     _append(ACNG_COMPFLAGS ${openssl_CFLAGS})
     _append(SSL_LIB_LIST ${openssl_LDFLAGS})
-
-    # also check for official host checking code
-    set(CMAKE_REQUIRED_INCLUDES ${openssl_CFLAGS})
-    set(CMAKE_REQUIRED_LIBRARIES ${openssl_LDFLAGS})
-    check_symbol_exists(SSL_get0_param openssl/ssl.h HAVE_SSL_HOST_VALIDATION)
-    if(NOT HAVE_SSL_HOST_VALIDATION)
-            message(WARNING "Detected OpenSSL version lacks hostname validation feature. Using a custom implementation for now but an update of OpenSSL is advisable!")
-    endif()
 	else()
 		message(WARNING "OpenSSL not found, disabling TLS connection support")
 		set(HAVE_SSL off)
@@ -353,7 +345,6 @@ SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
 CONFIGURE_FILE("${CMAKE_SOURCE_DIR}/include/acsyscap.h.in" "${CMAKE_BINARY_DIR}/acsyscap.h")
 
-add_subdirectory(oldssl-workaround)
 add_subdirectory(client)
 add_subdirectory(fs)
 add_subdirectory(source)

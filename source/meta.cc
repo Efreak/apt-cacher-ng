@@ -324,7 +324,7 @@ string tHttpUrl::ToURI(bool bUrlEscaped) const
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 
-tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
+ACNG_API tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
 {
 	tStrDeq srcs;
 #ifdef HAVE_WORDEXP

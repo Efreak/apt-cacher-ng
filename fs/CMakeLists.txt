@@ -20,7 +20,7 @@ if(fuse_FOUND AND HAVE_FUSE_25)
                 list(APPEND fsSRCS ../source/aclogger.cc)
         endif()
 
-        ADD_EXECUTABLE(acngfs ${fsSRCS} $<TARGET_OBJECTS:osslcompat>)
+        ADD_EXECUTABLE(acngfs ${fsSRCS})
         SET_TARGET_PROPERTIES(acngfs PROPERTIES COMPILE_FLAGS "${ACNG_COMPFLAGS} ${ACNG_CXXFLAGS} ${acngfs_cflags}")
         INSTALL(TARGETS acngfs DESTINATION ${LIBDIR})
         if(HAVE_DLOPEN)

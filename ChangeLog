@@ -4,6 +4,7 @@ apt-cacher-ng (3.3) FIXME; urgency=low
     for target locations, now relying on public CMake variables from
     GNUInstallDirs module; for details, see
     https://cmake.org/cmake/help/v3.2/module/GNUInstallDirs.html
+  * Dropping support for OpenSSL before 1.0.2
   * INTERNAL: Overhauling code deployment, using a shared library (reducing
     installed file size by almost 20%)
 
