@@ -1,6 +1,7 @@
 #ifndef CONSERVER_H_
 #define CONSERVER_H_
 
+#include "meta.h"
 
 namespace acng
 {
@@ -8,13 +9,13 @@ namespace acng
 namespace conserver {
 
 /*! Prepares the connection handlers and internal things, binds, listens, etc.
- * @return Nothing, uses exit to abort
+ * @return Number of created listeners.
  */
-void Setup();
+int Setup();
 /// Start the service
 int Run();
 /// Stop all running connections sanely and threads if possible
-void Shutdown();
+ACNG_API void Shutdown();
 
 }
 

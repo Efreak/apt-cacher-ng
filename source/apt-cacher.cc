@@ -39,15 +39,18 @@ using namespace std;
 #endif
 
 #include "maintenance.h"
+#include "evabase.h"
+#include <event2/event.h>
 
 namespace acng
 {
 
 static void usage(int nRetCode=0);
 static void SetupCacheDir();
-void sig_handler(int signum);
-void log_handler(int signum);
-void dump_handler(int signum);
+void term_handler(evutil_socket_t fd, short what, void *arg);
+void log_handler(evutil_socket_t fd, short what, void *arg);
+void dump_handler(evutil_socket_t fd, short what, void *arg);
+void noop_handler(evutil_socket_t fd, short what, void *arg);
 void handle_sigbus();
 void check_algos();
 
@@ -131,28 +134,18 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 
 void setup_sighandler()
 {
-	tSigAct act = tSigAct();
-
-	sigfillset(&act.sa_mask);
-	act.sa_handler = &sig_handler;
-	sigaction(SIGBUS, &act, nullptr);
-	sigaction(SIGTERM, &act, nullptr);
-	sigaction(SIGINT, &act, nullptr);
-	sigaction(SIGQUIT, &act, nullptr);
-
-	act.sa_handler = &dump_handler;
-	sigaction(SIGUSR2, &act, nullptr);
-
-	act.sa_handler = &log_handler;
-	sigaction(SIGUSR1, &act, nullptr);
-
-	act.sa_handler = SIG_IGN;
-	sigaction(SIGPIPE, &act, nullptr);
+	auto ebase = evabase::instance->base;
+	auto what = EV_SIGNAL|EV_PERSIST;
+#define REGSIG(x,y) event_add(::event_new(ebase, x, what, & y, 0), nullptr);
+	for(int snum : {SIGBUS, SIGTERM, SIGINT, SIGQUIT}) REGSIG(snum, term_handler);
+	REGSIG(SIGUSR1, log_handler);
+	REGSIG(SIGUSR2, dump_handler);
+	REGSIG(SIGPIPE, noop_handler);
 #ifdef SIGIO
-	sigaction(SIGIO, &act, nullptr);
+	REGSIG(SIGIO, noop_handler);
 #endif
 #ifdef SIGXFSZ
-	sigaction(SIGXFSZ, &act, nullptr);
+	REGSIG(SIGXFSZ, noop_handler);
 #endif
 }
 
@@ -214,12 +207,18 @@ static void SetupCacheDir()
 	exit(1);
 }
 
-void log_handler(int)
+void log_handler(evutil_socket_t, short, void*)
 {
 	log::close(true);
 }
 
-void sig_handler(int signum)
+void noop_handler(evutil_socket_t, short, void*)
+{
+	//XXX: report weird signals?
+}
+
+
+void term_handler(evutil_socket_t signum, short what, void *arg)
 {
 	dbgprint("caught signal " << signum);
 	switch (signum) {
@@ -235,11 +234,13 @@ void sig_handler(int signum)
 		__just_fall_through;
 	case (SIGTERM):
 	case (SIGINT):
-	case (SIGQUIT): {
+	case (SIGQUIT):
+	{
 		cleaner::GetInstance().Stop();
 		log::close(false);
-    if (!cfg::pidfile.empty())
-       unlink(cfg::pidfile.c_str());
+		if (!cfg::pidfile.empty())
+			unlink(cfg::pidfile.c_str());
+		conserver::Shutdown();
 		// and then terminate, resending the signal to default handler
 		tSigAct act = tSigAct();
 		sigfillset(&act.sa_mask);
@@ -275,13 +276,20 @@ int main(int argc, const char **argv)
 	}
 
 	check_algos();
+	evabase::instance = std::make_shared<evabase>();
+
 	setup_sighandler();
 
 	SetupCacheDir();
 
 	DelTree(cfg::cacheDirSlash+sReplDir);
 
-	conserver::Setup();
+	if(conserver::Setup() <= 0)
+	{
+		cerr << "No listening socket(s) could be created/prepared. "
+		"Check the network, check or unset the BindAddress directive.\n";
+		exit(EXIT_FAILURE);
+	}
 
 	if (bRunCleanup)
 	{

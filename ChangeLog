@@ -11,6 +11,7 @@ apt-cacher-ng (3.3) SO-LONG-AND-THANKS-FOR-THE-LOBSTER; urgency=low
     installed file size by almost 20%)
   * INTERNAL: dropped rfc2553emu code from old APT, using the platform
     abstraction from libevent instead
+  * INTERNAL: partial redesign for singlethreaded IO operation
 
  -- 
 

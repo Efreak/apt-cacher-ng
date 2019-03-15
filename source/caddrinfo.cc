@@ -25,13 +25,13 @@ base_with_condition dnsCacheCv;
 map<string,CAddrInfoPtr> dnsCache;
 list<decltype(dnsCache)::iterator> dnsCleanupQ;
 
-int CAddrInfo::ResolveRaw(const string & sHostname, const string &sPort, const evutil_addrinfo* hints)
+int CAddrInfo::ResolveRaw(const char* sHostname, const string &sPort, const evutil_addrinfo* hints)
 {
 	Reset();
 
 	LPCSTR port_requested = sPort.empty() ? nullptr : sPort.c_str();
 
-	return evutil_getaddrinfo(sHostname.c_str(), port_requested, hints, &m_rawInfo);
+	return evutil_getaddrinfo(sHostname, port_requested, hints, &m_rawInfo);
 }
 
 bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
@@ -61,7 +61,7 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 		return false;
 	};
 
-	int r = ResolveRaw(sHostname, sPort, &hints);
+	int r = ResolveRaw(sHostname.empty() ? nullptr : sHostname.c_str(), sPort, &hints);
 
 	if (0!=r)
 		return ret_error("If this refers to a configured cache repository, please check the corresponding configuration file", r);

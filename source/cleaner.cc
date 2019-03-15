@@ -168,7 +168,7 @@ void cleaner::dump_status()
 }
 
 
-void ACNG_API dump_handler(int) {
+void ACNG_API dump_handler(evutil_socket_t fd, short what, void *arg) {
 	fileItemMgmt::dump_status();
 	cleaner::GetInstance().dump_status();
 	g_tcp_con_factory.dump_status();

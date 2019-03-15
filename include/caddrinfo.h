@@ -38,7 +38,7 @@ public:
 	bool ResolveTcpTarget(const mstring & sHostname, const mstring &sPort, mstring & sErrorBuf);
 
 	// methods for internal and reusable operations
-	int ResolveRaw(const mstring & sHostname, const mstring &sPort, const evutil_addrinfo* hints);
+	int ResolveRaw(const char *hostname, const mstring &sPort, const evutil_addrinfo* hints);
 	void Reset();
 
 	~CAddrInfo();

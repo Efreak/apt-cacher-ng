@@ -74,8 +74,6 @@ struct tProperty
 	std::function<mstring(bool superUser)> get; // returns a string value. A string starting with # tells to skip the output
 };
 
-#ifndef MINIBUILD
-
 // predeclare some
 void _ParseLocalDirs(cmstring &value);
 void AddRemapInfo(bool bAsBackend, const string & token, const string &repname);
@@ -1366,8 +1364,6 @@ int CheckAdminAuth(LPCSTR auth)
 	return 1;
 #endif
 }
-
-#endif // MINIBUILD
 
 static bool proxy_failstate = false;
 acmutex proxy_fail_lock;
