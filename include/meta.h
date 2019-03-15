@@ -480,6 +480,17 @@ struct tDtorEx {
 	inline ~tDtorEx() { _action(); }
 };
 
+
+template<typename T, void TFreeFunc(T)>
+struct auto_raii
+{
+    T m_p, m_inval;
+    auto_raii(T xp, T invalid_value) : m_p(xp), m_inval(invalid_value) {}
+    ~auto_raii() { if (m_p != m_inval) TFreeFunc(m_p); }
+    void disable() { m_p = m_inval; }
+};
+
+
 // from bgtask.cc
 cmstring GetFooter();
 

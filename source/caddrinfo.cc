@@ -25,15 +25,32 @@ base_with_condition dnsCacheCv;
 map<string,CAddrInfoPtr> dnsCache;
 list<decltype(dnsCache)::iterator> dnsCleanupQ;
 
-bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
+int CAddrInfo::ResolveRaw(const string & sHostname, const string &sPort, const evutil_addrinfo* hints)
+{
+	Reset();
+
+	LPCSTR port_requested = sPort.empty() ? nullptr : sPort.c_str();
+
+	return evutil_getaddrinfo(sHostname.c_str(), port_requested, hints, &m_rawInfo);
+}
+
+bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 		string & sErrorBuf)
 {
 	LOGSTART2("CAddrInfo::Resolve", "Resolving " << sHostname);
 
-	if(m_nResTime >= RES_OK)
-		return false;
-
 	sErrorBuf.clear();
+
+	evutil_addrinfo hints =
+	{
+		// we provide plain numbers, no resolution needed; only supported addresses
+		AI_NUMERICSERV | AI_ADDRCONFIG,
+		(cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC) ?
+				cfg::conprotos[0] :
+				PF_UNSPEC,
+		SOCK_STREAM, IPPROTO_TCP,
+		0, nullptr, nullptr, nullptr
+	};
 
 	auto ret_error = [&](const char* sfx, int rc){
 		sErrorBuf = "503 DNS error for " + sHostname + ":" + sPort + " : " + evutil_gai_strerror(rc);
@@ -44,30 +61,17 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 		return false;
 	};
 
-	LPCSTR port_requested = sPort.empty() ? nullptr : sPort.c_str();
-
-	evutil_addrinfo hints =
-	{
-		// we provide plain numbers, no resolution needed; only supported addresses
-		(port_requested ? AI_NUMERICSERV:0) | AI_ADDRCONFIG,
-		(cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC) ?
-				cfg::conprotos[0] :
-				PF_UNSPEC,
-		SOCK_STREAM, IPPROTO_TCP,
-		0, nullptr, nullptr, nullptr
-	};
-
-	int r=evutil_getaddrinfo(sHostname.c_str(), port_requested, &hints, &m_resolvedInfo);
+	int r = ResolveRaw(sHostname, sPort, &hints);
 
 	if (0!=r)
 		return ret_error("If this refers to a configured cache repository, please check the corresponding configuration file", r);
 
 	// find any suitable-looking entry and keep a pointer to it
-	for (auto pCur=m_resolvedInfo; pCur; pCur = pCur->ai_next)
+	for (auto pCur=m_rawInfo; pCur; pCur = pCur->ai_next)
 	{
 		if (pCur->ai_socktype != SOCK_STREAM || pCur->ai_protocol != IPPROTO_TCP)
 			continue;
-		m_addrInfo = pCur;
+		m_tcpAddrInfo = pCur;
 		m_nResTime = RES_OK;
 		return true;
 	}
@@ -75,12 +79,18 @@ bool CAddrInfo::Resolve(const string & sHostname, const string &sPort,
 	return ret_error("no suitable target service", EINVAL);
 }
 
-CAddrInfo::~CAddrInfo()
+void CAddrInfo::Reset()
 {
-	if (m_resolvedInfo)
-		evutil_freeaddrinfo(m_resolvedInfo);
+	if (m_rawInfo)
+		evutil_freeaddrinfo(m_rawInfo);
 	if(m_psErrorMessage)
 		delete m_psErrorMessage;
+	m_nResTime = RES_ONGOING;
+}
+
+CAddrInfo::~CAddrInfo()
+{
+	Reset();
 }
 
 CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sPort, string &sErrorMsgBuf)
@@ -88,7 +98,7 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 	bool dummy_run = sHostname.empty() && sPort.empty();
 	auto resolve_now = [&sHostname, &sPort, &sErrorMsgBuf]() {
 		auto ret = make_shared<CAddrInfo>();
-		if(! ret->Resolve(sHostname, sPort, sErrorMsgBuf))
+		if(! ret->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf))
 			ret.reset();
 		return ret;
 	};
@@ -124,7 +134,7 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 		cacheIt = dnsCache.emplace(dnsKey, ptr).first;
 		// run blocking resolution unlocked
 		lg.unLock();
-		ptr->Resolve(sHostname, sPort, sErrorMsgBuf);
+		ptr->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf);
 		lg.reLock();
 
 		dnsCacheCv.notifyAll();

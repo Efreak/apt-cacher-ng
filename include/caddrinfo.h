@@ -22,18 +22,25 @@ class CAddrInfo
 	// special flag, to be replaced by creation time where possible
 	static const time_t RES_OK = 2;
 
-	evutil_addrinfo * m_resolvedInfo = nullptr; // raw returned data from getaddrinfo
 	time_t m_nResTime = RES_ONGOING;
 
 	std::string* m_psErrorMessage = nullptr;
 
 public:
+	// raw returned data from getaddrinfo
+	evutil_addrinfo * m_rawInfo = nullptr;
+
 	// hint to the first descriptor of any TCP type
-	evutil_addrinfo * m_addrInfo=nullptr;
+	evutil_addrinfo * m_tcpAddrInfo=nullptr;
 	
 	CAddrInfo() = default;
 	// blocking DNS resolution. Supposed to be called only once!
-	bool Resolve(const mstring & sHostname, const mstring &sPort, mstring & sErrorBuf);
+	bool ResolveTcpTarget(const mstring & sHostname, const mstring &sPort, mstring & sErrorBuf);
+
+	// methods for internal and reusable operations
+	int ResolveRaw(const mstring & sHostname, const mstring &sPort, const evutil_addrinfo* hints);
+	void Reset();
+
 	~CAddrInfo();
 
 	static SHARED_PTR<CAddrInfo> CachedResolve(const mstring & sHostname, const mstring &sPort,

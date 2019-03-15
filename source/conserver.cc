@@ -4,7 +4,7 @@
 #include "lockable.h"
 #include "conn.h"
 #include "acfg.h"
-#include <event2/util.h>
+#include "caddrinfo.h"
 #include "sockio.h"
 #include "fileio.h"
 #include <signal.h>
@@ -44,8 +44,7 @@ namespace conserver
 {
 
 int yes(1);
-
-int g_sockunix(-1);
+int g_sockunix = -1;
 vector<int> g_vecSocks;
 
 base_with_condition g_ThreadPoolCondition;
@@ -197,45 +196,6 @@ void SetupConAndGo(int fd, const char *szClientName=nullptr)
 	termsocket_quick(fd);
 }
 
-void CreateUnixSocket() {
-	string & sPath=cfg::fifopath;
-	auto addr_unx = sockaddr_un();
-	
-	size_t size = sPath.length()+1+offsetof(struct sockaddr_un, sun_path);
-	
-	auto die=[]() {
-		cerr << "Error creating Unix Domain Socket, ";
-		cerr.flush();
-		perror(cfg::fifopath.c_str());
-		cerr << "Check socket file and directory permissions" <<endl;
-		exit(EXIT_FAILURE);
-	};
-
-	if(sPath.length()>sizeof(addr_unx.sun_path))
-	{
-		errno=ENAMETOOLONG;
-		die();
-	}
-	
-	addr_unx.sun_family = AF_UNIX;
-	strncpy(addr_unx.sun_path, sPath.c_str(), sPath.length());
-	
-	mkbasedir(sPath);
-	unlink(sPath.c_str());
-	
-	g_sockunix = socket(PF_UNIX, SOCK_STREAM, 0);
-	setsockopt(g_sockunix, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-
-	if (g_sockunix<0)
-		die();
-	
-	if (::bind(g_sockunix, (struct sockaddr *)&addr_unx, size) < 0)
-		die();
-	
-	if (0==listen(g_sockunix, SO_MAXCONN))
-		g_vecSocks.emplace_back(g_sockunix);
-}
-
 void ACNG_API Setup()
 {
 	LOGSTART2s("Setup", 0);
@@ -246,27 +206,89 @@ void ACNG_API Setup()
 		cerr << "Neither TCP nor UNIX interface configured, cannot proceed.\n";
 		exit(EXIT_FAILURE);
 	}
-	
-	if (atoi(port.c_str())>0)
+
+	auto bind_and_listen =
+			[&](int nSockFd, const sockaddr* addi, unsigned int addilen) -> bool
+			{
+				auto_raii<int, forceclose> err_clean(nSockFd, -1);
+				if ( ::bind(nSockFd, addi, addilen))
+				{
+					perror("Couldn't bind socket");
+					cerr.flush();
+					if(EADDRINUSE == errno)
+					cerr << "Port " << port << " is busy, see the manual (Troubleshooting chapter) for details." <<endl;
+					cerr.flush();
+					return false;
+				}
+				if (listen(nSockFd, SO_MAXCONN))
+				{
+					perror("Couldn't listen on socket");
+					return false;
+				}
+				err_clean.disable();
+				g_vecSocks.emplace_back(nSockFd);
+				return true;
+			};
+
+	unsigned nCreated = 0;
+
+
+	if (cfg::fifopath.empty())
+		log::err("Not creating Unix Domain Socket, fifo_path not specified");
+	else
 	{
+		string & sPath = cfg::fifopath;
+		auto addr_unx = sockaddr_un();
+
+		size_t size = sPath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
+
+		auto die = []()
+		{
+			cerr << "Error creating Unix Domain Socket, ";
+			cerr.flush();
+			perror(cfg::fifopath.c_str());
+			cerr << "Check socket file and directory permissions" <<endl;
+			exit(EXIT_FAILURE);
+		};
+
+		if (sPath.length() > sizeof(addr_unx.sun_path))
+		{
+			errno = ENAMETOOLONG;
+			die();
+		}
+
+		addr_unx.sun_family = AF_UNIX;
+		strncpy(addr_unx.sun_path, sPath.c_str(), sPath.length());
+
+		mkbasedir(sPath);
+		unlink(sPath.c_str());
+
+		g_sockunix = socket(PF_UNIX, SOCK_STREAM, 0);
+		nCreated +=	bind_and_listen(g_sockunix, (struct sockaddr *) &addr_unx, size);
+	}
+
+	if (atoi(port.c_str()) <= 0)
+		log::err("Not creating TCP listening socket, no valid port specified!");
+	else
+	{
+		CAddrInfo resolver;
 		auto hints = evutil_addrinfo();
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE;
 		hints.ai_family = 0;
 		
-		auto conaddr = [hints](LPCSTR addi)
+		auto conaddr = [&](LPCSTR addi)
 		{
 			LOGSTART2s("Setup::ConAddr", 0);
 
-		    evutil_addrinfo *res, *p;
-		    if(0!=evutil_getaddrinfo(addi, port.c_str(), &hints, &res))
+		    if(resolver.ResolveRaw(addi, port, &hints))
 		    {
 		    	perror("Error resolving address for binding");
 		    	return;
 		    }
 
 		    std::unordered_set<std::string> dedup;
-		    for(p=res; p; p=p->ai_next)
+		    for(auto p=resolver.m_rawInfo; p; p = p->ai_next)
 		    {
 		    	if(p->ai_family != AF_INET6 && p->ai_family != AF_INET)
 		    		continue;
@@ -276,8 +298,18 @@ void ACNG_API Setup()
 		    		continue;
 
 		    	int nSockFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-				if (nSockFd<0)
-					goto error_socket;
+				if (nSockFd == -1)
+				{
+					// STFU on lag of IPv6?
+					if(EAFNOSUPPORT != errno &&
+							EPFNOSUPPORT != errno &&
+							ESOCKTNOSUPPORT != errno &&
+							EPROTONOSUPPORT != errno)
+					{
+						perror("Error creating socket");
+					}
+					continue;
+				}
 
 				// if we have a dual-stack IP implementation (like on Linux) then
 				// explicitly disable the shadow v4 listener. Otherwise it might be
@@ -289,44 +321,8 @@ void ACNG_API Setup()
 					setsockopt(nSockFd, SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
 #endif
 				setsockopt(nSockFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-				
-		    	if (::bind(nSockFd, p->ai_addr, p->ai_addrlen))
-		    		goto error_bind;
-		    	if (listen(nSockFd, SO_MAXCONN))
-		    		goto error_listen;
-		    	
-		    	USRDBG( "created socket, fd: " << nSockFd);// << ", for bindaddr: "<<bindaddr);
-		    	g_vecSocks.emplace_back(nSockFd);
-		    	
-		    	continue;
-
-				error_socket:
-				
-				if(EAFNOSUPPORT != errno &&
-						EPFNOSUPPORT != errno &&
-						ESOCKTNOSUPPORT != errno &&
-						EPROTONOSUPPORT != errno)
-				{
-					perror("Error creating socket");
-				}
-				goto close_socket;
-
-				error_listen:
-				perror("Couldn't listen on socket");
-				goto close_socket;
-
-				error_bind:
-				perror("Couldn't bind socket");
-				cerr.flush();
-				if(EADDRINUSE == errno)
-					cerr << "Port " << port << " is busy, see the manual (Troubleshooting chapter) for details." <<endl;
-				cerr.flush();
-				goto close_socket;
-
-				close_socket:
-				forceclose(nSockFd);
+				nCreated += bind_and_listen(nSockFd, p->ai_addr, p->ai_addrlen);
 		    }
-		    freeaddrinfo(res);
 		};
 
 		bool addedServer=false;
@@ -344,13 +340,6 @@ void ACNG_API Setup()
 			exit(EXIT_FAILURE);
 		}
 	}
-	else
-		log::err("Not creating TCP listening socket, no valid port specified!");
-
-	if ( !cfg::fifopath.empty() )
-		CreateUnixSocket();
-	else
-		log::err("Not creating Unix Domain Socket, fifo_path not specified");
 }
 
 int ACNG_API Run()

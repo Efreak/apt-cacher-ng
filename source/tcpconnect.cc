@@ -196,7 +196,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 	// always consider first family, afterwards stop when no more specified
 	for (unsigned i=0; i< _countof(cfg::conprotos) && (0==i || cfg::conprotos[i]!=PF_UNSPEC); ++i)
 	{
-		for (auto pInfo = dns->m_addrInfo; pInfo; pInfo = pInfo->ai_next)
+		for (auto pInfo = dns->m_tcpAddrInfo; pInfo; pInfo = pInfo->ai_next)
 		{
 			if (cfg::conprotos[i] != PF_UNSPEC && cfg::conprotos[i] != pInfo->ai_family)
 				continue;
