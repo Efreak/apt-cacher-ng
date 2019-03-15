@@ -95,12 +95,12 @@ foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl
 	set(CMAKE_REQUIRED_FLAGS "")
 endforeach(linkarg)
 
-#set(CMAKE_REQUIRED_FLAGS "-Wl,-fuse-ld=gold -Wl,--threads")
-#CHECK_CXX_COMPILER_FLAG("" LD_GOLDLINKER)
-#if(LD_GOLDLINKER)
-#        _append(CMAKE_EXE_LINKER_FLAGS "-Wl,-fuse-ld=gold -Wl,--threads")
-#endif()
-#set(CMAKE_REQUIRED_FLAGS "")
+set(CMAKE_REQUIRED_FLAGS "-Wl,-fuse-ld=gold -Wl,--threads")
+CHECK_CXX_COMPILER_FLAG("" LD_GOLDLINKER)
+if(LD_GOLDLINKER)
+        _append(CMAKE_EXE_LINKER_FLAGS "-Wl,-fuse-ld=gold -Wl,--threads")
+endif()
+set(CMAKE_REQUIRED_FLAGS "")
 
 option(USE_SSL "Use OpenSSL library for TLS and other crypto functionality" on)
 
