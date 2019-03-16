@@ -485,7 +485,7 @@ struct tDlJob
 				}
 
 				ldbg("contents: " << std::string(inBuf.rptr(), hDataLen));
-				inBuf.drop(hDataLen);
+				inBuf.drop((unsigned long) hDataLen);
 				if (h.type != header::ANSWER)
 				{
 					dbgline;

@@ -480,7 +480,6 @@ struct tDtorEx {
 	inline ~tDtorEx() { _action(); }
 };
 
-
 template<typename T, void TFreeFunc(T)>
 struct auto_raii
 {
@@ -499,6 +498,12 @@ std::pair<T,T> pairSum(const std::pair<T,T>& a, const std::pair<T,T>& b)
 {
 	return std::pair<T,T>(a.first+b.first, a.second + b.second);
 }
+
+#define RET_SWITCH(label) switch(label) {
+#define RET_CASE(label) case label : goto label;
+#define RET_SWITCH_END }
+
+#define setLockGuardX(x) std::lock_guard<decltype(x)> local_helper_lockguard(x);
 
 }
 

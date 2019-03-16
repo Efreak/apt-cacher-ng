@@ -4,6 +4,7 @@
 
 #include "config.h"
 #include "lockable.h"
+#include "header.h"
 
 #include <list>
 #include <string>
@@ -53,9 +54,8 @@ class conn // : public tRunable
       // for jobs
       friend class job;
       bool SetupDownloader(const char *xff);
-      dlcon * m_pDlClient;
+      std::unique_ptr<dlcon> m_pDlClient;
       mstring m_sClientHost;
-      header *m_pTmpHead;
       
       // some accounting
       mstring logFile, logClient;

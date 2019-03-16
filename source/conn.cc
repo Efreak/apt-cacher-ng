@@ -27,8 +27,7 @@ conn::conn(int fdId, const char *c) :
 			m_confd(fdId),
 			m_bStopActivity(false),
 			m_dlerthr(0),
-			m_pDlClient(nullptr),
-			m_pTmpHead(nullptr)
+			m_pDlClient(nullptr)
 {
 	if(c) // if nullptr, pick up later when sent by the wrapper
 		m_sClientHost=c;
@@ -58,14 +57,6 @@ conn::~conn() {
 	{
 		m_pDlClient->SignalStop();
 		pthread_join(m_dlerthr, nullptr);
-
-		delete m_pDlClient;
-		m_pDlClient=nullptr;
-	}
-	if(m_pTmpHead)
-	{
-		delete m_pTmpHead;
-		m_pTmpHead=nullptr;
 	}
 	log::flush();
 }
@@ -266,13 +257,8 @@ void conn::WorkLoop() {
 		while(inBuf.size()>0) {
 			try
 			{
-				if(!m_pTmpHead)
-					m_pTmpHead = new header();
-				if(!m_pTmpHead)
-					return; // no resources? whatever
-
-				m_pTmpHead->clear();
-				int nHeadBytes=m_pTmpHead->Load(inBuf.rptr(), inBuf.size());
+				header h;
+				int nHeadBytes=h.Load(inBuf.rptr(), inBuf.size());
 				ldbg("header parsed how? " << nHeadBytes);
 				if(nHeadBytes == 0)
 				{ // Either not enough data received, or buffer full; make space and retry
@@ -286,13 +272,13 @@ void conn::WorkLoop() {
 				}
 
 				// also must be identified before
-				if (m_pTmpHead->type == header::POST)
+				if (h.type == header::POST)
 				{
 					if (cfg::forwardsoap && !m_sClientHost.empty())
 					{
-						if (RawPassThrough::CheckListbugs(*m_pTmpHead))
+						if (RawPassThrough::CheckListbugs(h))
 						{
-							tSplitWalk iter(&m_pTmpHead->frontLine);
+							tSplitWalk iter(&h.frontLine);
 							if(iter.Next() && iter.Next())
 								RawPassThrough::RedirectBto2https(m_confd, iter);
 						}
@@ -307,12 +293,12 @@ void conn::WorkLoop() {
 					return;
 				}
 
-				if(m_pTmpHead->type == header::CONNECT)
+				if(h.type == header::CONNECT)
 				{
 
 					inBuf.drop(nHeadBytes);
 
-					tSplitWalk iter(&m_pTmpHead->frontLine);
+					tSplitWalk iter(& h.frontLine);
 					if(iter.Next() && iter.Next())
 					{
 						cmstring tgt(iter);
@@ -334,20 +320,20 @@ void conn::WorkLoop() {
 
 					inBuf.drop(nHeadBytes);
 
-					if(m_pTmpHead->h[header::XORIG] && *(m_pTmpHead->h[header::XORIG]))
+					if(h.h[header::XORIG] && * h.h[header::XORIG])
 					{
-						m_sClientHost=m_pTmpHead->h[header::XORIG];
+						m_sClientHost=h.h[header::XORIG];
 						continue; // OK
 					}
 					else
 						return;
 				}
 
-				ldbg("Parsed REQUEST:" << m_pTmpHead->frontLine);
+				ldbg("Parsed REQUEST:" << h.frontLine);
 				ldbg("Rest: " << (inBuf.size()-nHeadBytes));
 
 				{
-					job * j = new job(m_pTmpHead, this);
+					job * j = new job(std::move(h), this);
 					j->PrepareDownload(inBuf.rptr());
 					inBuf.drop(nHeadBytes);
 
@@ -356,8 +342,6 @@ void conn::WorkLoop() {
 					m_nProcessedJobs++;
 #endif
 				}
-
-				m_pTmpHead=nullptr; // owned by job now
 			}
 			catch(bad_alloc&)
 			{
@@ -417,10 +401,10 @@ bool conn::SetupDownloader(const char *pszOrigin)
 				sXff += ", ";
 			}
 			sXff+=m_sClientHost;
-			m_pDlClient=new dlcon(false, &sXff);
+			m_pDlClient.reset(new dlcon(false, &sXff));
 		}
 		else
-			m_pDlClient=new dlcon(false);
+			m_pDlClient.reset(new dlcon(false));
 
 		if(!m_pDlClient)
 			return false;
@@ -431,12 +415,11 @@ bool conn::SetupDownloader(const char *pszOrigin)
 	}
 
 	if (0==pthread_create(&m_dlerthr, nullptr, _StartDownloader,
-			(void *)m_pDlClient))
+			(void *)m_pDlClient.get()))
 	{
 		return true;
 	}
-	delete m_pDlClient;
-	m_pDlClient=nullptr;
+	m_pDlClient.reset();
 	return false;
 }
 

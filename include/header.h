@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include <map>
 #include "meta.h"
+#include "acbuf.h"
 
 namespace acng
 {
@@ -50,6 +51,7 @@ class ACNG_API header {
       inline header(){};
       ~header();
       header(const header &);
+      header(header &&);
       header& operator=(const header&); 
       
       static mstring GenInfoHeaders();

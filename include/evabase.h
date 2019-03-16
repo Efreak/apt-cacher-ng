@@ -1,22 +1,24 @@
 #ifndef __EVABASE_H__
 #define __EVABASE_H__
 
-#include "meta.h"
+#include "config.h"
 
 struct event_base;
-
-//int main(int argc, const char** argv);
+#include <memory>
+#include <unordered_set>
 
 namespace acng
 {
 
-//class socket_activity;
+class socket_activity_base;
 
 /**
  * Event lib abstraction - destructible event base
  */
 class ACNG_API evabase
 {
+	std::unordered_set<socket_activity_base*> m_weak_ref_users;
+
 public:
 	event_base *base;
 	/** Share the global instance created by main() */
@@ -24,8 +26,10 @@ public:
 	evabase();
 	~evabase();
 
-	// tell that activity is being deleted
-	// void notify_activity_destroying(socket_activity*);
+	// add a "free running" activity reference to the collection, for later shutdown
+	void register_activity(socket_activity_base*);
+	void unregister_activity(socket_activity_base*);
+	void invoke_shutdown_activities();
 };
 
 }

@@ -65,12 +65,21 @@ private:
  */
 class socket_activity_base
 {
-	// keep our base alive
+	// keep us alive
+	std::shared_ptr<socket_activity_base> m_selfref;
+protected:
 	std::shared_ptr<evabase> m_evbase;
 public:
 	socket_activity_base(std::shared_ptr<evabase> m_evbase);
-	// release the back reference from the main base
-	~socket_activity_base();
+	// release the back reference from the main base if it was registered there
+	virtual ~socket_activity_base();
+
+	// interface towards evabase:
+
+	/**
+	 * Tell all outstanding activities inside to stop and eventually release the object.
+	 */
+	virtual void invoke_shutdown() { delete this; }
 };
 
 }

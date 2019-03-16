@@ -10,23 +10,7 @@
 
 #include "fileio.h"
 #include <event2/event.h>
-
-#if 0
-acng::evasockevent::evasockevent(std::shared_ptr<evabase> ev_base, int fd)
-: m_fd(fd), m_evbase(ev_base)
-{
-	auto mask = 0;
-	m_event = event_new(ev_base->base, fd,
-	    mask, event_callback_fn cb,
-	    void *arg);
-}
-
-acng::evasockevent::~evasockevent()
-{
-	if(m_event)
-		event_free(m_event);
-}
-#endif
+#include <memory>
 
 acng::evasocket::evasocket(int fd) : m_fd(fd)
 {
@@ -79,5 +63,36 @@ acng::event_socket::event_socket(event_socket&& o)
 	m_evbase.swap(o.m_evbase);
 	m_sock.swap(o.m_sock);
 	m_parent_action.swap(o.m_parent_action);
-	std::swap(m_event, o.m_event);
+	m_event = o.m_event;
+	o.m_event = nullptr;
 }
+
+acng::socket_activity_base::socket_activity_base(std::shared_ptr<evabase> evbase)
+: m_evbase(evbase)
+{
+	m_evbase->register_activity(this);
+}
+
+acng::socket_activity_base::~socket_activity_base()
+{
+	m_evbase->unregister_activity(this);
+}
+/*
+std::shared_ptr<acng::socket_activity_base> acng::socket_activity_base::self_lock()
+{
+	m_selfref = std::shared_from_this(this);
+	m_evbase->register_activity(m_selfref);
+	return m_selfref;
+}
+
+std::shared_ptr<acng::socket_activity_base> acng::socket_activity_base::release_self_lock()
+{
+	decltype(m_selfref) ret;
+	if(m_selfref)
+	{
+		m_evbase->unregister_activity(m_selfref);
+		ret.swap(m_selfref);
+	}
+	return ret;
+}
+*/
