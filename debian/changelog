@@ -1,3 +1,9 @@
+apt-cacher-ng (3.2-1~bpo9+1) stretch-backports; urgency=low
+
+  * Straight backport to Stretch
+
+ -- Eduard Bloch <blade@debian.org>  Sun, 28 Apr 2019 18:59:39 +0200
+
 apt-cacher-ng (3.2-1) unstable; urgency=low
 
   * New upstream version
