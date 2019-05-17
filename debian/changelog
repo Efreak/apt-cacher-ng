@@ -1,3 +1,14 @@
+apt-cacher-ng (3.2-2) unstable; urgency=medium
+
+  *  Fix for incorrect assumption of some existing SHA256SUMS files in Debian
+     repositories which makes the expiration task fail without a proper way
+     for the end user to recover from it. Now ignore a download error in this
+     case (similar handling as for other guesses), assuming that permanent
+     404ing for other reasons than removal of remote content can be considered
+     unlikely (closes: #928957)
+
+ -- Eduard Bloch <blade@debian.org>  Fri, 17 May 2019 22:59:21 +0200
+
 apt-cacher-ng (3.2-1) unstable; urgency=low
 
   * New upstream version
