@@ -216,11 +216,7 @@ void conn::WorkLoop() {
 
 
 		ldbg("select con");
-
-		struct timeval tv;
-		tv.tv_sec = cfg::nettimeout;
-		tv.tv_usec = 23;
-		int ready = select(maxfd+1, &rfds, &wfds, nullptr, &tv);
+		int ready = select(maxfd+1, &rfds, &wfds, nullptr, CTimeVal().ForNetTimeout());
 
 		if(ready == 0)
 		{

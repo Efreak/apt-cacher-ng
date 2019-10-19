@@ -9,6 +9,7 @@
 
 #include <list>
 
+
 using namespace std;
 
 namespace acng
@@ -40,14 +41,13 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 	LOGSTART2("CAddrInfo::Resolve", "Resolving " << sHostname);
 
 	sErrorBuf.clear();
-
+	auto filter_specific = (cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC);
 	evutil_addrinfo hints =
 	{
-		// we provide plain numbers, no resolution needed; only supported addresses
+		// we provide plain port numbers, no resolution needed
+		// also return only probably working addresses
 		AI_NUMERICSERV | AI_ADDRCONFIG,
-		(cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC) ?
-				cfg::conprotos[0] :
-				PF_UNSPEC,
+		filter_specific ? cfg::conprotos[0] : PF_UNSPEC,
 		SOCK_STREAM, IPPROTO_TCP,
 		0, nullptr, nullptr, nullptr
 	};
@@ -65,8 +65,11 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 
 	if (0!=r)
 		return ret_error("If this refers to a configured cache repository, please check the corresponding configuration file", r);
-
-	// find any suitable-looking entry and keep a pointer to it
+#ifdef DEBUG
+	for(auto p=m_rawInfo; p; p=p->ai_next)
+		std::cerr << formatIpPort(p) << std::endl;
+#endif
+	// find any suitable-looking entry and keep a pointer to it faster lookup
 	for (auto pCur=m_rawInfo; pCur; pCur = pCur->ai_next)
 	{
 		if (pCur->ai_socktype != SOCK_STREAM || pCur->ai_protocol != IPPROTO_TCP)
@@ -83,6 +86,7 @@ void CAddrInfo::Reset()
 {
 	if (m_rawInfo)
 		evutil_freeaddrinfo(m_rawInfo);
+	m_tcpAddrInfo = m_rawInfo = nullptr;
 	if(m_psErrorMessage)
 		delete m_psErrorMessage;
 	m_nResTime = RES_ONGOING;
@@ -169,5 +173,6 @@ void DropDnsCache()
 	dnsCleanupQ.clear();
 	dnsCache.clear();
 }
+
 
 }

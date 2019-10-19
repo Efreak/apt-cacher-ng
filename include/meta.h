@@ -181,6 +181,9 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
    return nullptr;
 }
 
+#define ELVIS(x, y) (x ? x : y)
+#define OPTSET(x, y) if(!x) x = y
+
 // Sometimes I miss Perl...
 tStrVec::size_type Tokenize(cmstring &in, const char* sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
 /*inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
@@ -504,6 +507,54 @@ std::pair<T,T> pairSum(const std::pair<T,T>& a, const std::pair<T,T>& b)
 #define RET_SWITCH_END }
 
 #define setLockGuardX(x) std::lock_guard<decltype(x)> local_helper_lockguard(x);
+
+namespace cfg
+{
+extern int nettimeout;
+}
+struct CTimeVal
+{
+	struct timeval tv = {0,23};
+public:
+	// calculates for relative time (span)
+	struct timeval* For(time_t tExpSec, suseconds_t tExpUsec = 23)
+	{
+		tv.tv_sec = tExpSec;
+		tv.tv_usec = tExpUsec;
+		return &tv;
+	}
+	struct timeval* ForNetTimeout()
+	{
+		tv.tv_sec = cfg::nettimeout;
+		tv.tv_usec = 23;
+		return &tv;
+	}
+	// calculates for absolute time
+	struct timeval* Until(time_t tExpWhen, suseconds_t tExpUsec = 23)
+	{
+		tv.tv_sec = GetTime() + tExpWhen;
+		tv.tv_usec = tExpUsec;
+		return &tv;
+	}
+	// like above but with error checking
+	struct timeval* SetUntil(time_t tExpWhen, suseconds_t tExpUsec = 23)
+	{
+		auto now(GetTime());
+		if(now >= tExpWhen)
+			return nullptr;
+		tv.tv_sec = now + tExpWhen;
+		tv.tv_usec = tExpUsec;
+		return &tv;
+	}
+	// calculates for a timespan with max. length until tExpSec
+	struct timeval* Remaining(time_t tExpSec, suseconds_t tExpUsec = 23)
+	{
+		auto exp = tExpSec - GetTime();
+		tv.tv_sec = exp < 0 ? 0 : exp;
+		tv.tv_usec = tExpUsec;
+		return &tv;
+	}
+};
 
 }
 

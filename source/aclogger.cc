@@ -30,7 +30,11 @@ namespace log
 ofstream fErr, fStat;
 static acmutex mx;
 
+#ifndef DEBUG
 bool logIsEnabled = false;
+#else
+bool logIsEnabled = true;
+#endif
 
 std::atomic<off_t> totalIn(0), totalOut(0);
 

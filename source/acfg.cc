@@ -140,6 +140,7 @@ MapNameToInt n2iTbl[] = {
 		,{  "LogSubmittedOrigin",                &logxff,           nullptr,    10, false}
 		,{  "RecompBz2",                         &recompbz2,        nullptr,    10, false}
 		,{  "NetworkTimeout",                    &nettimeout,       nullptr,    10, false}
+		,{  "FastTimeout",                       &fasttimeout,      nullptr,    10, false}
 		,{  "MinUpdateInterval",                 &updinterval,      nullptr,    10, false}
 		,{  "ForwardBtsSoap",                    &forwardsoap,      nullptr,    10, false}
 		,{  "KeepExtraVersions",                 &keepnver,         nullptr,    10, false}
@@ -1146,6 +1147,10 @@ void PostProcConfig()
    if(nettimeout < 5) {
 	   cerr << "Warning: NetworkTimeout value too small, using: 5." << endl;
 	   nettimeout = 5;
+   }
+   if(fasttimeout < 0)
+   {
+	   fasttimeout = 0;
    }
 
    if(RESERVED_DEFVAL == forwardsoap)

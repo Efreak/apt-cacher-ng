@@ -26,12 +26,12 @@ class CAddrInfo
 
 	std::string* m_psErrorMessage = nullptr;
 
-public:
 	// raw returned data from getaddrinfo
 	evutil_addrinfo * m_rawInfo = nullptr;
+	// shortcut for iterators, first in the list with TCP target
+	evutil_addrinfo * m_tcpAddrInfo = nullptr;
 
-	// hint to the first descriptor of any TCP type
-	evutil_addrinfo * m_tcpAddrInfo=nullptr;
+public:
 	
 	CAddrInfo() = default;
 	// blocking DNS resolution. Supposed to be called only once!
@@ -45,9 +45,17 @@ public:
 
 	static SHARED_PTR<CAddrInfo> CachedResolve(const mstring & sHostname, const mstring &sPort,
 			mstring &sErrorMsgBuf);
+
+	//tDnsIterator getIterator(int pf_filter) const { return tDnsIterator(pf_filter, this); }
+	/**
+	 * Return a pre-located pointer which points on the first TCP compatible address or nullptr
+	 * if no such found.
+	 */
+	const evutil_addrinfo *getTcpAddrInfo() const { return m_tcpAddrInfo; }
 };
 
 typedef SHARED_PTR<CAddrInfo> CAddrInfoPtr;
+
 
 }
 

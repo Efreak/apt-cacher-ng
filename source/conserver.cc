@@ -9,10 +9,10 @@
 #include "fileio.h"
 #include "evabase.h"
 #include "evasocket.h"
+#include "dnsiter.h"
 #include <signal.h>
 #include <arpa/inet.h>
 #include <errno.h>
-
 #include <netdb.h>
 
 #include <cstdio>
@@ -349,7 +349,8 @@ int ACNG_API Setup()
 		    }
 
 		    std::unordered_set<std::string> dedup;
-		    for(auto p=resolver.m_rawInfo; p; p = p->ai_next)
+		    tDnsIterator iter(PF_UNSPEC, resolver.getTcpAddrInfo());
+		    for(const evutil_addrinfo *p; !!(p=iter.next());)
 		    {
 		    	if(p->ai_family != AF_INET6 && p->ai_family != AF_INET)
 		    		continue;

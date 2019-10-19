@@ -99,11 +99,11 @@ extreshhold(20), tpstandbymax(8), tpthreadmax(-1), dirperms(00755), fileperms(00
 keepnver(0), maxtempdelay(27), vrangeops(1);
 
 int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
-logxff(false), oldupdate(false), recompbz2(false), nettimeout(60), updinterval(0),
+logxff(false), oldupdate(false), recompbz2(false), nettimeout(40), updinterval(0),
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(10), exsupcount(RESERVED_DEFVAL),
 optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false),
-trackfileuse(false), exstarttradeoff(500000000);
+trackfileuse(false), exstarttradeoff(500000000), fasttimeout(4);
 
 int maxdlspeed(RESERVED_DEFVAL);
 
@@ -133,6 +133,7 @@ int debug(0), foreground(false);
 
 string ACNG_API cacheDirSlash; // guaranteed to have a trailing path separator
 
+// If second == unspec -> first applies as filter, if first unspec -> not filtered
 int conprotos[2] = { PF_UNSPEC, PF_UNSPEC };
 
 std::atomic_bool degraded(false);
