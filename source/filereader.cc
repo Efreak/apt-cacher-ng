@@ -31,7 +31,7 @@
 
 // must be something sensible, ratio impacts stack size by inverse power of 2
 #define BUFSIZEMIN 4095 // makes one page on i386 and should be enough for typical index files
-#define BUFSIZEMAX 16*4096
+#define BUFSIZEMAX 256*1024
 
 
 #ifdef MINIBUILD
