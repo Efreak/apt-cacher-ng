@@ -984,13 +984,18 @@ int fileitem_with_storage::MoveRelease2Sidestore()
 		return 0;
 	if(!endsWithSzAr(m_sPathRel, "/InRelease") && !endsWithSzAr(m_sPathRel, "/Release"))
 		return 0;
-	auto tgtDir = CACHE_BASE + cfg::privStoreRelSnapSufix + sPathSep + GetDirPart(m_sPathRel);
-	mkdirhier(tgtDir);
 	auto srcAbs = CACHE_BASE + m_sPathRel;
 	Cstat st(srcAbs);
-	auto sideFileAbs = tgtDir + ltos(st.st_ino) + ltos(st.st_mtim.tv_sec) + ltos(st.st_mtim.tv_nsec);
-	return FileCopy(srcAbs, sideFileAbs);
-	//return rename(srcAbs.c_str(), sideFileAbs.c_str());
+	if(st)
+	{
+		auto tgtDir = CACHE_BASE + cfg::privStoreRelSnapSufix + sPathSep + GetDirPart(m_sPathRel);
+		mkdirhier(tgtDir);
+		auto sideFileAbs = tgtDir + ltos(st.st_ino) + ltos(st.st_mtim.tv_sec)
+				+ ltos(st.st_mtim.tv_nsec);
+		return FileCopy(srcAbs, sideFileAbs);
+		//return rename(srcAbs.c_str(), sideFileAbs.c_str());
+	}
+	return 0;
 }
 
 #endif // MINIBUILD
