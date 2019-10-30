@@ -11,19 +11,23 @@
 # software package downloads. It's supposed to be in a directory specified by
 # the -c option of apt-cacher-ng, see apt-cacher-ng(8) for details.
 # RULES:
-# Letter case in variable names does not matter, names and values should be
-# separated with colons. For boolean variables, zero number is considered false,
-# non-zero considered true. If a default value is not explicitly mentioned in
-# the description, the commented value assignments mostly represent the default
-# values of the particular variables.
+# - letter case in variable names does not matter
+# - names and values are separated by colon or equals sign
+# - for boolean variables, zero means false, non-zero means true
+# - If a default value is not explicitly mentioned in the description, it might
+#   be something mentioned in the example but not neccessarily so; in doubt, use
+#   acngtool to query the default value of the particular variable.
 
 # Storage directory for downloaded data and related maintenance activity.
 #
-CacheDir: /var/cache/apt-cacher-ng
+# Note: When the value for CacheDir is changed, change the file
+# /lib/systemd/system/apt-cacher-ng.service too
+#
+CacheDir: @ACNG_CACHE_DIR@
 
 # Log file directory, can be set empty to disable logging
 #
-LogDir: /var/log/apt-cacher-ng
+LogDir: @ACNG_LOG_DIR@
 
 # A place to look for additional configuration and resource files if they are not
 # found in the configuration directory

@@ -38,6 +38,14 @@ if(NOT DEFINED(RUNDIR))
 	set(RUNDIR "/run")
 endif()
 
+IF(NOT DEFINED(ACNG_CACHE_DIR))
+        set(ACNG_CACHE_DIR "/var/tmp" CACHE STRING "Cache folder for examples and default configuration")
+ENDIF()
+
+IF(NOT DEFINED(ACNG_LOG_DIR))
+        set(ACNG_LOG_DIR "/var/tmp" CACHE STRING "Log file folder for examples and default configuration")
+ENDIF()
+
 # carefully splicing of command line arguments, even from lists
 macro(_append varname)
         string(REPLACE ";" " " _apx "${ARGN}")
