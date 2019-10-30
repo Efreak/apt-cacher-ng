@@ -40,6 +40,8 @@ string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
     "|\\.asc$" // all remaining PGP signatures. Assuming that volatile ones are matched below.
     "|changelogs/pool/.*/changelog.txt$" // packages.ultimediaos.com
     "|/objects/.*/.*\\.(dirtree|filez|commit|commitmeta)|/repo/deltas/.*" // FlatPak
+    // for Fedora 29 and 30 , https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=928270
+    "|[a-f0-9]+-modules.yaml.gz|[a-f0-9]+-(primary|filelists|comps-[^.]*.[^.]*|updateinfo|prestodelta).xml(|.gz|.xz|.zck)"
 ")$");
 
 string svfilepat("/development/rawhide/.*"

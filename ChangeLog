@@ -13,16 +13,21 @@ apt-cacher-ng (3.3) THE-CLOWNS-ARE-MARCHING; urgency=low
   [ FEATURES AND IMPROVEMENTS ]
   * Change of default network timeout to 40 seconds
   * Alternative fallback scheme for non-primary target connection attempts
-    (with default timeout value of 4s, see FastTimeout setting)
+    (with default timeout value of 4s, see FastTimeout setting). By default,
+    this should help with unstable (blocking) IPv6 routing where IPv4 is still
+    operational (Debian bug #942122)
   * Refactored DNS resolution&caching code, potential fix of rate connection
     problems
   * RequiresMountsFor directive in systemd service file example with
     additional remarks on keeping this in sync with the config (as in Debian
     bug #929035 and partly suggested in #942355)
+  * PFilePattern extensions for Fedora 29 and 30, by Alan Jenkins, Debian
+    bug #928270 (thanks!)
 
   [ BUGFIXES ]
   * increased size of the decompression line buffer for config file reading
     (Debian bug #942634)
+  * fixes potential data race in DNS resolution
 
   [ INTERNAL REFACTORING ]
   * Overhauling code deployment, using a shared library (reducing installed
