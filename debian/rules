@@ -22,7 +22,7 @@ endif
 	dh $@ --parallel --with systemd
 
 override_dh_auto_configure:
-	dh_auto_configure -- -DSDINSTALL=on $(EXTRA_LIBS)
+	dh_auto_configure -- -DSDINSTALL=on -DACNG_CACHE_DIR=/var/cache/apt-cacher-ng -DACNG_LOG_DIR=/var/log/apt-cacher-ng $(EXTRA_LIBS)
 
 # needs extra build deps and internet -> ignore
 override_dh_auto_test:
