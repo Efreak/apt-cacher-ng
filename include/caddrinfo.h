@@ -35,10 +35,9 @@ public:
 	
 	CAddrInfo() = default;
 	// blocking DNS resolution. Supposed to be called only once!
-	bool ResolveTcpTarget(const mstring & sHostname, const mstring &sPort, mstring & sErrorBuf);
+	bool ResolveTcpTarget(const mstring & sHostname, const mstring &sPort, mstring & sErrorBuf,
+			const evutil_addrinfo* hints = nullptr);
 
-	// methods for internal and reusable operations
-	int ResolveRaw(const char *hostname, const mstring &sPort, const evutil_addrinfo* hints);
 	void Reset();
 
 	~CAddrInfo();

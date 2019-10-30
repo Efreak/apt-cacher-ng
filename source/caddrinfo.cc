@@ -26,23 +26,15 @@ base_with_condition dnsCacheCv;
 map<string,CAddrInfoPtr> dnsCache;
 list<decltype(dnsCache)::iterator> dnsCleanupQ;
 
-int CAddrInfo::ResolveRaw(const char* sHostname, const string &sPort, const evutil_addrinfo* hints)
-{
-	Reset();
-
-	LPCSTR port_requested = sPort.empty() ? nullptr : sPort.c_str();
-
-	return evutil_getaddrinfo(sHostname, port_requested, hints, &m_rawInfo);
-}
-
 bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
-		string & sErrorBuf)
+		string & sErrorBuf,
+		const evutil_addrinfo* pHints)
 {
 	LOGSTART2("CAddrInfo::Resolve", "Resolving " << sHostname);
 
 	sErrorBuf.clear();
 	auto filter_specific = (cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC);
-	evutil_addrinfo hints =
+	evutil_addrinfo default_connect_hints =
 	{
 		// we provide plain port numbers, no resolution needed
 		// also return only probably working addresses
@@ -61,10 +53,17 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 		return false;
 	};
 
-	int r = ResolveRaw(sHostname.empty() ? nullptr : sHostname.c_str(), sPort, &hints);
+	Reset();
+
+	int r = evutil_getaddrinfo(sHostname.empty() ? nullptr : sHostname.c_str(),
+			sPort.empty() ? nullptr : sPort.c_str(),
+			pHints ? pHints : &default_connect_hints,
+			&m_rawInfo);
 
 	if (0!=r)
+	{
 		return ret_error("If this refers to a configured cache repository, please check the corresponding configuration file", r);
+	}
 #ifdef DEBUG
 	for(auto p=m_rawInfo; p; p=p->ai_next)
 		std::cerr << formatIpPort(p) << std::endl;

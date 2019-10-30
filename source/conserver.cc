@@ -279,19 +279,82 @@ auto bind_and_listen =
 			return true;
 		};
 
+std::string scratchBuf;
+
+auto setup_tcp_listeners = [](LPCSTR addi, const std::string& port) -> unsigned
+{
+	LOGSTART2s("Setup::ConAddr", 0);
+
+	CAddrInfo resolver;
+	auto hints = evutil_addrinfo();
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_family = PF_UNSPEC;
+
+	if(!resolver.ResolveTcpTarget(addi ? addi : sEmptyString, port, scratchBuf, &hints))
+	{
+		perror("Error resolving address for binding");
+		return 0;
+	}
+
+	std::unordered_set<std::string> dedup;
+	tDnsIterator iter(PF_UNSPEC, resolver.getTcpAddrInfo());
+	unsigned res(0);
+	for(const evutil_addrinfo *p; !!(p=iter.next());)
+	{
+		// no fit or or seen before?
+		if((p->ai_family != AF_INET6 && p->ai_family != AF_INET) ||
+				!dedup.insert(std::string((LPCSTR)p->ai_addr, p->ai_addrlen)).second)
+		{
+			continue;
+		}
+
+// managed socket
+		shared_ptr<evasocket> mSock;
+
+		int nSockFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+		if (nSockFd == -1)
+		{
+			// STFU on lag of IPv6?
+			switch(errno)
+			{
+				case EAFNOSUPPORT:
+				case EPFNOSUPPORT:
+				case ESOCKTNOSUPPORT:
+				case EPROTONOSUPPORT:
+				continue;
+				default:
+				perror("Error creating socket");
+				continue;
+			}
+		}
+		mSock = evasocket::create(nSockFd);
+
+// if we have a dual-stack IP implementation (like on Linux) then
+// explicitly disable the shadow v4 listener. Otherwise it might be
+// bound or maybe not, and then just sometimes because of configurable
+// dual-behavior, or maybe because of real errors;
+// we just cannot know for sure but we need to.
+#if defined(IPV6_V6ONLY) && defined(SOL_IPV6)
+		if(p->ai_family==AF_INET6) setsockopt(mSock->fd(), SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
+#endif
+		setsockopt(mSock->fd(), SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+		res += bind_and_listen(mSock, p->ai_addr, p->ai_addrlen);
+	}
+	return res;
+};
+
 int ACNG_API Setup()
 {
 	LOGSTART2s("Setup", 0);
-	using namespace cfg;
 	
-	if (fifopath.empty() && port.empty())
+	if (cfg::fifopath.empty() && cfg::port.empty())
 	{
 		cerr << "Neither TCP nor UNIX interface configured, cannot proceed.\n";
 		exit(EXIT_FAILURE);
 	}
 
 	unsigned nCreated = 0;
-
 
 	if (cfg::fifopath.empty())
 		log::err("Not creating Unix Domain Socket, fifo_path not specified");
@@ -328,79 +391,19 @@ int ACNG_API Setup()
 		nCreated += bind_and_listen(evasocket::create(sockFd), (struct sockaddr *) &addr_unx, size);
 	}
 
-	if (atoi(port.c_str()) <= 0)
+	if (atoi(cfg::port.c_str()) <= 0)
 		log::err("Not creating TCP listening socket, no valid port specified!");
 	else
 	{
-		CAddrInfo resolver;
-		auto hints = evutil_addrinfo();
-		hints.ai_socktype = SOCK_STREAM;
-		hints.ai_flags = AI_PASSIVE;
-		hints.ai_family = 0;
-		
-		auto setup_tcp_listeners = [&](LPCSTR addi)
+		bool custom_listen_ip = false;
+		for(const auto& sp: tSplitWalk(&cfg::bindaddr))
 		{
-			LOGSTART2s("Setup::ConAddr", 0);
-
-		    if(resolver.ResolveRaw(addi, port, &hints))
-		    {
-		    	perror("Error resolving address for binding");
-		    	return;
-		    }
-
-		    std::unordered_set<std::string> dedup;
-		    tDnsIterator iter(PF_UNSPEC, resolver.getTcpAddrInfo());
-		    for(const evutil_addrinfo *p; !!(p=iter.next());)
-		    {
-		    	if(p->ai_family != AF_INET6 && p->ai_family != AF_INET)
-		    		continue;
-
-		    	// processed before?
-		    	if(!dedup.insert(std::string((LPCSTR)p->ai_addr, p->ai_addrlen)).second)
-		    		continue;
-
-		    	// managed socket
-		    	shared_ptr<evasocket> mSock;
-		    	{
-		    	int nSockFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-				if (nSockFd == -1)
-				{
-					// STFU on lag of IPv6?
-					if(EAFNOSUPPORT != errno &&
-							EPFNOSUPPORT != errno &&
-							ESOCKTNOSUPPORT != errno &&
-							EPROTONOSUPPORT != errno)
-					{
-						perror("Error creating socket");
-					}
-					continue;
-				}
-
-				mSock = evasocket::create(nSockFd);
-		    	}
-				// if we have a dual-stack IP implementation (like on Linux) then
-				// explicitly disable the shadow v4 listener. Otherwise it might be
-				// bound or maybe not, and then just sometimes because of configurable
-				// dual-behavior, or maybe because of real errors;
-				// we just cannot know for sure but we need to.
-#if defined(IPV6_V6ONLY) && defined(SOL_IPV6)
-				if(p->ai_family==AF_INET6)
-					setsockopt(mSock->fd(), SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
-#endif
-				setsockopt(mSock->fd(), SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-				nCreated += bind_and_listen(mSock, p->ai_addr, p->ai_addrlen);
-		    }
-		};
-
-		unsigned nTokens=0;
-		for(const auto& sp: tSplitWalk(&bindaddr))
-		{
-			setup_tcp_listeners(sp.c_str());
-			nTokens++;
+			nCreated += setup_tcp_listeners(sp.c_str(), cfg::port);
+			custom_listen_ip = true;
 		}
 		// just TCP_ANY if none was specified
-		if(!nTokens)
-			setup_tcp_listeners(nullptr);
+		if(!custom_listen_ip)
+			nCreated += setup_tcp_listeners(nullptr, cfg::port);
 	}
 	return nCreated;
 }
