@@ -335,7 +335,13 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 		}
 		case SELECT_CONN:
 		{
-			if(GetTime() >= alt.tmexp)
+			auto now(GetTime());
+			if(now >= prim.tmexp)
+			{
+				alt.state = ERROR_STOP;
+				continue;
+			}
+			if(now >= alt.tmexp)
 			{
 				alt.state = HANDLE_ERROR;
 				continue;
@@ -353,6 +359,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			// came here because:
 			// - no more alternative DNS info
 			// - fatal socket/connect errors
+			// - exceeded maximal network timeout
 			if(prim.state == ERROR_STOP)
 			{
 				// reconsider final error state there
