@@ -35,11 +35,12 @@ cafile, capath, spfilepat, svfilepat, badredmime, sigbuscmd, connectPermPattern;
 
 extern mstring pfilepatEx, vfilepatEx, wfilepatEx, spfilepatEx, svfilepatEx; // for customization by user
 
-extern int debug, numcores, offlinemode, foreground, verbose, stupidfs, forcemanaged, keepnver,
+extern ACNG_API int debug, numcores, offlinemode, foreground, verbose, stupidfs, forcemanaged, keepnver,
 verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, dlbufsize, usewrap,
 exporigin, logxff, oldupdate, recompbz2, nettimeout, updinterval, forwardsoap, dirperms, fileperms,
 maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsupcount,
-optproxytimeout, patrace, maxdlspeed, maxredlsize, nsafriendly, trackfileuse, exstarttradeoff;
+optproxytimeout, patrace, maxdlspeed, maxredlsize, nsafriendly, trackfileuse, exstarttradeoff,
+fasttimeout;
 extern int allocspace;
 
 // processed config settings
@@ -49,12 +50,12 @@ extern mstring agentheader;
 
 extern int conprotos[2];
 
-bool SetOption(const mstring &line, NoCaseStringMap *pDupeChecker);
-void dump_config(bool includingDelicateValues=false);
-void ReadConfigDirectory(const char*, bool bReadErrorIsFatal=true);
+bool ACNG_API SetOption(const mstring &line, NoCaseStringMap *pDupeChecker);
+void ACNG_API dump_config(bool includingDelicateValues=false);
+void ACNG_API ReadConfigDirectory(const char*, bool bReadErrorIsFatal=true);
 
 //! Prepare various things resulting from variable combinations, etc.
-void PostProcConfig();
+void ACNG_API PostProcConfig();
 
 bool DegradedMode();
 
@@ -101,8 +102,8 @@ extern std::bitset<TCP_PORT_MAX> *pUserPorts;
 extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 
 void dump_trace();
-int * GetIntPtr(LPCSTR key);
-mstring * GetStringPtr(LPCSTR key);
+ACNG_API int * GetIntPtr(LPCSTR key);
+ACNG_API mstring * GetStringPtr(LPCSTR key);
 
 int CheckAdminAuth(LPCSTR auth);
 
@@ -138,6 +139,7 @@ bool MatchUncacheable(const mstring &, NOCACHE_PATTYPE);
 bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat);
 bool CompileExpressions();
 }
+LPCSTR ACNG_API ReTest(LPCSTR s);
 
 #define CACHE_BASE (acng::cfg::cacheDirSlash)
 #define CACHE_BASE_LEN (CACHE_BASE.length()) // where the relative paths begin

@@ -601,7 +601,7 @@ static short FindCompIdx(cmstring &s)
 	return -1;
 }
 
-void DelTree(const string &what)
+void ACNG_API DelTree(const string &what)
 {
 	class killa : public IFileHandler
 	{

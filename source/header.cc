@@ -80,6 +80,14 @@ header::header(const header &s)
 		h[i] = s.h[i] ? strdup(s.h[i]) : nullptr;
 }
 
+header::header(header &&s)
+:type(s.type)
+{
+	frontLine.swap(s.frontLine);
+	swap(h, s.h);
+}
+
+
 header& header::operator=(const header& s)
 {
 	type=s.type;

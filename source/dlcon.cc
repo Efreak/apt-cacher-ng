@@ -48,8 +48,8 @@ dlcon::dlcon(bool bManualExecution, string *xff, IDlConFactory *pConFactory) :
 {
 	LOGSTART("dlcon::dlcon");
 #ifdef HAVE_LINUX_EVENTFD
-	m_wakeventfd=eventfd(0, 0);
-	if(m_wakeventfd>=0)
+	m_wakeventfd = eventfd(0, 0);
+	if(m_wakeventfd >= 0)
 		set_nb(m_wakeventfd);
 #else
 	if (0 == pipe(m_wakepipe))
@@ -485,7 +485,7 @@ struct tDlJob
 				}
 
 				ldbg("contents: " << std::string(inBuf.rptr(), hDataLen));
-				inBuf.drop(hDataLen);
+				inBuf.drop((unsigned long) hDataLen);
 				if (h.type != header::ANSWER)
 				{
 					dbgline;
@@ -769,7 +769,6 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 			<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
 
 	fd_set rfds, wfds;
-	struct timeval tv;
 	int r = 0;
 	int fd = con ? con->GetFD() : -1;
 	FD_ZERO(&rfds);
@@ -808,8 +807,6 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 		}
 
 		ldbg("select dlcon");
-		tv.tv_sec = cfg::nettimeout;
-		tv.tv_usec = 0;
 
 		// jump right into data processing but only once
 		if(bReEntered)
@@ -818,7 +815,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 			goto proc_data;
 		}
 
-		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, &tv);
+		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, CTimeVal().ForNetTimeout());
 		ldbg("returned: " << r << ", errno: " << errno);
 
 		if (r < 0)
@@ -1186,7 +1183,7 @@ void dlcon::WorkLoop()
 
 				bool bUsed = false;
 				ASSERT(!m_qNewjobs.empty());
-
+#warning warum zweites mal connect??
 				auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
 				{
 					return m_pConFactory->CreateConnected(tgt.sHost,

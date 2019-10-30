@@ -72,7 +72,8 @@ typedef std::pair<LPCSTR, size_t> tPtrLen;
 #define SZPATHSEPUNIX "/"
 #define CPATHSEPWIN '\\'
 #define SZPATHSEPWIN "\\"
-extern cmstring sPathSep, sPathSepUnix, sDefPortHTTP, sDefPortHTTPS, hendl;
+extern std::string sDefPortHTTP, sDefPortHTTPS;
+extern cmstring sPathSep, sPathSepUnix, hendl;
 
 extern cmstring FAKEDATEMARK;
 
@@ -180,6 +181,9 @@ static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_
    return nullptr;
 }
 
+#define ELVIS(x, y) (x ? x : y)
+#define OPTSET(x, y) if(!x) x = y
+
 // Sometimes I miss Perl...
 tStrVec::size_type Tokenize(cmstring &in, const char* sep, tStrVec & out, bool bAppend=false, mstring::size_type nStartOffset=0);
 /*inline void Join(mstring &out, const mstring & sep, const tStrVec & tokens)
@@ -193,7 +197,7 @@ bool ParseKeyValLine(const mstring & sIn, mstring & sOutKey, mstring & sOutVal);
 
 extern cmstring PROT_PFX_HTTPS, PROT_PFX_HTTP;
 
-class tHttpUrl
+class ACNG_API tHttpUrl
 {
 
 private:
@@ -295,8 +299,8 @@ inline off_t atoofft(LPCSTR p, off_t nDefVal)
 	return p ? atoofft(p) : nDefVal;
 }
 
-mstring offttosH(off_t n);
-mstring offttosHdotted(off_t n);
+ACNG_API mstring offttosH(off_t n);
+ACNG_API mstring offttosHdotted(off_t n);
 tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted=false, bool bQuiet=false);
 
 //void MakeAbsolutePath(mstring &dirToFix, const mstring &reldir);
@@ -311,7 +315,7 @@ mstring DosEscape(cmstring &s);
 // just the bare minimum to make sure the string does not break HTML formating
 mstring html_sanitize(cmstring& in);
 
-mstring UserinfoEscape(cmstring &s);
+ACNG_API mstring UserinfoEscape(cmstring &s);
 
 #define pathTidy(s) { if(startsWithSz(s, "." SZPATHSEP)) s.erase(0, 2); tStrPos n(0); \
 	for(n=0;stmiss!=n;) { n=s.find(SZPATHSEP SZPATHSEP, n); if(stmiss!=n) s.erase(n, 1);}; \
@@ -327,12 +331,12 @@ mstring UserinfoEscape(cmstring &s);
 
 off_t GetFileSize(cmstring & path, off_t defret);
 
-mstring offttos(off_t n);
-mstring ltos(long n);
-mstring offttosH(off_t n);
+ACNG_API mstring offttos(off_t n);
+ACNG_API mstring ltos(long n);
+ACNG_API mstring offttosH(off_t n);
 
 //template<typename charp>
-off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeString, charp *next)
+ACNG_API off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeString, charp *next)
 
 
 void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar);
@@ -441,14 +445,14 @@ struct extended_bool
 	inline extended_bool(bool val, Textra xtra = defval) : value(val), xdata(xtra) {};
 };
 
-void DelTree(cmstring &what);
+void ACNG_API DelTree(cmstring &what);
 
-struct tErrnoFmter: public mstring
+struct ACNG_API tErrnoFmter: public mstring
 {
 	tErrnoFmter(LPCSTR prefix = nullptr);
 };
 
-mstring EncodeBase64Auth(cmstring &sPwdString);
+ACNG_API mstring EncodeBase64Auth(cmstring &sPwdString);
 mstring EncodeBase64(LPCSTR data, unsigned len);
 
 #if defined(HAVE_SSL) || defined(HAVE_TOMCRYPT)
@@ -479,6 +483,16 @@ struct tDtorEx {
 	inline ~tDtorEx() { _action(); }
 };
 
+template<typename T, void TFreeFunc(T)>
+struct auto_raii
+{
+    T m_p, m_inval;
+    auto_raii(T xp, T invalid_value) : m_p(xp), m_inval(invalid_value) {}
+    ~auto_raii() { if (m_p != m_inval) TFreeFunc(m_p); }
+    void disable() { m_p = m_inval; }
+};
+
+
 // from bgtask.cc
 cmstring GetFooter();
 
@@ -487,6 +501,60 @@ std::pair<T,T> pairSum(const std::pair<T,T>& a, const std::pair<T,T>& b)
 {
 	return std::pair<T,T>(a.first+b.first, a.second + b.second);
 }
+
+#define RET_SWITCH(label) switch(label) {
+#define RET_CASE(label) case label : goto label;
+#define RET_SWITCH_END }
+
+#define setLockGuardX(x) std::lock_guard<decltype(x)> local_helper_lockguard(x);
+
+namespace cfg
+{
+extern int nettimeout;
+}
+struct CTimeVal
+{
+	struct timeval tv = {0,23};
+public:
+	// calculates for relative time (span)
+	struct timeval* For(time_t tExpSec, suseconds_t tExpUsec = 23)
+	{
+		tv.tv_sec = tExpSec;
+		tv.tv_usec = tExpUsec;
+		return &tv;
+	}
+	struct timeval* ForNetTimeout()
+	{
+		tv.tv_sec = cfg::nettimeout;
+		tv.tv_usec = 23;
+		return &tv;
+	}
+	// calculates for absolute time
+	struct timeval* Until(time_t tExpWhen, suseconds_t tExpUsec = 23)
+	{
+		tv.tv_sec = GetTime() + tExpWhen;
+		tv.tv_usec = tExpUsec;
+		return &tv;
+	}
+	// like above but with error checking
+	struct timeval* SetUntil(time_t tExpWhen, suseconds_t tExpUsec = 23)
+	{
+		auto now(GetTime());
+		if(now >= tExpWhen)
+			return nullptr;
+		tv.tv_sec = now + tExpWhen;
+		tv.tv_usec = tExpUsec;
+		return &tv;
+	}
+	// calculates for a timespan with max. length until tExpSec
+	struct timeval* Remaining(time_t tExpSec, suseconds_t tExpUsec = 23)
+	{
+		auto exp = tExpSec - GetTime();
+		tv.tv_sec = exp < 0 ? 0 : exp;
+		tv.tv_usec = tExpUsec;
+		return &tv;
+	}
+};
 
 }
 

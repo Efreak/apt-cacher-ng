@@ -22,7 +22,7 @@ static const std::string sBRLF("<br>\n");
 
 namespace acng
 {
-class tSpecialRequest
+class ACNG_API tSpecialRequest
 {
 public:
 	enum eMaintWorkType : char

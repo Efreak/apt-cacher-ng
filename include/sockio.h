@@ -15,6 +15,8 @@
 #include <unistd.h>
 #include <cstddef>
 
+#include <event2/util.h>
+
 using namespace std;
 
 
@@ -46,7 +48,7 @@ void globalSslInit();
 
 void termsocket(int);
 
-inline void termsocket_quick(int fd)
+inline void termsocket_quick(int& fd)
 {
 	if(fd<0)
 		return;
@@ -66,6 +68,18 @@ inline bool check_read_state(int fd)
 	struct timeval tv = { 0, 0};
 	return (1 == select(fd + 1, &rfds, nullptr, nullptr, &tv) && FD_ISSET(fd, &rfds));
 }
+
+struct select_set_t
+{
+	int m_max = -1;
+	fd_set fds;
+	void add(int n) { if(m_max == -1 ) FD_ZERO(&fds); if(n>m_max) m_max = n; FD_SET(n, &fds); }
+	bool is_set(int fd) { return FD_ISSET(fd, &fds); }
+	int nfds() { return m_max + 1; }
+	operator bool() const { return m_max != -1; }
+};
+
+std::string formatIpPort(const evutil_addrinfo *info);
 
 }
 

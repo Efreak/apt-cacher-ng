@@ -16,7 +16,7 @@ namespace acng
 namespace cfg
 {
 
-string cachedir("/var/tmp"), logdir("/var/tmp"), fifopath, pidfile, reportpage,
+string ACNG_API cachedir(CACHEDIR), logdir(LOGDIR), fifopath, pidfile, reportpage,
 confdir, adminauth, adminauthB64, bindaddr, mirrorsrcs, suppdir(LIBDIR),
 capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 
@@ -40,6 +40,8 @@ string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
     "|\\.asc$" // all remaining PGP signatures. Assuming that volatile ones are matched below.
     "|changelogs/pool/.*/changelog.txt$" // packages.ultimediaos.com
     "|/objects/.*/.*\\.(dirtree|filez|commit|commitmeta)|/repo/deltas/.*" // FlatPak
+    // for Fedora 29 and 30 , https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=928270
+    "|[a-f0-9]+-modules.yaml.gz|[a-f0-9]+-(primary|filelists|comps-[^.]*.[^.]*|updateinfo|prestodelta).xml(|.gz|.xz|.zck)"
 ")$");
 
 string svfilepat("/development/rawhide/.*"
@@ -99,11 +101,11 @@ extreshhold(20), tpstandbymax(8), tpthreadmax(-1), dirperms(00755), fileperms(00
 keepnver(0), maxtempdelay(27), vrangeops(1);
 
 int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
-logxff(false), oldupdate(false), recompbz2(false), nettimeout(60), updinterval(0),
+logxff(false), oldupdate(false), recompbz2(false), nettimeout(40), updinterval(0),
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(10), exsupcount(RESERVED_DEFVAL),
 optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false),
-trackfileuse(false), exstarttradeoff(500000000);
+trackfileuse(false), exstarttradeoff(500000000), fasttimeout(4);
 
 int maxdlspeed(RESERVED_DEFVAL);
 
@@ -116,11 +118,11 @@ int dnscachetime(30);
 int dnscachetime(1800);
 #endif
 
-string agentname("Debian Apt-Cacher-NG/" ACVERSION);
-string remoteport("80"), port(ACNG_DEF_PORT);
-string agentheader;
+string ACNG_API agentname("Debian Apt-Cacher-NG/" ACVERSION);
+string ACNG_API remoteport("80"), port(ACNG_DEF_PORT);
+string ACNG_API agentheader;
 
-string requestapx;
+string ACNG_API requestapx;
 string sigbuscmd;
 mstring connectPermPattern("~~~");
 
@@ -131,8 +133,9 @@ int debug(3), foreground(true);
 int debug(0), foreground(false);
 #endif
 
-string cacheDirSlash; // guaranteed to have a trailing path separator
+string ACNG_API cacheDirSlash; // guaranteed to have a trailing path separator
 
+// If second == unspec -> first applies as filter, if first unspec -> not filtered
 int conprotos[2] = { PF_UNSPEC, PF_UNSPEC };
 
 std::atomic_bool degraded(false);

@@ -37,7 +37,7 @@ class job {
 	   	STATE_FINISHJOB
 	   } eJobState;
 
-      job(header *h, conn *pParent);
+      job(header &&h, conn *pParent);
       ~job();
       //  __attribute__((externally_visible))  
       
@@ -65,7 +65,7 @@ class job {
       tSpecialRequest::eMaintWorkType m_eMaintWorkType = tSpecialRequest::workNotSpecial;
       mstring m_sOrigUrl; // local SAFE copy of the originating source
       
-      header *m_pReqHead; // copy of users requests header
+      header m_reqHead; // copy of users requests header
 
       fileItemMgmt m_pItem;
       off_t m_nSendPos, m_nCurrentRangeLast;

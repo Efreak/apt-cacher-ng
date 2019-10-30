@@ -39,7 +39,7 @@ bool CompileExpressions();
 
 namespace cfg {
 
-bool g_bQuiet=false, g_bNoComplex=false;
+bool ACNG_API g_bQuiet=false, g_bNoComplex=false;
 
 extern std::atomic_bool degraded;
 
@@ -73,8 +73,6 @@ struct tProperty
 	std::function<bool(cmstring& key, cmstring& value)> set;
 	std::function<mstring(bool superUser)> get; // returns a string value. A string starting with # tells to skip the output
 };
-
-#ifndef MINIBUILD
 
 // predeclare some
 void _ParseLocalDirs(cmstring &value);
@@ -142,6 +140,7 @@ MapNameToInt n2iTbl[] = {
 		,{  "LogSubmittedOrigin",                &logxff,           nullptr,    10, false}
 		,{  "RecompBz2",                         &recompbz2,        nullptr,    10, false}
 		,{  "NetworkTimeout",                    &nettimeout,       nullptr,    10, false}
+		,{  "FastTimeout",                       &fasttimeout,      nullptr,    10, false}
 		,{  "MinUpdateInterval",                 &updinterval,      nullptr,    10, false}
 		,{  "ForwardBtsSoap",                    &forwardsoap,      nullptr,    10, false}
 		,{  "KeepExtraVersions",                 &keepnver,         nullptr,    10, false}
@@ -369,7 +368,8 @@ tProperty* GetPropPtr(cmstring& key)
 	return nullptr;
 }
 
-int * GetIntPtr(LPCSTR key) {
+int * GetIntPtr(LPCSTR key)
+{
 	for(auto &ent : n2iTbl)
 		if(0==strcasecmp(key, ent.name))
 			return ent.ptr;
@@ -620,7 +620,7 @@ struct tHookHandler: public tRepoData::IHookHandler, public base_with_mutex
 		{
 			//system(cmdRel.c_str());
 			downTimeNext = ::time(0) + downDuration;
-			g_victor.ScheduleFor(downTimeNext, cleaner::TYPE_ACFGHOOKS);
+			cleaner::GetInstance().ScheduleFor(downTimeNext, cleaner::TYPE_ACFGHOOKS);
 		}
 	}
 	virtual void OnAccess() override
@@ -1148,6 +1148,10 @@ void PostProcConfig()
 	   cerr << "Warning: NetworkTimeout value too small, using: 5." << endl;
 	   nettimeout = 5;
    }
+   if(fasttimeout < 0)
+   {
+	   fasttimeout = 0;
+   }
 
    if(RESERVED_DEFVAL == forwardsoap)
 	   forwardsoap = !forcemanaged;
@@ -1366,8 +1370,6 @@ int CheckAdminAuth(LPCSTR auth)
 #endif
 }
 
-#endif // MINIBUILD
-
 static bool proxy_failstate = false;
 acmutex proxy_fail_lock;
 const tHttpUrl* GetProxyInfo()
@@ -1408,7 +1410,7 @@ namespace rex
 	struct { regex_t *pat=nullptr, *extra=nullptr; } rex[ematchtype_max];
 	vector<regex_t> vecReqPatters, vecTgtPatterns;
 
-bool CompileExpressions()
+bool ACNG_API CompileExpressions()
 {
 	auto compat = [](regex_t* &re, LPCSTR ps)
 	{
@@ -1462,7 +1464,7 @@ bool Match(cmstring &in, eMatchType type)
 		|| (type == FILE_VOLATILE && MatchType(in, FILE_SPECIAL_VOLATILE));
 }
 
-eMatchType GetFiletype(const string & in)
+ACNG_API eMatchType GetFiletype(const string & in)
 {
 	if (MatchType(in, FILE_SPECIAL_VOLATILE))
 		return FILE_VOLATILE;

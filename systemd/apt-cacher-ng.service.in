@@ -1,14 +1,18 @@
 [Unit]
 Description=Apt-Cacher NG software download proxy
 After=network.target
-RequiresMountsFor=/var/cache/apt-cacher-ng
+# This can be used to ensure that the service starts only after delayed mount of
+# the storage location.
+# Note: when the CacheDir folder in configuration file(s) like in
+# @CFGDIR@/acng.conf is changed, change the next line too!
+RequiresMountsFor=@ACNG_CACHE_DIR@
 
 [Service]
 # the SocketPath option can be removed if the inetd bridge functionality is not needed
 ExecStart=@SBINDIR@/apt-cacher-ng SocketPath=@RUNDIR@/apt-cacher-ng/socket -c @CFGDIR@ ForeGround=1
 User=apt-cacher-ng
 Group=apt-cacher-ng
-# this can be changed to notify if the support was enabled at build time
+# This can be changed to notify if the support was enabled at build time
 Type=@SDTYPE@
 Restart=on-failure
 

@@ -23,7 +23,7 @@ using namespace std;
 namespace acng
 {
 #define MAXTEMPDELAY acng::cfg::maxtempdelay // 27
-mstring sReplDir("_altStore" SZPATHSEP);
+mstring ACNG_API sReplDir("_altStore" SZPATHSEP);
 
 static tFiGlobMap mapItems;
 #ifndef MINIBUILD
@@ -131,7 +131,6 @@ off_t GetFileSize(cmstring & path, off_t defret)
 	return (0==::stat(path.c_str(), &stbuf)) ? stbuf.st_size : defret;
 }
 
-
 void fileitem::ResetCacheState()
 {
 	setLockGuard;
@@ -192,7 +191,6 @@ fileitem::FiStatus fileitem::Setup(bool bCheckFreshness)
 				// file larger than it could ever be?
 				if(nContLen < m_nSizeSeen)
 					goto error_clean;
-
 
 				LOG("Content-Length has a sane range");
 
@@ -532,11 +530,11 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 			return withError(h.getCodeMessage());
 		}
 
-		m_bAllowStoreData=false;
+		m_bAllowStoreData = false;
 		// have a clean header with just the error message
-		m_head.frontLine=h.frontLine;
+		m_head.frontLine = h.frontLine;
 		m_head.set(header::CONTENT_LENGTH, "0");
-		if(m_status>FIST_DLGOTHEAD)
+		if(m_status > FIST_DLGOTHEAD)
 		{
 			// oh shit. Client may have already started sending it. Prevent such trouble in future.
 			unlink(sHeadPath.c_str());
@@ -560,16 +558,16 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 
 		mkbasedir(sPathAbs);
 
-		m_filefd=open(sPathAbs.c_str(), flags, cfg::fileperms);
+		m_filefd = open(sPathAbs.c_str(), flags, cfg::fileperms);
 		ldbg("file opened?! returned: " << m_filefd);
 
 		// self-recovery from cache poisoned with files with wrong permissions
-		if (m_filefd<0)
+		if (m_filefd < 0)
 		{
-			if(m_nSizeChecked>0) // OOOH CRAP! CANNOT APPEND HERE! Do what's still possible.
+			if(m_nSizeChecked > 0) // OOOH CRAP! CANNOT APPEND HERE! Do what's still possible.
 			{
-				string temp=sPathAbs+".tmp";
-				if(FileCopy(sPathAbs, temp) && 0==unlink(sPathAbs.c_str()) )
+				string temp = sPathAbs + ".tmp";
+				if(FileCopy(sPathAbs, temp) && 0 == unlink(sPathAbs.c_str()) )
 				{
 					if(0!=rename(temp.c_str(), sPathAbs.c_str()))
 						return withError("503 Cannot rename files");
@@ -603,7 +601,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 #endif
 		}
 
-		if(0!=fstat(m_filefd, &stbuf) || !S_ISREG(stbuf.st_mode))
+		if(0 != fstat(m_filefd, &stbuf) || !S_ISREG(stbuf.st_mode))
 			return withErrorAndKillFile("503 Not a regular file");
 
 		// this makes sure not to truncate file while it's mmaped
@@ -635,18 +633,18 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 		posix_fadvise(m_filefd, hint_start, hint_length, POSIX_FADV_SEQUENTIAL);
 #endif
 		 */
-		ldbg("Storing header as "+sHeadPath);
+		ldbg("Storing header as " + sHeadPath);
 		int count=m_head.StoreToFile(sHeadPath);
 
 		if(count<0)
-			return withErrorAndKillFile( (-count!=ENOSPC
+			return withErrorAndKillFile( (-count != ENOSPC
 					? "503 Cache storage error" : "503 OUT OF DISK SPACE"));
 
 		// double-check the sane state
-		if(0!=fstat(m_filefd, &stbuf) || stbuf.st_size!=m_nSizeChecked)
+		if(0 != fstat(m_filefd, &stbuf) || stbuf.st_size != m_nSizeChecked)
 			return withErrorAndKillFile("503 Inconsistent file state");
 
-		if(m_nSizeChecked!=lseek(m_filefd, m_nSizeChecked, SEEK_SET))
+		if(m_nSizeChecked != lseek(m_filefd, m_nSizeChecked, SEEK_SET))
 			return withErrorAndKillFile("503 IO error, positioning");
 	}
 
@@ -663,7 +661,7 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 	// something might care, most likely... also about BOUNCE action
 	notifyAll();
 
-	m_nIncommingCount+=size;
+	m_nIncommingCount += size;
 
 	if(m_status > FIST_COMPLETE || m_status < FIST_DLGOTHEAD)
 	{
@@ -671,7 +669,7 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 		return false;
 	}
 
-	if (size==0)
+	if (size == 0)
 	{
 		if(FIST_COMPLETE == m_status)
 		{
@@ -680,7 +678,7 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 		else
 		{
 			m_status = FIST_COMPLETE;
-			m_nTimeDlDone=GetTime();
+			m_nTimeDlDone = GetTime();
 
 			if (cfg::debug & log::LOG_MORE)
 				log::misc(tSS() << "Download of " << m_sPathRel << " finished");
@@ -697,26 +695,26 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 	{
 		m_status = FIST_DLRECEIVING;
 
-		if (m_bAllowStoreData && m_filefd>=0)
+		if (m_bAllowStoreData && m_filefd >= 0)
 		{
-			while(size>0)
+			while(size > 0)
 			{
-				int r=write(m_filefd, data, size);
-				if(r<0)
+				int r = write(m_filefd, data, size);
+				if(r < 0)
 				{
-					if(EINTR==errno || EAGAIN==errno)
+					if(EINTR == errno || EAGAIN == errno)
 						continue;
 					tErrnoFmter efmt("HTTP/1.1 503 ");
 					m_head.frontLine = efmt;
 					m_status=FIST_DLERROR;
 					// message will be set by the caller
-					m_nTimeDlDone=GetTime();
+					m_nTimeDlDone = GetTime();
 					_LogWithErrno(efmt.c_str(), m_sPathRel);
 					return false;
 				}
-				m_nSizeChecked+=r;
-				size-=r;
-				data+=r;
+				m_nSizeChecked += r;
+				size -= r;
+				data += r;
 			}
 		}
 	}
@@ -761,9 +759,9 @@ inline void fileItemMgmt::Unreg()
 		time_t when(0);
 		if (MAXTEMPDELAY && m_ptr->m_bCheckFreshness &&
 				m_ptr->m_status == fileitem::FIST_COMPLETE &&
-				((when=m_ptr->m_nTimeDlStarted+MAXTEMPDELAY) > GetTime()))
+				((when = m_ptr->m_nTimeDlStarted+MAXTEMPDELAY) > GetTime()))
 		{
-			g_victor.ScheduleFor(when, cleaner::TYPE_EXFILEITEM);
+			cleaner::GetInstance().ScheduleFor(when, cleaner::TYPE_EXFILEITEM);
 			return;
 		}
 
@@ -790,8 +788,8 @@ bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 	{
 		mstring sPathRel(fileitem_with_storage::NormalizePath(sPathUnescaped));
 		lockguard lockGlobalMap(mapItemsMx);
-		tFiGlobMap::iterator it=mapItems.find(sPathRel);
-		if(it!=mapItems.end())
+		auto it = mapItems.find(sPathRel);
+		if(it != mapItems.end())
 		{
 			if (bConsiderAltStore)
 			{
@@ -814,7 +812,7 @@ bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 					// ok, then create a modded name version in the replacement directory
 					mstring sPathRelMod(sPathRel);
 					replaceChars(sPathRelMod, "/\\", '_');
-					sPathRelMod.insert(0, sReplDir + ltos(getpid()) + "_" + ltos(now)+"_");
+					sPathRelMod.insert(0, sReplDir + ltos(getpid()) + "_" + ltos(now) + "_");
 					LOG("Registering a new REPLACEMENT file item...");
 					auto sp(make_shared<fileitem_with_storage>(sPathRelMod, 1));
 					sp->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
@@ -857,7 +855,7 @@ bool fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 
 	spCustomFileItem->m_globRef = mapItems.emplace(spCustomFileItem->m_sPathRel,
 			spCustomFileItem);
-	spCustomFileItem->usercount=1;
+	spCustomFileItem->usercount = 1;
 	m_ptr = spCustomFileItem;
 	return true;
 }
@@ -877,15 +875,14 @@ time_t fileItemMgmt::BackgroundCleanup()
 {
 	LOGSTART2s("fileItemMgmt::BackgroundCleanup", GetTime());
 	lockguard lockGlobalMap(mapItemsMx);
-	tFiGlobMap::iterator it, here;
 
-	time_t now=GetTime();
+	time_t now = GetTime();
 	time_t oldestGet = END_OF_TIME;
 	time_t expBefore = now - MAXTEMPDELAY;
 
-	for(it=mapItems.begin(); it!=mapItems.end();)
+	for(auto it = mapItems.begin(); it != mapItems.end();)
 	{
-		here=it++;
+		auto here = it++;
 
 		// became busy again? Ignore this entry, it's new master will take care of the deletion ASAP
 		if(here->second->usercount >0)
@@ -916,7 +913,7 @@ time_t fileItemMgmt::BackgroundCleanup()
 	ldbg(oldestGet);
 
 	// preserving a few seconds to catch more of them in the subsequent run
-	return std::max(oldestGet + MAXTEMPDELAY, GetTime()+8);
+	return std::max(oldestGet + MAXTEMPDELAY, GetTime() + 8);
 }
 
 ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, size_t count)
@@ -926,10 +923,10 @@ ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, 
 #else
 	ssize_t r=sendfile(out_fd, in_fd, &nSendPos, count);
 
-	if(r<0 && (errno==ENOSYS || errno==EINVAL))
+	if(r<0 && (errno == ENOSYS || errno == EINVAL))
 		return sendfile_generic(out_fd, in_fd, &nSendPos, count);
-	else
-		return r;
+
+	return r;
 #endif
 }
 
@@ -987,13 +984,18 @@ int fileitem_with_storage::MoveRelease2Sidestore()
 		return 0;
 	if(!endsWithSzAr(m_sPathRel, "/InRelease") && !endsWithSzAr(m_sPathRel, "/Release"))
 		return 0;
-	auto tgtDir = CACHE_BASE + cfg::privStoreRelSnapSufix + sPathSep + GetDirPart(m_sPathRel);
-	mkdirhier(tgtDir);
 	auto srcAbs = CACHE_BASE + m_sPathRel;
 	Cstat st(srcAbs);
-	auto sideFileAbs = tgtDir + ltos(st.st_ino) + ltos(st.st_mtim.tv_sec) + ltos(st.st_mtim.tv_nsec);
-	return FileCopy(srcAbs, sideFileAbs);
-	//return rename(srcAbs.c_str(), sideFileAbs.c_str());
+	if(st)
+	{
+		auto tgtDir = CACHE_BASE + cfg::privStoreRelSnapSufix + sPathSep + GetDirPart(m_sPathRel);
+		mkdirhier(tgtDir);
+		auto sideFileAbs = tgtDir + ltos(st.st_ino) + ltos(st.st_mtim.tv_sec)
+				+ ltos(st.st_mtim.tv_nsec);
+		return FileCopy(srcAbs, sideFileAbs);
+		//return rename(srcAbs.c_str(), sideFileAbs.c_str());
+	}
+	return 0;
 }
 
 #endif // MINIBUILD

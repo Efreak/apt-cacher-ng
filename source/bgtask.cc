@@ -49,7 +49,7 @@ tSpecOpDetachable::~tSpecOpDetachable()
 cmstring GetFooter()
 {
         return mstring("<hr><address>Server: ") + cfg::agentname
-                + "&nbsp;&nbsp;|&nbsp;&nbsp;<a\nhref=\"https://flattr.com/thing/51105/Apt-Cacher-NG\">Flattr this!"
+                + "&nbsp;&nbsp;|&nbsp;&nbsp;<a\nhref=\"https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=QDCK9C2ZGUKZY&source=url\">Donate!"
                 "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a\nhref=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
 }
 

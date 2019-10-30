@@ -1,3 +1,46 @@
+apt-cacher-ng (3.3) THE-CLANS-ARE-MARCHING; urgency=low
+
+  [ POSSIBLY BREAKING CHANGES ]
+  * the setting of cachedir and logdir in the built-in defaults is now
+    configurable at build time (-DACNG_CACHE_DIR=... -DACNG_LOG_DIR=...)
+    and this settings are also propagated into generated configuration examples
+  * Dropping support for CMake prior to v3.1, dropped most custom variables
+    for target locations, now relying on public CMake variables from
+    GNUInstallDirs module; for details, see
+    https://cmake.org/cmake/help/v3.2/module/GNUInstallDirs.html
+  * Dropping support for OpenSSL before 1.0.2
+
+  [ FEATURES AND IMPROVEMENTS ]
+  * Change of default network timeout to 40 seconds
+  * Alternative fallback scheme for non-primary target connection attempts
+    (with default timeout value of 4s, see FastTimeout setting). By default,
+    this should help with unstable (blocking) IPv6 routing where IPv4 is still
+    operational (Debian bug #942122)
+  * Refactored DNS resolution&caching code, potential fix of rate connection
+    problems
+  * RequiresMountsFor directive in systemd service file example with
+    additional remarks on keeping this in sync with the config (as in Debian
+    bug #929035 and partly suggested in #942355)
+  * PFilePattern extensions for Fedora 29 and 30, by Alan Jenkins, Debian
+    bug #928270 (thanks!)
+  * added very explicit explanation on what "default value" means in the
+    acng.conf example (Debian bug #855995)
+
+  [ BUGFIXES ]
+  * increased size of the decompression line buffer for config file reading
+    (Debian bug #942634)
+  * fixes potential data race in DNS resolution
+  * Typo in INSTALL file (Debian bug #913593)
+
+  [ INTERNAL REFACTORING ]
+  * Overhauling code deployment, using a shared library (reducing installed
+    file size by almost 20%)
+  * dropped rfc2553emu code from old APT, using the platform abstraction from
+    libevent instead
+  * partial redesign for more singlethreaded IO operation
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 30 Oct 2019 22:38:59 +0100
+
 apt-cacher-ng (3.2) MY-NAME-IS-ANYBODY; urgency=medium
 
   * Maintenance release
