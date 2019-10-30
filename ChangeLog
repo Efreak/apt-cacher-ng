@@ -1,4 +1,4 @@
-apt-cacher-ng (3.3) THE-CLOWNS-ARE-MARCHING; urgency=low
+apt-cacher-ng (3.3) THE-CLANS-ARE-MARCHING; urgency=low
 
   [ POSSIBLY BREAKING CHANGES ]
   * the setting of cachedir and logdir in the built-in defaults is now
