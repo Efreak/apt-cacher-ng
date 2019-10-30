@@ -39,7 +39,7 @@ apt-cacher-ng (3.3) THE-CLANS-ARE-MARCHING; urgency=low
     libevent instead
   * partial redesign for more singlethreaded IO operation
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Wed, 30 Oct 2019 22:38:59 +0100
 
 apt-cacher-ng (3.2) MY-NAME-IS-ANYBODY; urgency=medium
 
