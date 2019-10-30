@@ -14,9 +14,11 @@
 # - letter case in variable names does not matter
 # - names and values are separated by colon or equals sign
 # - for boolean variables, zero means false, non-zero means true
-# - If a default value is not explicitly mentioned in the description, it might
-#   be something mentioned in the example but not neccessarily so; in doubt, use
-#   acngtool to query the default value of the particular variable.
+# - "default value" means built-in (!) defaults, i.e. something which the
+#   program uses if the option is not set here or in other config files.
+#   That value might be explicitly mentioned in the description. Where it is
+#   not, there is no reason to assume any of the examples to be the default
+#   value! In doubt, use acngtool to query the value of the particular variable.
 
 # Storage directory for downloaded data and related maintenance activity.
 #

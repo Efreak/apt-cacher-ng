@@ -72,7 +72,7 @@ Configuration:
  - visit Command-and-Control web interface of apt-cacher-ng, link can be found
    among other instructions at http://yourHostName:portNumber/ , which might be
    http://localhost:3142/ with the default configuration
- - for apt clients, there is a config snipped in contrib/10-apt-cacher-ng.conf
+ - for apt clients, there is a config snippet in contrib/10-apt-cacher-ng.conf
    which might be installed into /etc/apt/apt.conf.d/.
 
 Developer notes:

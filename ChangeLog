@@ -23,11 +23,14 @@ apt-cacher-ng (3.3) THE-CLOWNS-ARE-MARCHING; urgency=low
     bug #929035 and partly suggested in #942355)
   * PFilePattern extensions for Fedora 29 and 30, by Alan Jenkins, Debian
     bug #928270 (thanks!)
+  * added very explicit explanation on what "default value" means in the
+    acng.conf example (Debian bug #855995)
 
   [ BUGFIXES ]
   * increased size of the decompression line buffer for config file reading
     (Debian bug #942634)
   * fixes potential data race in DNS resolution
+  * Typo in INSTALL file (Debian bug #913593)
 
   [ INTERNAL REFACTORING ]
   * Overhauling code deployment, using a shared library (reducing installed
