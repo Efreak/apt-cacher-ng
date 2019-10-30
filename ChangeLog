@@ -20,6 +20,10 @@ apt-cacher-ng (3.3) THE-CLOWNS-ARE-MARCHING; urgency=low
     additional remarks on keeping this in sync with the config (as in Debian
     bug #929035 and partly suggested in #942355)
 
+  [ BUGFIXES ]
+  * increased size of the decompression line buffer for config file reading
+    (Debian bug #942634)
+
   [ INTERNAL REFACTORING ]
   * Overhauling code deployment, using a shared library (reducing installed
     file size by almost 20%)
