@@ -24,7 +24,8 @@ apt-cacher-ng (3.3) THE-CLANS-ARE-MARCHING; urgency=low
   * PFilePattern extensions for Fedora 29 and 30, by Alan Jenkins, Debian
     bug #928270 (thanks!)
   * added very explicit explanation on what "default value" means in the
-    acng.conf example (Debian bug #855995)
+    acng.conf example (Debian bug #855995) and also how to print it
+    (with acngtool, Debian bug #914746)
 
   [ BUGFIXES ]
   * increased size of the decompression line buffer for config file reading
@@ -34,6 +35,7 @@ apt-cacher-ng (3.3) THE-CLANS-ARE-MARCHING; urgency=low
   * In Arch Linux database mirror list, rewrite https URLs to http since the
     official JSON query only returns https versions, also add a different
     source (from Debian bug #942844)
+  * Generation of Sourceforge mirror redirectors list is fixed
 
   [ INTERNAL REFACTORING ]
   * Overhauling code deployment, using a shared library (reducing installed

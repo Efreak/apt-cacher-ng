@@ -1,3 +1,11 @@
+# Mirror list/database update instructions
+# This Make hackery runs either directly on web input or uses multiple steps in
+# case where the input data is uncertain and the validity needs to be
+# double-checked (by probing/crawling). To avoid pointless scans, the data is
+# fingerprinted and the fingerprints are stored in the repository.
+#
+# XXX: this actually became too wild and most code should be moved into regular shell scripts.
+#
 
 DBTMP=tmp
 export DBTMP
@@ -5,6 +13,7 @@ CONFDIR=conf
 export CONFDIR
 DEBMASTERLIST=https://salsa.debian.org/mirror-team/masterlist/raw/master/Mirrors.masterlist
 ARCHJSON=https://www.archlinux.de/mirrors/datatables
+
 
 # Main rule to be called to update all databases. Does two things, first get
 # and pre-filter raw data, second: check the sources and generate final lists,
@@ -54,12 +63,11 @@ get_sl_input:
 	md5sum $(DBTMP)/slsnap > $(DBTMP)/sig-slsnap
 	cmp sig-slsnap $(DBTMP)/sig-slsnap 2>/dev/null || cp $(DBTMP)/sig-slsnap sig-slsnap
 
-get_sfnet_input:
-	wget -q -O $(DBTMP)/sf_raw http://sourceforge.net/p/forge/documentation/Mirrors/
-	perl -ne 'next if !/^<td>([a-z]+)<\/td>/; print "http://$$1.dl.sourceforge.net/project/\n"' > $(DBTMP)/sfsnap <$(DBTMP)/sf_raw
-	md5sum $(DBTMP)/sfsnap > $(DBTMP)/sig-sfsnap
-	cmp sig-sfsnap $(DBTMP)/sig-sfsnap 2>/dev/null || cp $(DBTMP)/sig-sfsnap sig-sfsnap
+get_sfnet_input: $(CONFDIR)/sfnet_mirrors
 
+$(CONFDIR)/sfnet_mirrors: $(CONFDIR)
+	wget -q -O $(DBTMP)/sf_raw http://sourceforge.net/p/forge/documentation/Mirrors/
+	perl -pe 's,<td,\n<td,g' < $(DBTMP)/sf_raw | sort -u | grep '<td>[a-z]\+<' | sed -e 's,<td>,http://,;s,<.*,.dl.sourceforge.net/project/,' > $(CONFDIR)/sfnet_mirrors
 
 # the $(CONFDIR)/* targets are intended to check the raw data got in the first step and 
 # generate the final lists, skipping dead mirrors. this is the second stage of the gendbs target. 
@@ -73,12 +81,6 @@ $(CONFDIR)/fedora_mirrors: sig-fsnap ubuntuscan.sh
 
 $(CONFDIR)/sl_mirrors: sig-slsnap ubuntuscan.sh
 	bash ubuntuscan.sh $@ $(DBTMP)/slsnap $(DBTMP) "/" "5rolling\|6rolling\|7rolling\|8rolling\|9rolling"
-
-$(CONFDIR)/sfnet_mirrors: sig-sfsnap
-	> $(DBTMP)/sfnet_mirrors.tmp
-	for u in $$(cat $(DBTMP)/sfsnap) ; do echo Testing "$$u"; wget --timeout=10 --tries=1 -q -O- $$u | grep -qi "all.*rights" && echo "$$u" >> $(DBTMP)/sfnet_mirrors.tmp; done
-	mkdir -p "$(CONFDIR)"
-	cp -f $(DBTMP)/sfnet_mirrors.tmp $@
 
 $(CONFDIR)/ubuntu_mirrors: sig-ubuntu ubuntuscan.sh
 	bash ubuntuscan.sh $@ $(DBTMP)/usnap $(DBTMP) "/pool/" "main"
@@ -129,4 +131,4 @@ package: $(DBTMP)
 install:
 	cp conf/*mirrors* /usr/lib/apt-cacher-ng/
 
-.PHONY: $(CONFDIR)/gentoo_mirrors.gz $(CONFDIR)/archlx_mirrors
+.PHONY: $(CONFDIR)/gentoo_mirrors.gz $(CONFDIR)/archlx_mirrors $(CONFDIR)/sfnet_mirrors
