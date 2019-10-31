@@ -1183,7 +1183,6 @@ void dlcon::WorkLoop()
 
 				bool bUsed = false;
 				ASSERT(!m_qNewjobs.empty());
-#warning warum zweites mal connect??
 				auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
 				{
 					return m_pConFactory->CreateConnected(tgt.sHost,
