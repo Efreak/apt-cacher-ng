@@ -26,6 +26,7 @@ apt-cacher-ng (3.3) THE-CLANS-ARE-MARCHING; urgency=low
   * added very explicit explanation on what "default value" means in the
     acng.conf example (Debian bug #855995) and also how to print it
     (with acngtool, Debian bug #914746)
+  * Mirror database update
 
   [ BUGFIXES ]
   * increased size of the decompression line buffer for config file reading
