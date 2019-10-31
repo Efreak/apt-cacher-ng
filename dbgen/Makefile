@@ -89,7 +89,12 @@ $(CONFDIR)/cygwin_mirrors:
 
 $(CONFDIR)/archlx_mirrors:
 	wget -q -O $(DBTMP)/arch_raw '$(ARCHJSON)'
-	jq '.data[]' $(DBTMP)/arch_raw | jq .url -r | sort -u > $(CONFDIR)/archlx_mirrors
+#	jq '.data[]' $(DBTMP)/arch_raw | jq .url -r | sort -u > $(CONFDIR)/archlx_mirrors
+	jq '.data[]' $(DBTMP)/arch_raw | jq .url -r | sed -e 's,https://,http://,' > $(DBTMP)/archlx_mirrors
+	wget -q -O- https://www.archlinux.org/mirrorlist/all/http/ \
+      | grep 'http://' \
+      | sed -e 's/.* = //' -e 's/\$$repo.*//' >> $(DBTMP)/archlx_mirrors
+	sort -u < $(DBTMP)/archlx_mirrors > $(CONFDIR)/archlx_mirrors
 
 $(CONFDIR)/deb_mirrors.gz: sig-debian deburlgen.pl
 	perl deburlgen.pl Archive-http < $(DBTMP)/dsnap > $(DBTMP)/dsnap.urls
@@ -119,7 +124,7 @@ TARARGS += --sort=name
 endif
 
 package: $(DBTMP)
-	rm -rf $(TGTDIR) && mkdir $(TGTDIR) && cp -l Makefile deburlgen.pl gentoo_mirrors.sh ubuntuscan.sh sig-* $(TGTDIR) && tar -f- -c $(TARARGS) $(TGTDIR) | xz -9 > $(DBGENERATOR).tar.xz
+	rm -rf $(TGTDIR) && mkdir $(TGTDIR) && cp -l Makefile deburlgen.pl *.sh sig-* $(TGTDIR) && tar -f- -c $(TARARGS) $(TGTDIR) | xz -9 > $(DBGENERATOR).tar.xz
 
 install:
 	cp conf/*mirrors* /usr/lib/apt-cacher-ng/

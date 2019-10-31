@@ -31,6 +31,9 @@ apt-cacher-ng (3.3) THE-CLANS-ARE-MARCHING; urgency=low
     (Debian bug #942634)
   * fixes potential data race in DNS resolution
   * Typo in INSTALL file (Debian bug #913593)
+  * In Arch Linux database mirror list, rewrite https URLs to http since the
+    official JSON query only returns https versions, also add a different
+    source (from Debian bug #942844)
 
   [ INTERNAL REFACTORING ]
   * Overhauling code deployment, using a shared library (reducing installed
