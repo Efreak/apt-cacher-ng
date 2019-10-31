@@ -329,7 +329,7 @@ ExThreshold: 4
 # between them or explicitly create them.
 #
 # LocalDirs: woo /data/debarchive/woody ; hamm /data/debarchive/hamm
-LocalDirs: acng-doc @DOCDIR@
+LocalDirs: acng-doc @CMAKE_INSTALL_FULL_DOCDIR@
 
 # Precache a set of files referenced by specified index files. This can be used
 # to create a partial mirror usable for offline work. There are certain limits
