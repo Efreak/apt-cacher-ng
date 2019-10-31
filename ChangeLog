@@ -38,6 +38,8 @@ apt-cacher-ng (3.3) THE-CLANS-ARE-MARCHING; urgency=low
   * dropped rfc2553emu code from old APT, using the platform abstraction from
     libevent instead
   * partial redesign for more singlethreaded IO operation
+  * Disabled LTO by default, still crashing gold linker with certain option
+    combinations
 
  -- Eduard Bloch <blade@debian.org>  Wed, 30 Oct 2019 22:38:59 +0100
 

@@ -125,6 +125,9 @@ ELSE()
   endif()
 ENDIF()
 
+# set the default to OFF for now because gold is still too buggy
+set(USE_LTO_DEFAULT off)
+
 if(CMAKE_BUILD_TYPE MATCHES Debug)
    set(USE_LTO_DEFAULT off)
    _append(ACNG_COMPFLAGS -DDEBUG)
@@ -155,7 +158,6 @@ if(USE_LTO)
 		set(USE_LTO off)
         endif()
 endif()
-message("-- LTO use: ${USE_LTO}")
 
 FIND_LIBRARY(HAVE_SOCKETLIB socket) # separate socket lib looks like Solaris-like environment
 if(HAVE_SOCKETLIB)
@@ -337,6 +339,8 @@ message("Compiler flags (common): ${ACNG_COMPFLAGS}")
 message("Compiler flags (C++ only): ${ACNG_CXXFLAGS}")
 message("Compiler flags (environment): ${CMAKE_CXX_FLAGS}")
 message("Linker flags: ${CMAKE_EXE_LINKER_FLAGS}")
+message("LTO use: ${USE_LTO}
+")
 
 # unset everything, only use as needed
 SET(CMAKE_REQUIRED_LIBRARIES )
