@@ -53,10 +53,10 @@ public:
 	// interface to libevent callbacks
 	static void on_io(evutil_socket_t, short what, void *uptr);
 
-	// moving is ok, copying: not!
-	event_socket(event_socket&&);
 private:
 	event_socket(const event_socket&) = delete;
+	// subtle moving to different location is just as bad because the pointer argument in the event pool becomes wild
+	event_socket(event_socket&&) = delete;
 };
 
 /**

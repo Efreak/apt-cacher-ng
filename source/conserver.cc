@@ -48,7 +48,7 @@ namespace conserver
 {
 
 int yes(1);
-vector<acng::event_socket> g_vecSocks;
+vector<SHARED_PTR<acng::event_socket> > g_vecSocks;
 
 base_with_condition g_ThreadPoolCondition;
 list<conn*> g_freshConQueue;
@@ -270,12 +270,14 @@ auto bind_and_listen =
 				return false;
 			}
 
-			g_vecSocks.emplace_back(evabase::instance,
+			g_vecSocks.emplace_back(
+					make_shared<event_socket>(evabase::instance,
 					mSock,
 					EV_READ | EV_PERSIST,
-					[](const std::shared_ptr<evasocket>& sock, short) {do_accept(sock);});
+					[](const std::shared_ptr<evasocket>& sock, short) {do_accept(sock);})
+					);
 			// and activate it once
-			g_vecSocks.back().enable();
+			g_vecSocks.back()->enable();
 			return true;
 		};
 
@@ -303,15 +305,8 @@ auto setup_tcp_listeners = [](LPCSTR addi, const std::string& port) -> unsigned
 	for(const evutil_addrinfo *p; !!(p=iter.next());)
 	{
 		// no fit or or seen before?
-		if((p->ai_family != AF_INET6 && p->ai_family != AF_INET) ||
-				!dedup.insert(std::string((LPCSTR)p->ai_addr, p->ai_addrlen)).second)
-		{
+		if(!dedup.emplace((const char*) p->ai_addr, p->ai_addrlen).second)
 			continue;
-		}
-
-// managed socket
-		shared_ptr<evasocket> mSock;
-
 		int nSockFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
 		if (nSockFd == -1)
 		{
@@ -328,15 +323,15 @@ auto setup_tcp_listeners = [](LPCSTR addi, const std::string& port) -> unsigned
 				continue;
 			}
 		}
-		mSock = evasocket::create(nSockFd);
-
-// if we have a dual-stack IP implementation (like on Linux) then
-// explicitly disable the shadow v4 listener. Otherwise it might be
-// bound or maybe not, and then just sometimes because of configurable
-// dual-behavior, or maybe because of real errors;
-// we just cannot know for sure but we need to.
+		auto mSock = evasocket::create(nSockFd);
+		// if we have a dual-stack IP implementation (like on Linux) then
+		// explicitly disable the shadow v4 listener. Otherwise it might be
+		// bound or maybe not, and then just sometimes because of configurable
+		// dual-behavior, or maybe because of real errors;
+		// we just cannot know for sure but we need to.
 #if defined(IPV6_V6ONLY) && defined(SOL_IPV6)
-		if(p->ai_family==AF_INET6) setsockopt(mSock->fd(), SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
+		if(p->ai_family==AF_INET6)
+			setsockopt(mSock->fd(), SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
 #endif
 		setsockopt(mSock->fd(), SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 		res += bind_and_listen(mSock, p->ai_addr, p->ai_addrlen);
