@@ -13,7 +13,7 @@ PROJECT(${PACKAGE} CXX C)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR})
-set(CMAKE_SKIP_BUILD_RPATH on) # no -rdynamic needed ever
+#set(CMAKE_SKIP_BUILD_RPATH on) # no -rdynamic needed ever
 
 INCLUDE(CheckIncludeFiles) 
 INCLUDE(CheckCXXSourceCompiles)
@@ -290,6 +290,14 @@ else()
         LIST(APPEND BaseNetworkLibs ${libevent_LDFLAGS})
 endif()
 
+
+pkg_check_modules(libevent_pthreads libevent_pthreads)
+if(NOT libevent_pthreads_FOUND)
+        message(FATAL_ERROR "!! Error: proper libevent_pthreads installation is required")
+else()
+        string(REPLACE ";" " " ACNG_COMPFLAGS "${ACNG_COMPFLAGS} ${libevent_pthreads_CFLAGS}")
+        LIST(APPEND BaseNetworkLibs ${libevent_pthreads_LDFLAGS})
+endif()
 
 if(USE_SSL)
 	pkg_check_modules(openssl "openssl>=1.0.2")

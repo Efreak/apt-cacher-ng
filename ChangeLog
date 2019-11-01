@@ -1,4 +1,4 @@
-apt-cacher-ng (3.3) THE-CLANS-ARE-MARCHING; urgency=low
+apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
 
   [ POSSIBLY BREAKING CHANGES ]
   * the setting of cachedir and logdir in the built-in defaults is now
@@ -40,14 +40,14 @@ apt-cacher-ng (3.3) THE-CLANS-ARE-MARCHING; urgency=low
 
   [ INTERNAL REFACTORING ]
   * Overhauling code deployment, using a shared library (reducing installed
-    file size by almost 20%)
+    file size by up to 20%)
   * dropped rfc2553emu code from old APT, using the platform abstraction from
     libevent instead
   * partial redesign for more singlethreaded IO operation
   * Disabled LTO by default, still crashing gold linker with certain option
     combinations
 
- -- Eduard Bloch <blade@debian.org>  Wed, 30 Oct 2019 22:38:59 +0100
+ -- 
 
 apt-cacher-ng (3.2) MY-NAME-IS-ANYBODY; urgency=medium
 
