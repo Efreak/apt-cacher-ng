@@ -279,7 +279,13 @@ ExThreshold: 4
 
 # Network timeout for outgoing connections, in seconds.
 #
-# NetworkTimeout: 60
+# NetworkTimeout: 40
+
+# Fast fallback timeout, in seconds. This is the time to wait before
+# alternative target addresses for a client connection are tried, which can be
+# usefull for quick fallback to IPv4 in case of whacky IPv6 configuration.
+#
+# FastTimeout = 4
 
 # Sometimes it makes sense to not store the data in cache and just return the
 # package data to client while it comes in. The following DontCache* parameters
