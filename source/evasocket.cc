@@ -57,7 +57,7 @@ void acng::event_socket::disable()
 	if(m_event)
 		event_del(m_event);
 }
-
+/*
 acng::event_socket::event_socket(event_socket&& o)
 {
 	m_evbase.swap(o.m_evbase);
@@ -66,6 +66,7 @@ acng::event_socket::event_socket(event_socket&& o)
 	m_event = o.m_event;
 	o.m_event = nullptr;
 }
+*/
 
 acng::socket_activity_base::socket_activity_base(std::shared_ptr<evabase> evbase)
 : m_evbase(evbase)

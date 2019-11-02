@@ -46,6 +46,10 @@ Troubleshooting and integrator notes:
    is lib/apt-cacher-ng under $CMAKE_INSTALL_PREFIX
  - see CMakeLists.txt for more variables that can be customized
  - NOTE: install halibut tool to rebuild the documentation, if needed
+ - If an update of remote mirror data is required, this can be achieved with
+   "make -C dbgen". The result ends in dbgen/conf/ and needs to be checked
+   carefully before installing it because of the evolution of mirrors (the
+   scripts might not keep up with the remote changes).
 
 Configure to run on system startup:
 
