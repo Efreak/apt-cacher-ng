@@ -213,9 +213,17 @@ public:
 	{
 		return bSSL ? PROT_PFX_HTTPS : PROT_PFX_HTTP;
 	}
-
+	tHttpUrl(const acng::tHttpUrl& a)
+	{
+		sHost = a.sHost;
+		sPort = a.sPort;
+		sPath = a.sPath;
+		sUserPass = a.sUserPass;
+		bSSL = a.bSSL;
+	}
 	tHttpUrl & operator=(const tHttpUrl &a)
 	{
+		if(&a == this) return *this;
 		sHost = a.sHost;
 		sPort = a.sPort;
 		sPath = a.sPath;

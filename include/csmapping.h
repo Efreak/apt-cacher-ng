@@ -86,6 +86,14 @@ struct tFingerprint {
 	{
 		memcpy(csum, a.csum, sizeof(csum));
 	};
+	tFingerprint & operator=(const tFingerprint& a)
+	{
+		if(this == &a) return *this;
+		size = a.size;
+		csType = a.csType;
+		memcpy(csum, a.csum, sizeof(csum));
+		return *this;
+	}
 	
 	bool SetCs(const mstring & hexString, CSTYPES eCstype = CSTYPE_INVALID)
 	{
