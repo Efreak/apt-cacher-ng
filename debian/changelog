@@ -1,8 +1,27 @@
 apt-cacher-ng (3.3-1) experimental; urgency=low
 
   * New upstream version v3.3
+    Contains a good number of internal changes, including:
+    - Alternative fallback scheme for non-primary target connection
+      attempts (with default timeout value of 4s, see FastTimeout
+      setting). By default, this should help with unstable (blocking) IPv6
+      routing where IPv4 is still operational (closes: #942122)
+    - RequiresMountsFor directive in systemd service file example with
+      additional remarks on keeping this in sync with the config
+      (closes: #929035, #942355)
+    - PFilePattern extensions for Fedora 29 and 30, by Alan Jenkins,
+      closes: #928270, thanks!)
+    - added very explicit explanation on what "default value" means in the
+      acng.conf example (closes: #855995) and also how to print it (with
+      acngtool, closes: #914746)
+    - Typo in INSTALL file (closes: #913593)
+    - In Arch Linux database mirror list, rewrite https URLs to http since
+      the official JSON query only returns https versions, also add a
+      different source (closes: #942844, thanks!)
+  * Make errors on purging of cache folder non-fatal (closes: #915082)
+  * Recommends: ca-certificates (closes: #926282)
 
- -- Eduard Bloch <blade@debian.org>  Wed, 30 Oct 2019 22:47:03 +0100
+ -- Eduard Bloch <blade@debian.org>  Sat, 02 Nov 2019 12:44:27 +0100
 
 apt-cacher-ng (3.2-3) unstable; urgency=medium
 
