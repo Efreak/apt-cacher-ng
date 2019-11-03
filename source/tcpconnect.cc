@@ -268,6 +268,13 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			if(!prim.dns)
 				return withThisErrno(EAFNOSUPPORT);
 			prim.state = DNS_PICKED;
+
+			if (alt.state == NOT_YET && !alt.dns)
+			{
+				alt.dns = iter.next();
+				if (!alt.dns)
+					alt.state = NA;
+			}
 			continue;
 		case DNS_PICKED:
 		{
@@ -319,7 +326,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 		case NOT_YET:
 			if (GetTime() >= alt.tmexp)
 			{
-				alt.state = PICK_DNS;
+				alt.state = alt.dns ? DNS_PICKED : PICK_DNS;
 				continue;
 			}
 			break;
@@ -411,6 +418,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 		else
 		{
 			// Timeout.
+			errno = ETIMEDOUT;
 			continue;
 		}
 
