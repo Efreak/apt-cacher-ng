@@ -113,73 +113,6 @@ void termsocket(int fd)
 			break;
 	};
 }
-#if 0
-static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t addrlen, time_t timeout, bool bAssumeNonBlock)
-{
-	long stflags;
-	struct timeval tv;
-	fd_set wfds;
-	int res;
-
-	tv.tv_sec = timeout;
-	tv.tv_usec = 0;
-
-	if(!bAssumeNonBlock)
-	{
-		if ((stflags = fcntl(sockfd, F_GETFL, nullptr)) < 0)
-			return -1;
-
-		// Set to non-blocking mode.
-		if (fcntl(sockfd, F_SETFL, stflags | O_NONBLOCK) < 0)
-			return -1;
-	}
-	res = connect(sockfd, addr, addrlen);
-	if (res < 0) {
-		if (EINPROGRESS == errno)
-		{
-			for (;;) {
-				// Wait for connection.
-				FD_ZERO(&wfds);
-				FD_SET(sockfd, &wfds);
-				res = select(sockfd+1, nullptr, &wfds, nullptr, &tv);
-				if (res < 0)
-				{
-					if (EINTR != errno)
-						return -1;
-				}
-				else if (res > 0)
-				{
-					// Socket selected for writing.
-					int err;
-					socklen_t optlen = sizeof(err);
-
-					if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, (void *)&err, &optlen) < 0)
-						return -1;
-
-					if (err)
-					{
-						errno = err;
-						return -1;
-					}
-
-					break;
-				} else {
-					// Timeout.
-					errno = ETIMEDOUT;
-					return -1;
-				}
-			}
-		} else {
-			return -1;
-		}
-	}
-
-	if(!bAssumeNonBlock && fcntl(sockfd, F_SETFL, stflags) < 0) // Set back to original mode
-		return -1;
-
-	return 0;
-}
-#endif
 
 void set_sock_flags(evutil_socket_t fd)
 {
@@ -283,7 +216,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 
 	for(auto op_max=0; op_max < 30000; ++op_max) // fail-safe switch, in case of any mistake here
 	{
-		DBGQLOG("state a: " << prim.state << ", state b: " << alt.state );
+		LOG("state a: " << prim.state << ", state b: " << alt.state );
 		switch(prim.state)
 		{
 		case PICK_ADDR:
