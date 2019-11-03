@@ -48,6 +48,9 @@
 #define __just_fall_through
 #endif
 
+#define STRINGIFY(a) STR(a)
+#define STR(a) #a
+
 namespace acng
 {
 
@@ -499,7 +502,6 @@ struct auto_raii
     ~auto_raii() { if (m_p != m_inval) TFreeFunc(m_p); }
     void disable() { m_p = m_inval; }
 };
-
 
 // from bgtask.cc
 cmstring GetFooter();
