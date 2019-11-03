@@ -34,12 +34,6 @@
 #define __func__ __FUNCTION__
 #endif
 
-#if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
-#define COMPATGCC47
-#define EMPLACE_PAIR_COMPAT(M,K,V) if((M).find(K) == (M).end()) (M).insert(std::make_pair(K,V))
-#else
-#define EMPLACE_PAIR_COMPAT(M,K,V) (M).emplace(K,V)
-#endif
 
 // little STFU helper
 #if __GNUC__ >= 7
@@ -47,6 +41,9 @@
 #else
 #define __just_fall_through
 #endif
+
+#define STRINGIFY(a) STR(a)
+#define STR(a) #a
 
 namespace acng
 {
@@ -499,7 +496,6 @@ struct auto_raii
     ~auto_raii() { if (m_p != m_inval) TFreeFunc(m_p); }
     void disable() { m_p = m_inval; }
 };
-
 
 // from bgtask.cc
 cmstring GetFooter();

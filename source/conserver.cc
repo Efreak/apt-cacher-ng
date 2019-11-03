@@ -143,7 +143,7 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 	socklen_t addrlen = sizeof(addr);
 
 	int fd = accept(soc->fd(), (struct sockaddr *) &addr, &addrlen);
-	auto_raii<int, forceclose> err_clean(fd, -1);
+	auto_raii<int, justforceclose> err_clean(fd, -1);
 
 	if (fd >= 0)
 	{

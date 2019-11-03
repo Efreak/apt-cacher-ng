@@ -113,73 +113,6 @@ void termsocket(int fd)
 			break;
 	};
 }
-#if 0
-static int connect_timeout(int sockfd, const struct sockaddr *addr, socklen_t addrlen, time_t timeout, bool bAssumeNonBlock)
-{
-	long stflags;
-	struct timeval tv;
-	fd_set wfds;
-	int res;
-
-	tv.tv_sec = timeout;
-	tv.tv_usec = 0;
-
-	if(!bAssumeNonBlock)
-	{
-		if ((stflags = fcntl(sockfd, F_GETFL, nullptr)) < 0)
-			return -1;
-
-		// Set to non-blocking mode.
-		if (fcntl(sockfd, F_SETFL, stflags | O_NONBLOCK) < 0)
-			return -1;
-	}
-	res = connect(sockfd, addr, addrlen);
-	if (res < 0) {
-		if (EINPROGRESS == errno)
-		{
-			for (;;) {
-				// Wait for connection.
-				FD_ZERO(&wfds);
-				FD_SET(sockfd, &wfds);
-				res = select(sockfd+1, nullptr, &wfds, nullptr, &tv);
-				if (res < 0)
-				{
-					if (EINTR != errno)
-						return -1;
-				}
-				else if (res > 0)
-				{
-					// Socket selected for writing.
-					int err;
-					socklen_t optlen = sizeof(err);
-
-					if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, (void *)&err, &optlen) < 0)
-						return -1;
-
-					if (err)
-					{
-						errno = err;
-						return -1;
-					}
-
-					break;
-				} else {
-					// Timeout.
-					errno = ETIMEDOUT;
-					return -1;
-				}
-			}
-		} else {
-			return -1;
-		}
-	}
-
-	if(!bAssumeNonBlock && fcntl(sockfd, F_SETFL, stflags) < 0) // Set back to original mode
-		return -1;
-
-	return 0;
-}
-#endif
 
 void set_sock_flags(evutil_socket_t fd)
 {
@@ -209,7 +142,15 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 	Disconnect();
 	auto time_start(GetTime());
 
-	enum ePhase { NA, NOT_YET, PICK_DNS, DNS_PICKED, SELECT_CONN, HANDLE_ERROR, ERROR_STOP};
+	enum ePhase {
+		NO_ALTERNATIVES,
+		NOT_YET,
+		PICK_ADDR,
+		ADDR_PICKED,
+		SELECT_CONN, // shall do select on connection
+		HANDLE_ERROR, // transient error state, to be continued into some recovery or ERROR_STOP; expects a useful errno value!
+		ERROR_STOP // basically a non-recoverable error state
+	};
 	struct tConData {
 		ePhase state;
 		int fd;
@@ -232,49 +173,62 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 #if DEBUG
 			log::err(string("Connecting: ") + formatIpPort(dns));
 #endif
-			auto res = connect(fd, dns->ai_addr, dns->ai_addrlen);
-			if (res != -1)
-				return true;
-			if(errno == EINPROGRESS)
-				state = SELECT_CONN;
-			else if(errno != EINTR)
-				state = HANDLE_ERROR;
-			return false;
+			while (true)
+			{
+				auto res = connect(fd, dns->ai_addr, dns->ai_addrlen);
+				if (res != -1)
+					return true;
+				if (errno == EINTR)
+					continue;
+				if (errno == EINPROGRESS)
+				{
+					errno = 0;
+					state = SELECT_CONN;
+				}
+				else
+					// interpret that errno
+					state = HANDLE_ERROR;
+				return false;
+
+			}
 		}
 	};
-	tConData prim {PICK_DNS, -1, time_start + timeout, nullptr };
-	tConData alt {cfg::fasttimeout >0 ? NOT_YET: NA, -1, time_start + cfg::fasttimeout, nullptr };
-	auto withErrnoError = [&]() {
-		sErrorMsg = tErrnoFmter("500 Connection failure: ");
-		return false;
-	};
-	auto withThisErrno = [&withErrnoError](int myErr) { errno = myErr; return withErrnoError(); };
-	// take and use the good one, close the rest on exit automatically
-	auto retGood = [&](int& fd) -> bool {
-		std::swap(fd, m_conFd);
-		return true;
-	};
-
 	auto iter = tAlternatingDnsIterator(dns->getTcpAddrInfo());
+	tConData prim {ADDR_PICKED, -1, time_start + timeout, iter.next() };
+	tConData alt {NO_ALTERNATIVES, -1, time_start + cfg::fasttimeout, nullptr };
 	CTimeVal tv;
+	// pickup the first and/or probably the best errno code which can be reported to user
 	int error_prim = 0;
+
+	auto retGood = [&](int& fd) { std::swap(fd, m_conFd); return true; };
+	auto retError = [&](const std::string &errStr) { sErrorMsg = errStr; return false; };
+	auto withErrnoError = [&]() { return retError(tErrnoFmter("500 Connection failure: "));	};
+	auto withThisErrno = [&withErrnoError](int myErr) { errno = myErr; return withErrnoError(); };
+
+	// ok, initial condition, one target should be always there, iterator would also hop to the next fallback if allowed
+	if(!prim.dns)
+		return withThisErrno(EAFNOSUPPORT);
+	if (cfg::fasttimeout > 0)
+	{
+		alt.dns = iter.next();
+		alt.state = alt.dns ? NOT_YET : NO_ALTERNATIVES;
+	}
 
 	for(auto op_max=0; op_max < 30000; ++op_max) // fail-safe switch, in case of any mistake here
 	{
+		LOG("state a: " << prim.state << ", state b: " << alt.state );
 		switch(prim.state)
 		{
-		case PICK_DNS:
-			prim.dns = iter.next();
-			if(!prim.dns)
-				return withThisErrno(EAFNOSUPPORT);
-			prim.state = DNS_PICKED;
-			continue;
-		case DNS_PICKED:
-		{
+		case PICK_ADDR:
+		case NO_ALTERNATIVES:
+		case NOT_YET:
+			// XXX: not reachable
+			break;
+		case ADDR_PICKED:
 			if(prim.init_con(time_start + cfg::nettimeout))
 				return retGood(prim.fd);
-			continue;
-		}
+			OPTSET(error_prim, errno);
+			__just_fall_through;
 		case SELECT_CONN:
 		{
 			if(GetTime() >= prim.tmexp)
@@ -292,12 +246,13 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			// can work around?
 			switch(alt.state)
 			{
-			case NA:
+			case NO_ALTERNATIVES:
 			case ERROR_STOP:
 				return withThisErrno(error_prim);
 			case NOT_YET:
-				alt.state = PICK_DNS;
 				prim.state = ERROR_STOP;
+				// push it sooner
+				alt.tmexp -= cfg::fasttimeout;
 				break;
 			default:
 				// some intermediate state there? Let it continue
@@ -307,30 +262,33 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			break;
 		}
 		case ERROR_STOP:
+			checkforceclose(prim.fd);
 			break;
 		default: // this should be unreachable
-			return withThisErrno(EINVAL);
+			return retError("500 Internal error at " STRINGIFY(__LINE__));
 		}
 
 		switch(alt.state)
 		{
-		case NA:
+		case NO_ALTERNATIVES:
 			break;
 		case NOT_YET:
-			if (GetTime() >= alt.tmexp)
-			{
-				alt.state = PICK_DNS;
-				continue;
-			}
-			break;
-		case PICK_DNS:
-			alt.dns = iter.next();
-			alt.state = alt.dns ? DNS_PICKED : ERROR_STOP;
-			continue;
-		case DNS_PICKED:
+			if (GetTime() < alt.tmexp)
+				break;
+			// first DNS info was preselected before
+			ASSERT(alt.dns);
+			alt.state = ADDR_PICKED;
+			__just_fall_through;
+		case ADDR_PICKED:
 		{
 			if(alt.init_con(GetTime() + cfg::fasttimeout))
 				return retGood(alt.fd);
+			continue;
+		}
+		case PICK_ADDR:
+		{
+			alt.dns = iter.next();
+			alt.state = alt.dns ? ADDR_PICKED : ERROR_STOP;
 			continue;
 		}
 		case SELECT_CONN:
@@ -350,8 +308,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 		}
 		case HANDLE_ERROR:
 		{
-			checkforceclose(alt.fd);
-			alt.state = PICK_DNS;
+			alt.state = PICK_ADDR;
 			continue;
 		}
 		case ERROR_STOP:
@@ -368,6 +325,8 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			}
 			break;
 		}
+		default: // this should be unreachable
+			return retError("500 Internal error at " STRINGIFY(__LINE__));
 		}
 
 		select_set_t selset;
@@ -411,6 +370,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 		else
 		{
 			// Timeout.
+			errno = ETIMEDOUT;
 			continue;
 		}
 
@@ -561,7 +521,7 @@ void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
 		// a DOS?
 		if (spareConPool.size() < 50)
 		{
-			EMPLACE_PAIR_COMPAT(spareConPool, make_tuple(host, handle->GetPort()
+			spareConPool.emplace(make_tuple(host, handle->GetPort()
 					SSL_OPT_ARG(handle->m_bio) ), make_pair(handle, now));
 #ifndef MINIBUILD
 			cleaner::GetInstance().ScheduleFor(now + TIME_SOCKET_EXPIRE_CLOSE, cleaner::TYPE_EXCONNS);
