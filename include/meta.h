@@ -34,12 +34,6 @@
 #define __func__ __FUNCTION__
 #endif
 
-#if __GNUC__ == 4 && __GNUC_MINOR__ < 8 && !defined(__clang__)
-#define COMPATGCC47
-#define EMPLACE_PAIR_COMPAT(M,K,V) if((M).find(K) == (M).end()) (M).insert(std::make_pair(K,V))
-#else
-#define EMPLACE_PAIR_COMPAT(M,K,V) (M).emplace(K,V)
-#endif
 
 // little STFU helper
 #if __GNUC__ >= 7
