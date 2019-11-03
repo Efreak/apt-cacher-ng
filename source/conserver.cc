@@ -253,15 +253,22 @@ void SetupConAndGo(int fd, const char *szClientName)
 }
 
 auto bind_and_listen =
-		[](shared_ptr<evasocket> mSock, const sockaddr* addi, unsigned int addilen) -> bool
+		[](shared_ptr<evasocket> mSock, const evutil_addrinfo *pAddrInfo) -> bool
 		{
-			if ( ::bind(mSock->fd(), addi, addilen))
+	LOGSTART2s("bind_and_listen", formatIpPort(pAddrInfo));
+			if ( ::bind(mSock->fd(), pAddrInfo->ai_addr, pAddrInfo->ai_addrlen))
 			{
+				log::flush();
 				perror("Couldn't bind socket");
 				cerr.flush();
 				if(EADDRINUSE == errno)
-				cerr << "Port " << cfg::port << " is busy, see the manual (Troubleshooting chapter) for details." <<endl;
+				{
+					if(pAddrInfo->ai_family == PF_UNIX)
+						cerr << "Error creating or binding the UNIX domain socket - please check permissions!" <<endl;
+					else
+						cerr << "Port " << cfg::port << " is busy, see the manual (Troubleshooting chapter) for details." <<endl;
 				cerr.flush();
+				}
 				return false;
 			}
 			if (listen(mSock->fd(), SO_MAXCONN))
@@ -295,6 +302,7 @@ auto setup_tcp_listeners = [](LPCSTR addi, const std::string& port) -> unsigned
 
 	if(!resolver.ResolveTcpTarget(addi ? addi : sEmptyString, port, scratchBuf, &hints))
 	{
+		log::flush();
 		perror("Error resolving address for binding");
 		return 0;
 	}
@@ -334,7 +342,7 @@ auto setup_tcp_listeners = [](LPCSTR addi, const std::string& port) -> unsigned
 			setsockopt(mSock->fd(), SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
 #endif
 		setsockopt(mSock->fd(), SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-		res += bind_and_listen(mSock, p->ai_addr, p->ai_addrlen);
+		res += bind_and_listen(mSock, p);
 	}
 	return res;
 };
@@ -383,7 +391,13 @@ int ACNG_API Setup()
 
 		auto sockFd = socket(PF_UNIX, SOCK_STREAM, 0);
 		if(sockFd < 0) die();
-		nCreated += bind_and_listen(evasocket::create(sockFd), (struct sockaddr *) &addr_unx, size);
+
+		evutil_addrinfo ai;
+		ai.ai_addr =(struct sockaddr *) &addr_unx;
+		ai.ai_addrlen = size;
+		ai.ai_family = PF_UNIX;
+
+		nCreated += bind_and_listen(evasocket::create(sockFd), &ai);
 	}
 
 	if (atoi(cfg::port.c_str()) <= 0)
