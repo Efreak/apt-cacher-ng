@@ -16,15 +16,9 @@ class CAddrInfo
 	CAddrInfo(const CAddrInfo&) = delete;
 	CAddrInfo operator=(const CAddrInfo&) = delete;
 
-	// special values of creation time
-	static const time_t RES_ONGOING = 0;
-	static const time_t RES_ERROR = 1;
-	// special flag, to be replaced by creation time where possible
-	static const time_t RES_OK = 2;
-
-	time_t m_nResTime = RES_ONGOING;
-
-	std::string* m_psErrorMessage = nullptr;
+	// some hints for cached entries
+	std::unique_ptr<std::string> m_sError;
+	time_t m_expTime = MAX_VAL(time_t);
 
 	// raw returned data from getaddrinfo
 	evutil_addrinfo * m_rawInfo = nullptr;
@@ -36,7 +30,8 @@ public:
 	CAddrInfo() = default;
 	// blocking DNS resolution. Supposed to be called only once!
 	bool ResolveTcpTarget(const mstring & sHostname, const mstring &sPort, mstring & sErrorBuf,
-			const evutil_addrinfo* hints = nullptr);
+			const evutil_addrinfo* hints,
+			bool & bTransientError);
 
 	void Reset();
 
