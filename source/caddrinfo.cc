@@ -7,8 +7,8 @@
 #include "lockable.h"
 #include "cleaner.h"
 
-#include <list>
-
+#include <deque>
+#include <memory>
 
 using namespace std;
 
@@ -18,17 +18,18 @@ static const unsigned DNS_CACHE_MAX=255;
 
 static string make_dns_key(const string & sHostname, const string &sPort)
 {
-	auto len(sHostname);
-	return sHostname + sPort + string((const char*)&sHostname, sizeof(sHostname));
+	return sHostname + "/" + sPort;
 }
 
 base_with_condition dnsCacheCv;
+
 map<string,CAddrInfoPtr> dnsCache;
-list<decltype(dnsCache)::iterator> dnsCleanupQ;
+deque<decltype(dnsCache)::iterator> dnsAddSeq;
 
 bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 		string & sErrorBuf,
-		const evutil_addrinfo* pHints)
+		const evutil_addrinfo* pHints,
+		bool & bTransientError)
 {
 	LOGSTART2("CAddrInfo::Resolve", "Resolving " << sHostname);
 
@@ -44,11 +45,11 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 		0, nullptr, nullptr, nullptr
 	};
 
-	auto ret_error = [&](const char* sfx, int rc){
+	auto ret_error = [&](const char* sfx, int rc)
+			{
+		// XXX: maybe also evaluate errno in case of EAI_SYSTEM
 		sErrorBuf = "503 DNS error for " + sHostname + ":" + sPort + " : " + evutil_gai_strerror(rc);
 		if(sfx)	sErrorBuf += string("(") + sfx + ")";
-		m_psErrorMessage = new string(sErrorBuf);
-		m_nResTime = RES_ERROR;
 		LOG(sfx);
 		return false;
 	};
@@ -59,9 +60,15 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 			sPort.empty() ? nullptr : sPort.c_str(),
 			pHints ? pHints : &default_connect_hints,
 			&m_rawInfo);
-
-	if (0!=r)
+	switch(r)
 	{
+	case 0: break;
+	case EAI_AGAIN:
+	case EAI_MEMORY:
+	case EAI_SYSTEM:
+		bTransientError = true;
+		__just_fall_through;
+	default:
 		return ret_error("If this refers to a configured cache repository, please check the corresponding configuration file", r);
 	}
 #ifdef DEBUG
@@ -74,11 +81,10 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 		if (pCur->ai_socktype != SOCK_STREAM || pCur->ai_protocol != IPPROTO_TCP)
 			continue;
 		m_tcpAddrInfo = pCur;
-		m_nResTime = RES_OK;
 		return true;
 	}
 
-	return ret_error("no suitable target service", EINVAL);
+	return ret_error("no suitable target service", EAI_SYSTEM);
 }
 
 void CAddrInfo::Reset()
@@ -86,9 +92,6 @@ void CAddrInfo::Reset()
 	if (m_rawInfo)
 		evutil_freeaddrinfo(m_rawInfo);
 	m_tcpAddrInfo = m_rawInfo = nullptr;
-	if(m_psErrorMessage)
-		delete m_psErrorMessage;
-	m_nResTime = RES_ONGOING;
 }
 
 CAddrInfo::~CAddrInfo()
@@ -99,9 +102,11 @@ CAddrInfo::~CAddrInfo()
 CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sPort, string &sErrorMsgBuf)
 {
 	bool dummy_run = sHostname.empty() && sPort.empty();
-	auto resolve_now = [&sHostname, &sPort, &sErrorMsgBuf]() {
+	bool bTransientError = false;
+	auto resolve_now = [&]()
+			{
 		auto ret = make_shared<CAddrInfo>();
-		if(! ret->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf))
+		if(! ret->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, nullptr, bTransientError))
 			ret.reset();
 		return ret;
 	};
@@ -109,69 +114,81 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 		return resolve_now();
 
 	auto dnsKey = make_dns_key(sHostname, sPort);
+	auto now(GetTime());
+
 	lockuniq lg(dnsCacheCv);
 
-	auto expiredTime = GetTime() - cfg::dnscachetime;
-
-	// drop old ones or at least as much as needed to store another entry
-	while(dnsCleanupQ.size() >= DNS_CACHE_MAX
-		|| (!dnsCleanupQ.empty() && dnsCleanupQ.front()->second->m_nResTime < expiredTime))
+	// clean all expired entries
+	unsigned n(0);
+	while(!dnsAddSeq.empty() && dnsAddSeq.front()->second && dnsAddSeq.front()->second->m_expTime <= now)
 	{
-		dnsCache.erase(dnsCleanupQ.front());
-		dnsCleanupQ.pop_front();
+		// just to be safe in case anyone waits for it
+		if(!dnsAddSeq.front()->second->m_sError)
+			dnsAddSeq.front()->second->m_sError.reset(new string("504 DNS Cache Timeout"));
+		dnsCache.erase(dnsAddSeq.front());
+		dnsAddSeq.pop_front();
+		++n;
 	}
-	// observe a DNS process in progress if needed
-	auto cacheIt = dnsCache.find(dnsKey);
-	bool resolve_here = cacheIt == dnsCache.end();
+	if(n) dnsCacheCv.notifyAll();
 
-	CAddrInfoPtr ptr;
-	if(resolve_here)
+	if (dummy_run)
+		return CAddrInfoPtr();
+
+	if (dnsCache.size() >= DNS_CACHE_MAX)
 	{
-		if(dnsCache.size() >= DNS_CACHE_MAX)
-		{
-			lg.unLock();
-			return resolve_now();
-		}
-		ptr = make_shared<CAddrInfo>();
-		// adding to lookup -> RESPONSIBLE FOR CLEANING NOW
-		cacheIt = dnsCache.emplace(dnsKey, ptr).first;
-		// run blocking resolution unlocked
+		// something is fishy, too long exp. time? Just pass through then
 		lg.unLock();
-		ptr->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf);
-		lg.reLock();
-
-		dnsCacheCv.notifyAll();
-
-		if(ptr->m_nResTime == RES_ERROR)
-		{
-			dnsCache.erase(cacheIt);
-			// resolved here, error string was updated
-			return CAddrInfoPtr();
-		}
-
-		ptr->m_nResTime = max(GetTime(), time_t(10));
-		dnsCleanupQ.emplace_back(cacheIt);
-		return ptr;
+		return resolve_now();
 	}
 
-	// -> being resolved by someone in background, get the result...
-	while (ptr->m_nResTime == RES_ONGOING)
-		dnsCacheCv.wait(lg);
-	if (ptr->m_nResTime != RES_ERROR)
-		return cacheIt->second;
-
-	auto psCachedError = cacheIt->second->m_psErrorMessage;
-	if (psCachedError)
-		sErrorMsgBuf = *psCachedError;
-	return CAddrInfoPtr();
+	auto insres = dnsCache.emplace(dnsKey, make_shared<CAddrInfo>());
+	auto p = insres.first->second;
+	auto is_ours(insres.second);
+	if (is_ours)
+	{
+		dnsAddSeq.push_back(insres.first);
+		p->m_expTime = now + cfg::dnscachetime;
+	}
+	else // reuse the results from another thread
+	{
+		while(true)
+		{
+			if(p->m_sError)
+			{
+				sErrorMsgBuf = * p->m_sError;
+				return CAddrInfoPtr();
+			}
+			if(p->m_expTime <= MAX_VAL(time_t))
+				return p;
+			dnsCacheCv.wait(lg);
+		}
+	}
+	lg.unLock();
+	auto resret = p->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, nullptr, bTransientError);
+	lg.reLock();
+	if(resret)
+	{
+		p->m_expTime = now + cfg::dnscachetime;
+		dnsCacheCv.notifyAll();
+		return p;
+	}
+	// or handle errors, keep them for observers
+	p->m_sError.reset(new string(sErrorMsgBuf));
+	// for permanent failures, also keep them in cache for a while
+	if(!bTransientError)
+		p->m_expTime = now + cfg::dnscachetime;
+	dnsCacheCv.notifyAll();
+	return p;
 }
 
+#if 0
 void DropDnsCache()
 {
+#warning check all usage
 	lockguard g(dnsCacheCv);
 	dnsCleanupQ.clear();
 	dnsCache.clear();
 }
-
+#endif
 
 }

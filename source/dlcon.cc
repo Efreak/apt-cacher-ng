@@ -594,8 +594,9 @@ struct tDlJob
 					{
 						// this was redirected and the destination is BAD!
 						h.frontLine="HTTP/1.1 501 Redirected to invalid target";
-						void DropDnsCache();
-						DropDnsCache();
+						// XXX: not sure this is the right attribution
+						//void DropDnsCache();
+						//DropDnsCache();
 					}
 				}
 

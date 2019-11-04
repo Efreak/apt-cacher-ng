@@ -299,8 +299,8 @@ auto setup_tcp_listeners = [](LPCSTR addi, const std::string& port) -> unsigned
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_family = PF_UNSPEC;
-
-	if(!resolver.ResolveTcpTarget(addi ? addi : sEmptyString, port, scratchBuf, &hints))
+	bool ignored;
+	if(!resolver.ResolveTcpTarget(addi ? addi : sEmptyString, port, scratchBuf, &hints, ignored))
 	{
 		log::flush();
 		perror("Error resolving address for binding");
