@@ -79,39 +79,59 @@ tcpconnect::~tcpconnect()
 	}
 }
 
+char crapbuf[40];
+const struct linger linger_hints { 0, 0 };
+const struct timeval linger_timeout { 15, 1};
+
+void termsocket_now(int fd, void *p = nullptr)
+{
+	// bad... ok, kill it quickly and hope for the best
+	::shutdown(fd, SHUT_RD);
+	//setsockopt(fd, SOL_SOCKET, SO_LINGER, &linger_hints, sizeof(linger_hints));
+	forceclose(fd);
+	if(p) event_free((event*) p);
+}
+
+void linger_read(int fd, short what, void* p)
+{
+	if((what & EV_TIMEOUT) || !(what&EV_READ))
+		return termsocket_now(fd, p);
+	// ok, have to read junk or terminating zero-read
+	while(true)
+	{
+		int r=recv(fd, crapbuf, sizeof(crapbuf), MSG_WAITALL);
+		if(0 == r)
+			return termsocket_now(fd, p);
+		if(r < 0)
+		{
+			if(errno == EINTR || errno == EAGAIN)
+				continue;
+			// some other error? Kill it
+			return termsocket_now(fd, p);
+		}
+	}
+}
+
 /*! \brief Helper to flush data stream contents reliable and close the connection then
  * DUDES, who write TCP implementations... why can this just not be done easy and reliable? Why do we need hacks like the method below?
  For details, see: http://blog.netherlabs.nl/articles/2009/01/18/the-ultimate-so_linger-page-or-why-is-my-tcp-not-reliable
+ * Using SO_LINGER is also dangerous, see https://www.nybek.com/blog/2015/04/29/so_linger-on-non-blocking-sockets
  *
  */
-void termsocket(int fd)
+void termsocket_async(int fd, event_base* base)
 {
 	LOGSTART2s("::termsocket", fd);
 	if (fd < 0)
 		return;
-
-	fcntl(fd, F_SETFL, ~O_NONBLOCK & fcntl(fd, F_GETFL));
+	// initiate shutdown, i.e. sending FIN and giving the remote some time to confirm
 	::shutdown(fd, SHUT_WR);
-	char buf[40];
+	int r=read(fd, crapbuf, sizeof(crapbuf));
+	if(r == 0) // fine, we are done
+		return termsocket_now(fd, nullptr);
 	LOG("waiting for peer to react");
-	while(true)
-	{
-		int r=recv(fd, buf, 40, MSG_WAITALL);
-		if(0 == r)
-			break;
-		if(r < 0)
-		{
-			if(errno == EINTR)
-				continue;
-			break; // XXX error case, actually
-		}
-	}
-
-	while (0 != ::close(fd))
-	{
-		if (errno != EINTR)
-			break;
-	};
+	auto ev = event_new(base, fd, EV_READ | EV_PERSIST, linger_read, event_self_cbarg());
+	if(!ev || 0 != event_add(ev, &linger_timeout))
+		return termsocket_now(fd, ev);
 }
 
 void set_sock_flags(evutil_socket_t fd)

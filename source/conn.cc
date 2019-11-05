@@ -10,6 +10,7 @@
 #include "acbuf.h"
 #include "tcpconnect.h"
 #include "cleaner.h"
+#include "conserver.h"
 
 #include <sys/select.h>
 #include <signal.h>
@@ -42,7 +43,6 @@ conn::conn(int fdId, const char *c) :
 
 conn::~conn() {
 	LOGSTART("con::~con (Destroying connection...)");
-	termsocket(m_confd);
 
 	// our user's connection is released but the downloader task created here may still be serving others
 	// tell it to stop when it gets the chance and delete it then
@@ -59,6 +59,7 @@ conn::~conn() {
 		pthread_join(m_dlerthr, nullptr);
 	}
 	log::flush();
+	conserver::FinishConnection(m_confd);
 }
 
 namespace RawPassThrough
@@ -207,6 +208,7 @@ void conn::WorkLoop() {
 			return; // shouldn't even get here
 
 		job *pjSender(nullptr);
+		bool hasMoreJobs = m_jobs2send.size()>1;
 
 		if ( !m_jobs2send.empty())
 		{
@@ -350,7 +352,7 @@ void conn::WorkLoop() {
 
 		if(FD_ISSET(m_confd, &wfds) && pjSender)
 		{
-			switch(pjSender->SendData(m_confd))
+			switch(pjSender->SendData(m_confd, hasMoreJobs))
 			{
 			case(job::R_DISCON):
 				{

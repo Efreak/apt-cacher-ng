@@ -22,7 +22,7 @@ void HandleOverload();
 /**
  * Return connection handle for proper closing.
  */
-void ConnectionFinished(int fd);
+void FinishConnection(int fd);
 
 }
 

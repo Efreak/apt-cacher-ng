@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <cstddef>
 
+#include <event2/event.h>
 #include <event2/util.h>
 
 using namespace std;
@@ -46,7 +47,7 @@ namespace acng
 void globalSslInit();
 #endif
 
-void termsocket(int);
+void termsocket_async(int, event_base*);
 
 inline void termsocket_quick(int& fd)
 {

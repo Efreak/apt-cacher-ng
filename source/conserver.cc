@@ -491,12 +491,20 @@ void HandleOverload()
 void do_resume()
 {
 	lockguard g(g_ThreadPoolCondition);
+	if(!g_suspended) return;
 	g_resumer->disable();
 	for(auto& it: g_vecSocks)
 	{
 		it->enable();
 	}
 	g_suspended = false;
+}
+
+void FinishConnection(int fd)
+{
+	termsocket_async(fd, evabase::instance->base);
+	// there is a good chance that more resources are available now
+	do_resume();
 }
 
 }
