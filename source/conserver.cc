@@ -52,11 +52,16 @@ vector<SHARED_PTR<acng::event_socket> > g_vecSocks;
 
 base_with_condition g_ThreadPoolCondition;
 list<conn*> g_freshConQueue;
+
 int g_nStandbyThreads(0);
 int g_nAllConThreadCount(0);
 bool bTerminationMode(false);
 
+bool g_suspended = false; // temporary suspended operation
+SHARED_PTR<acng::event_socket> g_resumer;
+
 void SetupConAndGo(int fd, const char *szClientName);
+void do_resume();
 
 // safety mechanism, detect when the number of incoming connections
 // is growing A LOT faster than it can be processed 
@@ -142,31 +147,53 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 	struct sockaddr_storage addr;
 	socklen_t addrlen = sizeof(addr);
 
-	int fd = accept(soc->fd(), (struct sockaddr *) &addr, &addrlen);
+	int fd = -1;
+	while(true)
+	{
+		fd = accept(soc->fd(), (struct sockaddr*) &addr, &addrlen);
+
+		if (fd != -1)
+			break;
+
+		switch (errno)
+		{
+		case EAGAIN:
+		case EINTR:
+			continue;
+		case EMFILE:
+		case ENFILE:
+		case ENOBUFS:
+		case ENOMEM:
+			// resource exhaustion, might recover when another connection handler has stopped, disconnect this one for now
+			conserver::HandleOverload();
+			return;
+		default:
+			return;
+		}
+	}
+
 	auto_raii<int, justforceclose> err_clean(fd, -1);
 
-	if (fd >= 0)
+	evutil_make_socket_nonblocking(fd);
+	if (addr.ss_family == AF_UNIX)
 	{
-		set_nb(fd);
-		if (addr.ss_family == AF_UNIX)
+		USRDBG("Detected incoming connection from the UNIX socket");
+		SetupConAndGo(fd, nullptr);
+		err_clean.disable();
+	}
+	else
+	{
+		USRDBG("Detected incoming connection from the TCP socket");
+		char hbuf[NI_MAXHOST];
+		if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf),
+				nullptr, 0, NI_NUMERICHOST))
 		{
-			USRDBG("Detected incoming connection from the UNIX socket");
-			SetupConAndGo(fd, nullptr);
-			err_clean.disable();
+			log::err("ERROR: could not resolve hostname for incoming TCP host");
+			return;
 		}
-		else
-		{
-			USRDBG("Detected incoming connection from the TCP socket");
-			char hbuf[NI_MAXHOST];
-			if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf), nullptr,
-					0, NI_NUMERICHOST))
-			{
-				log::err("ERROR: could not resolve hostname for incoming TCP host");
-				return;
-			}
 
-			if (cfg::usewrap)
-			{
+		if (cfg::usewrap)
+		{
 #ifdef HAVE_LIBWRAP
 				// libwrap is non-reentrant stuff, call it from here only
 				request_info req;
@@ -178,12 +205,12 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 					return;
 				}
 #else
-				log::err("WARNING: attempted to use libwrap which was not enabled at build time");
+			log::err(
+					"WARNING: attempted to use libwrap which was not enabled at build time");
 #endif
-			}
-			SetupConAndGo(fd, hbuf);
-			err_clean.disable();
 		}
+		SetupConAndGo(fd, hbuf);
+		err_clean.disable();
 	}
 }
 
@@ -252,8 +279,7 @@ void SetupConAndGo(int fd, const char *szClientName)
 	termsocket_quick(fd);
 }
 
-auto bind_and_listen =
-		[](shared_ptr<evasocket> mSock, const evutil_addrinfo *pAddrInfo) -> bool
+bool bind_and_listen(shared_ptr<evasocket> mSock, const evutil_addrinfo *pAddrInfo)
 		{
 	LOGSTART2s("bind_and_listen", formatIpPort(pAddrInfo));
 			if ( ::bind(mSock->fd(), pAddrInfo->ai_addr, pAddrInfo->ai_addrlen))
@@ -290,7 +316,7 @@ auto bind_and_listen =
 
 std::string scratchBuf;
 
-auto setup_tcp_listeners = [](LPCSTR addi, const std::string& port) -> unsigned
+unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 {
 	LOGSTART2s("Setup::ConAddr", 0);
 
@@ -356,6 +382,11 @@ int ACNG_API Setup()
 		cerr << "Neither TCP nor UNIX interface configured, cannot proceed.\n";
 		exit(EXIT_FAILURE);
 	}
+
+	g_resumer = std::make_shared<event_socket>(evabase::instance,
+			evasocket::create(-1),
+			0,
+			[](const std::shared_ptr<evasocket>&, short) {do_resume();});
 
 	unsigned nCreated = 0;
 
@@ -430,23 +461,42 @@ int ACNG_API Run()
 
 void Shutdown()
 {
+	DBGQLOG("Closing listening sockets\n");
+	// terminate activities
+	g_vecSocks.clear();
+	g_resumer.reset();
+
 	lockguard g(g_ThreadPoolCondition);
 
 	if(bTerminationMode)
 		return; // double SIGWHATEVER? Prevent it.
-	
-	//for (map<con*,int>::iterator it=mConStatus.begin(); it !=mConStatus.end(); it++)
-	//	it->first->SignalStop();
-	// TODO: maybe call shutdown on all?
-	//printf("Signaled stop to all cons\n");
-	
 	bTerminationMode=true;
-	printf("Notifying waiting threads\n");
+	DBGQLOG("Notifying worker threads\n");
 	g_ThreadPoolCondition.notifyAll();
-	
-	printf("Closing listening sockets\n");
-	// terminate activities
-	g_vecSocks.clear();
+}
+
+const struct timeval g_resumeTimeout { 2, 11 };
+
+void HandleOverload()
+{
+	lockguard g(g_ThreadPoolCondition);
+	g_suspended = true;
+	for(auto& it: g_vecSocks)
+	{
+		it->disable();
+	}
+	g_resumer->enable(&g_resumeTimeout);
+}
+
+void do_resume()
+{
+	lockguard g(g_ThreadPoolCondition);
+	g_resumer->disable();
+	for(auto& it: g_vecSocks)
+	{
+		it->enable();
+	}
+	g_suspended = false;
 }
 
 }

@@ -46,10 +46,10 @@ void acng::event_socket::on_io(evutil_socket_t, short what, void* uptr)
 	es->m_parent_action(es->m_sock, what);
 }
 
-void acng::event_socket::enable()
+void acng::event_socket::enable(const struct timeval *tv)
 {
 	if(m_event)
-		event_add(m_event, nullptr);
+		event_add(m_event, tv);
 }
 
 void acng::event_socket::disable()

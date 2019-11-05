@@ -17,6 +17,13 @@ int Run();
 /// Stop all running connections sanely and threads if possible
 ACNG_API void Shutdown();
 
+void HandleOverload();
+
+/**
+ * Return connection handle for proper closing.
+ */
+void ConnectionFinished(int fd);
+
 }
 
 }
