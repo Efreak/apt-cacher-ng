@@ -26,9 +26,7 @@ namespace acng
 
 conn::conn(unique_fd fd, const char *c) :
 			m_fd(move(fd)),
-			m_confd(m_fd.get()),
-			m_dlerthr(0),
-			m_pDlClient(nullptr)
+			m_confd(m_fd.get())
 {
 	if(c) // if nullptr, pick up later when sent by the wrapper
 		m_sClientHost=c;
@@ -52,10 +50,9 @@ conn::~conn() {
 	writeAnotherLogRecord(sEmptyString, sEmptyString);
 
 	if(m_pDlClient)
-	{
 		m_pDlClient->SignalStop();
-		pthread_join(m_dlerthr, nullptr);
-	}
+	if(m_dlerthr.joinable())
+		m_dlerthr.join();
 	log::flush();
 	conserver::FinishConnection(m_confd);
 }
@@ -196,7 +193,7 @@ void conn::WorkLoop() {
 	inBuf.setsize(32*1024);
 
 	int maxfd=m_confd;
-	while(!g_global_shutdown) {
+	while(!g_global_shutdown && !m_badState) {
 		fd_set rfds, wfds;
 		FD_ZERO(&wfds);
 		FD_ZERO(&rfds);
@@ -331,6 +328,9 @@ void conn::WorkLoop() {
 				{
 					job * j = new job(std::move(h), this);
 					j->PrepareDownload(inBuf.rptr());
+
+					if(m_badState) return;
+
 					inBuf.drop(nHeadBytes);
 
 					m_jobs2send.emplace_back(j);
@@ -375,16 +375,11 @@ void conn::WorkLoop() {
 	}
 }
 
-void * _StartDownloader(void *pVoidDler)
-{
-	static_cast<dlcon*>(pVoidDler) -> WorkLoop();
-	return nullptr;
-}
-
 bool conn::SetupDownloader(const char *pszOrigin)
 {
 	if (m_pDlClient)
 		return true;
+	m_badState = true;
 
 	try
 	{
@@ -404,18 +399,15 @@ bool conn::SetupDownloader(const char *pszOrigin)
 
 		if(!m_pDlClient)
 			return false;
+		auto pin = m_pDlClient;
+		m_dlerthr = move(thread([pin](){ pin->WorkLoop(); }));
+		m_badState = false;
+		return true;
 	}
-	catch(bad_alloc&)
+	catch(...)
 	{
 		return false;
 	}
-
-	if (0==pthread_create(&m_dlerthr, nullptr, _StartDownloader,
-			(void *)m_pDlClient.get()))
-	{
-		return true;
-	}
-	m_pDlClient.reset();
 	return false;
 }
 

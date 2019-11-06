@@ -7,6 +7,7 @@
 #include "sockio.h"
 #include <list>
 #include <string>
+#include <thread>
 
 #define RBUFLEN 16384
 
@@ -34,6 +35,7 @@ private:
 
 	unique_fd m_fd;
 	int m_confd;
+	bool m_badState = false;
 
 	std::list<job*> m_jobs2send;
 
@@ -42,12 +44,12 @@ private:
       int wakepipe[2];
 #endif
 
-	pthread_t m_dlerthr;
+	std::thread m_dlerthr;
 
 	// for jobs
 	friend class job;
 	bool SetupDownloader(const char *xff);
-	std::unique_ptr<dlcon> m_pDlClient;
+	std::shared_ptr<dlcon> m_pDlClient;
 	mstring m_sClientHost;
 
 	// some accounting
