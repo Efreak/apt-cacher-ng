@@ -20,6 +20,7 @@
 #include <ctime>
 #include <cstring>
 #include <functional>
+#include <atomic>
 
 #include <fcntl.h>
 #include <pthread.h>
@@ -488,13 +489,23 @@ struct tDtorEx {
 	inline ~tDtorEx() { _action(); }
 };
 
-template<typename T, void TFreeFunc(T)>
+// unique_ptr semantics on a very custom type
+template<typename T, void TFreeFunc(T), T inval_default>
 struct auto_raii
 {
-    T m_p, m_inval;
-    auto_raii(T xp, T invalid_value) : m_p(xp), m_inval(invalid_value) {}
-    ~auto_raii() { if (m_p != m_inval) TFreeFunc(m_p); }
-    void disable() { m_p = m_inval; }
+    T m_p;
+    auto_raii(T xp) : m_p(xp) {}
+    ~auto_raii() { if (m_p != inval_default) TFreeFunc(m_p); }
+    T release() { auto ret=m_p; m_p = inval_default; return ret;}
+    T get() const { return m_p; }
+    auto_raii() = delete;
+    auto_raii(const auto_raii&) = delete;
+    auto_raii(auto_raii && other)
+    {
+    	m_p = other.m_p;
+    	other.m_p = inval_default;
+    }
+    operator bool() const { return inval_default != m_p;}
 };
 
 // from bgtask.cc
@@ -560,6 +571,7 @@ public:
 	}
 };
 
+extern std::atomic<bool> g_global_shutdown;
 }
 
 #endif // _META_H

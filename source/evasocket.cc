@@ -18,7 +18,7 @@ acng::evasocket::evasocket(int fd) : m_fd(fd)
 
 acng::evasocket::~evasocket()
 {
-	if(m_fd != -1) forceclose(m_fd);
+	checkforceclose(m_fd);
 }
 
 std::shared_ptr<acng::evasocket> acng::evasocket::create(int fd)

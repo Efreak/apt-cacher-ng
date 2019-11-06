@@ -2,7 +2,7 @@
 #define SOCKIO_H_
 
 #include "meta.h"
-
+#include "fileio.h"
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
@@ -81,6 +81,9 @@ struct select_set_t
 };
 
 std::string formatIpPort(const evutil_addrinfo *info);
+
+// common flags for a CONNECTING socket
+void set_sock_flags(evutil_socket_t fd);
 
 }
 

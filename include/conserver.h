@@ -22,7 +22,7 @@ void HandleOverload();
 /**
  * Return connection handle for proper closing.
  */
-void FinishConnection(int fd);
+ACNG_API void FinishConnection(int fd);
 
 }
 

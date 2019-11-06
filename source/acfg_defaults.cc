@@ -105,7 +105,7 @@ logxff(false), oldupdate(false), recompbz2(false), nettimeout(40), updinterval(0
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(10), exsupcount(RESERVED_DEFVAL),
 optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false),
-trackfileuse(false), exstarttradeoff(500000000), fasttimeout(4);
+trackfileuse(false), exstarttradeoff(500000000), fasttimeout(4), discotimeout(15);
 
 int maxdlspeed(RESERVED_DEFVAL);
 

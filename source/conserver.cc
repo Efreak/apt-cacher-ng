@@ -1,3 +1,4 @@
+#include <memory>
 
 #include "conserver.h"
 #include "meta.h"
@@ -16,7 +17,6 @@
 #include <netdb.h>
 
 #include <cstdio>
-#include <list>
 #include <map>
 #include <unordered_set>
 #include <iostream>
@@ -51,7 +51,7 @@ int yes(1);
 vector<SHARED_PTR<acng::event_socket> > g_vecSocks;
 
 base_with_condition g_ThreadPoolCondition;
-list<conn*> g_freshConQueue;
+deque<unique_ptr<conn>> g_freshConQueue;
 
 int g_nStandbyThreads(0);
 int g_nAllConThreadCount(0);
@@ -60,7 +60,7 @@ bool bTerminationMode(false);
 bool g_suspended = false; // temporary suspended operation
 SHARED_PTR<acng::event_socket> g_resumer;
 
-void SetupConAndGo(int fd, const char *szClientName);
+void SetupConAndGo(unique_fd fd, const char *szClientName);
 void do_resume();
 
 // safety mechanism, detect when the number of incoming connections
@@ -70,24 +70,23 @@ void do_resume();
 void * ThreadAction(void *)
 {
 	lockuniq g(g_ThreadPoolCondition);
-	list<conn*> & Qu = g_freshConQueue;
 
 	while (true)
 	{
-		while (Qu.empty() && !bTerminationMode)
+		while (g_freshConQueue.empty() && !bTerminationMode)
 			g_ThreadPoolCondition.wait(g);
 
 		if (bTerminationMode)
 			break;
 
-		conn *c=Qu.front();
-		Qu.pop_front();
+		auto c = move(g_freshConQueue.front());
+		g_freshConQueue.pop_front();
 
 		g_nStandbyThreads--;
 		g.unLock();
 	
 		c->WorkLoop();
-		delete c;
+		c.release();
 
 		g.reLock();
 		g_nStandbyThreads++;
@@ -113,31 +112,6 @@ bool CreateDetachedThread(void *(*__start_routine)(void *))
 	bool bOK = (0 == pthread_create(&thr, &attr, __start_routine, nullptr));
 	pthread_attr_destroy(&attr);
 	return bOK;
-}
-
-//! pushes waiting thread(s) and create threads for each waiting task if needed
-inline bool SpawnThreadsAsNeeded()
-{
-	lockguard g(g_ThreadPoolCondition);
-	list<conn*> & Qu = g_freshConQueue;
-
-	// check the kill-switch
-	if(g_nAllConThreadCount+1>=cfg::tpthreadmax || bTerminationMode)
-		return false;
-
-	int nNeeded = Qu.size()-g_nStandbyThreads;
-	
-	while (nNeeded-- > 0)
-	{
-		if (!CreateDetachedThread(ThreadAction))
-			return false;
-		g_nStandbyThreads++;
-		g_nAllConThreadCount++;
-	}
-
-	g_ThreadPoolCondition.notifyAll();
-
-	return true;
 }
 
 void do_accept(const std::shared_ptr<evasocket>& soc)
@@ -172,14 +146,13 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 		}
 	}
 
-	auto_raii<int, justforceclose> err_clean(fd, -1);
+	unique_fd man_fd(fd);
 
 	evutil_make_socket_nonblocking(fd);
 	if (addr.ss_family == AF_UNIX)
 	{
 		USRDBG("Detected incoming connection from the UNIX socket");
-		SetupConAndGo(fd, nullptr);
-		err_clean.disable();
+		SetupConAndGo(move(man_fd), nullptr);
 	}
 	else
 	{
@@ -209,74 +182,64 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 					"WARNING: attempted to use libwrap which was not enabled at build time");
 #endif
 		}
-		SetupConAndGo(fd, hbuf);
-		err_clean.disable();
+		SetupConAndGo(move(man_fd), hbuf);
 	}
 }
 
-void SetupConAndGo(int fd, const char *szClientName)
+void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 {
-	LOGSTART2s("SetupConAndGo", fd);
+	LOGSTART2s("SetupConAndGo", man_fd.get());
 
-	if(!szClientName)
-		szClientName="";
-	
-	USRDBG( "Client name: " << szClientName);
-	conn *c(nullptr);
+	if (!szClientName)
+		szClientName = "";
 
+	//! pushes waiting thread(s) and create threads for each waiting task if needed
+	static auto SpawnThreadsAsNeeded = []()
 	{
-		// thread pool control, and also see Shutdown(), protect from
-		// interference of OS on file descriptor management
-		lockguard g(g_ThreadPoolCondition);
+		// check the kill-switch
+			if(g_nAllConThreadCount+1>=cfg::tpthreadmax || bTerminationMode)
+			return false;
 
-		// DOS prevention
-		if (g_freshConQueue.size() > MAX_BACKLOG)
-		{
-			USRDBG( "Worker queue overrun");
-			goto local_con_failure;
-		}
-
-		try
-		{
-			c = new conn(fd, szClientName);
-			if (!c)
+			int nNeeded = g_freshConQueue.size() - g_nStandbyThreads;
+			while (nNeeded-- > 0)
 			{
-#ifdef NO_EXCEPTIONS
-				USRDBG( "Out of memory");
-#endif
-				goto local_con_failure;
+				if (!CreateDetachedThread(ThreadAction)) return false;
+				g_nStandbyThreads++;
+				g_nAllConThreadCount++;
 			}
+			g_ThreadPoolCondition.notifyAll();
+			return true;
+		};
 
-			g_freshConQueue.emplace_back(c);
-			LOG("Connection to backlog, total count: " << g_freshConQueue.size());
+	USRDBG("Client name: " << szClientName);
 
+	lockguard g(g_ThreadPoolCondition);
 
-		} catch (std::bad_alloc&)
-		{
-			USRDBG( "Out of memory");
-			goto local_con_failure;
-		}
+	// DOS prevention
+	if (g_freshConQueue.size() > MAX_BACKLOG)
+	{
+		USRDBG("Worker queue overrun");
+		return;
 	}
-	
+
+	try
+	{
+		g_freshConQueue.emplace_back(std::unique_ptr<conn>(new conn(move(man_fd), szClientName)));
+		LOG("Connection to backlog, total count: " << g_freshConQueue.size());
+	}
+	catch (const std::bad_alloc&)
+	{
+		USRDBG("Out of memory");
+		return;
+	}
+
 	if (!SpawnThreadsAsNeeded())
 	{
-		tErrnoFmter fer("Cannot start threads, cleaning up. Reason: ");
+		tErrnoFmter fer(
+				"Cannot start threads, cleaning up, aborting all incoming connections. Reason: ");
 		USRDBG(fer);
-		lockguard g(g_ThreadPoolCondition);
-		while(!g_freshConQueue.empty())
-		{
-			delete g_freshConQueue.back();
-			g_freshConQueue.pop_back();
-		}
+		g_freshConQueue.clear();
 	}
-
-	return;
-
-	local_con_failure:
-	if (c)
-		delete c;
-	USRDBG( "Connection setup error");
-	termsocket_quick(fd);
 }
 
 bool bind_and_listen(shared_ptr<evasocket> mSock, const evutil_addrinfo *pAddrInfo)
@@ -471,6 +434,10 @@ void Shutdown()
 	if(bTerminationMode)
 		return; // double SIGWHATEVER? Prevent it.
 	bTerminationMode=true;
+
+	// global hint to all conn objects
+	g_global_shutdown = true;
+
 	DBGQLOG("Notifying worker threads\n");
 	g_ThreadPoolCondition.notifyAll();
 }
@@ -502,6 +469,9 @@ void do_resume()
 
 void FinishConnection(int fd)
 {
+	if(fd == -1)
+		return;
+
 	termsocket_async(fd, evabase::instance->base);
 	// there is a good chance that more resources are available now
 	do_resume();

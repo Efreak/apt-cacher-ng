@@ -24,16 +24,16 @@ using namespace std;
 namespace acng
 {
 
-conn::conn(int fdId, const char *c) :
-			m_confd(fdId),
-			m_bStopActivity(false),
+conn::conn(unique_fd fd, const char *c) :
+			m_fd(move(fd)),
+			m_confd(m_fd.get()),
 			m_dlerthr(0),
 			m_pDlClient(nullptr)
 {
 	if(c) // if nullptr, pick up later when sent by the wrapper
 		m_sClientHost=c;
 
-	LOGSTART2("con::con", "fd: " << fdId << ", clienthost: " << c);
+	LOGSTART2("con::con", "fd: " << m_confd << ", clienthost: " << c);
 
 #ifdef DEBUG
 	m_nProcessedJobs=0;
@@ -47,9 +47,7 @@ conn::~conn() {
 	// our user's connection is released but the downloader task created here may still be serving others
 	// tell it to stop when it gets the chance and delete it then
 
-	std::list<job*>::iterator jit;
-	for (jit=m_jobs2send.begin(); jit!=m_jobs2send.end(); jit++)
-		delete *jit;
+	for (auto jit : m_jobs2send) delete jit;
 
 	writeAnotherLogRecord(sEmptyString, sEmptyString);
 
@@ -198,7 +196,7 @@ void conn::WorkLoop() {
 	inBuf.setsize(32*1024);
 
 	int maxfd=m_confd;
-	while(!m_bStopActivity) {
+	while(!g_global_shutdown) {
 		fd_set rfds, wfds;
 		FD_ZERO(&wfds);
 		FD_ZERO(&rfds);
