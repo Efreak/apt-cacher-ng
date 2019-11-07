@@ -27,6 +27,8 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
     acng.conf example (Debian bug #855995) and also how to print it
     (with acngtool, Debian bug #914746)
   * Mirror database update
+  * Configurable timeout for forced client disconnect on the last portion of
+    data
 
   [ BUGFIXES ]
   * increased size of the decompression line buffer for config file reading
@@ -49,6 +51,7 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
   * partial redesign for more singlethreaded IO operation
   * Disabled LTO by default, still crashing gold linker with certain option
     combinations
+  * Moved lingering on CLOSE_WAIT sockets to the single main thread
 
  -- 
 
