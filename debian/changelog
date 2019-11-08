@@ -1,4 +1,4 @@
-apt-cacher-ng (3.3-1) experimental; urgency=low
+apt-cacher-ng (3.3-0.1) UNRELEASED; urgency=low
 
   * New upstream version v3.3
     Contains a good number of internal changes, including:
@@ -11,6 +11,8 @@ apt-cacher-ng (3.3-1) experimental; urgency=low
       (closes: #929035, #942355)
     - PFilePattern extensions for Fedora 29 and 30, by Alan Jenkins,
       closes: #928270, thanks!)
+    - VFilePattern extension for Centos8, by Andy Lowther,
+      closes: #944143 (thanks!)
     - added very explicit explanation on what "default value" means in the
       acng.conf example (closes: #855995) and also how to print it (with
       acngtool, closes: #914746)
@@ -21,7 +23,7 @@ apt-cacher-ng (3.3-1) experimental; urgency=low
   * Make errors on purging of cache folder non-fatal (closes: #915082)
   * Recommends: ca-certificates (closes: #926282)
 
- -- Eduard Bloch <blade@debian.org>  Sat, 02 Nov 2019 12:44:27 +0100
+ -- 
 
 apt-cacher-ng (3.2-3) unstable; urgency=medium
 
