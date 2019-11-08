@@ -23,6 +23,8 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
     bug #929035 and partly suggested in #942355)
   * PFilePattern extensions for Fedora 29 and 30, by Alan Jenkins, Debian
     bug #928270 (thanks!)
+  * VFilePattern extension for Centos8, by Andy Lowther, Debian bug #944143
+    (thanks!)
   * added very explicit explanation on what "default value" means in the
     acng.conf example (Debian bug #855995) and also how to print it
     (with acngtool, Debian bug #914746)
