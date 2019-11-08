@@ -224,7 +224,7 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 
 	try
 	{
-		g_freshConQueue.emplace_back(std::unique_ptr<conn>(new conn(move(man_fd), szClientName)));
+		g_freshConQueue.emplace_back(make_unique<conn>(move(man_fd), szClientName));
 		LOG("Connection to backlog, total count: " << g_freshConQueue.size());
 	}
 	catch (const std::bad_alloc&)

@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.1)
 
 # enforce minimal C++ language level
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED on)
+set(CMAKE_CXX_STANDARD 14)
+# let it take the lowest version, we need some precursor of C++14x
+#set(CMAKE_CXX_STANDARD_REQUIRED on)
 
 # don't care for now... just expecting POSIX
 set(CMAKE_LEGACY_CYGWIN_WIN32 0)
@@ -232,13 +233,6 @@ endif()
 _append(CFLAGS_DAEMON ${lsd_CFLAGS})
 _append(LDFLAGS_DAEMON ${lsd_LDFLAGS})
 set(HAVE_SD_NOTIFY ${lsd_FOUND})
-
-SET(CMAKE_REQUIRED_FLAGS "${ACNG_COMPFLAGS} ${ACNG_CXXFLAGS}")
-FILE(READ test/build/HAVE_MEMORY_SPTR.cc TESTSRC)
-CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_MEMORY_SPTR)
-if(NOT HAVE_MEMORY_SPTR)
-   message(FATAL_ERROR "Could not find a working smart pointer implementation.")
-endif()
 
 SET(CMAKE_REQUIRED_LIBRARIES dl)
 FILE(READ test/build/HAVE_DLOPEN.cc TESTSRC)
