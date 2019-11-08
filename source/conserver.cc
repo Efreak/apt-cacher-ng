@@ -50,12 +50,9 @@ namespace conserver
 int yes(1);
 vector<SHARED_PTR<acng::event_socket> > g_vecSocks;
 
-base_with_condition g_ThreadPoolCondition;
+base_with_condition g_thread_push_cond_var;
 deque<unique_ptr<conn>> g_freshConQueue;
-
-int g_nStandbyThreads(0);
-int g_nAllConThreadCount(0);
-bool bTerminationMode(false);
+unsigned g_nStandbyThreads = 0, g_nTotalThreads=0;
 
 bool g_suspended = false; // temporary suspended operation
 SHARED_PTR<acng::event_socket> g_resumer;
@@ -66,53 +63,6 @@ void do_resume();
 // safety mechanism, detect when the number of incoming connections
 // is growing A LOT faster than it can be processed 
 #define MAX_BACKLOG 200
-
-void * ThreadAction(void *)
-{
-	lockuniq g(g_ThreadPoolCondition);
-
-	while (true)
-	{
-		while (g_freshConQueue.empty() && !bTerminationMode)
-			g_ThreadPoolCondition.wait(g);
-
-		if (bTerminationMode)
-			break;
-
-		auto c = move(g_freshConQueue.front());
-		g_freshConQueue.pop_front();
-
-		g_nStandbyThreads--;
-		g.unLock();
-	
-		c->WorkLoop();
-		c.release();
-
-		g.reLock();
-		g_nStandbyThreads++;
-
-		if (g_nStandbyThreads >= cfg::tpstandbymax)
-			break;
-	}
-	
-	g_nAllConThreadCount--;
-	g_nStandbyThreads--;
-
-	return nullptr;
-}
-
-bool CreateDetachedThread(void *(*__start_routine)(void *))
-{
-	pthread_t thr;
-	pthread_attr_t attr; // be detached from the beginning
-
-	if (pthread_attr_init(&attr))
-		return false;
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	bool bOK = (0 == pthread_create(&thr, &attr, __start_routine, nullptr));
-	pthread_attr_destroy(&attr);
-	return bOK;
-}
 
 void do_accept(const std::shared_ptr<evasocket>& soc)
 {
@@ -186,6 +136,68 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 	}
 }
 
+
+auto ThreadAction = []()
+{
+	lockuniq g(g_thread_push_cond_var);
+
+	while (true)
+	{
+		while (g_freshConQueue.empty() && !g_global_shutdown)
+			g_thread_push_cond_var.wait(g);
+
+		if (g_global_shutdown)
+			break;
+
+		auto c = move(g_freshConQueue.front());
+		g_freshConQueue.pop_front();
+
+		g_nStandbyThreads--;
+		g.unLock();
+
+		c->WorkLoop();
+		c.release();
+
+		g.reLock();
+		g_nStandbyThreads++;
+
+		if (int(g_nStandbyThreads) >= cfg::tpstandbymax || g_global_shutdown)
+			break;
+	}
+
+	// remove from global pool
+	g_nStandbyThreads--;
+	g_nTotalThreads--;
+	g_thread_push_cond_var.notifyAll();
+};
+
+//! pushes waiting thread(s) and create threads for each waiting task if needed
+auto SpawnThreadsAsNeeded = []()
+{
+	// check the kill-switch
+		if(int(g_nTotalThreads+1)>=cfg::tpthreadmax || g_global_shutdown)
+		return false;
+
+	// need a custom one
+		if(g_nStandbyThreads == 0)
+		{
+			try
+			{
+				thread thr(ThreadAction);
+				// if thread was started w/o exception it will decrement those in the end
+				g_nStandbyThreads++;
+				g_nTotalThreads++;
+				thr.detach();
+			}
+			catch(...)
+			{
+				return false;
+			}
+		}
+		g_thread_push_cond_var.notifyAll();
+		return true;
+	};
+
 void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 {
 	LOGSTART2s("SetupConAndGo", man_fd.get());
@@ -193,27 +205,10 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 	if (!szClientName)
 		szClientName = "";
 
-	//! pushes waiting thread(s) and create threads for each waiting task if needed
-	static auto SpawnThreadsAsNeeded = []()
-	{
-		// check the kill-switch
-			if(g_nAllConThreadCount+1>=cfg::tpthreadmax || bTerminationMode)
-			return false;
-
-			int nNeeded = g_freshConQueue.size() - g_nStandbyThreads;
-			while (nNeeded-- > 0)
-			{
-				if (!CreateDetachedThread(ThreadAction)) return false;
-				g_nStandbyThreads++;
-				g_nAllConThreadCount++;
-			}
-			g_ThreadPoolCondition.notifyAll();
-			return true;
-		};
 
 	USRDBG("Client name: " << szClientName);
 
-	lockguard g(g_ThreadPoolCondition);
+	lockguard g(g_thread_push_cond_var);
 
 	// DOS prevention
 	if (g_freshConQueue.size() > MAX_BACKLOG)
@@ -429,24 +424,22 @@ void Shutdown()
 	g_vecSocks.clear();
 	g_resumer.reset();
 
-	lockguard g(g_ThreadPoolCondition);
-
-	if(bTerminationMode)
-		return; // double SIGWHATEVER? Prevent it.
-	bTerminationMode=true;
-
-	// global hint to all conn objects
-	g_global_shutdown = true;
-
-	DBGQLOG("Notifying worker threads\n");
-	g_ThreadPoolCondition.notifyAll();
+	{
+		lockuniq g(g_thread_push_cond_var);
+		// global hint to all conn objects
+		g_global_shutdown = true;
+		DBGQLOG("Notifying worker threads\n");
+		g_thread_push_cond_var.notifyAll();
+		while(g_nTotalThreads)
+			g_thread_push_cond_var.wait(g);
+	}
 }
 
 const struct timeval g_resumeTimeout { 2, 11 };
 
 void HandleOverload()
 {
-	lockguard g(g_ThreadPoolCondition);
+	lockguard g(g_thread_push_cond_var);
 	g_suspended = true;
 	for(auto& it: g_vecSocks)
 	{
@@ -457,7 +450,7 @@ void HandleOverload()
 
 void do_resume()
 {
-	lockguard g(g_ThreadPoolCondition);
+	lockguard g(g_thread_push_cond_var);
 	if(!g_suspended) return;
 	g_resumer->disable();
 	for(auto& it: g_vecSocks)
