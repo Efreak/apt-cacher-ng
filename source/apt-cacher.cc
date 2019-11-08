@@ -246,6 +246,8 @@ void term_handler(evutil_socket_t signum, short what, void *arg)
 	}
 }
 
+void CloseAllCachedConnections();
+
 struct tAppStartStop
 {
 	tAppStartStop(int argc, const char**argv)
@@ -316,6 +318,7 @@ struct tAppStartStop
 		if (!cfg::pidfile.empty())
 			unlink(cfg::pidfile.c_str());
 		conserver::Shutdown();
+		CloseAllCachedConnections();
 		log::close(false);
 	}
 };

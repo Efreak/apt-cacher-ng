@@ -46,7 +46,7 @@ public:
 	~event_socket();
 
 	// activate the event once (does not make sense with EV_PERSIST)
-	void enable();
+	void enable(const struct timeval *tv = nullptr);
 	// disable a previously enabled event (does not make much sense with EV_PERSIST unless suppressing one known pending execution is needed)
 	void disable();
 

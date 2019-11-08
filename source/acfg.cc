@@ -141,6 +141,7 @@ MapNameToInt n2iTbl[] = {
 		,{  "RecompBz2",                         &recompbz2,        nullptr,    10, false}
 		,{  "NetworkTimeout",                    &nettimeout,       nullptr,    10, false}
 		,{  "FastTimeout",                       &fasttimeout,      nullptr,    10, false}
+		,{  "DisconnectTimeout",                 &discotimeout,     nullptr,    10, false}
 		,{  "MinUpdateInterval",                 &updinterval,      nullptr,    10, false}
 		,{  "ForwardBtsSoap",                    &forwardsoap,      nullptr,    10, false}
 		,{  "KeepExtraVersions",                 &keepnver,         nullptr,    10, false}

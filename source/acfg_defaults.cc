@@ -63,7 +63,7 @@ string vfilepat(INFOLDER
 		"|filelists\\.xml\\.gz|filelists\\.sqlite\\.bz2|repomd\\.xml" // SL, http://ra.khe.sh/computers/linux/apt-cacher-ng-with-yum.html
 		"|packages\\.[a-zA-Z][a-zA-Z]\\.gz|info\\.txt|license\\.tar\\.gz|license\\.zip" //opensuse
 		"|" ALXPATTERN // Arch Linux
-		"|metalink\\?repo|.*prestodelta\\.xml\\.gz|repodata/.*\\.(xml|sqlite)" COMPOPT // CentOS
+		"|metalink\\?repo|.*prestodelta\\.xml\\.gz|repodata/.*\\.(yaml|yml|xml|sqlite)" COMPOPT // CentOS
 		"|\\.treeinfo|vmlinuz|(initrd|product|squashfs|updates)\\.img" // Fedora
 		"|\\.o" // https://bugs.launchpad.net/ubuntu/+source/apt-cacher-ng/+bug/1078224
 		"|Components-.*yml" COMPOPT // DEP-11 aka AppStream"
@@ -105,7 +105,7 @@ logxff(false), oldupdate(false), recompbz2(false), nettimeout(40), updinterval(0
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(10), exsupcount(RESERVED_DEFVAL),
 optproxytimeout(-1), patrace(false), maxredlsize(1<<16), nsafriendly(false),
-trackfileuse(false), exstarttradeoff(500000000), fasttimeout(4);
+trackfileuse(false), exstarttradeoff(500000000), fasttimeout(4), discotimeout(15);
 
 int maxdlspeed(RESERVED_DEFVAL);
 

@@ -195,6 +195,13 @@ ExThreshold: 4
 # is refused when this value is reached (below zero = unlimited).
 # MaxConThreads: -1
 #
+# Timeout for a forced disconnect in cases where a client connection is about
+# to be closed but remote refuses to confirm the disconnect request. Setting
+# this to a lower value mitigates the effects of resource starvation in case of
+# a DOS attack but increases the risk of failing to flush the remaining portion
+# of data.
+# DisconnectTimeout: 15
+
 # Pigeonholing files (like static vs. volatile contents) is done by (extended)
 # regular expressions.
 #

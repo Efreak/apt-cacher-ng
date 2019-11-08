@@ -819,7 +819,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, CTimeVal().ForNetTimeout());
 		ldbg("returned: " << r << ", errno: " << errno);
 
-		if (r < 0)
+		if (r == -1)
 		{
 			if (EINTR == errno)
 				continue;
@@ -835,6 +835,8 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 		else if (r == 0) // looks like a timeout
 		{
 			sErrorMsg = "500 Connection timeout";
+			LOG(sErrorMsg);
+
 			// was there anything to do at all?
 			if(inpipe.empty())
 				return HINT_SWITCH;

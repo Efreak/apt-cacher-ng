@@ -10,6 +10,7 @@
 #include "acbuf.h"
 #include "tcpconnect.h"
 #include "cleaner.h"
+#include "conserver.h"
 
 #include <sys/select.h>
 #include <signal.h>
@@ -23,16 +24,14 @@ using namespace std;
 namespace acng
 {
 
-conn::conn(int fdId, const char *c) :
-			m_confd(fdId),
-			m_bStopActivity(false),
-			m_dlerthr(0),
-			m_pDlClient(nullptr)
+conn::conn(unique_fd fd, const char *c) :
+			m_fd(move(fd)),
+			m_confd(m_fd.get())
 {
 	if(c) // if nullptr, pick up later when sent by the wrapper
 		m_sClientHost=c;
 
-	LOGSTART2("con::con", "fd: " << fdId << ", clienthost: " << c);
+	LOGSTART2("con::con", "fd: " << m_confd << ", clienthost: " << c);
 
 #ifdef DEBUG
 	m_nProcessedJobs=0;
@@ -42,23 +41,20 @@ conn::conn(int fdId, const char *c) :
 
 conn::~conn() {
 	LOGSTART("con::~con (Destroying connection...)");
-	termsocket(m_confd);
 
 	// our user's connection is released but the downloader task created here may still be serving others
 	// tell it to stop when it gets the chance and delete it then
 
-	std::list<job*>::iterator jit;
-	for (jit=m_jobs2send.begin(); jit!=m_jobs2send.end(); jit++)
-		delete *jit;
+	for (auto jit : m_jobs2send) delete jit;
 
 	writeAnotherLogRecord(sEmptyString, sEmptyString);
 
 	if(m_pDlClient)
-	{
 		m_pDlClient->SignalStop();
-		pthread_join(m_dlerthr, nullptr);
-	}
+	if(m_dlerthr.joinable())
+		m_dlerthr.join();
 	log::flush();
+	conserver::FinishConnection(m_confd);
 }
 
 namespace RawPassThrough
@@ -197,7 +193,7 @@ void conn::WorkLoop() {
 	inBuf.setsize(32*1024);
 
 	int maxfd=m_confd;
-	while(!m_bStopActivity) {
+	while(!g_global_shutdown && !m_badState) {
 		fd_set rfds, wfds;
 		FD_ZERO(&wfds);
 		FD_ZERO(&rfds);
@@ -207,6 +203,7 @@ void conn::WorkLoop() {
 			return; // shouldn't even get here
 
 		job *pjSender(nullptr);
+		bool hasMoreJobs = m_jobs2send.size()>1;
 
 		if ( !m_jobs2send.empty())
 		{
@@ -331,6 +328,9 @@ void conn::WorkLoop() {
 				{
 					job * j = new job(std::move(h), this);
 					j->PrepareDownload(inBuf.rptr());
+
+					if(m_badState) return;
+
 					inBuf.drop(nHeadBytes);
 
 					m_jobs2send.emplace_back(j);
@@ -350,7 +350,7 @@ void conn::WorkLoop() {
 
 		if(FD_ISSET(m_confd, &wfds) && pjSender)
 		{
-			switch(pjSender->SendData(m_confd))
+			switch(pjSender->SendData(m_confd, hasMoreJobs))
 			{
 			case(job::R_DISCON):
 				{
@@ -375,16 +375,11 @@ void conn::WorkLoop() {
 	}
 }
 
-void * _StartDownloader(void *pVoidDler)
-{
-	static_cast<dlcon*>(pVoidDler) -> WorkLoop();
-	return nullptr;
-}
-
 bool conn::SetupDownloader(const char *pszOrigin)
 {
 	if (m_pDlClient)
 		return true;
+	m_badState = true;
 
 	try
 	{
@@ -404,18 +399,15 @@ bool conn::SetupDownloader(const char *pszOrigin)
 
 		if(!m_pDlClient)
 			return false;
+		auto pin = m_pDlClient;
+		m_dlerthr = move(thread([pin](){ pin->WorkLoop(); }));
+		m_badState = false;
+		return true;
 	}
-	catch(bad_alloc&)
+	catch(...)
 	{
 		return false;
 	}
-
-	if (0==pthread_create(&m_dlerthr, nullptr, _StartDownloader,
-			(void *)m_pDlClient.get()))
-	{
-		return true;
-	}
-	m_pDlClient.reset();
 	return false;
 }
 

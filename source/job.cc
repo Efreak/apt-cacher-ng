@@ -718,7 +718,7 @@ report_invport:
 }
 
 #define THROW_ERROR(x) { if(m_nAllDataCount) return R_DISCON; SetErrorResponse(x); return R_AGAIN; }
-job::eJobResult job::SendData(int confd)
+job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 {
 	LOGSTART("job::SendData");
 
@@ -908,7 +908,7 @@ job::eJobResult job::SendData(int confd)
 					{
 						ldbg("prebuf sending: "<< m_sendbuf.c_str());
 						auto r=send(confd, m_sendbuf.rptr(), m_sendbuf.size(),
-								m_backstate == STATE_TODISCON ? 0 : MSG_MORE);
+								(haveMoreJobs && m_backstate !=  STATE_TODISCON) ? MSG_MORE : 0);
 						if (r<0)
 						{
 							if (errno==EAGAIN || errno==EINTR || errno == ENOBUFS)

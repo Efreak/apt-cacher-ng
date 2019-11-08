@@ -79,52 +79,6 @@ tcpconnect::~tcpconnect()
 	}
 }
 
-/*! \brief Helper to flush data stream contents reliable and close the connection then
- * DUDES, who write TCP implementations... why can this just not be done easy and reliable? Why do we need hacks like the method below?
- For details, see: http://blog.netherlabs.nl/articles/2009/01/18/the-ultimate-so_linger-page-or-why-is-my-tcp-not-reliable
- *
- */
-void termsocket(int fd)
-{
-	LOGSTART2s("::termsocket", fd);
-	if (fd < 0)
-		return;
-
-	fcntl(fd, F_SETFL, ~O_NONBLOCK & fcntl(fd, F_GETFL));
-	::shutdown(fd, SHUT_WR);
-	char buf[40];
-	LOG("waiting for peer to react");
-	while(true)
-	{
-		int r=recv(fd, buf, 40, MSG_WAITALL);
-		if(0 == r)
-			break;
-		if(r < 0)
-		{
-			if(errno == EINTR)
-				continue;
-			break; // XXX error case, actually
-		}
-	}
-
-	while (0 != ::close(fd))
-	{
-		if (errno != EINTR)
-			break;
-	};
-}
-
-void set_sock_flags(evutil_socket_t fd)
-{
-#ifndef NO_TCP_TUNNING
-
-		int yes(1);
-		::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-		::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
-#endif
-		evutil_make_socket_nonblocking(fd);
-}
-
 inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 {
 	LOGSTART2("tcpconnect::_Connect", "hostname: " << m_sHostName);
@@ -398,6 +352,12 @@ void tcpconnect::Disconnect()
 acmutex spareConPoolMx;
 multimap<tuple<string,string SSL_OPT_ARG(bool) >,
 		std::pair<tDlStreamHandle, time_t> > spareConPool;
+
+ACNG_API void CloseAllCachedConnections()
+{
+	lockguard g(spareConPoolMx);
+	spareConPool.clear();
+}
 
 tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, cfg::tRepoData::IHookHandler *pStateTracker

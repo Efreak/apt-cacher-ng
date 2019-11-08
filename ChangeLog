@@ -23,10 +23,14 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
     bug #929035 and partly suggested in #942355)
   * PFilePattern extensions for Fedora 29 and 30, by Alan Jenkins, Debian
     bug #928270 (thanks!)
+  * VFilePattern extension for Centos8, by Andy Lowther, Debian bug #944143
+    (thanks!)
   * added very explicit explanation on what "default value" means in the
     acng.conf example (Debian bug #855995) and also how to print it
     (with acngtool, Debian bug #914746)
   * Mirror database update
+  * Configurable timeout for forced client disconnect on the last portion of
+    data
 
   [ BUGFIXES ]
   * increased size of the decompression line buffer for config file reading
@@ -37,6 +41,9 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
     official JSON query only returns https versions, also add a different
     source (from Debian bug #942844)
   * Generation of Sourceforge mirror redirectors list is fixed
+  * Fixed an ancient bug where there last answered request might have been
+    delayed in processing due to incorrect selection of MSG_MORE flag
+  * Potential crash on shutdown prevented (misordered destructor sequence)
 
   [ INTERNAL REFACTORING ]
   * Overhauling code deployment, using a shared library (reducing installed
@@ -46,6 +53,7 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
   * partial redesign for more singlethreaded IO operation
   * Disabled LTO by default, still crashing gold linker with certain option
     combinations
+  * Moved lingering on CLOSE_WAIT sockets to the single main thread
 
  -- 
 

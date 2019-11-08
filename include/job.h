@@ -46,7 +46,7 @@ class job {
       /*
        * Start or continue returning the file.
        */
-      eJobResult SendData(int confd);
+      eJobResult SendData(int confd, bool haveMoreJobs);
   
    private:
       

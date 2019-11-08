@@ -115,6 +115,8 @@ public:
 };
 */
 
+using unique_fd = auto_raii<int, justforceclose, -1>;
+
 }
 
 #endif /* FILEIO_H_ */
