@@ -18,7 +18,7 @@ void termsocket_now(int fd, void *p = nullptr)
 	::shutdown(fd, SHUT_RD);
 	forceclose(fd);
 	g_discoTimeouts.erase(fd);
-	event_free((event*)p);
+	if(p) event_free((event*)p);
 }
 
 void linger_read(int fd, short what, void *p)

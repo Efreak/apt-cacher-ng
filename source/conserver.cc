@@ -153,12 +153,12 @@ auto ThreadAction = []()
 		g_freshConQueue.pop_front();
 
 		g_nStandbyThreads--;
+
 		g.unLock();
-
 		c->WorkLoop();
-		c.release();
-
+		c.reset();
 		g.reLock();
+
 		g_nStandbyThreads++;
 
 		if (int(g_nStandbyThreads) >= cfg::tpstandbymax || g_global_shutdown)
