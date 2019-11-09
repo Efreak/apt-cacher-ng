@@ -83,7 +83,7 @@ struct select_set_t
 std::string formatIpPort(const evutil_addrinfo *info);
 
 // common flags for a CONNECTING socket
-void set_sock_flags(evutil_socket_t fd);
+void set_connect_sock_flags(evutil_socket_t fd);
 
 }
 

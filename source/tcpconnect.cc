@@ -123,7 +123,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 				state = HANDLE_ERROR;
 				return false;
 			}
-			set_sock_flags(fd);
+			set_connect_sock_flags(fd);
 #if DEBUG
 			log::err(string("Connecting: ") + formatIpPort(dns));
 #endif

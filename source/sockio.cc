@@ -8,21 +8,14 @@ namespace acng
 {
 using namespace std;
 
-#warning fixme, disconnect timeout to cfg
-#define DISCTIMEOUT cfg::nettimeout
-
-char crapbuf[40];
-//const struct linger linger_hints { 0, 0 };
-//const struct timeval linger_timeout { 15, 1};
-
+// those data structures are used by main thread only
 // helper structure with metadata which can be passed around
 unordered_map<int,time_t> g_discoTimeouts;
+char crapbuf[40];
 
 void termsocket_now(int fd, void *p = nullptr)
 {
-//	cerr << "closing: " << fd << endl;
 	::shutdown(fd, SHUT_RD);
-	//setsockopt(fd, SOL_SOCKET, SO_LINGER, &linger_hints, sizeof(linger_hints));
 	forceclose(fd);
 	g_discoTimeouts.erase(fd);
 	event_free((event*)p);
@@ -73,11 +66,12 @@ void termsocket_async(int fd, event_base* base)
 		::shutdown(fd, SHUT_WR);
 		int r = read(fd, crapbuf, sizeof(crapbuf));
 		if (r == 0) // fine, we are done
-			return termsocket_now(fd, nullptr); LOG("waiting for peer to react");
+			return termsocket_now(fd, nullptr);
+		LOG("waiting for peer to react");
 		auto ev = event_new(base, fd, EV_READ, linger_read,
 				event_self_cbarg());
-		g_discoTimeouts[fd] = GetTime() + DISCTIMEOUT;
-		struct timeval tmout { DISCTIMEOUT, 42 };
+		g_discoTimeouts[fd] = GetTime() + cfg::discotimeout;
+		struct timeval tmout { cfg::discotimeout, 42 };
 		if (ev && 0 == event_add(ev, &tmout))
 			return; // will cleanup in the callbacks
 	} catch (...)
@@ -89,10 +83,9 @@ void termsocket_async(int fd, event_base* base)
 	justforceclose(fd);
 }
 
-void set_sock_flags(evutil_socket_t fd)
+void set_connect_sock_flags(evutil_socket_t fd)
 {
 #ifndef NO_TCP_TUNNING
-
 		int yes(1);
 		::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 		::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
