@@ -12,6 +12,7 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
 
   [ FEATURES AND IMPROVEMENTS ]
   * Change of default network timeout to 40 seconds
+  * Reduced automatic retries on remote disconnects to two
   * Alternative fallback scheme for non-primary target connection attempts
     (with default timeout value of 4s, see FastTimeout setting). By default,
     this should help with unstable (blocking) IPv6 routing where IPv4 is still

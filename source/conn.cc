@@ -406,6 +406,7 @@ bool conn::SetupDownloader(const char *pszOrigin)
 	}
 	catch(...)
 	{
+		m_badState = true;
 		return false;
 	}
 	return false;

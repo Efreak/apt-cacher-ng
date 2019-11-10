@@ -24,7 +24,7 @@ using namespace std;
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
 
-#define MAX_RETRY 11
+#define MAX_RETRY cfg::dlretriesmax
 
 namespace acng
 {
@@ -150,6 +150,7 @@ struct tDlJob
 
 	~tDlJob()
 	{
+		LOGSTART("tDlJob::~tDlJob");
 		if (m_pStorage)
 			m_pStorage->DecDlRefCount(sErrorMsg.empty() ? sGenericError : sErrorMsg);
 	}
@@ -1103,6 +1104,8 @@ void dlcon::WorkLoop()
 		log::err("Error creating pipe file descriptors");
 		return;
 	}
+
+	tDtorEx allJobReleaser([&](){ m_qNewjobs.clear(); });
 
 	tDljQueue inpipe;
 	tDlStreamHandle con;

@@ -98,7 +98,7 @@ string wfilepat(INFOLDER
 string pfilepatEx, spfilepatEx, vfilepatEx, svfilepatEx, wfilepatEx; // for customization by user
 int offlinemode(false), verboselog(true), stupidfs(false), forcemanaged(false),
 extreshhold(20), tpstandbymax(8), tpthreadmax(-1), dirperms(00755), fileperms(00664),
-keepnver(0), maxtempdelay(27), vrangeops(1);
+keepnver(0), maxtempdelay(27), vrangeops(1), dlretriesmax(2);
 
 int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
 logxff(false), oldupdate(false), recompbz2(false), nettimeout(40), updinterval(0),

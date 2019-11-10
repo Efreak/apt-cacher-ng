@@ -202,6 +202,10 @@ ExThreshold: 4
 # of data.
 # DisconnectTimeout: 15
 
+# By default, if a remote suddenly reconnects, ACNG tries at least two times to
+# redownload from the same or different location (if known).
+# DlMaxRetries: 2
+
 # Pigeonholing files (like static vs. volatile contents) is done by (extended)
 # regular expressions.
 #

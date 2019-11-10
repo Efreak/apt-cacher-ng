@@ -39,7 +39,7 @@ extern ACNG_API int debug, numcores, offlinemode, foreground, verbose, stupidfs,
 verboselog, extreshhold, exfailabort, tpstandbymax, tpthreadmax, dnscachetime, dlbufsize, usewrap,
 exporigin, logxff, oldupdate, recompbz2, nettimeout, updinterval, forwardsoap, dirperms, fileperms,
 maxtempdelay, redirmax, vrangeops, stucksecs, persistoutgoing, pipelinelen, exsupcount,
-optproxytimeout, patrace, maxdlspeed, maxredlsize, nsafriendly, trackfileuse, exstarttradeoff,
+optproxytimeout, patrace, maxdlspeed, maxredlsize, dlretriesmax, nsafriendly, trackfileuse, exstarttradeoff,
 fasttimeout, discotimeout;
 extern int allocspace;
 
