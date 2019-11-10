@@ -133,6 +133,7 @@ MapNameToInt n2iTbl[] = {
 		,{  "ExTreshold",                        &extreshhold,      nullptr,    10, true} // wrong spelling :-(
 		,{  "MaxStandbyConThreads",              &tpstandbymax,     nullptr,    10, false}
 		,{  "MaxConThreads",                     &tpthreadmax,      nullptr,    10, false}
+		,{  "DlMaxRetries",                      &dlretriesmax,     nullptr,    10, false}
 		,{  "DnsCacheSeconds",                   &dnscachetime,     nullptr,    10, false}
 		,{  "UnbufferLogs",                      &debug,            nullptr,    10, false}
 		,{  "ExAbortOnProblems",                 &exfailabort,      nullptr,    10, false}

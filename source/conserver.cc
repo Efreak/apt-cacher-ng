@@ -153,12 +153,12 @@ auto ThreadAction = []()
 		g_freshConQueue.pop_front();
 
 		g_nStandbyThreads--;
+
 		g.unLock();
-
 		c->WorkLoop();
-		c.release();
-
+		c.reset();
 		g.reLock();
+
 		g_nStandbyThreads++;
 
 		if (int(g_nStandbyThreads) >= cfg::tpstandbymax || g_global_shutdown)
@@ -341,11 +341,12 @@ int ACNG_API Setup()
 		exit(EXIT_FAILURE);
 	}
 
-	g_resumer = std::make_shared<event_socket>(evabase::instance,
-			evasocket::create(-1),
-			0,
-			[](const std::shared_ptr<evasocket>&, short) {do_resume();});
-
+	{
+		lockguard g(g_thread_push_cond_var);
+		g_resumer = std::make_shared<event_socket>(evabase::instance, evasocket::create(-1), 0,
+				[](const std::shared_ptr<evasocket>&, short)
+				{	do_resume();});
+	}
 	unsigned nCreated = 0;
 
 	if (cfg::fifopath.empty())
@@ -452,6 +453,7 @@ void do_resume()
 {
 	lockguard g(g_thread_push_cond_var);
 	if(!g_suspended) return;
+	if(!g_resumer) return; // already in shutdown phase
 	g_resumer->disable();
 	for(auto& it: g_vecSocks)
 	{

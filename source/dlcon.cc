@@ -24,7 +24,7 @@ using namespace std;
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
 
-#define MAX_RETRY 11
+#define MAX_RETRY cfg::dlretriesmax
 
 namespace acng
 {
@@ -49,13 +49,20 @@ dlcon::dlcon(bool bManualExecution, string *xff, IDlConFactory *pConFactory) :
 	LOGSTART("dlcon::dlcon");
 #ifdef HAVE_LINUX_EVENTFD
 	m_wakeventfd = eventfd(0, 0);
-	if(m_wakeventfd >= 0)
+	if(m_wakeventfd == -1)
+		m_bStopASAP = true;
+	else
 		set_nb(m_wakeventfd);
 #else
 	if (0 == pipe(m_wakepipe))
 	{
 		set_nb(m_wakepipe[0]);
 		set_nb(m_wakepipe[1]);
+	}
+	else
+	{
+		m_wakepipe[0] = m_wakepipe[1] = -1;
+		m_bStopASAP = true;
 	}
 #endif
 	if (xff)
@@ -150,6 +157,7 @@ struct tDlJob
 
 	~tDlJob()
 	{
+		LOGSTART("tDlJob::~tDlJob");
 		if (m_pStorage)
 			m_pStorage->DecDlRefCount(sErrorMsg.empty() ? sGenericError : sErrorMsg);
 	}
@@ -699,16 +707,48 @@ private:
 	tDlJob & operator=(const tDlJob&);
 };
 
+#ifdef HAVE_LINUX_EVENTFD
+inline void dlcon::wake()
+{
+	LOGSTART("dlcon::wake");
+	if(fdWakeWrite == -1)
+		return;
+	while(true)
+	{
+		auto r=eventfd_write(fdWakeWrite, 1);
+		if(r == 0 || (errno != EINTR && errno != EAGAIN))
+			break;
+	}
+
+}
+inline void dlcon::awaken_check()
+{
+	LOGSTART("dlcon::awaken_check");
+	eventfd_t xtmp;
+	for(int i=0; ; ++i)
+	{
+		auto tmp = eventfd_read(fdWakeRead, &xtmp);
+		LOG("got one event, res: " << tmp << ", errno: " << errno);
+		if(i > 100) // breakpoint... OS bug? what's the errno?
+			break;
+		if(tmp == -1 && errno == EAGAIN) continue;
+		break;
+	}
+}
+
+#else
 void dlcon::wake()
 {
-	if (fdWakeWrite<0)
-		return;
-#ifdef HAVE_LINUX_EVENTFD
-	while(eventfd_write(fdWakeWrite, 1)<0) ;
-#else
+	LOGSTART("dlcon::wake");
 	POKE(fdWakeWrite);
-#endif
 }
+inline void dlcon::awaken_check()
+{
+	LOGSTART("dlcon::awaken_check");
+	for (char tmp; ::read(m_wakepipe[0], &tmp, 1) > 0;) ;
+}
+
+#endif
 
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const cfg::tRepoData *pBackends,
@@ -723,6 +763,8 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 			return false;
 	}
 	setLockGuard;
+	if(m_bStopASAP)
+		return false;
 /*
 	ASSERT(
 			todo->m_pStorage->m_nRangeLimit < 0
@@ -747,7 +789,6 @@ void dlcon::SignalStop()
 	// stop all activity as soon as possible
 	m_bStopASAP=true;
 	m_qNewjobs.clear();
-
 	wake();
 }
 
@@ -818,6 +859,10 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 
 		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, CTimeVal().ForNetTimeout());
 		ldbg("returned: " << r << ", errno: " << errno);
+		if(m_bStopASAP)
+		{
+			return HINT_DISCON;
+		}
 
 		if (r == -1)
 		{
@@ -849,18 +894,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 
 		if (FD_ISSET(fdWakeRead, &rfds))
 		{
-			dbgline;
-#ifdef HAVE_LINUX_EVENTFD
-			eventfd_t xtmp;
-			int tmp;
-			do {
-				tmp = eventfd_read(fdWakeRead, &xtmp);
-			} while (tmp < 0 && (errno == EINTR || errno == EAGAIN));
-
-#else
-			for (int tmp; read(m_wakepipe[0], &tmp, 1) > 0;)
-				;
-#endif
+			awaken_check();
 			return HINT_SWITCH;
 		}
 
@@ -1104,6 +1138,8 @@ void dlcon::WorkLoop()
 		return;
 	}
 
+	tDtorEx allJobReleaser([&](){ m_qNewjobs.clear(); });
+
 	tDljQueue inpipe;
 	tDlStreamHandle con;
 	unsigned loopRes=0;
@@ -1327,6 +1363,8 @@ void dlcon::WorkLoop()
         // inner loop: plain communication until something happens. Maybe should use epoll here?
         loopRes=ExchangeData(sErrorMsg, con, inpipe);
         ldbg("loopRes: "<< loopRes);
+        if(m_bStopASAP)
+        	return;
 
         /* check whether we have a pipeline stall. This may happen because a) we are done or
          * b) because of the remote hostname change or c) the client stopped sending tasks.

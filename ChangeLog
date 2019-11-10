@@ -12,6 +12,7 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
 
   [ FEATURES AND IMPROVEMENTS ]
   * Change of default network timeout to 40 seconds
+  * Reduced automatic retries on remote disconnects to two
   * Alternative fallback scheme for non-primary target connection attempts
     (with default timeout value of 4s, see FastTimeout setting). By default,
     this should help with unstable (blocking) IPv6 routing where IPv4 is still
@@ -43,7 +44,12 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
   * Generation of Sourceforge mirror redirectors list is fixed
   * Fixed an ancient bug where there last answered request might have been
     delayed in processing due to incorrect selection of MSG_MORE flag
-  * Potential crash on shutdown prevented (misordered destructor sequence)
+  * Potential crash on shutdown prevented (misordered destructor sequence,
+    insufficient tracking of remaining active tasks)
+  * Correct shutdown of blocked incoming connection on daemon shutdown
+  * Limit of simultaneous DNS resolver requests to 8 due to observed
+    instability of glibc (probably
+    https://sourceware.org/ml/libc-alpha/2015-10/msg00865.html )
 
   [ INTERNAL REFACTORING ]
   * Overhauling code deployment, using a shared library (reducing installed
