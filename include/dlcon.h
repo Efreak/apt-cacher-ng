@@ -115,6 +115,7 @@ class ACNG_API dlcon : public base_with_mutex
       unsigned m_nLastDlCount=0;
 
       void wake();
+      void awaken_check();
 };
 
 #define IS_REDIRECT(st) (st == 301 || st == 302 || st == 307)

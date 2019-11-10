@@ -20,6 +20,7 @@
 
 using namespace std;
 
+#define SHORT_TIMEOUT 4
 
 namespace acng
 {
@@ -192,6 +193,9 @@ void conn::WorkLoop() {
 	acbuf inBuf;
 	inBuf.setsize(32*1024);
 
+	// define a much shorter timeout than network timeout in order to be able to disconnect bad clients quickly
+	auto client_timeout(GetTime() + cfg::nettimeout);
+
 	int maxfd=m_confd;
 	while(!g_global_shutdown && !m_badState) {
 		fd_set rfds, wfds;
@@ -211,14 +215,18 @@ void conn::WorkLoop() {
 			FD_SET(m_confd, &wfds);
 		}
 
-
 		ldbg("select con");
-		int ready = select(maxfd+1, &rfds, &wfds, nullptr, CTimeVal().ForNetTimeout());
+		int ready = select(maxfd+1, &rfds, &wfds, nullptr, CTimeVal().For(SHORT_TIMEOUT));
+
+		if(g_global_shutdown)
+			break;
 
 		if(ready == 0)
 		{
 			USRDBG("Timeout occurred, apt client disappeared silently?");
-			return;
+			if(GetTime() > client_timeout)
+				return; // yeah, time to leave
+			continue;
 		}
 		else if (ready<0)
 		{
@@ -227,6 +235,11 @@ void conn::WorkLoop() {
 
 			ldbg("select error in con, errno: " << errno);
 			return; // FIXME: good error message?
+		}
+		else
+		{
+			// ok, something is still flowing, increase deadline
+			client_timeout = GetTime() + cfg::nettimeout;
 		}
 
 		ldbg("select con back");
@@ -377,9 +390,11 @@ void conn::WorkLoop() {
 
 bool conn::SetupDownloader(const char *pszOrigin)
 {
+	if(m_badState)
+		return false;
+
 	if (m_pDlClient)
 		return true;
-	m_badState = true;
 
 	try
 	{
@@ -400,16 +415,18 @@ bool conn::SetupDownloader(const char *pszOrigin)
 		if(!m_pDlClient)
 			return false;
 		auto pin = m_pDlClient;
-		m_dlerthr = move(thread([pin](){ pin->WorkLoop(); }));
+		m_dlerthr = move(thread([pin](){
+			pin->WorkLoop();
+		}));
 		m_badState = false;
 		return true;
 	}
 	catch(...)
 	{
 		m_badState = true;
+		m_pDlClient.reset();
 		return false;
 	}
-	return false;
 }
 
 void conn::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,

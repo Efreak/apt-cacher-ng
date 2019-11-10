@@ -44,7 +44,8 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
   * Generation of Sourceforge mirror redirectors list is fixed
   * Fixed an ancient bug where there last answered request might have been
     delayed in processing due to incorrect selection of MSG_MORE flag
-  * Potential crash on shutdown prevented (misordered destructor sequence)
+  * Potential crash on shutdown prevented (misordered destructor sequence,
+    insufficient tracking of remaining active tasks)
 
   [ INTERNAL REFACTORING ]
   * Overhauling code deployment, using a shared library (reducing installed

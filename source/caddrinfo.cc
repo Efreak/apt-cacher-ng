@@ -9,8 +9,10 @@
 
 #include <deque>
 #include <memory>
-
+#include <thread>
 using namespace std;
+
+#define DNS_MAX_PAR 12
 
 namespace acng
 {
@@ -56,10 +58,16 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 
 	Reset();
 
+	static atomic_int dns_overload_limiter(0);
+	while(dns_overload_limiter > DNS_MAX_PAR)
+		this_thread::sleep_for(1s);
+	dns_overload_limiter++;
 	int r = evutil_getaddrinfo(sHostname.empty() ? nullptr : sHostname.c_str(),
 			sPort.empty() ? nullptr : sPort.c_str(),
 			pHints ? pHints : &default_connect_hints,
 			&m_rawInfo);
+	dns_overload_limiter--;
+
 	switch(r)
 	{
 	case 0: break;
