@@ -61,7 +61,7 @@ apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
     combinations
   * Moved lingering on CLOSE_WAIT sockets to the single main thread
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Sun, 10 Nov 2019 18:59:08 +0100
 
 apt-cacher-ng (3.2) MY-NAME-IS-ANYBODY; urgency=medium
 
