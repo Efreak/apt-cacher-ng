@@ -12,7 +12,7 @@
 #include <thread>
 using namespace std;
 
-#define DNS_MAX_PAR 12
+#define DNS_MAX_PAR 8
 
 namespace acng
 {
