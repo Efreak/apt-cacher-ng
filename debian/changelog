@@ -1,3 +1,9 @@
+apt-cacher-ng (3.2-3~bpo10+1) buster-backports; urgency=medium
+
+  * Straight rebuild for buster-backports
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 14 Nov 2019 15:40:28 +0100
+
 apt-cacher-ng (3.2-3) unstable; urgency=medium
 
   * Increase decompression line buffer size (closes: #942634)
