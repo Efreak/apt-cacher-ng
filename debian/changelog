@@ -1,3 +1,9 @@
+apt-cacher-ng (3.3-2) unstable; urgency=low
+
+  * Upload to Sid
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 14 Nov 2019 13:56:58 +0100
+
 apt-cacher-ng (3.3-1) experimental; urgency=low
 
   * New upstream version v3.3
