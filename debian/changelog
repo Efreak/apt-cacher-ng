@@ -1,3 +1,9 @@
+apt-cacher-ng (3.2-3~bpo9+1) stretch-backports-sloppy; urgency=medium
+
+  * Straight rebuild for stretch-backports-sloppy
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 14 Nov 2019 16:03:33 +0100
+
 apt-cacher-ng (3.2-3~bpo10+1) buster-backports; urgency=medium
 
   * Straight rebuild for buster-backports
