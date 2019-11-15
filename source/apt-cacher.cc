@@ -135,9 +135,8 @@ void parse_options(int argc, const char **argv, bool& bStartCleanup)
 
 void setup_sighandler()
 {
-	auto ebase = evabase::instance->base;
 	auto what = EV_SIGNAL|EV_PERSIST;
-#define REGSIG(x,y) event_add(::event_new(ebase, x, what, & y, 0), nullptr);
+#define REGSIG(x,y) event_add(::event_new(evabase::base, x, what, & y, 0), nullptr);
 	for(int snum : {SIGBUS, SIGTERM, SIGINT, SIGQUIT}) REGSIG(snum, term_handler);
 	REGSIG(SIGUSR1, log_handler);
 	REGSIG(SIGUSR2, dump_handler);
@@ -237,8 +236,8 @@ void term_handler(evutil_socket_t signum, short what, void *arg)
 	case (SIGINT):
 	case (SIGQUIT):
 	{
-		if(evabase::instance)
-			event_base_loopbreak(evabase::instance->base);
+		if(evabase::base)
+			event_base_loopbreak(evabase::base);
 		break;
 	}
 	default:
@@ -271,7 +270,7 @@ struct tAppStartStop
 
 			check_algos();
 
-			evabase::instance = std::make_shared<evabase>();
+			evabase::base = event_base_new();
 
 			setup_sighandler();
 
@@ -320,6 +319,8 @@ struct tAppStartStop
 		conserver::Shutdown();
 		CloseAllCachedConnections();
 		log::close(false);
+		if(evabase::base)
+			event_base_free(evabase::base);
 	}
 };
 

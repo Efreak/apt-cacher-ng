@@ -276,7 +276,7 @@ SET(CMAKE_REQUIRED_LIBRARIES "")
 
 set(HAVE_CHECKSUM on)
 
-pkg_check_modules(libevent libevent)
+pkg_check_modules(libevent "libevent>=2.1.2")
 if(NOT libevent_FOUND)
         message(FATAL_ERROR "!! Error: proper libevent installation is required")
 else()

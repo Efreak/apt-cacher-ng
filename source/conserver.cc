@@ -9,7 +9,6 @@
 #include "sockio.h"
 #include "fileio.h"
 #include "evabase.h"
-#include "evasocket.h"
 #include "dnsiter.h"
 #include <signal.h>
 #include <arpa/inet.h>
@@ -48,25 +47,34 @@ namespace conserver
 {
 
 int yes(1);
-vector<SHARED_PTR<acng::event_socket> > g_vecSocks;
 
 base_with_condition g_thread_push_cond_var;
 deque<unique_ptr<conn>> g_freshConQueue;
 unsigned g_nStandbyThreads = 0, g_nTotalThreads=0;
-
-bool g_suspended = false; // temporary suspended operation
-SHARED_PTR<acng::event_socket> g_resumer;
+const struct timeval g_resumeTimeout { 2, 11 };
 
 void SetupConAndGo(unique_fd fd, const char *szClientName);
-void do_resume();
 
 // safety mechanism, detect when the number of incoming connections
 // is growing A LOT faster than it can be processed 
 #define MAX_BACKLOG 200
 
-void do_accept(const std::shared_ptr<evasocket>& soc)
+void cb_resume(evutil_socket_t fd, short what, void* arg)
 {
-	LOGSTART2s("do_accept", soc->fd());
+	event_add((event*) arg, nullptr);
+}
+
+void do_accept(evutil_socket_t server_fd, short what, void* arg)
+{
+	LOGSTART2s("do_accept", server_fd);
+	auto self((event*)arg);
+
+	if(what == TEARDOWN_HINT)
+	{
+		close(server_fd);
+		event_free(self);
+		return;
+	}
 
 	struct sockaddr_storage addr;
 	socklen_t addrlen = sizeof(addr);
@@ -74,7 +82,7 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 	int fd = -1;
 	while(true)
 	{
-		fd = accept(soc->fd(), (struct sockaddr*) &addr, &addrlen);
+		fd = accept(server_fd, (struct sockaddr*) &addr, &addrlen);
 
 		if (fd != -1)
 			break;
@@ -89,7 +97,8 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 		case ENOBUFS:
 		case ENOMEM:
 			// resource exhaustion, might recover when another connection handler has stopped, disconnect this one for now
-			conserver::HandleOverload();
+			event_del(self);
+			event_base_once(evabase::base, -1, EV_TIMEOUT, cb_resume, self, &g_resumeTimeout);
 			return;
 		default:
 			return;
@@ -237,10 +246,10 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 	}
 }
 
-bool bind_and_listen(shared_ptr<evasocket> mSock, const evutil_addrinfo *pAddrInfo)
+bool bind_and_listen(evutil_socket_t mSock, const evutil_addrinfo *pAddrInfo)
 		{
 	LOGSTART2s("bind_and_listen", formatIpPort(pAddrInfo));
-			if ( ::bind(mSock->fd(), pAddrInfo->ai_addr, pAddrInfo->ai_addrlen))
+			if ( ::bind(mSock, pAddrInfo->ai_addr, pAddrInfo->ai_addrlen))
 			{
 				log::flush();
 				perror("Couldn't bind socket");
@@ -255,20 +264,18 @@ bool bind_and_listen(shared_ptr<evasocket> mSock, const evutil_addrinfo *pAddrIn
 				}
 				return false;
 			}
-			if (listen(mSock->fd(), SO_MAXCONN))
+			if (listen(mSock, SO_MAXCONN))
 			{
 				perror("Couldn't listen on socket");
 				return false;
 			}
-
-			g_vecSocks.emplace_back(
-					make_shared<event_socket>(evabase::instance,
-					mSock,
-					EV_READ | EV_PERSIST,
-					[](const std::shared_ptr<evasocket>& sock, short) {do_accept(sock);})
-					);
-			// and activate it once
-			g_vecSocks.back()->enable();
+			auto ev = event_new(evabase::base, mSock, EV_READ|EV_PERSIST, do_accept, event_self_cbarg());
+			if(!ev)
+			{
+				cerr << "Socket creation error" << endl;
+				return false;
+			}
+			event_add(ev, nullptr);
 			return true;
 		};
 
@@ -315,7 +322,6 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 				continue;
 			}
 		}
-		auto mSock = evasocket::create(nSockFd);
 		// if we have a dual-stack IP implementation (like on Linux) then
 		// explicitly disable the shadow v4 listener. Otherwise it might be
 		// bound or maybe not, and then just sometimes because of configurable
@@ -323,10 +329,10 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 		// we just cannot know for sure but we need to.
 #if defined(IPV6_V6ONLY) && defined(SOL_IPV6)
 		if(p->ai_family==AF_INET6)
-			setsockopt(mSock->fd(), SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
+			setsockopt(nSockFd, SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
 #endif
-		setsockopt(mSock->fd(), SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-		res += bind_and_listen(mSock, p);
+		setsockopt(nSockFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+		res += bind_and_listen(nSockFd, p);
 	}
 	return res;
 };
@@ -341,12 +347,6 @@ int ACNG_API Setup()
 		exit(EXIT_FAILURE);
 	}
 
-	{
-		lockguard g(g_thread_push_cond_var);
-		g_resumer = std::make_shared<event_socket>(evabase::instance, evasocket::create(-1), 0,
-				[](const std::shared_ptr<evasocket>&, short)
-				{	do_resume();});
-	}
 	unsigned nCreated = 0;
 
 	if (cfg::fifopath.empty())
@@ -387,7 +387,7 @@ int ACNG_API Setup()
 		ai.ai_addrlen = size;
 		ai.ai_family = PF_UNIX;
 
-		nCreated += bind_and_listen(evasocket::create(sockFd), &ai);
+		nCreated += bind_and_listen(sockFd, &ai);
 	}
 
 	if (atoi(cfg::port.c_str()) <= 0)
@@ -415,20 +415,31 @@ int ACNG_API Run()
 	sd_notify(0, "READY=1");
 #endif
 
-	return event_base_loop(evabase::instance->base, EVLOOP_NO_EXIT_ON_EMPTY);
+	return event_base_loop(evabase::base, EVLOOP_NO_EXIT_ON_EMPTY);
+}
+
+/**
+ * Forcibly run each callback and signal shutdown.
+ */
+int teardown_event_activity(const event_base*, const event* ev, void*)
+{
+	// event_active(ev, TEARDOWN_HINT, 0);
+	// that's forbidden by const-correctness... ok, run manually
+	auto cb = event_get_callback(ev);
+	auto arg = event_get_callback_arg(ev);
+	cb(-1, TEARDOWN_HINT, arg);
+	return 0;
 }
 
 void Shutdown()
 {
-	DBGQLOG("Closing listening sockets\n");
-	// terminate activities
-	g_vecSocks.clear();
-	g_resumer.reset();
+	g_global_shutdown = true;
+	// send teardown hint to all event callbacks
+	event_base_foreach_event(evabase::base, teardown_event_activity, nullptr);
 
 	{
 		lockuniq g(g_thread_push_cond_var);
 		// global hint to all conn objects
-		g_global_shutdown = true;
 		DBGQLOG("Notifying worker threads\n");
 		g_thread_push_cond_var.notifyAll();
 		while(g_nTotalThreads)
@@ -436,40 +447,14 @@ void Shutdown()
 	}
 }
 
-const struct timeval g_resumeTimeout { 2, 11 };
-
-void HandleOverload()
-{
-	lockguard g(g_thread_push_cond_var);
-	g_suspended = true;
-	for(auto& it: g_vecSocks)
-	{
-		it->disable();
-	}
-	g_resumer->enable(&g_resumeTimeout);
-}
-
-void do_resume()
-{
-	lockguard g(g_thread_push_cond_var);
-	if(!g_suspended) return;
-	if(!g_resumer) return; // already in shutdown phase
-	g_resumer->disable();
-	for(auto& it: g_vecSocks)
-	{
-		it->enable();
-	}
-	g_suspended = false;
-}
-
 void FinishConnection(int fd)
 {
 	if(fd == -1)
 		return;
 
-	termsocket_async(fd, evabase::instance->base);
+	termsocket_async(fd, evabase::base);
 	// there is a good chance that more resources are available now
-	do_resume();
+//	do_resume();
 }
 
 }
