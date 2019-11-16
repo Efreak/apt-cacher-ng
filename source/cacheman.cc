@@ -413,7 +413,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		}
 	}
 
-	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix, 0, cfg::REDIRMAX_DEFAULT);
+	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix, 0, cfg::REDIRMAX_DEFAULT, nullptr);
 
 	m_pDlcon->WorkLoop();
 	if (pFi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE
@@ -925,7 +925,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 void cacheman::StartDlder()
 {
 	if (!m_pDlcon)
-		m_pDlcon = new dlcon(true);
+		m_pDlcon = new dlcon(sEmptyString);
 }
 
 void cacheman::ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups& idxGroups,

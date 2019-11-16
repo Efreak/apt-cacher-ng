@@ -449,7 +449,7 @@ void Shutdown()
 
 void FinishConnection(int fd)
 {
-	if(fd == -1)
+	if(fd == -1 || g_global_shutdown)
 		return;
 
 	termsocket_async(fd, evabase::base);

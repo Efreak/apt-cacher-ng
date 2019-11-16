@@ -42,8 +42,7 @@ typedef std::list<tDlJobPtr> tDljQueue;
 class ACNG_API dlcon : public base_with_mutex
 { 
     public:
-        dlcon(bool bManualExecution, mstring *xff=nullptr,
-        		IDlConFactory *pConFactory = &g_tcp_con_factory);
+        dlcon(cmstring& sOwnersHostname, IDlConFactory *pConFactory = &g_tcp_con_factory);
         ~dlcon();
 
         void WorkLoop();
@@ -53,9 +52,7 @@ class ACNG_API dlcon : public base_with_mutex
         bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
         		const cfg::tRepoData *pRepoDesc,
         		cmstring *sPatSuffix, LPCSTR reqHead,
-				int nMaxRedirection);
-
-        mstring m_sXForwardedFor;
+				int nMaxRedirection, const char* szHeaderXff);
 
     private:
 
@@ -67,6 +64,7 @@ class ACNG_API dlcon : public base_with_mutex
     	
     	tDljQueue m_qNewjobs;
     	IDlConFactory* m_pConFactory;
+    	std::string m_ownersHostname;
 
 #ifdef HAVE_LINUX_EVENTFD
     	int m_wakeventfd = -1;
@@ -81,8 +79,6 @@ class ACNG_API dlcon : public base_with_mutex
     	/// remember being attached to an fitem
 
     	bool m_bStopASAP;
-
-    	unsigned m_bManualMode;
 
     	/// blacklist for permanently failing hosts, with error message
     	std::map<std::pair<cmstring,cmstring>, mstring> m_blacklist;

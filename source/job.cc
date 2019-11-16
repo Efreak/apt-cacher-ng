@@ -644,7 +644,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
     if( fistate < fileitem::FIST_DLGOTHEAD) // needs a downloader
     {
     	dbgline;
-    	if(!m_pParentCon->SetupDownloader(m_reqHead.h[header::XFORWARDEDFOR]))
+    	if(!m_pParentCon->SetupDownloader())
     	{
     		USRDBG( "Error creating download handler for "<<m_sFileLoc);
     		goto report_overload;
@@ -673,7 +673,7 @@ try
 							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
 							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
 									(LPCSTR) ( bPtMode ? headBuf : nullptr),
-							cfg::redirmax))
+							cfg::redirmax, m_reqHead.h[header::XFORWARDEDFOR]))
 				{
 					ldbg("Download job enqueued for " << m_sFileLoc);
 				}

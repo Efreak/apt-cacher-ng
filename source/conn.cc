@@ -388,7 +388,7 @@ void conn::WorkLoop() {
 	}
 }
 
-bool conn::SetupDownloader(const char *pszOrigin)
+bool conn::SetupDownloader()
 {
 	if(m_badState)
 		return false;
@@ -398,20 +398,7 @@ bool conn::SetupDownloader(const char *pszOrigin)
 
 	try
 	{
-		if(cfg::exporigin)
-		{
-			string sXff;
-			if(pszOrigin)
-			{
-				sXff = *pszOrigin;
-				sXff += ", ";
-			}
-			sXff+=m_sClientHost;
-			m_pDlClient.reset(new dlcon(false, &sXff));
-		}
-		else
-			m_pDlClient.reset(new dlcon(false));
-
+		m_pDlClient = make_shared<dlcon>(m_sClientHost);
 		if(!m_pDlClient)
 			return false;
 		auto pin = m_pDlClient;

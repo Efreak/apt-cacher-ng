@@ -1,3 +1,13 @@
+apt-cacher-ng (3.4) SOMETIMES-YOU-EAT-THE-BEAR; urgency=low
+
+  [ BUGFIXES ]
+  * Fixing construction of individual X-Forwarded-For headers. This matters
+    only for proxy cascades and only when ExposeOrigin option is set.
+  * Potential hanging of acngtool/acngfs on termination
+  * Minor speedup in acngfs with reused download agent
+
+ -- 
+
 apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
 
   [ POSSIBLY BREAKING CHANGES ]

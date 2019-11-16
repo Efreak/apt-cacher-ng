@@ -23,7 +23,7 @@
 #include <cstdio>
 #include <cstring>
 #include <functional>
-
+#include <thread>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -38,6 +38,8 @@
 #include "filereader.h"
 #include "csmapping.h"
 #include "cleaner.h"
+#include "evabase.h"
+#include <event2/thread.h>
 
 using namespace std;
 using namespace acng;
@@ -944,6 +946,10 @@ std::unordered_map<string, parm> parms = {
 
 int main(int argc, const char **argv)
 {
+
+	evthread_use_pthreads();
+
+
 	using namespace acng;
 	// ensure a harmless object just in case any activity wants to run anything there
 	cleaner::GetInstance(false).notifyAll();
@@ -1013,18 +1019,38 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	string xurl(surl);
 	if(!url.SetHttpUrl(xurl, false))
 		return -2;
-	dlcon dl(true, nullptr, pDlconFac);
+	dlcon dl("", pDlconFac);
+
+	evabase::base = event_base_new();
+
+	std::thread evthr([&]()
+	{
+		return event_base_loop(evabase::base, EVLOOP_NO_EXIT_ON_EMPTY);
+	});
+	std::thread thr([&]()
+	{	dl.WorkLoop();});
+
+	tDtorEx cleaner([&]()
+	{
+		dl.SignalStop();
+		thr.join();
+		if(evabase::base)
+		{
+			event_base_loopbreak(evabase::base);
+			event_base_free(evabase::base);
+		}
+		evthr.join();
+		::acng::cleaner::GetInstance().Stop();
+	});
 
 	auto fi=fac->Create();
-	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT);
-	dl.WorkLoop();
-	auto fistatus = fi->GetStatus();
-	header hh = fi->GetHeader();
-	int st=hh.getStatus();
-
+	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT, nullptr);
+	int st;
+	auto fistatus = fi->WaitForFinish(&st);
 	if(fistatus == fileitem::FIST_COMPLETE && st == 200)
 		return EXIT_SUCCESS;
 
+	auto hh = fi->GetHeader();
 	// don't reveal passwords
 	auto xpos=xurl.find('@');
 	if(xpos!=stmiss)

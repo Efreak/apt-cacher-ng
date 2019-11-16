@@ -41,8 +41,10 @@ static const auto taboo =
 
 std::atomic_uint g_nDlCons(0);
 
-dlcon::dlcon(bool bManualExecution, string *xff, IDlConFactory *pConFactory) :
-		m_pConFactory(pConFactory), m_bStopASAP(false), m_bManualMode(bManualExecution),
+dlcon::dlcon(cmstring& sOwnersHostname, IDlConFactory *pConFactory) :
+		m_pConFactory(pConFactory),
+		m_ownersHostname(sOwnersHostname),
+		m_bStopASAP(false),
 		m_nTempPipelineDisable(0),
 		m_bProxyTot(false)
 {
@@ -65,8 +67,6 @@ dlcon::dlcon(bool bManualExecution, string *xff, IDlConFactory *pConFactory) :
 		m_bStopASAP = true;
 	}
 #endif
-	if (xff)
-		m_sXForwardedFor = *xff;
   g_nDlCons++;
 }
 
@@ -115,7 +115,7 @@ struct tDlJob
 		STATE_FINISHJOB
 	} tDlState;
 
-	string m_extraHeaders;
+	string m_extraHeaders, m_xff;
 
 	tHttpUrl m_remoteUri;
 	const tHttpUrl *m_pCurBackend=nullptr;
@@ -295,7 +295,7 @@ struct tDlJob
 	}
 
 	// needs connectedHost, blacklist, output buffer from the parent, proxy mode?
-	inline void AppendRequest(tSS &head, cmstring &xff, const tHttpUrl *proxy)
+	inline void AppendRequest(tSS &head, const tHttpUrl *proxy)
 	{
 		LOGSTART("tDlJob::AppendRequest");
 
@@ -403,8 +403,8 @@ struct tDlJob
 		if (m_pStorage->m_bCheckFreshness)
 			head << "Cache-Control: no-store,no-cache,max-age=0\r\n";
 
-		if (cfg::exporigin && !xff.empty())
-			head << "X-Forwarded-For: " << xff << "\r\n";
+		if (cfg::exporigin && !m_xff.empty())
+			head << "X-Forwarded-For: " << m_xff << "\r\n";
 
 		head << cfg::requestapx
 				<< m_extraHeaders
@@ -753,7 +753,7 @@ inline void dlcon::awaken_check()
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const cfg::tRepoData *pBackends,
 		cmstring *sPatSuffix, LPCSTR reqHead,
-		int nMaxRedirection)
+		int nMaxRedirection, const char* szHeaderXff)
 {
 	if(!pForcedUrl)
 	{
@@ -776,6 +776,17 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection));
 
 	m_qNewjobs.back()->ExtractCustomHeaders(reqHead);
+
+	if (cfg::exporigin && !m_ownersHostname.empty())
+	{
+		if (szHeaderXff)
+		{
+			m_qNewjobs.back()->m_xff = szHeaderXff;
+			m_qNewjobs.back()->m_xff+= ", ";
+		}
+
+		m_qNewjobs.back()->m_xff += m_ownersHostname;
+	}
 
 	wake();
 	return true;
@@ -1337,7 +1348,7 @@ void dlcon::WorkLoop()
         			break;
         		}
 
-				cjob->AppendRequest(m_sendBuf, m_sXForwardedFor, proxy);
+				cjob->AppendRequest(m_sendBuf, proxy);
 				LOG("request added to buffer");
 				inpipe.emplace_back(cjob);
 				m_qNewjobs.pop_front();
@@ -1354,11 +1365,6 @@ void dlcon::WorkLoop()
 		ldbg("Request(s) cooked, buffer contents: " << m_sendBuf);
 
         go_select:
-
-        if(inpipe.empty() && m_bManualMode)
-        {
-        	return;
-        }
 
         // inner loop: plain communication until something happens. Maybe should use epoll here?
         loopRes=ExchangeData(sErrorMsg, con, inpipe);

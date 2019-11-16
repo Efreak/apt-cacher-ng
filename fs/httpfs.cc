@@ -42,8 +42,14 @@
 #define MIN(a,b) ( (a<=b)?a:b)
 #endif
 
+#include <thread>
+
 using namespace std;
 using namespace acng;
+
+dlcon dler("");
+
+//#define SPAM
 
 #ifdef SPAM
 #define _cerr(x) cerr << x
@@ -157,7 +163,6 @@ public:
 
 	int Read(char *retbuf, const char *path, off_t pos, size_t len)
 	{
-		dlcon dler(true, 0);
 		tHttpUrl uri = proxyUrl;
 		uri.sPath += baseUrl.sHost
 		// + ":" + ( baseUrl.sPort.empty() ? baseUrl.sPort : "80")
@@ -287,8 +292,7 @@ public:
 
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
-		dler.AddJob(spFi, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
-		dler.WorkLoop();
+		dler.AddJob(spFi, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT, nullptr);
 		int nHttpCode(100);
 		pFi->WaitForFinish(&nHttpCode);
 		bIsFirst=false;
@@ -327,8 +331,6 @@ public:
 		}
 		// ok, not cached, do the hard way
 
-		dlcon dler(true, 0);
-
 		tHttpUrl uri = proxyUrl;
 		uri.sPath += baseUrl.sHost
 		// + ":" + ( baseUrl.sPort.empty() ? baseUrl.sPort : "80")
@@ -360,8 +362,7 @@ public:
 			}
 		};
 		auto probe(make_shared<tFitemProbe>());
-		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
-		dler.WorkLoop();
+		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT, nullptr);
 		int nHttpCode(100);
 		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
 		stbuf.st_size = atoofft(probe->GetHeaderUnlocked().h[header::CONTENT_LENGTH], 0);
@@ -630,6 +631,7 @@ void _ExitUsage() {
 #define barf(x) { cerr << endl << "ERROR: " << x <<endl; exit(1); }
 #define erUsage { _ExitUsage(); }
 
+
 int main(int argc, char *argv[])
 {
 	using namespace acng;
@@ -740,6 +742,15 @@ int main(int argc, char *argv[])
    argv[nMyArgCount]=argv[0]; // application path
    argv=&argv[nMyArgCount];
    argc-=nMyArgCount;
+
+   std::thread thr([]() { dler.WorkLoop(); });
+	tDtorEx cleaner([&]()
+	{
+		dler.SignalStop();
+		thr.join();
+		acng::cleaner::GetInstance().Stop();
+	});
+
    return my_fuse_main(argc, argv);
 }
 

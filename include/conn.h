@@ -48,7 +48,7 @@ private:
 
 	// for jobs
 	friend class job;
-	bool SetupDownloader(const char *xff);
+	bool SetupDownloader();
 	std::shared_ptr<dlcon> m_pDlClient;
 	mstring m_sClientHost;
 
