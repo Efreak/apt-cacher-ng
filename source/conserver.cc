@@ -290,16 +290,19 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_family = PF_UNSPEC;
-	bool ignored;
-	if(!resolver.ResolveTcpTarget(addi ? addi : sEmptyString, port, scratchBuf, &hints, ignored))
+
+	evutil_addrinfo* dnsret;
+	int r = evutil_getaddrinfo(addi, port.c_str(), &hints, &dnsret);
+	if(r)
 	{
 		log::flush();
 		perror("Error resolving address for binding");
 		return 0;
 	}
+	tDtorEx dnsclean([dnsret]() {if(dnsret) evutil_freeaddrinfo(dnsret);});
 
 	std::unordered_set<std::string> dedup;
-	tDnsIterator iter(PF_UNSPEC, resolver.getTcpAddrInfo());
+	tDnsIterator iter(PF_UNSPEC, dnsret);
 	unsigned res(0);
 	for(const evutil_addrinfo *p; !!(p=iter.next());)
 	{
@@ -309,7 +312,7 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 		int nSockFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
 		if (nSockFd == -1)
 		{
-			// STFU on lag of IPv6?
+			// STFU on lack of IPv6?
 			switch(errno)
 			{
 				case EAFNOSUPPORT:

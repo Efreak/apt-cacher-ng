@@ -30,7 +30,6 @@ deque<decltype(dnsCache)::iterator> dnsAddSeq;
 
 bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 		string & sErrorBuf,
-		const evutil_addrinfo* pHints,
 		bool & bTransientError)
 {
 	LOGSTART2("CAddrInfo::Resolve", "Resolving " << sHostname);
@@ -64,7 +63,7 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 	dns_overload_limiter++;
 	int r = evutil_getaddrinfo(sHostname.empty() ? nullptr : sHostname.c_str(),
 			sPort.empty() ? nullptr : sPort.c_str(),
-			pHints ? pHints : &default_connect_hints,
+			&default_connect_hints,
 			&m_rawInfo);
 	dns_overload_limiter--;
 
@@ -114,7 +113,7 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 	auto resolve_now = [&]()
 			{
 		auto ret = make_shared<CAddrInfo>();
-		if(! ret->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, nullptr, bTransientError))
+		if(! ret->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, bTransientError))
 			ret.reset();
 		return ret;
 	};
@@ -172,7 +171,7 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 		}
 	}
 	lg.unLock();
-	auto resret = p->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, nullptr, bTransientError);
+	auto resret = p->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, bTransientError);
 	lg.reLock();
 	if(resret)
 	{
