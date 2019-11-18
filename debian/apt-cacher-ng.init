@@ -37,10 +37,6 @@ SOCKETFILE="$RUNDIR/socket"
 DAEMON_OPTS="$DAEMON_OPTS pidfile=$PIDFILE SocketPath=$SOCKETFILE foreground=0  $EXTRA_ACNG_OPTS "
 
 do_start() {
-   PIDOF=$(pidof apt-cacher-ng)
-   if [ -n "$PIDOF" ] && [ -e "$PIDFILE" ] && [ "$PIDOF" = "$(cat $PIDFILE)" ] ; then
-      return 255
-   fi
    rm -rf "$RUNDIR" || return 1
    install -d --mode=0755 -o $USER -g $GROUP "$RUNDIR" || return 1
    start-stop-daemon --start --chuid $USER --group $GROUP --quiet --pidfile $PIDFILE --exec $DAEMON -- $DAEMON_OPTS

@@ -1,3 +1,10 @@
+apt-cacher-ng (3.3-3) UNRELEASED; urgency=medium
+
+  * Dropped ancient pidof check from the init script (no bug here but there
+    was some complaint on debian-devel a while ago)
+
+ -- Eduard Bloch <blade@debian.org>  Mon, 18 Nov 2019 20:53:56 +0100
+
 apt-cacher-ng (3.3-2) unstable; urgency=low
 
   * Upload to Sid
