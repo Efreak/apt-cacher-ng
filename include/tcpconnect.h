@@ -60,7 +60,7 @@ public:
 	bool StartTunnel(const tHttpUrl & realTarget, mstring& sError, cmstring *psAuthorization, bool bDoSSLinit);
 
 private:
-	bool _Connect(mstring &sErrOut, int timeout);
+	std::string _Connect(int timeout);
 	cfg::tRepoData::IHookHandler *m_pStateObserver=nullptr;
 
 protected:

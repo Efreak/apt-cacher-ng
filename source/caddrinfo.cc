@@ -1,42 +1,112 @@
-
 #include "meta.h"
+
+#include <deque>
+#include <memory>
+#include <list>
+#include <unordered_map>
+#include <future>
+
 #include "caddrinfo.h"
 #include "sockio.h"
 #include "acfg.h"
 #include "debug.h"
 #include "lockable.h"
-#include "cleaner.h"
+#include "evabase.h"
 
-#include <deque>
-#include <memory>
-#include <thread>
 using namespace std;
 
-#define DNS_MAX_PAR 8
+/**
+ * The CAddrInfo has multiple jobs:
+ * - cache the resolution results for a specific time span
+ * - in case of parallel ongoing resolution requests, coordinate the wishes so that the result is reused (and all callers are notified)
+ */
 
 namespace acng
 {
-static const unsigned DNS_CACHE_MAX=255;
+static const unsigned DNS_CACHE_MAX = 255;
+static const unsigned DNS_ERROR_KEEP_MAX_TIME = 15;
 
 static string make_dns_key(const string & sHostname, const string &sPort)
 {
-	return sHostname + "/" + sPort;
+	return sHostname + ":" + sPort;
 }
 
-base_with_condition dnsCacheCv;
+// using non-ordered map because of iterator stability, needed for expiration queue
+map<string,CAddrInfoPtr> dns_cache;
+deque<decltype(dns_cache)::iterator> dns_exp_q;
 
-map<string,CAddrInfoPtr> dnsCache;
-deque<decltype(dnsCache)::iterator> dnsAddSeq;
-
-bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
-		string & sErrorBuf,
-		bool & bTransientError)
+// descriptor of a running DNS lookup
+struct tDnsResContext
 {
-	LOGSTART2("CAddrInfo::Resolve", "Resolving " << sHostname);
+	string sHost, sPort;
+	list<CAddrInfo::tDnsResultReporter> cbs;
+};
+unordered_map<string,tDnsResContext*> g_active_resolvers;
 
-	sErrorBuf.clear();
-	auto filter_specific = (cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC);
-	evutil_addrinfo default_connect_hints =
+/**
+ * Trash old entries and make space for at least one new entry.
+ */
+void CAddrInfo::clean_dns_cache()
+{
+	if(cfg::dnscachetime <=0) return;
+	auto now=GetTime();
+	while(!dns_cache.empty())
+	{
+		if(dns_exp_q.front()->second->m_expTime > now && dns_cache.size()<DNS_CACHE_MAX-1 )
+			break;
+		dns_cache.erase(dns_exp_q.front());
+		dns_exp_q.pop_front();
+	}
+}
+
+// this shall remain global and forever, for last-resort notifications
+SHARED_PTR<CAddrInfo> fail_hint=CAddrInfo::make_fatal_failure_hint();
+SHARED_PTR<CAddrInfo> CAddrInfo::make_fatal_failure_hint()
+{
+	auto p = new CAddrInfo();
+	p->m_sError = "503 Fatal system error within apt-cacher-ng processing";
+	return SHARED_PTR<CAddrInfo>(p);
+}
+
+SHARED_PTR<CAddrInfo> CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort)
+{
+	promise<CAddrInfoPtr> reppro;
+	auto reporter = [&reppro](CAddrInfoPtr result) { reppro.set_value(move(result)); };
+	Resolve(sHostname, sPort, move(reporter));
+	auto res(move(reppro.get_future().get()));
+	return res ? res : fail_hint;
+}
+void CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporter rep)
+{
+	static const struct timeval tImmediately { 0, 0};
+	auto repList = list<tDnsResultReporter> {move(rep)};
+	auto ctx = new tDnsResContext {sHostname, sPort, move(repList)};
+	event_base_once(evabase::base, -1, EV_READ, cb_invoke_dns_res, ctx, &tImmediately);
+}
+void CAddrInfo::cb_invoke_dns_res(int result, short what, void *arg)
+{
+	unique_ptr<tDnsResContext> args((tDnsResContext*)arg);
+	auto key=make_dns_key(args->sHost, args->sPort);
+	if(cfg::dnscachetime>0)
+	{
+		auto caIt = dns_cache.find(key);
+		if(caIt != dns_cache.end())
+		{
+			if(args->cbs.front()) args->cbs.front()(caIt->second);
+			return;
+		}
+	}
+	auto resIt = g_active_resolvers.find(key);
+	// jump on the bandwagon? move all callbacks to there...
+	if(resIt != g_active_resolvers.end())
+	{
+		resIt->second->cbs.splice(resIt->second->cbs.end(), args->cbs);
+		return;
+	}
+	// ok, invoke a completely new DNS lookup operation
+	g_active_resolvers[key] = args.get();
+	static bool filter_specific = (cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC);
+	static const evutil_addrinfo default_connect_hints =
 	{
 		// we provide plain port numbers, no resolution needed
 		// also return only probably working addresses
@@ -45,157 +115,67 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 		SOCK_STREAM, IPPROTO_TCP,
 		0, nullptr, nullptr, nullptr
 	};
+	auto pRaw = args.release(); // to be owned by the operation
+	evdns_getaddrinfo(evabase::dnsbase, pRaw->sHost.empty() ? nullptr : pRaw->sHost.c_str(),
+			pRaw->sPort.empty() ? nullptr : pRaw->sPort.c_str(),
+			&default_connect_hints, cb_dns, pRaw);
+}
 
-	auto ret_error = [&](const char* sfx, int rc)
-			{
-		// XXX: maybe also evaluate errno in case of EAI_SYSTEM
-		sErrorBuf = "503 DNS error for " + sHostname + ":" + sPort + " : " + evutil_gai_strerror(rc);
-		if(sfx)	sErrorBuf += string("(") + sfx + ")";
-		LOG(sfx);
-		return false;
-	};
+void CAddrInfo::cb_dns(int rc, struct evutil_addrinfo *results, void *arg)
+{
+	// take ownership
+	unique_ptr<tDnsResContext> args((tDnsResContext*)arg);
+	g_active_resolvers.erase(make_dns_key(args->sHost, args->sPort));
 
-	Reset();
+	auto ret = std::shared_ptr<CAddrInfo>(new CAddrInfo);
+	auto invoke_cbs = [&args, &ret]() { for(auto& it: args->cbs) {it(ret);}};
+	auto fmt_error = [](int rc) { return string("503 DNS error - ") + evutil_gai_strerror(rc); };
 
-	static atomic_int dns_overload_limiter(0);
-	while(dns_overload_limiter > DNS_MAX_PAR)
-		this_thread::sleep_for(1s);
-	dns_overload_limiter++;
-	int r = evutil_getaddrinfo(sHostname.empty() ? nullptr : sHostname.c_str(),
-			sPort.empty() ? nullptr : sPort.c_str(),
-			&default_connect_hints,
-			&m_rawInfo);
-	dns_overload_limiter--;
-
-	switch(r)
+	switch(rc)
 	{
 	case 0: break;
 	case EAI_AGAIN:
 	case EAI_MEMORY:
 	case EAI_SYSTEM:
-		bTransientError = true;
-		__just_fall_through;
+		ret->m_expTime = 0; // expire this ASAP and retry
+		ret->m_sError = "504 Temporary DNS resolution error";
+		return invoke_cbs();
 	default:
-		return ret_error("If this refers to a configured cache repository, please check the corresponding configuration file", r);
+		ret->m_expTime = GetTime() + std::min(cfg::dnscachetime, (int) DNS_ERROR_KEEP_MAX_TIME);
+		ret->m_sError = fmt_error(rc); //"If this refers to a configured cache repository, please check the corresponding configuration file");
+		return invoke_cbs();
 	}
+	ret->m_rawInfo = results;
 #ifdef DEBUG
-	for(auto p=m_rawInfo; p; p=p->ai_next)
+	for(auto p=ret->m_rawInfo; p; p=p->ai_next)
 		std::cerr << formatIpPort(p) << std::endl;
 #endif
 	// find any suitable-looking entry and keep a pointer to it faster lookup
-	for (auto pCur=m_rawInfo; pCur; pCur = pCur->ai_next)
+	for (auto pCur = ret->m_rawInfo; pCur && !ret->m_tcpAddrInfo; pCur = pCur->ai_next)
 	{
-		if (pCur->ai_socktype != SOCK_STREAM || pCur->ai_protocol != IPPROTO_TCP)
-			continue;
-		m_tcpAddrInfo = pCur;
-		return true;
+		if (pCur->ai_socktype == SOCK_STREAM && pCur->ai_protocol == IPPROTO_TCP)
+			ret->m_tcpAddrInfo = pCur;
 	}
-
-	return ret_error("no suitable target service", EAI_SYSTEM);
-}
-
-void CAddrInfo::Reset()
-{
-	if (m_rawInfo)
-		evutil_freeaddrinfo(m_rawInfo);
-	m_tcpAddrInfo = m_rawInfo = nullptr;
+	if(ret->m_tcpAddrInfo)
+		ret->m_expTime = GetTime() + cfg::dnscachetime;
+	else
+	{
+		// nothing found? Report a common error then.
+		ret->m_expTime = GetTime() + std::min(cfg::dnscachetime, (int) DNS_ERROR_KEEP_MAX_TIME);
+		ret->m_sError = fmt_error(EAI_SYSTEM); //"If this refers to a configured cache repository, please check the corresponding configuration file");
+	}
+	return invoke_cbs();
+	if(cfg::dnscachetime > 0) // keep a copy for other users
+	{
+		clean_dns_cache();
+		auto newIt = dns_cache.emplace(make_dns_key(args->sHost, args->sPort), ret);
+		dns_exp_q.push_back(newIt.first);
+	}
 }
 
 CAddrInfo::~CAddrInfo()
 {
-	Reset();
+	if (m_rawInfo) evutil_freeaddrinfo(m_rawInfo);
+	m_tcpAddrInfo = m_rawInfo = nullptr;
 }
-
-CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sPort, string &sErrorMsgBuf)
-{
-	bool dummy_run = sHostname.empty() && sPort.empty();
-	bool bTransientError = false;
-	auto resolve_now = [&]()
-			{
-		auto ret = make_shared<CAddrInfo>();
-		if(! ret->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, bTransientError))
-			ret.reset();
-		return ret;
-	};
-	if (!cfg::dnscachetime && !dummy_run)
-		return resolve_now();
-
-	auto dnsKey = make_dns_key(sHostname, sPort);
-	auto now(GetTime());
-
-	lockuniq lg(dnsCacheCv);
-
-	// clean all expired entries
-	unsigned n(0);
-	while(!dnsAddSeq.empty() && dnsAddSeq.front()->second && dnsAddSeq.front()->second->m_expTime <= now)
-	{
-		// just to be safe in case anyone waits for it
-		if(!dnsAddSeq.front()->second->m_sError)
-			dnsAddSeq.front()->second->m_sError.reset(new string("504 DNS Cache Timeout"));
-		dnsCache.erase(dnsAddSeq.front());
-		dnsAddSeq.pop_front();
-		++n;
-	}
-	if(n) dnsCacheCv.notifyAll();
-
-	if (dummy_run)
-		return CAddrInfoPtr();
-
-	if (dnsCache.size() >= DNS_CACHE_MAX)
-	{
-		// something is fishy, too long exp. time? Just pass through then
-		lg.unLock();
-		return resolve_now();
-	}
-
-	auto insres = dnsCache.emplace(dnsKey, make_shared<CAddrInfo>());
-	auto p = insres.first->second;
-	auto is_ours(insres.second);
-	if (is_ours)
-	{
-		dnsAddSeq.push_back(insres.first);
-		p->m_expTime = now + cfg::dnscachetime;
-	}
-	else // reuse the results from another thread
-	{
-		while(true)
-		{
-			if(p->m_sError)
-			{
-				sErrorMsgBuf = * p->m_sError;
-				return CAddrInfoPtr();
-			}
-			if(p->m_expTime <= MAX_VAL(time_t))
-				return p;
-			dnsCacheCv.wait(lg);
-		}
-	}
-	lg.unLock();
-	auto resret = p->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, bTransientError);
-	lg.reLock();
-	if(resret)
-	{
-		p->m_expTime = now + cfg::dnscachetime;
-		dnsCacheCv.notifyAll();
-		return p;
-	}
-	// or handle errors, keep them for observers
-	p->m_sError.reset(new string(sErrorMsgBuf));
-	// for permanent failures, also keep them in cache for a while
-	if(!bTransientError)
-		p->m_expTime = now + cfg::dnscachetime;
-	dnsCacheCv.notifyAll();
-	return p;
-}
-
-#if 0
-void DropDnsCache()
-{
-#warning check all usage
-	lockguard g(dnsCacheCv);
-	dnsCleanupQ.clear();
-	dnsCache.clear();
-}
-#endif
-
 }

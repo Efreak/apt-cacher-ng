@@ -271,6 +271,7 @@ struct tAppStartStop
 			check_algos();
 
 			evabase::base = event_base_new();
+			evabase::dnsbase = evdns_base_new(evabase::base, 1);
 
 			setup_sighandler();
 
@@ -319,6 +320,8 @@ struct tAppStartStop
 		conserver::Shutdown();
 		CloseAllCachedConnections();
 		log::close(false);
+		if(evabase::dnsbase)
+			evdns_base_free(evabase::dnsbase, 1);
 		if(evabase::base)
 			event_base_free(evabase::base);
 	}

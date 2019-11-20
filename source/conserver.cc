@@ -285,7 +285,6 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 {
 	LOGSTART2s("Setup::ConAddr", 0);
 
-	CAddrInfo resolver;
 	auto hints = evutil_addrinfo();
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;

@@ -949,7 +949,6 @@ int main(int argc, const char **argv)
 
 	evthread_use_pthreads();
 
-
 	using namespace acng;
 	// ensure a harmless object just in case any activity wants to run anything there
 	cleaner::GetInstance(false).notifyAll();
@@ -1022,25 +1021,22 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	dlcon dl("", pDlconFac);
 
 	evabase::base = event_base_new();
+	evabase::dnsbase = evdns_base_new(evabase::base, 1);
 
-	std::thread evthr([&]()
-	{
-		return event_base_loop(evabase::base, EVLOOP_NO_EXIT_ON_EMPTY);
+	std::thread evthr([&]() {
+		event_base_loop(evabase::base, EVLOOP_NO_EXIT_ON_EMPTY);
+		evdns_base_free(evabase::dnsbase, 1);
+		event_base_free(evabase::base);
 	});
-	std::thread thr([&]()
-	{	dl.WorkLoop();});
+	std::thread thr([&]() {	dl.WorkLoop();});
 
 	tDtorEx cleaner([&]()
 	{
-		dl.SignalStop();
-		thr.join();
-		if(evabase::base)
-		{
-			event_base_loopbreak(evabase::base);
-			event_base_free(evabase::base);
-		}
-		evthr.join();
 		::acng::cleaner::GetInstance().Stop();
+		dl.SignalStop();
+		if(evabase::base) event_base_loopbreak(evabase::base);
+		thr.join();
+		evthr.join();
 	});
 
 	auto fi=fac->Create();

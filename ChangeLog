@@ -5,6 +5,8 @@ apt-cacher-ng (3.4) SOMETIMES-YOU-EAT-THE-BEAR; urgency=low
     only for proxy cascades and only when ExposeOrigin option is set.
   * Potential hanging of acngtool/acngfs on termination
   * Minor speedup in acngfs with reused download agent
+  * Using asynchronous libevent DNS resolver instead of getaddrinfo from OS,
+    since the later turned out to be unstable in stress tests
 
  -- 
 
