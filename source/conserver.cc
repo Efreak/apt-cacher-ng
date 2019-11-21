@@ -61,6 +61,7 @@ void SetupConAndGo(unique_fd fd, const char *szClientName);
 
 void cb_resume(evutil_socket_t fd, short what, void* arg)
 {
+	if(what == TEARDOWN_HINT) return; // ignore, this stays down now
 	event_add((event*) arg, nullptr);
 }
 
@@ -420,16 +421,24 @@ int ACNG_API Run()
 	return event_base_loop(evabase::base, EVLOOP_NO_EXIT_ON_EMPTY);
 }
 
+struct t_event_desctor {
+	evutil_socket_t fd;
+	event_callback_fn callback;
+	void *arg;
+};
+
 /**
  * Forcibly run each callback and signal shutdown.
  */
-int teardown_event_activity(const event_base*, const event* ev, void*)
+int teardown_event_activity(const event_base*, const event* ev, void* ret)
 {
-	// event_active(ev, TEARDOWN_HINT, 0);
-	// that's forbidden by const-correctness... ok, run manually
-	auto cb = event_get_callback(ev);
-	auto arg = event_get_callback_arg(ev);
-	cb(-1, TEARDOWN_HINT, arg);
+	t_event_desctor r;
+	event_base *nix;
+	short what;
+	auto lret((deque<t_event_desctor>*)ret);
+	event_get_assignment(ev, &nix, &r.fd, &what, &r.callback, &r.arg);
+	if(r.callback == do_accept)
+		lret->emplace_back(move(r));
 	return 0;
 }
 
@@ -437,7 +446,13 @@ void Shutdown()
 {
 	g_global_shutdown = true;
 	// send teardown hint to all event callbacks
-	event_base_foreach_event(evabase::base, teardown_event_activity, nullptr);
+	deque<t_event_desctor> todo;
+	event_base_foreach_event(evabase::base, teardown_event_activity, &todo);
+	for (const auto &ptr : todo)
+	{
+		DBGQLOG("Notifying event on " << ptr.fd);
+		ptr.callback(ptr.fd, TEARDOWN_HINT, ptr.arg);
+	}
 
 	{
 		lockuniq g(g_thread_push_cond_var);
