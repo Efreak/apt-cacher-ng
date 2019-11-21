@@ -20,10 +20,6 @@ class ACNG_API CAddrInfo
 	std::string m_sError;
 	time_t m_expTime = MAX_VAL(time_t);
 
-	// C-style callback for libevent
-	static void cb_dns(int result, struct evutil_addrinfo *results, void *arg);
-	static void cb_invoke_dns_res(int result, short what, void *arg);
-
 	// raw returned data from getaddrinfo
 	evutil_addrinfo * m_rawInfo = nullptr;
 	// shortcut for iterators, first in the list with TCP target
@@ -49,6 +45,11 @@ public:
 
 	// iih, just for building of a special element regardsless of private ctor
 	static SHARED_PTR<CAddrInfo> make_fatal_failure_hint();
+
+	// C-style callback for libevent
+	static void cb_dns(int result, struct evutil_addrinfo *results, void *arg);
+
+	CAddrInfo(const char *szErrorMessage) : m_sError(szErrorMessage) {}
 };
 
 typedef SHARED_PTR<CAddrInfo> CAddrInfoPtr;

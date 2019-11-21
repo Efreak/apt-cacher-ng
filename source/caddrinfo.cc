@@ -30,10 +30,14 @@ static string make_dns_key(const string & sHostname, const string &sPort)
 {
 	return sHostname + ":" + sPort;
 }
+void cb_invoke_dns_res(int result, short what, void *arg);
 
 // using non-ordered map because of iterator stability, needed for expiration queue
 map<string,CAddrInfoPtr> dns_cache;
 deque<decltype(dns_cache)::iterator> dns_exp_q;
+
+// this shall remain global and forever, for last-resort notifications
+SHARED_PTR<CAddrInfo> fail_hint=make_shared<CAddrInfo>("503 Fatal system error within apt-cacher-ng processing");
 
 // descriptor of a running DNS lookup
 struct tDnsResContext
@@ -59,15 +63,6 @@ void CAddrInfo::clean_dns_cache()
 	}
 }
 
-// this shall remain global and forever, for last-resort notifications
-SHARED_PTR<CAddrInfo> fail_hint=CAddrInfo::make_fatal_failure_hint();
-SHARED_PTR<CAddrInfo> CAddrInfo::make_fatal_failure_hint()
-{
-	auto p = new CAddrInfo();
-	p->m_sError = "503 Fatal system error within apt-cacher-ng processing";
-	return SHARED_PTR<CAddrInfo>(p);
-}
-
 SHARED_PTR<CAddrInfo> CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort)
 {
 	promise<CAddrInfoPtr> reppro;
@@ -83,21 +78,30 @@ void CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporte
 	auto ctx = new tDnsResContext {sHostname, sPort, move(repList)};
 	event_base_once(evabase::base, -1, EV_READ, cb_invoke_dns_res, ctx, &tImmediately);
 }
-void CAddrInfo::cb_invoke_dns_res(int result, short what, void *arg)
+void cb_invoke_dns_res(int result, short what, void *arg)
 {
 	unique_ptr<tDnsResContext> args((tDnsResContext*)arg);
+	if(!args || args->cbs.empty() || !(args->cbs.front())) return; // heh?
+
+	if(what == TEARDOWN_HINT)
+	{
+		auto err_hint = make_shared<CAddrInfo>(evutil_gai_strerror(EAI_SYSTEM));
+		args->cbs.front()(err_hint);
+		return;
+	}
+
 	auto key=make_dns_key(args->sHost, args->sPort);
-	if(cfg::dnscachetime>0)
+	if(cfg::dnscachetime > 0)
 	{
 		auto caIt = dns_cache.find(key);
 		if(caIt != dns_cache.end())
 		{
-			if(args->cbs.front()) args->cbs.front()(caIt->second);
+			args->cbs.front()(caIt->second);
 			return;
 		}
 	}
 	auto resIt = g_active_resolvers.find(key);
-	// jump on the bandwagon? move all callbacks to there...
+	// join the waiting crowd, mmove all callbacks to there...
 	if(resIt != g_active_resolvers.end())
 	{
 		resIt->second->cbs.splice(resIt->second->cbs.end(), args->cbs);
@@ -118,7 +122,7 @@ void CAddrInfo::cb_invoke_dns_res(int result, short what, void *arg)
 	auto pRaw = args.release(); // to be owned by the operation
 	evdns_getaddrinfo(evabase::dnsbase, pRaw->sHost.empty() ? nullptr : pRaw->sHost.c_str(),
 			pRaw->sPort.empty() ? nullptr : pRaw->sPort.c_str(),
-			&default_connect_hints, cb_dns, pRaw);
+			&default_connect_hints, CAddrInfo::cb_dns, pRaw);
 }
 
 void CAddrInfo::cb_dns(int rc, struct evutil_addrinfo *results, void *arg)

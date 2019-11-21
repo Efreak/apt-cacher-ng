@@ -43,6 +43,9 @@ using namespace std;
 namespace acng
 {
 
+// that's from caddrinfo.cc
+void cb_invoke_dns_res(int result, short what, void *arg);
+
 namespace conserver
 {
 
@@ -437,7 +440,7 @@ int teardown_event_activity(const event_base*, const event* ev, void* ret)
 	short what;
 	auto lret((deque<t_event_desctor>*)ret);
 	event_get_assignment(ev, &nix, &r.fd, &what, &r.callback, &r.arg);
-	if(r.callback == do_accept)
+	if(r.callback == do_accept || r.callback == cb_invoke_dns_res)
 		lret->emplace_back(move(r));
 	return 0;
 }
