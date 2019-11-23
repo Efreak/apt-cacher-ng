@@ -16,19 +16,17 @@
 #include "lockable.h"
 #include "sockio.h"
 
-#include <list>
+#include <iostream>
 #include <thread>
 
 #include <sys/select.h>
 #include <signal.h>
 #include <string.h>
 #include <errno.h>
-#include <iostream>
 
 using namespace std;
 
 #define SHORT_TIMEOUT 4
-#define RBUFLEN 16384
 
 namespace acng
 {
@@ -42,7 +40,7 @@ class conn::Impl
 	int m_confd;
 	bool m_badState = false;
 
-	std::list<job*> m_jobs2send;
+	deque<job> m_jobs2send;
 
 #ifdef KILLABLE
       // to awake select with dummy data
@@ -94,7 +92,7 @@ class conn::Impl
   		// our user's connection is released but the downloader task created here may still be serving others
   		// tell it to stop when it gets the chance and delete it then
 
-  		for (auto jit : m_jobs2send) delete jit;
+  		m_jobs2send.clear();
 
   		writeAnotherLogRecord(sEmptyString, sEmptyString);
 
@@ -266,14 +264,9 @@ void conn::Impl::WorkLoop() {
 		if(inBuf.freecapa()==0)
 			return; // shouldn't even get here
 
-		job *pjSender(nullptr);
 		bool hasMoreJobs = m_jobs2send.size()>1;
 
-		if ( !m_jobs2send.empty())
-		{
-			pjSender=m_jobs2send.front();
-			FD_SET(m_confd, &wfds);
-		}
+		if ( !m_jobs2send.empty()) FD_SET(m_confd, &wfds);
 
 		ldbg("select con");
 		int ready = select(maxfd+1, &rfds, &wfds, nullptr, CTimeVal().For(SHORT_TIMEOUT));
@@ -283,7 +276,7 @@ void conn::Impl::WorkLoop() {
 
 		if(ready == 0)
 		{
-			USRDBG("Timeout occurred, apt client disappeared silently?");
+			//USRDBG("Timeout occurred, idle client hanging around?");
 			if(GetTime() > client_timeout)
 				return; // yeah, time to leave
 			continue;
@@ -304,7 +297,8 @@ void conn::Impl::WorkLoop() {
 
 		ldbg("select con back");
 
-		if(FD_ISSET(m_confd, &rfds)) {
+		if(FD_ISSET(m_confd, &rfds))
+		{
 			int n=inBuf.sysread(m_confd);
 			ldbg("got data: " << n <<", inbuf size: "<< inBuf.size());
 			if(n<=0) // error, incoming junk overflow or closed connection
@@ -361,9 +355,7 @@ void conn::Impl::WorkLoop() {
 
 				if(h.type == header::CONNECT)
 				{
-
 					inBuf.drop(nHeadBytes);
-
 					tSplitWalk iter(& h.frontLine);
 					if(iter.Next() && iter.Next())
 					{
@@ -397,20 +389,14 @@ void conn::Impl::WorkLoop() {
 
 				ldbg("Parsed REQUEST:" << h.frontLine);
 				ldbg("Rest: " << (inBuf.size()-nHeadBytes));
-
-				{
-					job * j = new job(std::move(h), _q);
-					j->PrepareDownload(inBuf.rptr());
-
-					if(m_badState) return;
-
-					inBuf.drop(nHeadBytes);
-
-					m_jobs2send.emplace_back(j);
+				m_jobs2send.emplace_back(std::move(h), _q);
+				m_jobs2send.back().PrepareDownload(inBuf.rptr());
+				if (m_badState)
+					return;
+				inBuf.drop(nHeadBytes);
 #ifdef DEBUG
-					m_nProcessedJobs++;
+				m_nProcessedJobs++;
 #endif
-				}
 			}
 			catch(bad_alloc&)
 			{
@@ -421,9 +407,9 @@ void conn::Impl::WorkLoop() {
 		if(inBuf.freecapa()==0)
 			return; // cannot happen unless being attacked
 
-		if(FD_ISSET(m_confd, &wfds) && pjSender)
+		if(FD_ISSET(m_confd, &wfds) && !m_jobs2send.empty())
 		{
-			switch(pjSender->SendData(m_confd, hasMoreJobs))
+			switch(m_jobs2send.front().SendData(m_confd, hasMoreJobs))
 			{
 			case(job::R_DISCON):
 				{
@@ -433,9 +419,6 @@ void conn::Impl::WorkLoop() {
 			case(job::R_DONE):
 				{
 					m_jobs2send.pop_front();
-					delete pjSender;
-					pjSender=nullptr;
-
 					ldbg("Remaining jobs to send: " << m_jobs2send.size());
 					break;
 				}
@@ -486,7 +469,7 @@ void conn::Impl::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
 	{
 		sClient=xff;
 		trimString(sClient);
-		string::size_type pos = sClient.find_last_of(SPACECHARS);
+		auto pos = sClient.find_last_of(SPACECHARS);
 		if (pos!=stmiss)
 			sClient.erase(0, pos+1);
 	}
