@@ -28,7 +28,6 @@ using namespace std;
 #define CHUNKDEFAULT false
 #endif
 
-
 namespace acng
 {
 
@@ -669,7 +668,7 @@ try
 						fistate = _SwitchToPtItem();
 				}
 
-					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.getFiPtr(),
+					if (m_pParentCon->SetupDownloader()->AddJob(m_pItem.getFiPtr(),
 							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
 							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
 									(LPCSTR) ( bPtMode ? headBuf : nullptr),

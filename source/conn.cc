@@ -7,10 +7,17 @@
 #include "job.h"
 #include "header.h"
 #include "dlcon.h"
+#include "job.h"
 #include "acbuf.h"
 #include "tcpconnect.h"
 #include "cleaner.h"
 #include "conserver.h"
+
+#include "lockable.h"
+#include "sockio.h"
+
+#include <list>
+#include <thread>
 
 #include <sys/select.h>
 #include <signal.h>
@@ -21,42 +28,95 @@
 using namespace std;
 
 #define SHORT_TIMEOUT 4
+#define RBUFLEN 16384
 
 namespace acng
 {
 
-conn::conn(unique_fd fd, const char *c) :
-			m_fd(move(fd)),
-			m_confd(m_fd.get())
+class conn::Impl
 {
-	if(c) // if nullptr, pick up later when sent by the wrapper
-		m_sClientHost=c;
+	friend class conn;
+	conn* _q = nullptr;
 
-	LOGSTART2("con::con", "fd: " << m_confd << ", clienthost: " << c);
+	unique_fd m_fd;
+	int m_confd;
+	bool m_badState = false;
 
-#ifdef DEBUG
-	m_nProcessedJobs=0;
+	std::list<job*> m_jobs2send;
+
+#ifdef KILLABLE
+      // to awake select with dummy data
+      int wakepipe[2];
 #endif
 
+	std::thread m_dlerthr;
+
+	// for jobs
+	friend class job;
+	bool SetupDownloader();
+	std::shared_ptr<dlcon> m_pDlClient;
+	mstring m_sClientHost;
+
+	// some accounting
+	mstring logFile, logClient;
+	off_t fileTransferIn = 0, fileTransferOut = 0;
+	bool m_bLogAsError = false;
+	void writeAnotherLogRecord(const mstring &pNewFile,
+			const mstring &pNewClient);
+
+	// This method collects the logged data counts for certain file.
+	// Since the user might restart the transfer again and again, the counts are accumulated (for each file path)
+	void LogDataCounts(cmstring &file, const char *xff, off_t countIn,
+			off_t countOut, bool bAsError);
+
+#ifdef DEBUG
+      unsigned m_nProcessedJobs;
+#endif
+
+  	Impl(unique_fd fd, const char *c) :
+		m_fd(move(fd)),
+		m_confd(m_fd.get())
+
+  	{
+  		if(c) // if nullptr, pick up later when sent by the wrapper
+  			m_sClientHost=c;
+
+  		LOGSTART2("con::con", "fd: " << m_confd << ", clienthost: " << c);
+
+  	#ifdef DEBUG
+  		m_nProcessedJobs=0;
+  	#endif
+
+  	};
+  	~Impl() {
+  		LOGSTART("con::~con (Destroying connection...)");
+
+  		// our user's connection is released but the downloader task created here may still be serving others
+  		// tell it to stop when it gets the chance and delete it then
+
+  		for (auto jit : m_jobs2send) delete jit;
+
+  		writeAnotherLogRecord(sEmptyString, sEmptyString);
+
+  		if(m_pDlClient)
+  			m_pDlClient->SignalStop();
+  		if(m_dlerthr.joinable())
+  			m_dlerthr.join();
+  		log::flush();
+  		conserver::FinishConnection(m_confd);
+  	}
+
+  	void WorkLoop();
 };
 
-conn::~conn() {
-	LOGSTART("con::~con (Destroying connection...)");
-
-	// our user's connection is released but the downloader task created here may still be serving others
-	// tell it to stop when it gets the chance and delete it then
-
-	for (auto jit : m_jobs2send) delete jit;
-
-	writeAnotherLogRecord(sEmptyString, sEmptyString);
-
-	if(m_pDlClient)
-		m_pDlClient->SignalStop();
-	if(m_dlerthr.joinable())
-		m_dlerthr.join();
-	log::flush();
-	conserver::FinishConnection(m_confd);
-}
+// call forwarding
+conn::conn(unique_fd fd, const char *c) : _p(new Impl(move(fd), move(c))) { _p->_q = this;};
+conn::~conn() { delete _p; }
+void conn::WorkLoop() {	return _p->WorkLoop(); }
+void conn::LogDataCounts(cmstring &file, const char *xff, off_t countIn, off_t countOut,
+		bool bAsError) {return _p->LogDataCounts(file, xff, countIn, countOut, bAsError); }
+dlcon* conn::SetupDownloader()
+{ return _p->SetupDownloader() ? _p->m_pDlClient.get() : nullptr; }
 
 namespace RawPassThrough
 {
@@ -184,7 +244,7 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 }
 }
 
-void conn::WorkLoop() {
+void conn::Impl::WorkLoop() {
 
 	LOGSTART("con::WorkLoop");
 
@@ -339,7 +399,7 @@ void conn::WorkLoop() {
 				ldbg("Rest: " << (inBuf.size()-nHeadBytes));
 
 				{
-					job * j = new job(std::move(h), this);
+					job * j = new job(std::move(h), _q);
 					j->PrepareDownload(inBuf.rptr());
 
 					if(m_badState) return;
@@ -388,7 +448,7 @@ void conn::WorkLoop() {
 	}
 }
 
-bool conn::SetupDownloader()
+bool conn::Impl::SetupDownloader()
 {
 	if(m_badState)
 		return false;
@@ -416,7 +476,7 @@ bool conn::SetupDownloader()
 	}
 }
 
-void conn::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
+void conn::Impl::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
 		off_t nNewOut, bool bAsError)
 {
 	string sClient;
@@ -438,7 +498,7 @@ void conn::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
 }
 
 // sends the stats to logging and replaces file/client identities with the new context
-void conn::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient)
+void conn::Impl::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient)
 {
 		log::transfer(fileTransferIn, fileTransferOut, logClient, logFile, m_bLogAsError);
 		fileTransferIn = fileTransferOut = 0;
