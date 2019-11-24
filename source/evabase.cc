@@ -1,16 +1,19 @@
 #include "evabase.h"
-
 #include "meta.h"
 #include "debug.h"
+#include "lockable.h"
 
 #include <event2/dns.h>
 #include <event2/util.h>
+#include <event2/thread.h>
 
 #ifdef HAVE_SD_NOTIFY
 #include <systemd/sd-daemon.h>
 #endif
 
 using namespace std;
+
+#warning add an extra task once per hour or so, optimizing all caches
 
 namespace acng
 {
@@ -19,15 +22,17 @@ event_base* evabase::base;
 evdns_base* evabase::dnsbase;
 std::atomic<bool> evabase::in_shutdown;
 
+struct event *handover_wakeup;
+const struct timeval timeout_asap{0,0};
+deque<evabase::tCancelableAction> incoming_q, processing_q;
+mutex handover_mx;
+
 namespace conserver
 {
 // forward declarations for the pointer checks
 //void cb_resume(evutil_socket_t fd, short what, void* arg);
 void do_accept(evutil_socket_t server_fd, short what, void* arg);
 }
-#warning clean
-// that's from caddrinfo.cc
-void cb_invoke_dns_res(int result, short what, void *arg);
 
 struct t_event_desctor {
 	evutil_socket_t fd;
@@ -48,10 +53,8 @@ int teardown_event_activity(const event_base*, const event* ev, void* ret)
 #ifdef DEBUG
 	if(r.callback == conserver::do_accept)
 		cout << "stop accept: " << r.arg << endl;
-	if(r.callback == cb_invoke_dns_res)
-		cout << "stop dns req: " << r.arg <<endl;
 #endif
-	if(r.callback == conserver::do_accept || r.callback == cb_invoke_dns_res)
+	if(r.callback == conserver::do_accept)
 		lret->emplace_back(move(r));
 	return 0;
 }
@@ -89,10 +92,38 @@ ACNG_API int evabase::MainLoop()
 	return r;
 }
 
+void evabase::SignalStop()
+{
+	if(evabase::base)
+		event_base_loopbreak(evabase::base);
+}
+
+void cb_handover(evutil_socket_t sock, short what, void* arg)
+{
+	{
+		lockguard g(handover_mx);
+		processing_q.swap(incoming_q);
+	}
+	for(const auto& ac: processing_q)
+		ac(evabase::in_shutdown);
+	processing_q.clear();
+}
+
+void evabase::Post(tCancelableAction&& act)
+{
+	{
+		lockguard g(handover_mx);
+		incoming_q.emplace_back(move(act));
+	}
+	event_add(handover_wakeup, &timeout_asap);
+}
+
 evabase::evabase()
 {
+	evthread_use_pthreads();
 	evabase::base = event_base_new();
 	evabase::dnsbase = evdns_base_new(evabase::base, 1);
+	handover_wakeup =  evtimer_new(base, cb_handover, nullptr);
 }
 
 evabase::~evabase()

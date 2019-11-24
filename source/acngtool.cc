@@ -39,7 +39,6 @@
 #include "csmapping.h"
 #include "cleaner.h"
 #include "evabase.h"
-#include <event2/thread.h>
 
 using namespace std;
 using namespace acng;
@@ -946,9 +945,6 @@ std::unordered_map<string, parm> parms = {
 
 int main(int argc, const char **argv)
 {
-
-	evthread_use_pthreads();
-
 	using namespace acng;
 	// ensure a harmless object just in case any activity wants to run anything there
 	cleaner::GetInstance(false).notifyAll();

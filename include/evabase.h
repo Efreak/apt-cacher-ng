@@ -1,7 +1,7 @@
 #ifndef __EVABASE_H__
 #define __EVABASE_H__
 
-#include "config.h"
+#include "meta.h"
 #include <event.h>
 
 struct evdns_base;
@@ -26,9 +26,14 @@ static std::atomic<bool> in_shutdown;
  */
 int MainLoop();
 
-static void SignalStop() {	if(evabase::base) event_base_loopbreak(evabase::base); }
+static void SignalStop();
 
-//void Post(std::function<void(bool)>&&);
+using tCancelableAction = std::function<void(bool)>;
+
+/**
+ * Push an action into processing queue. In case operation is not possible, runs the action with the cancel flag (bool argument set to true)
+ */
+static void Post(tCancelableAction&&);
 
 evabase();
 ~evabase();

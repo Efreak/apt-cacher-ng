@@ -40,8 +40,6 @@ using namespace std;
 
 #include "maintenance.h"
 #include "evabase.h"
-#include <event2/event.h>
-#include <event2/thread.h>
 
 namespace acng
 {
@@ -252,8 +250,6 @@ struct tAppStartStop
 
 	tAppStartStop(int argc, const char**argv)
 	{
-		evthread_use_pthreads();
-
 #ifdef HAVE_SSL
 			acng::globalSslInit();
 		#endif

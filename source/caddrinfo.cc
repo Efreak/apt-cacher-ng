@@ -30,7 +30,6 @@ static string make_dns_key(const string & sHostname, const string &sPort)
 {
 	return sHostname + ":" + sPort;
 }
-void cb_invoke_dns_res(int result, short what, void *arg);
 
 // using non-ordered map because of iterator stability, needed for expiration queue
 map<string,CAddrInfoPtr> dns_cache;
@@ -45,7 +44,7 @@ struct tDnsResContext
 	string sHost, sPort;
 	list<CAddrInfo::tDnsResultReporter> cbs;
 };
-unordered_map<string,tDnsResContext*> g_active_resolvers;
+unordered_map<string,tDnsResContext*> g_active_resolver_index;
 
 /**
  * Trash old entries and make space for at least one new entry.
@@ -63,74 +62,11 @@ void CAddrInfo::clean_dns_cache()
 	}
 }
 
-SHARED_PTR<CAddrInfo> CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort)
-{
-	promise<CAddrInfoPtr> reppro;
-	auto reporter = [&reppro](CAddrInfoPtr result) { reppro.set_value(move(result)); };
-	Resolve(sHostname, sPort, move(reporter));
-	auto res(move(reppro.get_future().get()));
-	return res ? res : fail_hint;
-}
-void CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporter rep)
-{
-	static const struct timeval tImmediately { 0, 0};
-	auto repList = list<tDnsResultReporter> {move(rep)};
-	auto ctx = new tDnsResContext {sHostname, sPort, move(repList)};
-#warning fail hitn bei post fialure
-	event_base_once(evabase::base, -1, EV_READ, cb_invoke_dns_res, ctx, &tImmediately);
-}
-void cb_invoke_dns_res(int result, short what, void *arg)
-{
-	unique_ptr<tDnsResContext> args((tDnsResContext*)arg);
-	if(!args || args->cbs.empty() || !(args->cbs.front())) return; // heh?
-
-	if(evabase::in_shutdown)
-	{
-		auto err_hint = make_shared<CAddrInfo>(evutil_gai_strerror(EAI_SYSTEM));
-		args->cbs.front()(err_hint);
-		return;
-	}
-
-	auto key=make_dns_key(args->sHost, args->sPort);
-	if(cfg::dnscachetime > 0)
-	{
-		auto caIt = dns_cache.find(key);
-		if(caIt != dns_cache.end())
-		{
-			args->cbs.front()(caIt->second);
-			return;
-		}
-	}
-	auto resIt = g_active_resolvers.find(key);
-	// join the waiting crowd, mmove all callbacks to there...
-	if(resIt != g_active_resolvers.end())
-	{
-		resIt->second->cbs.splice(resIt->second->cbs.end(), args->cbs);
-		return;
-	}
-	// ok, invoke a completely new DNS lookup operation
-	g_active_resolvers[key] = args.get();
-	static bool filter_specific = (cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC);
-	static const evutil_addrinfo default_connect_hints =
-	{
-		// we provide plain port numbers, no resolution needed
-		// also return only probably working addresses
-		AI_NUMERICSERV | AI_ADDRCONFIG,
-		filter_specific ? cfg::conprotos[0] : PF_UNSPEC,
-		SOCK_STREAM, IPPROTO_TCP,
-		0, nullptr, nullptr, nullptr
-	};
-	auto pRaw = args.release(); // to be owned by the operation
-	evdns_getaddrinfo(evabase::dnsbase, pRaw->sHost.empty() ? nullptr : pRaw->sHost.c_str(),
-			pRaw->sPort.empty() ? nullptr : pRaw->sPort.c_str(),
-			&default_connect_hints, CAddrInfo::cb_dns, pRaw);
-}
-
 void CAddrInfo::cb_dns(int rc, struct evutil_addrinfo *results, void *arg)
 {
 	// take ownership
 	unique_ptr<tDnsResContext> args((tDnsResContext*)arg);
-	g_active_resolvers.erase(make_dns_key(args->sHost, args->sPort));
+	g_active_resolver_index.erase(make_dns_key(args->sHost, args->sPort));
 
 	auto ret = std::shared_ptr<CAddrInfo>(new CAddrInfo);
 	auto invoke_cbs = [&args, &ret]() { for(auto& it: args->cbs) {it(ret);}};
@@ -169,13 +105,80 @@ void CAddrInfo::cb_dns(int rc, struct evutil_addrinfo *results, void *arg)
 		ret->m_expTime = GetTime() + std::min(cfg::dnscachetime, (int) DNS_ERROR_KEEP_MAX_TIME);
 		ret->m_sError = fmt_error(EAI_SYSTEM); //"If this refers to a configured cache repository, please check the corresponding configuration file");
 	}
-	return invoke_cbs();
 	if(cfg::dnscachetime > 0) // keep a copy for other users
 	{
 		clean_dns_cache();
 		auto newIt = dns_cache.emplace(make_dns_key(args->sHost, args->sPort), ret);
 		dns_exp_q.push_back(newIt.first);
 	}
+	return invoke_cbs();
+}
+
+SHARED_PTR<CAddrInfo> CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort)
+{
+	promise<CAddrInfoPtr> reppro;
+	auto reporter = [&reppro](CAddrInfoPtr result) { reppro.set_value(move(result)); };
+	Resolve(sHostname, sPort, move(reporter));
+	auto res(move(reppro.get_future().get()));
+	return res ? res : fail_hint;
+}
+void CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporter rep)
+{
+	auto temp_ctx = new tDnsResContext {
+		sHostname,
+		sPort,
+		list<CAddrInfo::tDnsResultReporter> {move(rep)}
+	};
+
+	auto cb_invoke_dns_res = [temp_ctx](bool canceled)
+	{
+		auto args = unique_ptr<tDnsResContext>(temp_ctx); //temporarily owned here
+		if(!args || args->cbs.empty() || !(args->cbs.front())) return; // heh?
+		LOGSTART2s("cb_invoke_dns_res", temp_ctx->sHost);
+
+		if(evabase::in_shutdown)
+		{
+			auto err_hint = make_shared<CAddrInfo>(evutil_gai_strerror(EAI_SYSTEM));
+			args->cbs.front()(err_hint);
+			return;
+		}
+
+		auto key=make_dns_key(args->sHost, args->sPort);
+		if(cfg::dnscachetime > 0)
+		{
+			auto caIt = dns_cache.find(key);
+			if(caIt != dns_cache.end())
+			{
+				args->cbs.front()(caIt->second);
+				return;
+			}
+		}
+		auto resIt = g_active_resolver_index.find(key);
+		// join the waiting crowd, mmove all callbacks to there...
+		if(resIt != g_active_resolver_index.end())
+		{
+			resIt->second->cbs.splice(resIt->second->cbs.end(), args->cbs);
+			return;
+		}
+		// ok, invoke a completely new DNS lookup operation
+		g_active_resolver_index[key] = args.get();
+		static bool filter_specific = (cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC);
+		static const evutil_addrinfo default_connect_hints =
+		{
+			// we provide plain port numbers, no resolution needed
+			// also return only probably working addresses
+			AI_NUMERICSERV | AI_ADDRCONFIG,
+			filter_specific ? cfg::conprotos[0] : PF_UNSPEC,
+			SOCK_STREAM, IPPROTO_TCP,
+			0, nullptr, nullptr, nullptr
+		};
+		auto pRaw = args.release(); // to be owned by the operation
+		evdns_getaddrinfo(evabase::dnsbase, pRaw->sHost.empty() ? nullptr : pRaw->sHost.c_str(),
+				pRaw->sPort.empty() ? nullptr : pRaw->sPort.c_str(),
+				&default_connect_hints, CAddrInfo::cb_dns, pRaw);
+	};
+
+	evabase::Post(move(cb_invoke_dns_res));
 }
 
 CAddrInfo::~CAddrInfo()

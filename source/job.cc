@@ -33,6 +33,7 @@ namespace acng
 
 mstring sHttp11("HTTP/1.1");
 
+#warning FIXME, -42 was a bad idea, why not -1? Why closing -42 in dtor (valdgrind)?
 #define SPECIAL_FD -42
 inline bool IsValidFD(int fd) { return fd>=0 || SPECIAL_FD == fd; }
 
