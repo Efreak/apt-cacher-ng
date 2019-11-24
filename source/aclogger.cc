@@ -441,6 +441,7 @@ static struct : public base_with_mutex, public std::map<pthread_t, int>
 
 t_logger::t_logger(const char *szFuncName,  const void * ptr)
 {
+	if(!cfg::debug) return;
 	m_id = pthread_self();
 	m_szName = szFuncName;
 	callobj = uintptr_t(ptr);
@@ -456,6 +457,7 @@ t_logger::t_logger(const char *szFuncName,  const void * ptr)
 
 t_logger::~t_logger()
 {
+	if(!cfg::debug) return;
 	m_nLevel--;
 	GetFmter() << "<< " << m_szName << " [T:"<<m_id<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	Write();
