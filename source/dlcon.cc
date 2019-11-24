@@ -56,12 +56,11 @@ class dlcon::Impl: public base_with_mutex
 {
 
 	struct tDlJob;
-	typedef std::shared_ptr<tDlJob> tDlJobPtr;
-	typedef std::list<tDlJobPtr> tDljQueue;
+	typedef std::list<tDlJob> tDljQueue;
 	friend struct tDlJob;
 	friend class dlcon;
 
-	tDljQueue m_qNewjobs;
+	tDljQueue m_jobs;
 	const IDlConFactory &m_conFactory;
 	std::string m_ownersHostname;
 
@@ -806,7 +805,7 @@ void SignalStop()
 
 	// stop all activity as soon as possible
 	m_bStopASAP=true;
-	m_qNewjobs.clear();
+	m_jobs.clear();
 	wake();
 }
 }; // Impl
@@ -878,20 +877,18 @@ bool dlcon::Impl::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 	setLockGuard;
 	if(m_bStopASAP)
 		return false;
-	m_qNewjobs.emplace_back(
-			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection));
-
-	m_qNewjobs.back()->ExtractCustomHeaders(reqHead);
+	m_jobs.emplace_back(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection);
+	m_jobs.back().ExtractCustomHeaders(reqHead);
 
 	if (cfg::exporigin && !m_ownersHostname.empty())
 	{
 		if (szHeaderXff)
 		{
-			m_qNewjobs.back()->m_xff = szHeaderXff;
-			m_qNewjobs.back()->m_xff+= ", ";
+			m_jobs.back().m_xff = szHeaderXff;
+			m_jobs.back().m_xff+= ", ";
 		}
 
-		m_qNewjobs.back()->m_xff += m_ownersHostname;
+		m_jobs.back().m_xff += m_ownersHostname;
 	}
 
 	wake();
@@ -980,7 +977,7 @@ inline unsigned dlcon::Impl::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &c
 			if(inpipe.empty())
 				return HINT_SWITCH;
 
-			if(inpipe.front()->IsRecoverableState())
+			if(inpipe.front().IsRecoverableState())
 				return EFLAG_LOST_CON;
 			else
 				return (HINT_DISCON|EFLAG_JOB_BROKEN);
@@ -1140,11 +1137,11 @@ inline unsigned dlcon::Impl::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &c
 			while(!m_inBuf.empty())
 			{
 
-				ldbg("Processing job for " << inpipe.front()->RemoteUri(false));
-				unsigned res = inpipe.front()->ProcessIncomming(m_inBuf, false);
+				ldbg("Processing job for " << inpipe.front().RemoteUri(false));
+				unsigned res = inpipe.front().ProcessIncomming(m_inBuf, false);
 				ldbg(
 						"... incoming data processing result: " << res
-						<< ", emsg: " << inpipe.front()->sErrorMsg);
+						<< ", emsg: " << inpipe.front().sErrorMsg);
 
 				if(res&EFLAG_MIRROR_BROKEN)
 				{
@@ -1157,7 +1154,7 @@ inline unsigned dlcon::Impl::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &c
 				if (HINT_DONE & res)
 				{
 					// just in case that server damaged the last response body
-					con->KnowLastFile(WEAK_PTR<fileitem>(inpipe.front()->m_pStorage));
+					con->KnowLastFile(WEAK_PTR<fileitem>(inpipe.front().m_pStorage));
 
 					inpipe.pop_front();
 					if (HINT_DISCON & res)
@@ -1186,7 +1183,7 @@ inline unsigned dlcon::Impl::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &c
 					auto it = inpipe.begin();
 					for(++it; it != inpipe.end(); ++it)
 					{
-						unsigned rr = (**it).ProcessIncomming(m_inBuf, true);
+						unsigned rr = it->ProcessIncomming(m_inBuf, true);
 						// just the internal rewriting applied and nothing else?
 						if( HINT_TGTCHANGE != rr )
 						{
@@ -1202,7 +1199,7 @@ inline unsigned dlcon::Impl::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &c
 				// else case: error handling, pass to main loop
 				if(HINT_KILL_LAST_FILE & res)
 					con->KillLastFile();
-				setIfNotEmpty(sErrorMsg, inpipe.front()->sErrorMsg);
+				setIfNotEmpty(sErrorMsg, inpipe.front().sErrorMsg);
 				return res;
 			}
 			return HINT_DONE; // input buffer consumed
@@ -1232,7 +1229,7 @@ void dlcon::Impl::WorkLoop()
 		return;
 	}
 
-	tDtorEx allJobReleaser([&](){ m_qNewjobs.clear(); });
+	tDtorEx allJobReleaser([&](){ m_jobs.clear(); });
 
 	tDljQueue inpipe;
 	tDlStreamHandle con;
@@ -1242,23 +1239,23 @@ void dlcon::Impl::WorkLoop()
 
 	int nLostConTolerance=MAX_RETRY;
 
-	auto BlacklistMirror = [&](tDlJobPtr & job)
+	auto BlacklistMirror = [&](tDlJob & job)
 	{
 		LOGSTART2("BlacklistMirror", "blacklisting " <<
-				job->GetPeerHost().ToURI(false));
-		m_blacklist[std::make_pair(job->GetPeerHost().sHost,
-				job->GetPeerHost().GetPort())] = sErrorMsg;
+				job.GetPeerHost().ToURI(false));
+		m_blacklist[std::make_pair(job.GetPeerHost().sHost,
+				job.GetPeerHost().GetPort())] = sErrorMsg;
 	};
 
-	auto prefProxy = [&](tDlJobPtr& cjob) -> const tHttpUrl*
+	auto prefProxy = [&](tDlJob& cjob) -> const tHttpUrl*
 	{
 		if(m_bProxyTot)
 			return nullptr;
 
-		if(cjob->m_pRepoDesc && cjob->m_pRepoDesc->m_pProxy
-				&& !cjob->m_pRepoDesc->m_pProxy->sHost.empty())
+		if(cjob.m_pRepoDesc && cjob.m_pRepoDesc->m_pProxy
+				&& !cjob.m_pRepoDesc->m_pProxy->sHost.empty())
 		{
-			return cjob->m_pRepoDesc->m_pProxy;
+			return cjob.m_pRepoDesc->m_pProxy;
 		}
 		return cfg::GetProxyInfo();
 	};
@@ -1268,7 +1265,7 @@ void dlcon::Impl::WorkLoop()
         // init state or transfer loop jumped out, what are the needed actions?
         {
         	setLockGuard;
-        	LOG("New jobs: " << m_qNewjobs.size());
+        	LOG("New jobs: " << m_jobs.size());
 
         	if(m_bStopASAP)
         	{
@@ -1285,7 +1282,7 @@ void dlcon::Impl::WorkLoop()
         	}
 
 
-        	if(m_qNewjobs.empty())
+        	if(m_jobs.empty())
         		goto go_select; // parent will notify RSN
 
         	if(!con)
@@ -1297,39 +1294,39 @@ void dlcon::Impl::WorkLoop()
 
         		bStopRequesting=false;
 
-        		for(tDljQueue::iterator it=m_qNewjobs.begin(); it!=m_qNewjobs.end();)
+        		for(tDljQueue::iterator it=m_jobs.begin(); it!=m_jobs.end();)
         		{
-        			if((**it).SetupJobConfig(sErrorMsg, m_blacklist))
+        			if(it->SetupJobConfig(sErrorMsg, m_blacklist))
         				++it;
         			else
         			{
-        				setIfNotEmpty2( (**it).sErrorMsg, sErrorMsg,
+        				setIfNotEmpty2( it->sErrorMsg, sErrorMsg,
         						"500 Broken mirror or incorrect configuration");
-        				m_qNewjobs.erase(it++);
+        				m_jobs.erase(it++);
         			}
         		}
-        		if(m_qNewjobs.empty())
+        		if(m_jobs.empty())
         		{
         			LOG("no jobs left, start waiting")
         			goto go_select; // nothing left, might receive new jobs soon
         		}
 
 				bool bUsed = false;
-				ASSERT(!m_qNewjobs.empty());
+				ASSERT(!m_jobs.empty());
 				auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
 				{
 					return m_conFactory.CreateConnected(tgt.sHost,
 							tgt.GetPort(),
 							sErrorMsg,
 							&bUsed,
-							m_qNewjobs.front()->GetConnStateTracker(),
+							m_jobs.front().GetConnStateTracker(),
 							IFSSLORFALSE(tgt.bSSL),
 							timeout, fresh);
 			}	;
 
-				auto& cjob = m_qNewjobs.front();
+				auto& cjob = m_jobs.front();
 				auto proxy = prefProxy(cjob);
-				auto& peerHost = cjob->GetPeerHost();
+				auto& peerHost = cjob.GetPeerHost();
 
 #ifdef HAVE_SSL
 				if(peerHost.bSSL)
@@ -1391,19 +1388,19 @@ void dlcon::Impl::WorkLoop()
 
         	// connection should be stable now, prepare all jobs and/or move to pipeline
         	while(!bStopRequesting
-        			&& !m_qNewjobs.empty()
+        			&& !m_jobs.empty()
         			&& int(inpipe.size()) <= cfg::pipelinelen)
         	{
-   				tDlJobPtr &cjob = m_qNewjobs.front();
+   				auto &frontJob = m_jobs.front();
 
-        		if(!cjob->SetupJobConfig(sErrorMsg, m_blacklist))
+        		if(!frontJob.SetupJobConfig(sErrorMsg, m_blacklist))
         		{
         			// something weird happened to it, drop it and let the client care
-        			m_qNewjobs.pop_front();
+        			m_jobs.pop_front();
         			continue;
         		}
 
-        		auto& tgt=cjob->GetPeerHost();
+        		auto& tgt=frontJob.GetPeerHost();
         		// good case, direct or tunneled connection
         		bool match=(tgt.sHost == con->GetHostname() && tgt.GetPort() == con->GetPort());
         		const tHttpUrl * proxy = nullptr; // to be set ONLY if PROXY mode is used
@@ -1411,7 +1408,7 @@ void dlcon::Impl::WorkLoop()
         		// if not exact and can be proxied, and is this the right proxy?
         		if(!match)
         		{
-        			proxy = prefProxy(cjob);
+        			proxy = prefProxy(frontJob);
         			if(proxy)
         			{
         				/*
@@ -1431,10 +1428,10 @@ void dlcon::Impl::WorkLoop()
         			break;
         		}
 
-				cjob->AppendRequest(m_sendBuf, proxy);
+				frontJob.AppendRequest(m_sendBuf, proxy);
 				LOG("request added to buffer");
-				inpipe.emplace_back(cjob);
-				m_qNewjobs.pop_front();
+				auto itSecond = m_jobs.begin();
+				inpipe.splice(inpipe.end(), m_jobs, m_jobs.begin(), ++itSecond);
 
 				if (m_nTempPipelineDisable > 0)
 				{
@@ -1518,10 +1515,10 @@ void dlcon::Impl::WorkLoop()
 
 			// trying to resume that job secretly, unless user disabled the use of range (we
 			// cannot resync the sending position ATM, throwing errors to user for now)
-			if (cfg::vrangeops <= 0 && inpipe.front()->m_pStorage->m_bCheckFreshness)
+			if (cfg::vrangeops <= 0 && inpipe.front().m_pStorage->m_bCheckFreshness)
 				loopRes |= EFLAG_JOB_BROKEN;
 			else
-				inpipe.front()->m_DlState = tDlJob::STATE_REGETHEADER;
+				inpipe.front().m_DlState = tDlJob::STATE_REGETHEADER;
 		}
 
         if(loopRes & (HINT_DONE|HINT_MORE))
@@ -1545,7 +1542,7 @@ void dlcon::Impl::WorkLoop()
 
         if( (EFLAG_JOB_BROKEN & loopRes) && !inpipe.empty())
         {
-        	setIfNotEmpty(inpipe.front()->sErrorMsg, sErrorMsg);
+        	setIfNotEmpty(inpipe.front().sErrorMsg, sErrorMsg);
 
         	inpipe.pop_front();
 
@@ -1560,20 +1557,16 @@ void dlcon::Impl::WorkLoop()
         		{
         			for(auto it = joblist.begin(); it!= joblist.end();)
         			{
-        				if(*it && (**it).m_pStorage
-        						&& (**it).m_pStorage->GetStatus() >= fileitem::FIST_DLRECEIVING)
-        				{
-        					// someone else is doing it -> drop
-        					joblist.erase(it++);
-        					continue;
-        				}
+        				// someone else is doing it -> drop
+        				if(it->m_pStorage && it->m_pStorage->GetStatus() >= fileitem::FIST_DLRECEIVING)
+        					it = joblist.erase(it);
         				else
         					++it;
         			}
         		};
         		cleaner(inpipe);
         		setLockGuard;
-        		cleaner(m_qNewjobs);
+        		cleaner(m_jobs);
         	}
         }
 
@@ -1581,8 +1574,7 @@ void dlcon::Impl::WorkLoop()
         // for the jobs that were not finished and/or dropped, move them back into the task queue
         {
         	setLockGuard;
-        	m_qNewjobs.insert(m_qNewjobs.begin(), inpipe.begin(), inpipe.end());
-        	inpipe.clear();
+        	m_jobs.splice(m_jobs.begin(), inpipe);
         }
 
 	}
