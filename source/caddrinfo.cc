@@ -12,7 +12,7 @@
 #include "debug.h"
 #include "lockable.h"
 #include "evabase.h"
-
+#include <event2/dns.h>
 using namespace std;
 
 /**
@@ -76,6 +76,7 @@ void CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporte
 	static const struct timeval tImmediately { 0, 0};
 	auto repList = list<tDnsResultReporter> {move(rep)};
 	auto ctx = new tDnsResContext {sHostname, sPort, move(repList)};
+#warning fail hitn bei post fialure
 	event_base_once(evabase::base, -1, EV_READ, cb_invoke_dns_res, ctx, &tImmediately);
 }
 void cb_invoke_dns_res(int result, short what, void *arg)
@@ -83,7 +84,7 @@ void cb_invoke_dns_res(int result, short what, void *arg)
 	unique_ptr<tDnsResContext> args((tDnsResContext*)arg);
 	if(!args || args->cbs.empty() || !(args->cbs.front())) return; // heh?
 
-	if(what == TEARDOWN_HINT)
+	if(what == TEARDOWN_HINT || g_global_shutdown)
 	{
 		auto err_hint = make_shared<CAddrInfo>(evutil_gai_strerror(EAI_SYSTEM));
 		args->cbs.front()(err_hint);

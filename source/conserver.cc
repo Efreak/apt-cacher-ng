@@ -26,12 +26,6 @@
 #include <tcpd.h>
 #endif
 
-#ifdef HAVE_SD_NOTIFY
-#include <systemd/sd-daemon.h>
-#endif
-
-#include <event2/event.h>
-
 #include "debug.h"
 
 using namespace std;
@@ -43,9 +37,6 @@ using namespace std;
 
 namespace acng
 {
-
-// that's from caddrinfo.cc
-void cb_invoke_dns_res(int result, short what, void *arg);
 
 namespace conserver
 {
@@ -414,58 +405,14 @@ int ACNG_API Setup()
 	return nCreated;
 }
 
-int ACNG_API Run()
-{
-	LOGSTART2s("Run", "GoGoGo");
-
-#ifdef HAVE_SD_NOTIFY
-	sd_notify(0, "READY=1");
-#endif
-
-	return event_base_loop(evabase::base, EVLOOP_NO_EXIT_ON_EMPTY);
-}
-
-struct t_event_desctor {
-	evutil_socket_t fd;
-	event_callback_fn callback;
-	void *arg;
-};
-
-/**
- * Forcibly run each callback and signal shutdown.
- */
-int teardown_event_activity(const event_base*, const event* ev, void* ret)
-{
-	t_event_desctor r;
-	event_base *nix;
-	short what;
-	auto lret((deque<t_event_desctor>*)ret);
-	event_get_assignment(ev, &nix, &r.fd, &what, &r.callback, &r.arg);
-	if(r.callback == do_accept || r.callback == cb_invoke_dns_res)
-		lret->emplace_back(move(r));
-	return 0;
-}
-
 void Shutdown()
 {
-	g_global_shutdown = true;
-	// send teardown hint to all event callbacks
-	deque<t_event_desctor> todo;
-	event_base_foreach_event(evabase::base, teardown_event_activity, &todo);
-	for (const auto &ptr : todo)
-	{
-		DBGQLOG("Notifying event on " << ptr.fd);
-		ptr.callback(ptr.fd, TEARDOWN_HINT, ptr.arg);
-	}
-
-	{
 		lockuniq g(g_thread_push_cond_var);
 		// global hint to all conn objects
 		DBGQLOG("Notifying worker threads\n");
 		g_thread_push_cond_var.notifyAll();
 		while(g_nTotalThreads)
 			g_thread_push_cond_var.wait(g);
-	}
 }
 
 void FinishConnection(int fd)

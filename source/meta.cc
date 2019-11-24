@@ -33,6 +33,7 @@ cmstring PROT_PFX_HTTPS(WITHLEN("https://")), PROT_PFX_HTTP(WITHLEN("http://"));
 cmstring FAKEDATEMARK(WITHLEN("Sat, 26 Apr 1986 01:23:39 GMT+3"));
 cmstring hendl("<br>\n");
 
+// global cancelation token
 std::atomic<bool> g_global_shutdown;
 
 /*

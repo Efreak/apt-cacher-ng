@@ -1020,21 +1020,14 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 		return -2;
 	dlcon dl("", pDlconFac);
 
-	evabase::base = event_base_new();
-	evabase::dnsbase = evdns_base_new(evabase::base, 1);
-
-	std::thread evthr([&]() {
-		event_base_loop(evabase::base, EVLOOP_NO_EXIT_ON_EMPTY);
-		evdns_base_free(evabase::dnsbase, 1);
-		event_base_free(evabase::base);
-	});
+	evabase eb;
+	std::thread evthr([&]() { eb.MainLoop(); });
 	std::thread thr([&]() {	dl.WorkLoop();});
-
 	tDtorEx cleaner([&]()
 	{
 		::acng::cleaner::GetInstance().Stop();
 		dl.SignalStop();
-		if(evabase::base) event_base_loopbreak(evabase::base);
+		eb.SignalStop();
 		thr.join();
 		evthr.join();
 	});

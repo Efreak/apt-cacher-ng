@@ -236,8 +236,7 @@ void term_handler(evutil_socket_t signum, short what, void *arg)
 	case (SIGINT):
 	case (SIGQUIT):
 	{
-		if(evabase::base)
-			event_base_loopbreak(evabase::base);
+		evabase::SignalStop();
 		break;
 	}
 	default:
@@ -249,68 +248,69 @@ void CloseAllCachedConnections();
 
 struct tAppStartStop
 {
+	evabase m_base;
+
 	tAppStartStop(int argc, const char**argv)
 	{
 		evthread_use_pthreads();
 
-		#ifdef HAVE_SSL
+#ifdef HAVE_SSL
 			acng::globalSslInit();
 		#endif
 
-			bool bRunCleanup=false;
+		bool bRunCleanup = false;
 
-			parse_options(argc, argv, bRunCleanup);
+		parse_options(argc, argv, bRunCleanup);
 
-			if(!log::open())
+		if (!log::open())
+		{
+			cerr
+					<< "Problem creating log files. Check permissions of the log directory, "
+					<< cfg::logdir << endl;
+			exit(EXIT_FAILURE);
+		}
+
+		check_algos();
+
+		setup_sighandler();
+
+		SetupCacheDir();
+
+		DelTree(cfg::cacheDirSlash + sReplDir);
+
+		if (conserver::Setup() <= 0)
+		{
+			cerr
+					<< "No listening socket(s) could be created/prepared. "
+							"Check the network, check or unset the BindAddress directive.\n";
+			exit(EXIT_FAILURE);
+		}
+
+		if (bRunCleanup)
+		{
+			tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
+					cfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
+					fileno(stdout));
+			exit(0);
+		}
+
+		if (!cfg::foreground && !fork_away())
+		{
+			tErrnoFmter ef("Failed to change to daemon mode");
+			cerr << ef << endl;
+			exit(43);
+		}
+
+		if (!cfg::pidfile.empty())
+		{
+			mkbasedir(cfg::pidfile);
+			FILE *PID_FILE = fopen(cfg::pidfile.c_str(), "w");
+			if (PID_FILE != nullptr)
 			{
-				cerr << "Problem creating log files. Check permissions of the log directory, "
-					<< cfg::logdir<<endl;
-				exit(EXIT_FAILURE);
+				fprintf(PID_FILE, "%d", getpid());
+				checkForceFclose(PID_FILE);
 			}
-
-			check_algos();
-
-			evabase::base = event_base_new();
-			evabase::dnsbase = evdns_base_new(evabase::base, 1);
-
-			setup_sighandler();
-
-			SetupCacheDir();
-
-			DelTree(cfg::cacheDirSlash+sReplDir);
-
-			if(conserver::Setup() <= 0)
-			{
-				cerr << "No listening socket(s) could be created/prepared. "
-				"Check the network, check or unset the BindAddress directive.\n";
-				exit(EXIT_FAILURE);
-			}
-
-			if (bRunCleanup)
-			{
-				tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
-						cfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
-						fileno(stdout));
-				exit(0);
-			}
-
-			if (!cfg::foreground && !fork_away())
-			{
-				tErrnoFmter ef("Failed to change to daemon mode");
-				cerr << ef << endl;
-				exit(43);
-			}
-
-			if (!cfg::pidfile.empty())
-			{
-				mkbasedir(cfg::pidfile);
-				FILE *PID_FILE = fopen(cfg::pidfile.c_str(), "w");
-				if (PID_FILE != nullptr)
-				{
-					fprintf(PID_FILE, "%d", getpid());
-					checkForceFclose(PID_FILE);
-				}
-			}
+		}
 	}
 	~tAppStartStop()
 	{
@@ -320,10 +320,6 @@ struct tAppStartStop
 		conserver::Shutdown();
 		CloseAllCachedConnections();
 		log::close(false);
-		if(evabase::dnsbase)
-			evdns_base_free(evabase::dnsbase, 1);
-		if(evabase::base)
-			event_base_free(evabase::base);
 	}
 };
 
@@ -333,6 +329,5 @@ int main(int argc, const char **argv)
 {
 	using namespace acng;
 	tAppStartStop app(argc, argv);
-	return conserver::Run();
-
+	return app.m_base.MainLoop();
 }
