@@ -12,7 +12,7 @@
 #include <memory>
 #include "meta.h"
 #include "sockio.h"
-
+#include "acfg.h"
 #include <memory>
 
 #ifdef HAVE_SSL
@@ -79,7 +79,7 @@ class IDlConFactory
 public:
 	/// Moves the connection handle to the reserve pool (resets the specified sptr).
 	/// Should only be supplied with IDLE connection handles in a sane state.
-	virtual void RecycleIdleConnection(tDlStreamHandle & handle) =0;
+	virtual void RecycleIdleConnection(tDlStreamHandle & handle) const =0;
 	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
 				mstring &sErrOut,
 				bool *pbSecondHand,
@@ -87,7 +87,7 @@ public:
 				,bool ssl
 				,int timeout
 				,bool mustbevirgin
-		) =0;
+		) const =0;
 	virtual ~IDlConFactory() {};
 };
 
@@ -96,7 +96,7 @@ class ACNG_API dl_con_factory : public IDlConFactory
 public:
 	/// Moves the connection handle to the reserve pool (resets the specified sptr).
 	/// Should only be supplied with IDLE connection handles in a sane state.
-	virtual void RecycleIdleConnection(tDlStreamHandle & handle) override;
+	virtual void RecycleIdleConnection(tDlStreamHandle & handle) const override;
 	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
 				mstring &sErrOut,
 				bool *pbSecondHand,
@@ -104,7 +104,7 @@ public:
 				,bool ssl
 				,int timeout
 				,bool mustbevirgin
-		) override;
+		) const override;
 	virtual ~dl_con_factory() {};
 	void dump_status();
 	time_t BackgroundCleanup();

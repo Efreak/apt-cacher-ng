@@ -215,7 +215,7 @@ struct CReportItemFactory : public IFitemFactory
 	}
 };
 
-int wcat(LPCSTR url, LPCSTR proxy, IFitemFactory*, IDlConFactory *pdlconfa = &g_tcp_con_factory);
+int wcat(LPCSTR url, LPCSTR proxy, IFitemFactory*, const IDlConFactory &pdlconfa = g_tcp_con_factory);
 
 static void usage(int retCode = 0, LPCSTR cmd = nullptr)
 {
@@ -486,19 +486,19 @@ int maint_job()
 		// internal connection result
 		struct maintfac: public IDlConFactory
 		{
-			bool m_bOK = false;
-			mstring m_hname;
+			mutable bool m_bOK = false;
+			mutable mstring m_hname;
 			maintfac(cmstring& s) :
 					m_hname(s)
 			{
 			}
 
-			void RecycleIdleConnection(tDlStreamHandle & handle) override
+			void RecycleIdleConnection(tDlStreamHandle & handle) const override
 			{
 				// keep going, no recycling/restoring
 			}
 			virtual tDlStreamHandle CreateConnected(cmstring &, cmstring &, mstring &, bool *,
-					cfg::tRepoData::IHookHandler *, bool, int, bool) override
+					cfg::tRepoData::IHookHandler *, bool, int, bool) const override
 			{
 				string serr;
 
@@ -574,7 +574,7 @@ int maint_job()
 #endif
 
 		CReportItemFactory printItemFactory;
-		auto retcode = wcat(urlPath.c_str(), nullptr, &printItemFactory, &factoryWrapper);
+		auto retcode = wcat(urlPath.c_str(), nullptr, &printItemFactory, factoryWrapper);
 		if (retcode)
 		{
 			if (!factoryWrapper.m_bOK) // connection failed, try another IP
@@ -998,7 +998,7 @@ int main(int argc, const char **argv)
 	return g_exitCode;
 }
 
-int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac)
+int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, const IDlConFactory &pDlconFac)
 {
 	cfg::dnscachetime=0;
 	cfg::persistoutgoing=0;

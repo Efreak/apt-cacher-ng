@@ -1,8 +1,18 @@
 
+//#include <netinet/in.h>
+//#include <netdb.h>
+
+#include "tcpconnect.h"
+#include "lockable.h"
+#include "fileitem.h"
+#include "acfg.h"
+#include "acbuf.h"
+
 #include <unistd.h>
 #include <sys/time.h>
 #include <atomic>
 #include <algorithm>
+#include <list>
 
 #define LOCAL_DEBUG
 #include "debug.h"
@@ -41,40 +51,79 @@ static const auto taboo =
 
 std::atomic_uint g_nDlCons(0);
 
-dlcon::dlcon(cmstring& sOwnersHostname, IDlConFactory *pConFactory) :
-		m_pConFactory(pConFactory),
-		m_ownersHostname(sOwnersHostname),
-		m_bStopASAP(false),
-		m_nTempPipelineDisable(0),
-		m_bProxyTot(false)
+
+class dlcon::Impl: public base_with_mutex
 {
-	LOGSTART("dlcon::dlcon");
+
+	struct tDlJob;
+	typedef std::shared_ptr<tDlJob> tDlJobPtr;
+	typedef std::list<tDlJobPtr> tDljQueue;
+	friend struct tDlJob;
+	friend class dlcon;
+
+	tDljQueue m_qNewjobs;
+	const IDlConFactory &m_conFactory;
+	std::string m_ownersHostname;
+
 #ifdef HAVE_LINUX_EVENTFD
-	m_wakeventfd = eventfd(0, 0);
-	if(m_wakeventfd == -1)
-		m_bStopASAP = true;
-	else
-		set_nb(m_wakeventfd);
+	int m_wakeventfd = -1;
+#define fdWakeRead m_wakeventfd
+#define fdWakeWrite m_wakeventfd
 #else
-	if (0 == pipe(m_wakepipe))
-	{
-		set_nb(m_wakepipe[0]);
-		set_nb(m_wakepipe[1]);
-	}
-	else
-	{
-		m_wakepipe[0] = m_wakepipe[1] = -1;
-		m_bStopASAP = true;
-	}
+	int m_wakepipe[2] =
+	{ -1, -1 };
+#define fdWakeRead m_wakepipe[0]
+#define fdWakeWrite m_wakepipe[1]
 #endif
-  g_nDlCons++;
-}
+	// flags and local copies for input parsing
+	/// remember being attached to an fitem
+
+	bool m_bStopASAP;
+
+	/// blacklist for permanently failing hosts, with error message
+	std::map<std::pair<cmstring, cmstring>, mstring> m_blacklist;
+	tSS m_sendBuf, m_inBuf;
+
+	unsigned ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con,
+			tDljQueue &qActive);
+
+	// Disable pipelining for the next # requests. Actually used as crude workaround for the
+	// concept limitation (because of automata over a couple of function) and its
+	// impact on download performance.
+	// The use case: stupid web servers that redirect all requests do that step-by-step, i.e.
+	// they get a bunch of requests but return only the first response and then flush the buffer
+	// so we process this response and wish to switch to the new target location (dropping
+	// the current connection because we don't keep it somehow to background, this is the only
+	// download agent we have). This manner perverts the whole principle and causes permanent
+	// disconnects/reconnects. In this case, it's beneficial to disable pipelining and send
+	// our requests one-by-one. This is done for a while (i.e. the valueof(m_nDisablePling)/2 )
+	// times before the operation mode returns to normal.
+	int m_nTempPipelineDisable;
+
+	// the default behavior or using or not using the proxy. Will be set
+	// if access proxies shall no longer be used.
+	bool m_bProxyTot;
+
+	// this is a binary factor, meaning how many reads from buffer are OK when
+	// speed limiting is enabled
+	unsigned m_nSpeedLimiterRoundUp = (unsigned(1) << 16) - 1;
+	unsigned m_nSpeedLimitMaxPerTake = MAX_VAL(unsigned);
+	unsigned m_nLastDlCount = 0;
+
+	void wake();
+	void awaken_check();
+
+    void WorkLoop();
+    bool AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
+    		const cfg::tRepoData *pRepoDesc,
+    		cmstring *sPatSuffix, LPCSTR reqHead,
+			int nMaxRedirection, const char* szHeaderXff);
 
 struct tDlJob
 {
 	tFileItemPtr m_pStorage;
 	mstring sErrorMsg;
-	dlcon &m_parent;
+	dlcon::Impl &m_parent;
 
 	inline bool HasBrokenStorage()
 	{
@@ -129,7 +178,7 @@ struct tDlJob
 
 	int m_nRedirRemaining;
 
-	inline tDlJob(dlcon *p, tFileItemPtr pFi,
+	inline tDlJob(dlcon::Impl *p, tFileItemPtr pFi,
 			const tHttpUrl *pUri,
 			const cfg::tRepoData * pRepoData,
 			const std::string *psPath,
@@ -250,9 +299,9 @@ struct tDlJob
 		return true;
 	}
 
-	bool SetupJobConfig(mstring& sReasonMsg, decltype(dlcon::m_blacklist) &blacklist)
+	bool SetupJobConfig(mstring& sReasonMsg, decltype(dlcon::Impl::m_blacklist) &blacklist)
 	{
-		LOGSTART("dlcon::SetupJobConfig");
+		LOGSTART("dlcon::Impl::SetupJobConfig");
 
 		// using backends? Find one which is not blacklisted
 		if (m_bBackendMode)
@@ -707,10 +756,74 @@ private:
 	tDlJob & operator=(const tDlJob&);
 };
 
-#ifdef HAVE_LINUX_EVENTFD
-inline void dlcon::wake()
+public:
+
+Impl(cmstring& sOwnersHostname, const IDlConFactory &pConFactory) :
+		m_conFactory(pConFactory),
+		m_ownersHostname(sOwnersHostname),
+		m_bStopASAP(false),
+		m_nTempPipelineDisable(0),
+		m_bProxyTot(false)
 {
-	LOGSTART("dlcon::wake");
+	LOGSTART("dlcon::Impl::dlcon");
+#ifdef HAVE_LINUX_EVENTFD
+	m_wakeventfd = eventfd(0, 0);
+	if(m_wakeventfd == -1)
+		m_bStopASAP = true;
+	else
+		set_nb(m_wakeventfd);
+#else
+	if (0 == pipe(m_wakepipe))
+	{
+		set_nb(m_wakepipe[0]);
+		set_nb(m_wakepipe[1]);
+	}
+	else
+	{
+		m_wakepipe[0] = m_wakepipe[1] = -1;
+		m_bStopASAP = true;
+	}
+#endif
+  g_nDlCons++;
+}
+
+~Impl()
+{
+	LOGSTART("dlcon::Impl::~dlcon, Destroying dlcon");
+#ifdef HAVE_LINUX_EVENTFD
+	checkforceclose(m_wakeventfd);
+#else
+	checkforceclose(m_wakepipe[0]);
+	checkforceclose(m_wakepipe[1]);
+#endif
+  g_nDlCons--;
+}
+
+void SignalStop()
+{
+	LOGSTART("dlcon::Impl::SignalStop");
+	setLockGuard;
+
+	// stop all activity as soon as possible
+	m_bStopASAP=true;
+	m_qNewjobs.clear();
+	wake();
+}
+}; // Impl
+
+dlcon::dlcon(cmstring& sOwnersHostname, const IDlConFactory& pConFactory) : _p(new dlcon::Impl(sOwnersHostname, pConFactory)) {}
+dlcon::~dlcon() { delete _p; }
+void dlcon::WorkLoop() { return _p->WorkLoop(); }
+void dlcon::SignalStop(){ return _p->SignalStop(); }
+bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl, const cfg::tRepoData *pRepoDesc, cmstring *sPatSuffix, LPCSTR reqHead,
+		int nMaxRedirection, const char *szHeaderXff)
+{ return _p->AddJob(m_pItem, pForcedUrl, pRepoDesc, sPatSuffix, reqHead, nMaxRedirection, szHeaderXff); }
+
+
+#ifdef HAVE_LINUX_EVENTFD
+inline void dlcon::Impl::wake()
+{
+	LOGSTART("dlcon::Impl::wake");
 	if(fdWakeWrite == -1)
 		return;
 	while(true)
@@ -721,9 +834,9 @@ inline void dlcon::wake()
 	}
 
 }
-inline void dlcon::awaken_check()
+inline void dlcon::Impl::awaken_check()
 {
-	LOGSTART("dlcon::awaken_check");
+	LOGSTART("dlcon::Impl::awaken_check");
 	eventfd_t xtmp;
 	for(int i=0; ; ++i)
 	{
@@ -737,20 +850,20 @@ inline void dlcon::awaken_check()
 }
 
 #else
-void dlcon::wake()
+void dlcon::Impl::wake()
 {
-	LOGSTART("dlcon::wake");
+	LOGSTART("dlcon::Impl::wake");
 	POKE(fdWakeWrite);
 }
-inline void dlcon::awaken_check()
+inline void dlcon::Impl::awaken_check()
 {
-	LOGSTART("dlcon::awaken_check");
+	LOGSTART("dlcon::Impl::awaken_check");
 	for (char tmp; ::read(m_wakepipe[0], &tmp, 1) > 0;) ;
 }
 
 #endif
 
-bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
+bool dlcon::Impl::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const cfg::tRepoData *pBackends,
 		cmstring *sPatSuffix, LPCSTR reqHead,
 		int nMaxRedirection, const char* szHeaderXff)
@@ -765,13 +878,6 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 	setLockGuard;
 	if(m_bStopASAP)
 		return false;
-/*
-	ASSERT(
-			todo->m_pStorage->m_nRangeLimit < 0
-					|| todo->m_pStorage->m_nRangeLimit >= todo->m_pStorage->m_nSizeSeen);
-
-	LOGSTART2("dlcon::EnqJob", todo->m_remoteUri.ToURI(false));
-*/
 	m_qNewjobs.emplace_back(
 			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection));
 
@@ -792,32 +898,9 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 	return true;
 }
 
-void dlcon::SignalStop()
+inline unsigned dlcon::Impl::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &inpipe)
 {
-	LOGSTART("dlcon::SignalStop");
-	setLockGuard;
-
-	// stop all activity as soon as possible
-	m_bStopASAP=true;
-	m_qNewjobs.clear();
-	wake();
-}
-
-dlcon::~dlcon()
-{
-	LOGSTART("dlcon::~dlcon, Destroying dlcon");
-#ifdef HAVE_LINUX_EVENTFD
-	checkforceclose(m_wakeventfd);
-#else
-	checkforceclose(m_wakepipe[0]);
-	checkforceclose(m_wakepipe[1]);
-#endif
-  g_nDlCons--;
-}
-
-inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &inpipe)
-{
-	LOGSTART2("dlcon::ExchangeData",
+	LOGSTART2("dlcon::Impl::ExchangeData",
 			"qsize: " << inpipe.size() << ", sendbuf size: "
 			<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
 
@@ -1131,9 +1214,9 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 	return EFLAG_JOB_BROKEN|HINT_DISCON;
 }
 
-void dlcon::WorkLoop()
+void dlcon::Impl::WorkLoop()
 {
-	LOGSTART("dlcon::WorkLoop");
+	LOGSTART("dlcon::Impl::WorkLoop");
     string sErrorMsg;
     m_inBuf.clear();
     
@@ -1196,7 +1279,7 @@ void dlcon::WorkLoop()
         		if(inpipe.empty())
         		{
         			if(con)
-        				m_pConFactory->RecycleIdleConnection(con);
+        				m_conFactory.RecycleIdleConnection(con);
         			return;
         		}
         	}
@@ -1235,7 +1318,7 @@ void dlcon::WorkLoop()
 				ASSERT(!m_qNewjobs.empty());
 				auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
 				{
-					return m_pConFactory->CreateConnected(tgt.sHost,
+					return m_conFactory.CreateConnected(tgt.sHost,
 							tgt.GetPort(),
 							sErrorMsg,
 							&bUsed,
@@ -1391,7 +1474,7 @@ void dlcon::WorkLoop()
 			if (con && !(loopRes & all_err))
 			{
 				dbgline;
-				m_pConFactory->RecycleIdleConnection(con);
+				m_conFactory.RecycleIdleConnection(con);
 				continue;
 			}
 		}
@@ -1415,7 +1498,7 @@ void dlcon::WorkLoop()
         	// reinsert them into the new task list and continue
 
         	// if conn was not reset above then it should be in good shape
-        	m_pConFactory->RecycleIdleConnection(con);
+        	m_conFactory.RecycleIdleConnection(con);
         	goto move_jobs_back_to_q;
         }
 

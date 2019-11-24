@@ -360,7 +360,7 @@ ACNG_API void CloseAllCachedConnections()
 
 tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, cfg::tRepoData::IHookHandler *pStateTracker
-		,bool bSsl, int timeout, bool nocache)
+		,bool bSsl, int timeout, bool nocache) const
 {
 	LOGSTART2s("tcpconnect::CreateConnected", "hostname: " << sHostname << ", port: " << sPort
 			<< (bSsl?" with ssl":" , no ssl"));
@@ -439,7 +439,7 @@ tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &s
 	return p;
 }
 
-void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
+void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle) const
 {
 	if(!handle)
 		return;
