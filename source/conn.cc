@@ -15,7 +15,7 @@
 
 #include "lockable.h"
 #include "sockio.h"
-
+#include "evabase.h"
 #include <iostream>
 #include <thread>
 
@@ -255,7 +255,7 @@ void conn::Impl::WorkLoop() {
 	auto client_timeout(GetTime() + cfg::nettimeout);
 
 	int maxfd=m_confd;
-	while(!g_global_shutdown && !m_badState) {
+	while(!evabase::in_shutdown && !m_badState) {
 		fd_set rfds, wfds;
 		FD_ZERO(&wfds);
 		FD_ZERO(&rfds);
@@ -271,7 +271,7 @@ void conn::Impl::WorkLoop() {
 		ldbg("select con");
 		int ready = select(maxfd+1, &rfds, &wfds, nullptr, CTimeVal().For(SHORT_TIMEOUT));
 
-		if(g_global_shutdown)
+		if(evabase::in_shutdown)
 			break;
 
 		if(ready == 0)

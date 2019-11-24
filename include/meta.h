@@ -570,8 +570,6 @@ public:
 		return &tv;
 	}
 };
-
-extern std::atomic<bool> g_global_shutdown;
 }
 
 #endif // _META_H

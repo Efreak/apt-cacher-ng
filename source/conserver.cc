@@ -56,7 +56,7 @@ void SetupConAndGo(unique_fd fd, const char *szClientName);
 
 void cb_resume(evutil_socket_t fd, short what, void* arg)
 {
-	if(what == TEARDOWN_HINT) return; // ignore, this stays down now
+	if(evabase::in_shutdown) return; // ignore, this stays down now
 	event_add((event*) arg, nullptr);
 }
 
@@ -65,7 +65,7 @@ void do_accept(evutil_socket_t server_fd, short what, void* arg)
 	LOGSTART2s("do_accept", server_fd);
 	auto self((event*)arg);
 
-	if(what == TEARDOWN_HINT)
+	if(evabase::in_shutdown)
 	{
 		close(server_fd);
 		event_free(self);
@@ -148,10 +148,10 @@ auto ThreadAction = []()
 
 	while (true)
 	{
-		while (g_freshConQueue.empty() && !g_global_shutdown)
+		while (g_freshConQueue.empty() && !evabase::in_shutdown)
 			g_thread_push_cond_var.wait(g);
 
-		if (g_global_shutdown)
+		if (evabase::in_shutdown)
 			break;
 
 		auto c = move(g_freshConQueue.front());
@@ -166,7 +166,7 @@ auto ThreadAction = []()
 
 		g_nStandbyThreads++;
 
-		if (int(g_nStandbyThreads) >= cfg::tpstandbymax || g_global_shutdown)
+		if (int(g_nStandbyThreads) >= cfg::tpstandbymax || evabase::in_shutdown)
 			break;
 	}
 
@@ -180,7 +180,7 @@ auto ThreadAction = []()
 auto SpawnThreadsAsNeeded = []()
 {
 	// check the kill-switch
-		if(int(g_nTotalThreads+1)>=cfg::tpthreadmax || g_global_shutdown)
+		if(int(g_nTotalThreads+1)>=cfg::tpthreadmax || evabase::in_shutdown)
 		return false;
 
 	// need a custom one
@@ -417,7 +417,7 @@ void Shutdown()
 
 void FinishConnection(int fd)
 {
-	if(fd == -1 || g_global_shutdown)
+	if(fd == -1 || evabase::in_shutdown)
 		return;
 
 	termsocket_async(fd, evabase::base);

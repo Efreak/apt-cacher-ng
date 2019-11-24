@@ -84,7 +84,7 @@ void cb_invoke_dns_res(int result, short what, void *arg)
 	unique_ptr<tDnsResContext> args((tDnsResContext*)arg);
 	if(!args || args->cbs.empty() || !(args->cbs.front())) return; // heh?
 
-	if(what == TEARDOWN_HINT || g_global_shutdown)
+	if(evabase::in_shutdown)
 	{
 		auto err_hint = make_shared<CAddrInfo>(evutil_gai_strerror(EAI_SYSTEM));
 		args->cbs.front()(err_hint);
