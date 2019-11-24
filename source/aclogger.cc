@@ -200,7 +200,7 @@ void misc(const string & sLine, const char cLogType)
 	if(cfg::debug & LOG_FLUSH)
 		fStat.flush();
 }
-
+#warning convert to size-aware string
 void err(const char *msg, const char *client)
 {
 	if(!logIsEnabled)

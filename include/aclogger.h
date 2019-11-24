@@ -56,7 +56,7 @@ bool ACNG_API open();
 void ACNG_API close(bool bReopen);
 void transfer(uint64_t bytesIn, uint64_t bytesOut, cmstring& sClient, cmstring& sPath,
 		bool bAsError);
-void err(const char *msg, const char *client = nullptr);
+void ACNG_API err(const char *msg, const char *client = nullptr);
 void misc(const mstring & sLine, const char cLogType = 'M');
 inline void err(cmstring &msg)
 {
