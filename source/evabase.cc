@@ -18,9 +18,9 @@ using namespace std;
 namespace acng
 {
 
-event_base* evabase::base;
-evdns_base* evabase::dnsbase;
-std::atomic<bool> evabase::in_shutdown;
+event_base* evabase::base = nullptr;
+evdns_base* evabase::dnsbase = nullptr;
+std::atomic<bool> evabase::in_shutdown = ATOMIC_VAR_INIT(false);
 
 struct event *handover_wakeup;
 const struct timeval timeout_asap{0,0};
