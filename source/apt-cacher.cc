@@ -218,7 +218,7 @@ void noop_handler(evutil_socket_t, short, void*)
 
 void term_handler(evutil_socket_t signum, short what, void *arg)
 {
-	dbgprint("caught signal " << signum);
+	DBGQLOG("caught signal " << signum);
 	switch (signum) {
 	case (SIGBUS):
 		/* OH NO!

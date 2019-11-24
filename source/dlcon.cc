@@ -52,7 +52,7 @@ static const auto taboo =
 std::atomic_uint g_nDlCons(0);
 
 
-class dlcon::Impl: public base_with_mutex
+class dlcon::Impl
 {
 
 	struct tDlJob;
@@ -60,7 +60,7 @@ class dlcon::Impl: public base_with_mutex
 	friend struct tDlJob;
 	friend class dlcon;
 
-	tDljQueue m_jobs;
+	tDljQueue m_new_jobs;
 	const IDlConFactory &m_conFactory;
 	std::string m_ownersHostname;
 
@@ -74,10 +74,8 @@ class dlcon::Impl: public base_with_mutex
 #define fdWakeRead m_wakepipe[0]
 #define fdWakeWrite m_wakepipe[1]
 #endif
-	// flags and local copies for input parsing
-	/// remember being attached to an fitem
-
-	bool m_bStopASAP;
+	atomic_int m_ctrl_hint = ATOMIC_VAR_INIT(0);
+	mutex m_handover_mutex;
 
 	/// blacklist for permanently failing hosts, with error message
 	std::map<std::pair<cmstring, cmstring>, mstring> m_blacklist;
@@ -202,6 +200,8 @@ struct tDlJob
 			m_bBackendMode=true;
 		}
 	}
+	// Default move ctor is ok despite of pointers, we only need it in the beginning, list-splice operations should not move the object around
+	tDlJob(tDlJob && other) = default;
 
 	~tDlJob()
 	{
@@ -760,7 +760,6 @@ public:
 Impl(cmstring& sOwnersHostname, const IDlConFactory &pConFactory) :
 		m_conFactory(pConFactory),
 		m_ownersHostname(sOwnersHostname),
-		m_bStopASAP(false),
 		m_nTempPipelineDisable(0),
 		m_bProxyTot(false)
 {
@@ -768,7 +767,7 @@ Impl(cmstring& sOwnersHostname, const IDlConFactory &pConFactory) :
 #ifdef HAVE_LINUX_EVENTFD
 	m_wakeventfd = eventfd(0, 0);
 	if(m_wakeventfd == -1)
-		m_bStopASAP = true;
+		m_ctrl_hint = -1;
 	else
 		set_nb(m_wakeventfd);
 #else
@@ -780,7 +779,7 @@ Impl(cmstring& sOwnersHostname, const IDlConFactory &pConFactory) :
 	else
 	{
 		m_wakepipe[0] = m_wakepipe[1] = -1;
-		m_bStopASAP = true;
+		m_ctrl_hint = -1;
 	}
 #endif
   g_nDlCons++;
@@ -801,11 +800,8 @@ Impl(cmstring& sOwnersHostname, const IDlConFactory &pConFactory) :
 void SignalStop()
 {
 	LOGSTART("dlcon::Impl::SignalStop");
-	setLockGuard;
-
 	// stop all activity as soon as possible
-	m_bStopASAP=true;
-	m_jobs.clear();
+	m_ctrl_hint = -1;
 	wake();
 }
 }; // Impl
@@ -867,6 +863,9 @@ bool dlcon::Impl::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		cmstring *sPatSuffix, LPCSTR reqHead,
 		int nMaxRedirection, const char* szHeaderXff)
 {
+	if(m_ctrl_hint<0)
+		return false;
+
 	if(!pForcedUrl)
 	{
 		if(!pBackends || pBackends->m_backends.empty())
@@ -874,22 +873,23 @@ bool dlcon::Impl::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		if(!sPatSuffix || sPatSuffix->empty())
 			return false;
 	}
-	setLockGuard;
-	if(m_bStopASAP)
-		return false;
-	m_jobs.emplace_back(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection);
-	m_jobs.back().ExtractCustomHeaders(reqHead);
+	tDlJob xnew(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection);
+	xnew.ExtractCustomHeaders(reqHead);
 
 	if (cfg::exporigin && !m_ownersHostname.empty())
 	{
 		if (szHeaderXff)
 		{
-			m_jobs.back().m_xff = szHeaderXff;
-			m_jobs.back().m_xff+= ", ";
+			xnew.m_xff = szHeaderXff;
+			xnew.m_xff+= ", ";
 		}
-
-		m_jobs.back().m_xff += m_ownersHostname;
+		xnew.m_xff += m_ownersHostname;
 	}
+	{
+		lockguard g(m_handover_mutex);
+		m_new_jobs.emplace_back(move(xnew));
+	}
+	m_ctrl_hint++;
 
 	wake();
 	return true;
@@ -950,10 +950,8 @@ inline unsigned dlcon::Impl::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &c
 
 		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, CTimeVal().ForNetTimeout());
 		ldbg("returned: " << r << ", errno: " << errno);
-		if(m_bStopASAP)
-		{
+		if(m_ctrl_hint < 0)
 			return HINT_DISCON;
-		}
 
 		if (r == -1)
 		{
@@ -1229,9 +1227,10 @@ void dlcon::Impl::WorkLoop()
 		return;
 	}
 
-	tDtorEx allJobReleaser([&](){ m_jobs.clear(); });
+	tDljQueue next_jobs, active_jobs;
 
-	tDljQueue inpipe;
+	tDtorEx allJobReleaser([&](){ next_jobs.clear(); active_jobs.clear(); });
+
 	tDlStreamHandle con;
 	unsigned loopRes=0;
 
@@ -1259,197 +1258,201 @@ void dlcon::Impl::WorkLoop()
 		}
 		return cfg::GetProxyInfo();
 	};
-
+	int lastCtrlMark = -2;
 	while(true) // outer loop: jobs, connection handling
 	{
-        // init state or transfer loop jumped out, what are the needed actions?
-        {
-        	setLockGuard;
-        	LOG("New jobs: " << m_jobs.size());
+		// init state or transfer loop jumped out, what are the needed actions?
+		LOG("New next_jobs: " << next_jobs.size());
 
-        	if(m_bStopASAP)
-        	{
-        		/* The no-more-users checking logic will purge orphaned items from the inpipe
-        		 * queue. When the connection is dirty after that, it will be closed in the
-        		 * ExchangeData() but if not then it can be assumed to be clean and reusable.
-        		 */
-        		if(inpipe.empty())
-        		{
-        			if(con)
-        				m_conFactory.RecycleIdleConnection(con);
-        			return;
-        		}
-        	}
+		if(m_ctrl_hint < 0) // check for ordered shutdown
+		{
+			/* The no-more-users checking logic will purge orphaned items from the inpipe
+			 * queue. When the connection is dirty after that, it will be closed in the
+			 * ExchangeData() but if not then it can be assumed to be clean and reusable.
+			 */
+			if(active_jobs.empty())
+			{
+				if(con)
+					m_conFactory.RecycleIdleConnection(con);
+				return;
+			}
+		}
+		int newCtrlMark = m_ctrl_hint;
+		if(newCtrlMark != lastCtrlMark)
+		{
+			lastCtrlMark = newCtrlMark;
+			lockguard g(m_handover_mutex);
+			next_jobs.splice(next_jobs.begin(), m_new_jobs);
+		}
 
+		if(next_jobs.empty() && active_jobs.empty())
+			goto go_select; // parent will notify RSN
 
-        	if(m_jobs.empty())
-        		goto go_select; // parent will notify RSN
+		if(!con)
+		{
+			// cleanup after the last connection - send buffer, broken next_jobs, ...
+			m_sendBuf.clear();
+			m_inBuf.clear();
+			active_jobs.clear();
 
-        	if(!con)
-        	{
-        		// cleanup after the last connection - send buffer, broken jobs, ...
-        		m_sendBuf.clear();
-        		m_inBuf.clear();
-        		inpipe.clear();
+			bStopRequesting=false;
 
-        		bStopRequesting=false;
-
-        		for(tDljQueue::iterator it=m_jobs.begin(); it!=m_jobs.end();)
-        		{
-        			if(it->SetupJobConfig(sErrorMsg, m_blacklist))
-        				++it;
-        			else
-        			{
-        				setIfNotEmpty2( it->sErrorMsg, sErrorMsg,
-        						"500 Broken mirror or incorrect configuration");
-        				m_jobs.erase(it++);
-        			}
-        		}
-        		if(m_jobs.empty())
-        		{
-        			LOG("no jobs left, start waiting")
-        			goto go_select; // nothing left, might receive new jobs soon
-        		}
-
-				bool bUsed = false;
-				ASSERT(!m_jobs.empty());
-				auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
+			for(tDljQueue::iterator it=next_jobs.begin(); it!=next_jobs.end();)
+			{
+				if(it->SetupJobConfig(sErrorMsg, m_blacklist))
+					++it;
+				else
 				{
-					return m_conFactory.CreateConnected(tgt.sHost,
-							tgt.GetPort(),
-							sErrorMsg,
-							&bUsed,
-							m_jobs.front().GetConnStateTracker(),
-							IFSSLORFALSE(tgt.bSSL),
-							timeout, fresh);
-			}	;
+					setIfNotEmpty2( it->sErrorMsg, sErrorMsg,
+							"500 Broken mirror or incorrect configuration");
+					it = next_jobs.erase(it);
+				}
+			}
+			if(next_jobs.empty())
+			{
+				LOG("no next_jobs left, start waiting")
+				goto go_select; // nothing left, might receive new next_jobs soon
+			}
 
-				auto& cjob = m_jobs.front();
-				auto proxy = prefProxy(cjob);
-				auto& peerHost = cjob.GetPeerHost();
+			bool bUsed = false;
+			ASSERT(!next_jobs.empty());
+			auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
+			{
+				return m_conFactory.CreateConnected(tgt.sHost,
+						tgt.GetPort(),
+						sErrorMsg,
+						&bUsed,
+						next_jobs.front().GetConnStateTracker(),
+						IFSSLORFALSE(tgt.bSSL),
+						timeout, fresh);
+		}	;
+
+			auto& cjob = next_jobs.front();
+			auto proxy = prefProxy(cjob);
+			auto& peerHost = cjob.GetPeerHost();
 
 #ifdef HAVE_SSL
-				if(peerHost.bSSL)
+			if(peerHost.bSSL)
+			{
+				if(proxy)
 				{
-					if(proxy)
+					con = doconnect(*proxy, cfg::optproxytimeout > 0 ?
+							cfg::optproxytimeout : cfg::nettimeout, false);
+					if(con)
 					{
-						con = doconnect(*proxy, cfg::optproxytimeout > 0 ?
-								cfg::optproxytimeout : cfg::nettimeout, false);
-						if(con)
-						{
-							if(!con->StartTunnel(peerHost, sErrorMsg, & proxy->sUserPass, true))
-								con.reset();
-						}
+						if(!con->StartTunnel(peerHost, sErrorMsg, & proxy->sUserPass, true))
+							con.reset();
 					}
-					else
-						con = doconnect(peerHost, cfg::nettimeout, false);
 				}
 				else
+					con = doconnect(peerHost, cfg::nettimeout, false);
+			}
+			else
 #endif
+			{
+				if(proxy)
 				{
-					if(proxy)
-					{
-						con = doconnect(*proxy, cfg::optproxytimeout > 0 ?
-								cfg::optproxytimeout : cfg::nettimeout, false);
-					}
-					else
-						con = doconnect(peerHost, cfg::nettimeout, false);
+					con = doconnect(*proxy, cfg::optproxytimeout > 0 ?
+							cfg::optproxytimeout : cfg::nettimeout, false);
 				}
+				else
+					con = doconnect(peerHost, cfg::nettimeout, false);
+			}
 
-        		if(!con && proxy && cfg::optproxytimeout>0)
-        		{
-        			ldbg("optional proxy broken, disable");
-        			m_bProxyTot = true;
-        			proxy = nullptr;
-				cfg::MarkProxyFailure();
-        			con = doconnect(peerHost, cfg::nettimeout, false);
-        		}
+			if(!con && proxy && cfg::optproxytimeout>0)
+			{
+				ldbg("optional proxy broken, disable");
+				m_bProxyTot = true;
+				proxy = nullptr;
+			cfg::MarkProxyFailure();
+				con = doconnect(peerHost, cfg::nettimeout, false);
+			}
 
-        		ldbg("connection valid? " << bool(con) << " was fresh? " << !bUsed);
+			ldbg("connection valid? " << bool(con) << " was fresh? " << !bUsed);
 
-        		if(con)
-        		{
-        			ldbg("target? [" << con->GetHostname() << "]:" << con->GetPort());
+			if(con)
+			{
+				ldbg("target? [" << con->GetHostname() << "]:" << con->GetPort());
 
-        			// must test this connection, just be sure no crap is in the pipe
-        			if (bUsed && check_read_state(con->GetFD()))
-        			{
-        				ldbg("code: MoonWalker");
-        				con.reset();
-        				continue;
-        			}
-        		}
-        		else
-        		{
-        			BlacklistMirror(cjob);
-        			continue; // try the next backend
-        		}
-        	}
-
-        	// connection should be stable now, prepare all jobs and/or move to pipeline
-        	while(!bStopRequesting
-        			&& !m_jobs.empty()
-        			&& int(inpipe.size()) <= cfg::pipelinelen)
-        	{
-   				auto &frontJob = m_jobs.front();
-
-        		if(!frontJob.SetupJobConfig(sErrorMsg, m_blacklist))
-        		{
-        			// something weird happened to it, drop it and let the client care
-        			m_jobs.pop_front();
-        			continue;
-        		}
-
-        		auto& tgt=frontJob.GetPeerHost();
-        		// good case, direct or tunneled connection
-        		bool match=(tgt.sHost == con->GetHostname() && tgt.GetPort() == con->GetPort());
-        		const tHttpUrl * proxy = nullptr; // to be set ONLY if PROXY mode is used
-
-        		// if not exact and can be proxied, and is this the right proxy?
-        		if(!match)
-        		{
-        			proxy = prefProxy(frontJob);
-        			if(proxy)
-        			{
-        				/*
-        				 * SSL over proxy uses HTTP tunnels (CONNECT scheme) so the check
-        				 * above should have matched before.
-        				 */
-        				if(!tgt.bSSL)
-        					match=(proxy->sHost == con->GetHostname() && proxy->GetPort() == con->GetPort());
-        			}
-        			// else... host changed and not going through the same proxy -> fail
-        		}
-
-        		if(!match)
-        		{
-        			LOG("host mismatch, new target: " << tgt.sHost << ":" << tgt.GetPort());
-        			bStopRequesting=true;
-        			break;
-        		}
-
-				frontJob.AppendRequest(m_sendBuf, proxy);
-				LOG("request added to buffer");
-				auto itSecond = m_jobs.begin();
-				inpipe.splice(inpipe.end(), m_jobs, m_jobs.begin(), ++itSecond);
-
-				if (m_nTempPipelineDisable > 0)
+				// must test this connection, just be sure no crap is in the pipe
+				if (bUsed && check_read_state(con->GetFD()))
 				{
-					bStopRequesting = true;
-					--m_nTempPipelineDisable;
-					break;
+					ldbg("code: MoonWalker");
+					con.reset();
+					continue;
 				}
-        	}
-        }
+			}
+			else
+			{
+				BlacklistMirror(cjob);
+				continue; // try the next backend
+			}
+		}
+
+		// connection should be stable now, prepare all jobs and/or move to pipeline
+		while(!bStopRequesting
+				&& !next_jobs.empty()
+				&& int(active_jobs.size()) <= cfg::pipelinelen)
+		{
+			auto &frontJob = next_jobs.front();
+
+			if(!frontJob.SetupJobConfig(sErrorMsg, m_blacklist))
+			{
+				// something weird happened to it, drop it and let the client care
+				next_jobs.pop_front();
+				continue;
+			}
+
+			auto& tgt=frontJob.GetPeerHost();
+			// good case, direct or tunneled connection
+			bool match=(tgt.sHost == con->GetHostname() && tgt.GetPort() == con->GetPort());
+			const tHttpUrl * proxy = nullptr; // to be set ONLY if PROXY mode is used
+
+			// if not exact and can be proxied, and is this the right proxy?
+			if(!match)
+			{
+				proxy = prefProxy(frontJob);
+				if(proxy)
+				{
+					/*
+					 * SSL over proxy uses HTTP tunnels (CONNECT scheme) so the check
+					 * above should have matched before.
+					 */
+					if(!tgt.bSSL)
+						match=(proxy->sHost == con->GetHostname() && proxy->GetPort() == con->GetPort());
+				}
+				// else... host changed and not going through the same proxy -> fail
+			}
+
+			if(!match)
+			{
+				LOG("host mismatch, new target: " << tgt.sHost << ":" << tgt.GetPort());
+				bStopRequesting=true;
+				break;
+			}
+
+			frontJob.AppendRequest(m_sendBuf, proxy);
+			LOG("request added to buffer");
+			auto itSecond = next_jobs.begin();
+			active_jobs.splice(active_jobs.end(), next_jobs, next_jobs.begin(), ++itSecond);
+
+			if (m_nTempPipelineDisable > 0)
+			{
+				bStopRequesting = true;
+				--m_nTempPipelineDisable;
+				break;
+			}
+		}
+
 
 		ldbg("Request(s) cooked, buffer contents: " << m_sendBuf);
 
         go_select:
 
         // inner loop: plain communication until something happens. Maybe should use epoll here?
-        loopRes=ExchangeData(sErrorMsg, con, inpipe);
+        loopRes=ExchangeData(sErrorMsg, con, active_jobs);
         ldbg("loopRes: "<< loopRes);
-        if(m_bStopASAP)
+        if(m_ctrl_hint < 0)
         	return;
 
         /* check whether we have a pipeline stall. This may happen because a) we are done or
@@ -1458,7 +1461,7 @@ void dlcon::Impl::WorkLoop()
          * get it back from the pool in the next workloop cycle or someone else gets it and we
          * get a new connection for the new host later.
          * */
-        if (inpipe.empty())
+        if (active_jobs.empty())
 		{
         	// all requests have been processed (client done, or pipeline stall, who cares)
 			dbgline;
@@ -1491,7 +1494,7 @@ void dlcon::Impl::WorkLoop()
 
         if ( loopRes & HINT_TGTCHANGE )
         {
-        	// short queue continues jobs with rewritten targets, so
+        	// short queue continues next_jobs with rewritten targets, so
         	// reinsert them into the new task list and continue
 
         	// if conn was not reset above then it should be in good shape
@@ -1499,12 +1502,12 @@ void dlcon::Impl::WorkLoop()
         	goto move_jobs_back_to_q;
         }
 
-        if ((EFLAG_LOST_CON & loopRes) && !inpipe.empty())
+        if ((EFLAG_LOST_CON & loopRes) && !active_jobs.empty())
 		{
 			// disconnected by OS... give it a chance, or maybe not...
 			if (--nLostConTolerance <= 0)
 			{
-				BlacklistMirror(inpipe.front());
+				BlacklistMirror(active_jobs.front());
 				nLostConTolerance=MAX_RETRY;
 			}
 
@@ -1515,10 +1518,10 @@ void dlcon::Impl::WorkLoop()
 
 			// trying to resume that job secretly, unless user disabled the use of range (we
 			// cannot resync the sending position ATM, throwing errors to user for now)
-			if (cfg::vrangeops <= 0 && inpipe.front().m_pStorage->m_bCheckFreshness)
+			if (cfg::vrangeops <= 0 && active_jobs.front().m_pStorage->m_bCheckFreshness)
 				loopRes |= EFLAG_JOB_BROKEN;
 			else
-				inpipe.front().m_DlState = tDlJob::STATE_REGETHEADER;
+				active_jobs.front().m_DlState = tDlJob::STATE_REGETHEADER;
 		}
 
         if(loopRes & (HINT_DONE|HINT_MORE))
@@ -1537,14 +1540,14 @@ void dlcon::Impl::WorkLoop()
 
         // resolving the "fatal error" situation, push the pipelined job back to new, etc.
 
-        if( (EFLAG_MIRROR_BROKEN & loopRes) && !inpipe.empty())
-        	BlacklistMirror(inpipe.front());
+        if( (EFLAG_MIRROR_BROKEN & loopRes) && !active_jobs.empty())
+        	BlacklistMirror(active_jobs.front());
 
-        if( (EFLAG_JOB_BROKEN & loopRes) && !inpipe.empty())
+        if( (EFLAG_JOB_BROKEN & loopRes) && !active_jobs.empty())
         {
-        	setIfNotEmpty(inpipe.front().sErrorMsg, sErrorMsg);
+        	setIfNotEmpty(active_jobs.front().sErrorMsg, sErrorMsg);
 
-        	inpipe.pop_front();
+        	active_jobs.pop_front();
 
         	if(EFLAG_STORE_COLLISION & loopRes)
         	{
@@ -1553,8 +1556,9 @@ void dlcon::Impl::WorkLoop()
 				// already processed by it and try to continue somewhere else.
 				// This way, the overall number of collisions and reconnects is minimized
 
-        		auto cleaner = [](tDljQueue &joblist)
+        		for(auto pJobList : {&active_jobs, &next_jobs})
         		{
+        			auto& joblist(*pJobList);
         			for(auto it = joblist.begin(); it!= joblist.end();)
         			{
         				// someone else is doing it -> drop
@@ -1564,19 +1568,11 @@ void dlcon::Impl::WorkLoop()
         					++it;
         			}
         		};
-        		cleaner(inpipe);
-        		setLockGuard;
-        		cleaner(m_jobs);
         	}
         }
 
         move_jobs_back_to_q:
-        // for the jobs that were not finished and/or dropped, move them back into the task queue
-        {
-        	setLockGuard;
-        	m_jobs.splice(m_jobs.begin(), inpipe);
-        }
-
+       	next_jobs.splice(next_jobs.begin(), active_jobs);
 	}
 }
 

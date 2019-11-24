@@ -100,7 +100,7 @@ int offlinemode(false), verboselog(true), stupidfs(false), forcemanaged(false),
 extreshhold(20), tpstandbymax(8), tpthreadmax(-1), dirperms(00755), fileperms(00664),
 keepnver(0), maxtempdelay(27), vrangeops(1), dlretriesmax(2);
 
-int dlbufsize(70000), exfailabort(1), exporigin(false), numcores(1),
+int dlbufsize(30000), exfailabort(1), exporigin(false), numcores(1),
 logxff(false), oldupdate(false), recompbz2(false), nettimeout(40), updinterval(0),
 forwardsoap(RESERVED_DEFVAL), usewrap(RESERVED_DEFVAL), redirmax(RESERVED_DEFVAL),
 stucksecs(500), persistoutgoing(1), pipelinelen(10), exsupcount(RESERVED_DEFVAL),

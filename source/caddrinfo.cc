@@ -136,7 +136,7 @@ void CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporte
 		if(!args || args->cbs.empty() || !(args->cbs.front())) return; // heh?
 		LOGSTART2s("cb_invoke_dns_res", temp_ctx->sHost);
 
-		if(evabase::in_shutdown)
+		if(canceled || evabase::in_shutdown)
 		{
 			auto err_hint = make_shared<CAddrInfo>(evutil_gai_strerror(EAI_SYSTEM));
 			args->cbs.front()(err_hint);
