@@ -31,20 +31,25 @@ static string make_dns_key(const string & sHostname, const string &sPort)
 	return sHostname + ":" + sPort;
 }
 
-// using non-ordered map because of iterator stability, needed for expiration queue
+// using non-ordered map because of iterator stability, needed for expiration queue;
+// something like boost multiindex would be more appropriate if there was complicated
+// ordering on expiration date but that's not the case; OTOH could also use a multi-key
+// index instead of g_active_resolver_index but then again, when the resolution is finished,
+// that key data becomes worthless.
 map<string,CAddrInfoPtr> dns_cache;
 deque<decltype(dns_cache)::iterator> dns_exp_q;
 
-// this shall remain global and forever, for last-resort notifications
-SHARED_PTR<CAddrInfo> fail_hint=make_shared<CAddrInfo>("503 Fatal system error within apt-cacher-ng processing");
-
-// descriptor of a running DNS lookup
+// descriptor of a running DNS lookup, passed around with libevent callbacks
 struct tDnsResContext
 {
 	string sHost, sPort;
 	list<CAddrInfo::tDnsResultReporter> cbs;
 };
 unordered_map<string,tDnsResContext*> g_active_resolver_index;
+
+// this shall remain global and forever, for last-resort notifications
+SHARED_PTR<CAddrInfo> fail_hint=make_shared<CAddrInfo>("503 Fatal system error within apt-cacher-ng processing");
+
 
 /**
  * Trash old entries and make space for at least one new entry.
@@ -69,7 +74,7 @@ void CAddrInfo::cb_dns(int rc, struct evutil_addrinfo *results, void *arg)
 	g_active_resolver_index.erase(make_dns_key(args->sHost, args->sPort));
 
 	auto ret = std::shared_ptr<CAddrInfo>(new CAddrInfo);
-	auto invoke_cbs = [&args, &ret]() { for(auto& it: args->cbs) {it(ret);}};
+	tDtorEx invoke_cbs([&args, &ret]() { for(auto& it: args->cbs) {it(ret);}});
 	auto fmt_error = [](int rc) { return string("503 DNS error - ") + evutil_gai_strerror(rc); };
 
 	switch(rc)
@@ -80,11 +85,11 @@ void CAddrInfo::cb_dns(int rc, struct evutil_addrinfo *results, void *arg)
 	case EAI_SYSTEM:
 		ret->m_expTime = 0; // expire this ASAP and retry
 		ret->m_sError = "504 Temporary DNS resolution error";
-		return invoke_cbs();
+		return;
 	default:
 		ret->m_expTime = GetTime() + std::min(cfg::dnscachetime, (int) DNS_ERROR_KEEP_MAX_TIME);
 		ret->m_sError = fmt_error(rc); //"If this refers to a configured cache repository, please check the corresponding configuration file");
-		return invoke_cbs();
+		return;
 	}
 	ret->m_rawInfo = results;
 #ifdef DEBUG
@@ -111,7 +116,6 @@ void CAddrInfo::cb_dns(int rc, struct evutil_addrinfo *results, void *arg)
 		auto newIt = dns_cache.emplace(make_dns_key(args->sHost, args->sPort), ret);
 		dns_exp_q.push_back(newIt.first);
 	}
-	return invoke_cbs();
 }
 
 SHARED_PTR<CAddrInfo> CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort)
