@@ -25,6 +25,7 @@ namespace acng
 {
 static const unsigned DNS_CACHE_MAX = 255;
 static const unsigned DNS_ERROR_KEEP_MAX_TIME = 15;
+static const string dns_error_status_prefix("503 DNS error - ");
 
 static string make_dns_key(const string & sHostname, const string &sPort)
 {
@@ -52,18 +53,20 @@ SHARED_PTR<CAddrInfo> fail_hint=make_shared<CAddrInfo>("503 Fatal system error w
 
 
 /**
- * Trash old entries and make space for at least one new entry.
+ * Trash old entries and keep purging until there is enough space for at least one new entry.
  */
 void CAddrInfo::clean_dns_cache()
 {
 	if(cfg::dnscachetime <=0) return;
 	auto now=GetTime();
+	ASSERT(dns_cache.size() == dns_exp_q.size());
 	while(!dns_cache.empty())
 	{
-		if(dns_exp_q.front()->second->m_expTime > now && dns_cache.size()<DNS_CACHE_MAX-1 )
-			break;
-		dns_cache.erase(dns_exp_q.front());
-		dns_exp_q.pop_front();
+		if(dns_exp_q.front()->second->m_expTime <= now || dns_cache.size() >= DNS_CACHE_MAX-1 )
+		{
+			dns_cache.erase(dns_exp_q.front());
+			dns_exp_q.pop_front();
+		}
 	}
 }
 
@@ -71,57 +74,65 @@ void CAddrInfo::cb_dns(int rc, struct evutil_addrinfo *results, void *arg)
 {
 	// take ownership
 	unique_ptr<tDnsResContext> args((tDnsResContext*)arg);
-	g_active_resolver_index.erase(make_dns_key(args->sHost, args->sPort));
-
-	auto ret = std::shared_ptr<CAddrInfo>(new CAddrInfo);
-	tDtorEx invoke_cbs([&args, &ret]() { for(auto& it: args->cbs) {it(ret);}});
-	auto fmt_error = [](int rc) { return string("503 DNS error - ") + evutil_gai_strerror(rc); };
-
-	switch(rc)
+	arg = nullptr;
+	try
 	{
-	case 0: break;
-	case EAI_AGAIN:
-	case EAI_MEMORY:
-	case EAI_SYSTEM:
-		ret->m_expTime = 0; // expire this ASAP and retry
-		ret->m_sError = "504 Temporary DNS resolution error";
-		return;
-	default:
-		ret->m_expTime = GetTime() + std::min(cfg::dnscachetime, (int) DNS_ERROR_KEEP_MAX_TIME);
-		ret->m_sError = fmt_error(rc); //"If this refers to a configured cache repository, please check the corresponding configuration file");
-		return;
-	}
-	ret->m_rawInfo = results;
+		g_active_resolver_index.erase(make_dns_key(args->sHost, args->sPort));
+		auto ret = std::shared_ptr<CAddrInfo>(new CAddrInfo);
+		tDtorEx invoke_cbs([&args, &ret]() { for(auto& it: args->cbs) it(ret);});
+
+		switch (rc)
+		{
+		case 0:
+			break;
+		case EAI_AGAIN:
+		case EAI_MEMORY:
+		case EAI_SYSTEM:
+			ret->m_expTime = 0; // expire this ASAP and retry
+			ret->m_sError = "504 Temporary DNS resolution error";
+			return;
+		default:
+			ret->m_expTime = GetTime() + std::min(cfg::dnscachetime, (int) DNS_ERROR_KEEP_MAX_TIME);
+			ret->m_sError = dns_error_status_prefix + evutil_gai_strerror(rc); //   fmt_error(rc); //"If this refers to a configured cache repository, please check the corresponding configuration file");
+			return;
+		}
+		ret->m_rawInfo = results;
 #ifdef DEBUG
-	for(auto p=ret->m_rawInfo; p; p=p->ai_next)
-		std::cerr << formatIpPort(p) << std::endl;
+		for (auto p = ret->m_rawInfo; p; p = p->ai_next)
+			std::cerr << formatIpPort(p) << std::endl;
 #endif
-	// find any suitable-looking entry and keep a pointer to it faster lookup
-	for (auto pCur = ret->m_rawInfo; pCur && !ret->m_tcpAddrInfo; pCur = pCur->ai_next)
-	{
-		if (pCur->ai_socktype == SOCK_STREAM && pCur->ai_protocol == IPPROTO_TCP)
-			ret->m_tcpAddrInfo = pCur;
+		// find any suitable-looking entry and keep a pointer to it faster lookup
+		for (auto pCur = ret->m_rawInfo; pCur && !ret->m_tcpAddrInfo; pCur = pCur->ai_next)
+		{
+			if (pCur->ai_socktype == SOCK_STREAM && pCur->ai_protocol == IPPROTO_TCP)
+				ret->m_tcpAddrInfo = pCur;
+		}
+		if (ret->m_tcpAddrInfo)
+			ret->m_expTime = GetTime() + cfg::dnscachetime;
+		else
+		{
+			// nothing found? Report a common error then.
+			ret->m_expTime = GetTime() + std::min(cfg::dnscachetime, (int) DNS_ERROR_KEEP_MAX_TIME);
+			ret->m_sError = dns_error_status_prefix + evutil_gai_strerror(EAI_SYSTEM);
+		}
+		if (cfg::dnscachetime > 0) // keep a copy for other users
+		{
+			clean_dns_cache();
+			auto newIt = dns_cache.emplace(make_dns_key(args->sHost, args->sPort), ret);
+			dns_exp_q.push_back(newIt.first);
+		}
 	}
-	if(ret->m_tcpAddrInfo)
-		ret->m_expTime = GetTime() + cfg::dnscachetime;
-	else
+	catch(...)
 	{
-		// nothing found? Report a common error then.
-		ret->m_expTime = GetTime() + std::min(cfg::dnscachetime, (int) DNS_ERROR_KEEP_MAX_TIME);
-		ret->m_sError = fmt_error(EAI_SYSTEM); //"If this refers to a configured cache repository, please check the corresponding configuration file");
-	}
-	if(cfg::dnscachetime > 0) // keep a copy for other users
-	{
-		clean_dns_cache();
-		auto newIt = dns_cache.emplace(make_dns_key(args->sHost, args->sPort), ret);
-		dns_exp_q.push_back(newIt.first);
+		// nothing above should actually throw, but if it does, make sure to not keep wild pointers
+		g_active_resolver_index.clear();
 	}
 }
 
 SHARED_PTR<CAddrInfo> CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort)
 {
 	promise<CAddrInfoPtr> reppro;
-	auto reporter = [&reppro](CAddrInfoPtr result) { reppro.set_value(move(result)); };
+	auto reporter = [&reppro](CAddrInfoPtr result) { reppro.set_value(result); };
 	Resolve(sHostname, sPort, move(reporter));
 	auto res(move(reppro.get_future().get()));
 	return res ? res : fail_hint;
@@ -158,7 +169,7 @@ void CAddrInfo::Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporte
 			}
 		}
 		auto resIt = g_active_resolver_index.find(key);
-		// join the waiting crowd, mmove all callbacks to there...
+		// join the waiting crowd, move all callbacks to there...
 		if(resIt != g_active_resolver_index.end())
 		{
 			resIt->second->cbs.splice(resIt->second->cbs.end(), args->cbs);
