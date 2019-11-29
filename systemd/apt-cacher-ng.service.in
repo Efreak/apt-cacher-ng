@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 # the SocketPath option can be removed if the inetd bridge functionality is not needed
-ExecStart=@SBINDIR@/apt-cacher-ng SocketPath=@RUNDIR@/apt-cacher-ng/socket -c @CFGDIR@ ForeGround=1
+ExecStart=@SBINDIR@/apt-cacher-ng -c @CFGDIR@ ForeGround=1
 User=apt-cacher-ng
 Group=apt-cacher-ng
 # this can be changed to notify if the support was enabled at build time
