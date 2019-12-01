@@ -200,8 +200,8 @@ void misc(const string & sLine, const char cLogType)
 	if(cfg::debug & LOG_FLUSH)
 		fStat.flush();
 }
-#warning convert to size-aware string
-void err(const char *msg)
+
+void err(const char *msg, size_t len)
 {
 	if(!logIsEnabled)
 		return;
@@ -221,7 +221,7 @@ void err(const char *msg)
 	ctime_r(&tm, buf);
 	buf[24]=0;
 	fErr << buf << '|';
-	fErr << msg << '\n';
+	fErr.write(msg, len) << '\n';
 
 #ifdef DEBUG
 	if(cfg::debug & log::LOG_DEBUG)
