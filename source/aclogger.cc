@@ -206,8 +206,16 @@ void err(const char *msg, size_t len)
 	if(!logIsEnabled)
 		return;
 
+	auto xlog = [msg, len](ostream& chan){
+		static char buf[32];
+		const time_t tm=time(nullptr);
+		ctime_r(&tm, buf);
+		buf[24]='|';
+		chan.write(buf, 25).write(msg, len).write(szNEWLINE, 1);
+		if(cfg::debug & LOG_FLUSH)
+			chan.flush();
+	};
 	lockguard g(&mx);
-
 	if(!fErr.is_open())
 	{
 #ifdef DEBUG // basic debugging of acngtool
@@ -215,21 +223,11 @@ void err(const char *msg, size_t len)
 #endif
 		return;
 	}
-	
-	static char buf[32];
-	const time_t tm=time(nullptr);
-	ctime_r(&tm, buf);
-	buf[24]=0;
-	fErr << buf << '|';
-	fErr.write(msg, len) << '\n';
-
+	xlog(fErr);
 #ifdef DEBUG
-	if(cfg::debug & log::LOG_DEBUG)
-		cerr << buf << msg <<endl;
+	if(cfg::debug & LOG_DEBUG)
+		xlog(cerr);
 #endif
-
-	if(cfg::debug & log::LOG_DEBUG)
-		fErr.flush();
 }
 
 void ACNG_API flush()
