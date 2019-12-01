@@ -9,7 +9,7 @@ while : ; do
    case "$1" in
       DEBUG)
          shift
-         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_BUILD_TYPE=Debug -DCMAKE_VERBOSE_MAKEFILE=ON --debug-trycompile --debug-output"
+         CMAKEFLAGS="$CMAKEFLAGS -DCMAKE_BUILD_TYPE=Debug -DDEBUG=ON -DCMAKE_VERBOSE_MAKEFILE=ON --debug-trycompile --debug-output"
          ;;
       VERBOSE)
          shift

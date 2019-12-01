@@ -125,7 +125,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 				return false;
 			}
 			set_connect_sock_flags(fd);
-#if DEBUG
+#ifdef DEBUG
 			log::err(string("Connecting: ") + formatIpPort(dns));
 #endif
 			while (true)
