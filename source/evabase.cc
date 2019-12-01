@@ -13,7 +13,7 @@
 
 using namespace std;
 
-#warning add an extra task once per hour or so, optimizing all caches
+//XXX: add an extra task once per hour or so, optimizing all caches
 
 namespace acng
 {

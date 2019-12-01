@@ -129,7 +129,7 @@ void do_accept(evutil_socket_t server_fd, short what, void* arg)
 				fromhost(&req);
 				if (!hosts_access(&req))
 				{
-					log::err("ERROR: access not permitted by hosts files", hbuf);
+					log::err(string(hbuf) + "|ERROR: access not permitted by hosts files");
 					return;
 				}
 #else

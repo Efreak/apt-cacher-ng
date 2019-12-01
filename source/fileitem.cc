@@ -954,7 +954,7 @@ void fileItemMgmt::dump_status()
 					<< item.second->m_nSizeSeen
 					<< "\n\tGotAt: " << item.second->m_nTimeDlStarted << "\n\n";
 		}
-		log::err(fmt.c_str(), nullptr);
+		log::err(fmt);
 	}
 	log::flush();
 }

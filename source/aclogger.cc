@@ -201,7 +201,7 @@ void misc(const string & sLine, const char cLogType)
 		fStat.flush();
 }
 #warning convert to size-aware string
-void err(const char *msg, const char *client)
+void err(const char *msg)
 {
 	if(!logIsEnabled)
 		return;
@@ -221,8 +221,6 @@ void err(const char *msg, const char *client)
 	ctime_r(&tm, buf);
 	buf[24]=0;
 	fErr << buf << '|';
-	if(client)
-		fErr << client << ": ";
 	fErr << msg << '\n';
 
 #ifdef DEBUG
