@@ -33,10 +33,6 @@ namespace acng
 
 mstring sHttp11("HTTP/1.1");
 
-#warning FIXME, -42 was a bad idea, why not -1? Why closing -42 in dtor (valdgrind)?
-#define SPECIAL_FD -42
-inline bool IsValidFD(int fd) { return fd>=0 || SPECIAL_FD == fd; }
-
 tTraceData traceData;
 void cfg::dump_trace()
 {
@@ -76,8 +72,7 @@ public:
 		m_nSizeChecked = m_nSizeSeen = 0;
 		return m_status = FIST_INITED;
 	}
-	virtual int GetFileFd() override
-			{ return SPECIAL_FD; }; // something, don't care for now
+	virtual int GetFileFd() override { return INT_MAX; }; // something, don't care for now
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t, const char *,
 			bool, bool&) override
 	{
@@ -165,8 +160,7 @@ public:
 class tGeneratedFitemBase : public fileitem
 {
 public:
-	virtual int GetFileFd() override
-	{ return SPECIAL_FD; }; // something, don't care for now
+	virtual int GetFileFd() override { return -1; }; // something, don't care for now
 
 	tSS m_data;
 
@@ -230,7 +224,7 @@ job::~job()
 	int stcode = 200;
 	if(m_pItem) stcode = m_pItem.getFiPtr()->GetHeader().getStatus();
 
-	bool bErr=m_sFileLoc.empty() || stcode >= 400;
+	bool bErr = m_sFileLoc.empty() || stcode >= 400;
 
 	m_pParentCon->LogDataCounts(
 			m_sFileLoc + (bErr ? (miscError + ltos(stcode) + ']') : sEmptyString),
@@ -825,7 +819,6 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 					}
 
 					m_filefd=m_pItem.getFiPtr()->GetFileFd();
-					if(!IsValidFD(m_filefd)) THROW_ERROR("503 IO error");
 
 					m_state=m_bChunkMode ? STATE_SEND_CHUNK_HEADER : STATE_SEND_PLAIN_DATA;
 					ldbg("next state will be: " << (int) m_state);

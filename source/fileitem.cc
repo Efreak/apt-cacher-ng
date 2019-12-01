@@ -118,7 +118,7 @@ int fileitem::GetFileFd() {
 
 #ifdef HAVE_FADVISE
 	// optional, experimental
-	if(fd>=0)
+	if(fd != -1)
 		posix_fadvise(fd, 0, m_nSizeChecked, POSIX_FADV_SEQUENTIAL);
 #endif
 
@@ -918,6 +918,9 @@ time_t fileItemMgmt::BackgroundCleanup()
 
 ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, size_t count)
 {
+	if(out_fd == -1 || in_fd == -1)
+		return -1;
+
 #ifndef HAVE_LINUX_SENDFILE
 	return sendfile_generic(out_fd, in_fd, &nSendPos, count);
 #else
