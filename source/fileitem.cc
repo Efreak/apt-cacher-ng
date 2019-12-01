@@ -109,7 +109,7 @@ uint64_t fileitem::GetTransferCount()
 	return ret;
 }
 
-int fileitem::GetFileFd() {
+unique_fd fileitem::GetFileFd() {
 	LOGSTART("fileitem::GetFileFd");
 	setLockGuard;
 
@@ -122,7 +122,7 @@ int fileitem::GetFileFd() {
 		posix_fadvise(fd, 0, m_nSizeChecked, POSIX_FADV_SEQUENTIAL);
 #endif
 
-	return fd;
+	return unique_fd(fd);
 }
 
 off_t GetFileSize(cmstring & path, off_t defret)

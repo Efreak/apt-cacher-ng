@@ -7,6 +7,7 @@
 #include "config.h"
 #include "lockable.h"
 #include "header.h"
+#include "fileio.h"
 #include <unordered_map>
 
 namespace acng
@@ -37,7 +38,7 @@ public:
 	// initialize file item, return the status
 	virtual FiStatus Setup(bool bDynType);
 	
-	virtual int GetFileFd();
+	virtual unique_fd GetFileFd();
 	uint64_t GetTransferCount();
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow)=0;
@@ -112,7 +113,7 @@ public:
 	inline fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
 	inline fileitem_with_storage(cmstring &s, int nUsers) {m_sPathRel=s; usercount=nUsers; };
 	virtual ~fileitem_with_storage();
-        int Truncate2checkedSize() override;
+	int Truncate2checkedSize() override;
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,

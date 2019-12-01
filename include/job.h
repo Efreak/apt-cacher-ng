@@ -50,7 +50,7 @@ class job {
   
    private:
       
-	  int m_filefd;
+	  unique_fd m_filefd;
 	  conn *m_pParentCon;
       
       bool m_bChunkMode;

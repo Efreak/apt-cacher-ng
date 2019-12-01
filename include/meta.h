@@ -489,23 +489,31 @@ struct tDtorEx {
 	inline ~tDtorEx() { _action(); }
 };
 
-// unique_ptr semantics on a very custom type
+// unique_ptr semantics (almost) on a non-pointer type
 template<typename T, void TFreeFunc(T), T inval_default>
 struct auto_raii
 {
     T m_p;
-    auto_raii(T xp) : m_p(xp) {}
+    auto_raii() : m_p(inval_default) {}
+    explicit auto_raii(T xp) : m_p(xp) {}
     ~auto_raii() { if (m_p != inval_default) TFreeFunc(m_p); }
     T release() { auto ret=m_p; m_p = inval_default; return ret;}
     T get() const { return m_p; }
-    auto_raii() = delete;
     auto_raii(const auto_raii&) = delete;
     auto_raii(auto_raii && other)
-    {
-    	m_p = other.m_p;
-    	other.m_p = inval_default;
-    }
-    operator bool() const { return inval_default != m_p;}
+	{
+		m_p = other.m_p;
+		other.m_p = inval_default;
+	}
+	auto_raii& reset(auto_raii &&other)
+	{
+		if (&other == this)
+			return *this;
+		m_p = other.m_p;
+		other.m_p = inval_default;
+		return *this;
+	}
+    bool valid() const { return inval_default != m_p;}
 };
 
 // from bgtask.cc

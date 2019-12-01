@@ -68,8 +68,8 @@ struct ACNG_API CPrintItemFactory : public IFitemFactory
 				m_nSizeChecked = m_nSizeSeen = 0;
 				return m_status = FIST_INITED;
 			}
-			virtual int GetFileFd() override
-			{	return 1;}; // something, don't care for now
+			virtual unique_fd GetFileFd() override
+			{	return unique_fd();}; // something, don't care for now
 			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
 					bool, bool&) override
 			{
@@ -147,8 +147,8 @@ struct CReportItemFactory : public IFitemFactory
 				m_nSizeChecked = m_nSizeSeen = 0;
 				return m_status = FIST_INITED;
 			}
-			virtual int GetFileFd() override
-			{	return 1;}; // something, don't care for now
+			virtual unique_fd GetFileFd() override
+			{	return unique_fd();}; // something, don't care for now
 			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
 					bool, bool&) override
 			{

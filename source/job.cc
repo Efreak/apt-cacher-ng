@@ -72,7 +72,7 @@ public:
 		m_nSizeChecked = m_nSizeSeen = 0;
 		return m_status = FIST_INITED;
 	}
-	virtual int GetFileFd() override { return INT_MAX; }; // something, don't care for now
+	unique_fd GetFileFd() override { return unique_fd(); }; // something, don't care for now
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t, const char *,
 			bool, bool&) override
 	{
@@ -160,7 +160,7 @@ public:
 class tGeneratedFitemBase : public fileitem
 {
 public:
-	virtual int GetFileFd() override { return -1; }; // something, don't care for now
+	unique_fd GetFileFd() override { return unique_fd(); }; // something, don't care for now
 
 	tSS m_data;
 
@@ -231,8 +231,6 @@ job::~job()
 			m_reqHead.h[header::XFORWARDEDFOR],
 			(m_pItem ? m_pItem.getFiPtr()->GetTransferCount() : 0),
 			m_nAllDataCount, bErr);
-	
-	checkforceclose(m_filefd);
 }
 
 
@@ -391,7 +389,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 			if(!sMimeType.empty())
 				m_head.set(header::CONTENT_TYPE, sMimeType);
 		};
-		virtual int GetFileFd() override
+		unique_fd GetFileFd() override
 		{
 			int fd=open(m_sPathRel.c_str(), O_RDONLY);
 		#ifdef HAVE_FADVISE
@@ -399,7 +397,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 			if(fd>=0)
 				posix_fadvise(fd, 0, m_nSizeChecked, POSIX_FADV_SEQUENTIAL);
 		#endif
-			return fd;
+			return unique_fd(fd);
 		}
 	};
 	m_pItem.RegisterFileitemLocalOnly(new tLocalGetFitem(absPath, stbuf));
@@ -818,7 +816,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 						return R_AGAIN;
 					}
 
-					m_filefd=m_pItem.getFiPtr()->GetFileFd();
+					m_filefd.reset(m_pItem.getFiPtr()->GetFileFd());
 
 					m_state=m_bChunkMode ? STATE_SEND_CHUNK_HEADER : STATE_SEND_PLAIN_DATA;
 					ldbg("next state will be: " << (int) m_state);
@@ -840,7 +838,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 
 					size_t nMax2SendNow=min(nGoodDataSize-m_nSendPos, m_nCurrentRangeLast+1-m_nSendPos);
 					ldbg("~sendfile: on "<< m_nSendPos << " up to : " << nMax2SendNow);
-					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd, m_nSendPos, nMax2SendNow);
+					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd.get(), m_nSendPos, nMax2SendNow);
 					ldbg("~sendfile: " << n << " new m_nSendPos: " << m_nSendPos);
 
 					if(n>0)
@@ -878,7 +876,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 
 					if(m_nChunkRemainingBytes==0)
 						GOTOENDE; // done
-					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd, m_nSendPos, m_nChunkRemainingBytes);
+					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd.get(), m_nSendPos, m_nChunkRemainingBytes);
 					if(n<0)
 						THROW_ERROR("400 Client error");
 					m_nChunkRemainingBytes-=n;
