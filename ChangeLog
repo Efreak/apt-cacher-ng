@@ -1,5 +1,9 @@
 apt-cacher-ng (3.4) SOMETIMES-YOU-EAT-THE-BEAR; urgency=low
 
+  [ FEATURES AND IMPROVEMENTS ]
+  * Allowed specification of different/multiple endpoints to bind with
+    arbitrary ports, i.e. binding with non-default port on specific network interfaces
+
   [ BUGFIXES ]
   * Fixing construction of individual X-Forwarded-For headers. This matters
     only for proxy cascades and only when ExposeOrigin option is set.

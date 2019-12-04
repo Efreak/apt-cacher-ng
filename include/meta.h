@@ -249,7 +249,8 @@ public:
 	inline cmstring& GetDefaultPortForProto() const {
 		return bSSL ? sDefPortHTTPS : sDefPortHTTP;
 	}
-	inline cmstring& GetPort() const { return !sPort.empty() ? sPort : GetDefaultPortForProto(); }
+	inline cmstring& GetPort(cmstring& szDefVal) const { return !sPort.empty() ? sPort : szDefVal; }
+	inline cmstring& GetPort() const { return GetPort(GetDefaultPortForProto()); }
 
 	inline tHttpUrl(cmstring &host, cmstring& port, bool ssl) :
 			sPort(port), sHost(host), bSSL(ssl)

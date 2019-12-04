@@ -279,7 +279,8 @@ std::string scratchBuf;
 
 unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 {
-	LOGSTART2s("Setup::ConAddr", 0);
+	LOGSTARTs("Setup::ConAddr");
+	USRDBG("Binding on host: " << addi << ", port: " << port);
 
 	auto hints = evutil_addrinfo();
 	hints.ai_socktype = SOCK_STREAM;
@@ -388,14 +389,22 @@ int ACNG_API Setup()
 		nCreated += bind_and_listen(sockFd, &ai);
 	}
 
-	if (atoi(cfg::port.c_str()) <= 0)
-		log::err("Not creating TCP listening socket, no valid port specified!");
-	else
 	{
 		bool custom_listen_ip = false;
+		tHttpUrl url;
 		for(const auto& sp: tSplitWalk(&cfg::bindaddr))
 		{
-			nCreated += setup_tcp_listeners(sp.c_str(), cfg::port);
+			auto isUrl = url.SetHttpUrl(sp, false);
+			if(!isUrl && atoi(cfg::port.c_str()) <= 0)
+			{
+				USRDBG("Not creating TCP listening socket for " <<  sp
+						<< ", no custom nor default port specified!");
+				continue;
+			}
+//	XXX: uri parser accepts anything wihtout shema, good for this situation but maybe bad for strict validation...
+//			USRDBG("Binding as host:port URI? " << isUrl << ", addr: " << url.ToURI(false));
+			nCreated += setup_tcp_listeners(isUrl ? url.sHost.c_str() : sp.c_str(),
+					isUrl ? url.GetPort(cfg::port) : cfg::port);
 			custom_listen_ip = true;
 		}
 		// just TCP_ANY if none was specified
