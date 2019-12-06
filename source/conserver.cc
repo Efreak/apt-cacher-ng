@@ -340,7 +340,7 @@ int ACNG_API Setup()
 {
 	LOGSTART2s("Setup", 0);
 	
-	if (cfg::fifopath.empty() && (cfg::port.empty() && cfg::bindaddr.empty()))
+	if (cfg::udspath.empty() && (cfg::port.empty() && cfg::bindaddr.empty()))
 	{
 		cerr << "Neither TCP nor UNIX interface configured, cannot proceed.\n";
 		exit(EXIT_FAILURE);
@@ -348,11 +348,11 @@ int ACNG_API Setup()
 
 	unsigned nCreated = 0;
 
-	if (cfg::fifopath.empty())
+	if (cfg::udspath.empty())
 		log::err("Not creating Unix Domain Socket, fifo_path not specified");
 	else
 	{
-		string & sPath = cfg::fifopath;
+		string & sPath = cfg::udspath;
 		auto addr_unx = sockaddr_un();
 
 		size_t size = sPath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
@@ -361,7 +361,7 @@ int ACNG_API Setup()
 		{
 			cerr << "Error creating Unix Domain Socket, ";
 			cerr.flush();
-			perror(cfg::fifopath.c_str());
+			perror(cfg::udspath.c_str());
 			cerr << "Check socket file and directory permissions" <<endl;
 			exit(EXIT_FAILURE);
 		};

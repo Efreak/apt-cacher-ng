@@ -473,8 +473,8 @@ int maint_job()
 	tStrVec hostips;
 #if 0 // FIXME, processing on UDS gets stuck somewhere
 	// prefer UDS if configured in a sane way
-	if (startsWithSz(cfg::fifopath, "/"))
-		hostips.emplace_back(cfg::fifopath);
+	if (startsWithSz(cfg::udspath, "/"))
+		hostips.emplace_back(cfg::udspath);
 #endif
 	auto nips = Tokenize(cfg::bindaddr, SPACECHARS, hostips, true);
 	if (!nips)
@@ -524,9 +524,9 @@ int maint_job()
 
 						struct sockaddr_un addr;
 						addr.sun_family = PF_UNIX;
-						strcpy(addr.sun_path, cfg::fifopath.c_str());
+						strcpy(addr.sun_path, cfg::udspath.c_str());
 						socklen_t adlen =
-								cfg::fifopath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
+								cfg::udspath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
 						if (connect(m_conFd, (struct sockaddr*) &addr, adlen))
 						{
 #ifdef DEBUG
