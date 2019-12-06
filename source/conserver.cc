@@ -242,7 +242,7 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 	}
 }
 
-bool bind_and_listen(evutil_socket_t mSock, const evutil_addrinfo *pAddrInfo)
+bool bind_and_listen(evutil_socket_t mSock, const evutil_addrinfo *pAddrInfo, cmstring& port)
 		{
 	LOGSTART2s("bind_and_listen", formatIpPort(pAddrInfo));
 			if ( ::bind(mSock, pAddrInfo->ai_addr, pAddrInfo->ai_addrlen))
@@ -255,7 +255,7 @@ bool bind_and_listen(evutil_socket_t mSock, const evutil_addrinfo *pAddrInfo)
 					if(pAddrInfo->ai_family == PF_UNIX)
 						cerr << "Error creating or binding the UNIX domain socket - please check permissions!" <<endl;
 					else
-						cerr << "Port " << cfg::port << " is busy, see the manual (Troubleshooting chapter) for details." <<endl;
+						cerr << "Port " << port << " is busy, see the manual (Troubleshooting chapter) for details." <<endl;
 				cerr.flush();
 				}
 				return false;
@@ -331,7 +331,7 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 			setsockopt(nSockFd, SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
 #endif
 		setsockopt(nSockFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-		res += bind_and_listen(nSockFd, p);
+		res += bind_and_listen(nSockFd, p, port);
 	}
 	return res;
 };
@@ -340,7 +340,7 @@ int ACNG_API Setup()
 {
 	LOGSTART2s("Setup", 0);
 	
-	if (cfg::fifopath.empty() && cfg::port.empty())
+	if (cfg::fifopath.empty() && (cfg::port.empty() && cfg::bindaddr.empty()))
 	{
 		cerr << "Neither TCP nor UNIX interface configured, cannot proceed.\n";
 		exit(EXIT_FAILURE);
@@ -386,7 +386,7 @@ int ACNG_API Setup()
 		ai.ai_addrlen = size;
 		ai.ai_family = PF_UNIX;
 
-		nCreated += bind_and_listen(sockFd, &ai);
+		nCreated += bind_and_listen(sockFd, &ai, "0");
 	}
 
 	{

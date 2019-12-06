@@ -412,8 +412,8 @@ void tMarkupFileSend::SendProp(cmstring &key)
 			return SendChunk(m_fmtHelper.clean() << *pi);
 		return;
 	}
-	if (key == "serverip")
-		return SendChunk(GetHostname());
+	if (key == "serverhostport")
+		return SendChunk(GetMyHostPort());
 	if (key == "footer")
 		return SendChunk(GetFooter());
 
