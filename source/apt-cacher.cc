@@ -316,6 +316,7 @@ struct tAppStartStop
 		conserver::Shutdown();
 		CloseAllCachedConnections();
 		log::close(false);
+		globalSslDeInit();
 	}
 };
 

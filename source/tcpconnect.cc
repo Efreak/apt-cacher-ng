@@ -685,21 +685,6 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 	return true;
 }
 
-//! Global initialization helper (might be non-reentrant)
-void ACNG_API globalSslInit()
-{
-	static bool inited=false;
-	if(inited)
-		return;
-	inited = true;
-	SSL_load_error_strings();
-	ERR_load_BIO_strings();
-	ERR_load_crypto_strings();
-	ERR_load_SSL_strings();
-	OpenSSL_add_all_algorithms();
-	SSL_library_init();
-}
-
 #endif
 
 bool tcpconnect::StartTunnel(const tHttpUrl& realTarget, mstring& sError,

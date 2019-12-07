@@ -1014,6 +1014,9 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, const IDlConFactory &pDl
 	string xurl(surl);
 	if(!url.SetHttpUrl(xurl, false))
 		return -2;
+	if(url.bSSL)
+		globalSslInit();
+
 	dlcon dl("", pDlconFac);
 
 	evabase eb;
