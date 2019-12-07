@@ -553,6 +553,10 @@ struct tDlJob
 
 				int st = h.getStatus();
 
+				// processing hint 102, or something like 103 which we can ignore
+				if(st < 200)
+					return HINT_MORE;
+
 				if (cfg::redirmax) // internal redirection might be disabled
 				{
 					if (IS_REDIRECT(st))

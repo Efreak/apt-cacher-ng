@@ -3,6 +3,7 @@ apt-cacher-ng (3.4) SOMETIMES-YOU-EAT-THE-BEAR; urgency=low
   [ FEATURES AND IMPROVEMENTS ]
   * Allowed specification of different/multiple endpoints to bind with
     arbitrary ports, i.e. binding with non-default port on specific network interfaces
+  * By default, refer to the manual served through the built-in webserver
 
   [ BUGFIXES ]
   * Fixing construction of individual X-Forwarded-For headers. This matters
@@ -11,6 +12,7 @@ apt-cacher-ng (3.4) SOMETIMES-YOU-EAT-THE-BEAR; urgency=low
   * Minor speedup in acngfs with reused download agent
   * Using asynchronous libevent DNS resolver instead of getaddrinfo from OS,
     since the later turned out to be unstable in stress tests
+  * Safely ignore the HTTP 102 Processing status code and similar hints 
 
  -- 
 
