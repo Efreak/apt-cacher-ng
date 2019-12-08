@@ -8,7 +8,6 @@
 #ifndef TCPCONNECT_H_
 #define TCPCONNECT_H_
 
-#include <atomic>
 #include <memory>
 #include "meta.h"
 #include "sockio.h"
@@ -110,7 +109,6 @@ public:
 	time_t BackgroundCleanup();
 protected:
 	friend class tcpconnect;
-	static std::atomic_uint g_nconns;
 };
 
 extern dl_con_factory g_tcp_con_factory;
