@@ -1,11 +1,11 @@
 apt-cacher-ng (3.4) SOMETIMES-YOU-EAT-THE-BEAR; urgency=low
 
-  [ FEATURES AND IMPROVEMENTS ]
+  [ FEATURES AND USAGE IMPROVEMENTS ]
   * Allowed specification of different/multiple endpoints to bind with
     arbitrary ports, i.e. binding with non-default port on specific network interfaces
   * By default, refer to the manual served through the built-in webserver
 
-  [ BUGFIXES ]
+  [ BUGFIXES AND OPTIMIZATIONS ]
   * Fixing construction of individual X-Forwarded-For headers. This matters
     only for proxy cascades and only when ExposeOrigin option is set.
   * Potential hanging of acngtool/acngfs on termination
