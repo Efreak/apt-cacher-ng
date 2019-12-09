@@ -36,6 +36,12 @@
 #endif
 
 
+#ifdef __GNUC__
+#define WARN_UNUSED  __attribute__ ((warn_unused_result))
+#else
+#define WARN_UNUSED
+#endif
+
 // little STFU helper
 #if __GNUC__ >= 7
 #define __just_fall_through [[fallthrough]]

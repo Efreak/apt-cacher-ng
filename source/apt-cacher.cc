@@ -53,7 +53,7 @@ void noop_handler(evutil_socket_t fd, short what, void *arg);
 void handle_sigbus();
 void check_algos();
 
-extern mstring sReplDir;
+//extern mstring sReplDir;
 
 typedef struct sigaction tSigAct;
 
@@ -272,7 +272,7 @@ struct tAppStartStop
 
 		SetupCacheDir();
 
-		DelTree(cfg::cacheDirSlash + sReplDir);
+		//DelTree(cfg::cacheDirSlash + sReplDir);
 
 		if (conserver::Setup() <= 0)
 		{

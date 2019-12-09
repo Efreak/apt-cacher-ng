@@ -285,7 +285,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 					seal();
 				}
 			};
-			m_pItem.RegisterFileitemLocalOnly(new dirredirect(visPath));
+			m_pItem = TFileItemUser::Create(make_shared<dirredirect>(visPath), false);
 			return;
 		}
 
@@ -298,8 +298,8 @@ inline void job::PrepareLocalDownload(const string &visPath,
 				seal(); // for now...
 			}
 		};
-		listing *p=new listing(visPath);
-		m_pItem.RegisterFileitemLocalOnly(p); // assign to smart pointer ASAP, operations might throw
+		auto p = make_shared<listing>(visPath);
+		m_pItem = TFileItemUser::Create(p, false);
 		tSS & page = p->m_data;
 
 		page << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>Index of "
@@ -400,7 +400,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 			return unique_fd(fd);
 		}
 	};
-	m_pItem.RegisterFileitemLocalOnly(new tLocalGetFitem(absPath, stbuf));
+	m_pItem = TFileItemUser::Create(make_shared<tLocalGetFitem>(absPath, stbuf), false);
 }
 
 inline bool job::ParseRange()
@@ -581,7 +581,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 		bForceFreshnessChecks = ( ! cfg::offlinemode && m_type == FILE_VOLATILE);
 
-		m_pItem.PrepareRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
+		m_pItem = TFileItemUser::Create(m_sFileLoc, bForceFreshnessChecks);
 	}
 	catch(std::out_of_range&) // better safe...
 	{
@@ -1103,7 +1103,7 @@ fileitem::FiStatus job::_SwitchToPtItem()
 	// Changing to local pass-through file item
 	LOGSTART("job::_SwitchToPtItem");
 	// exception-safe sequence
-	m_pItem.RegisterFileitemLocalOnly(new tPassThroughFitem(m_sFileLoc));
+	m_pItem = TFileItemUser::Create(make_shared<tPassThroughFitem>(m_sFileLoc), false);
 	return m_pItem.getFiPtr()->Setup(true);
 }
 
@@ -1128,9 +1128,9 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation, const
 		}
 	};
 
-	erroritem *p = new erroritem("noid", errorLine, bodytext);
+	auto p = make_shared<erroritem>("noid", errorLine, bodytext);
 	p->HeadRef().set(header::LOCATION, szLocation);
-	m_pItem.RegisterFileitemLocalOnly(p);
+	m_pItem = TFileItemUser::Create(p, false);
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
 	m_state=STATE_SEND_MAIN_HEAD;
 }

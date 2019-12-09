@@ -146,6 +146,9 @@ LPCSTR ACNG_API ReTest(LPCSTR s);
 #define SZABSPATH(x) (CACHE_BASE+(x)).c_str()
 #define SABSPATH(x) (CACHE_BASE+(x))
 
+#define SABSPATHEX(x, y) (CACHE_BASE+(x) + (y))
+#define SZABSPATHEX(x, y) (CACHE_BASE+(x) + (y)).c_str()
+
 bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
 
 // XXX: find a better place for this, shared between server and acngtool

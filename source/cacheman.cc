@@ -276,7 +276,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	const cfg::tRepoData *pRepoDesc=nullptr;
 	mstring sRemoteSuffix, sFilePathAbs(SABSPATH(sFilePathRel));
 
-	fileItemMgmt fiaccess;
+	TFileItemUser fiaccess;
 	tHttpUrl parserPath, parserHead;
 	const tHttpUrl *pResolvedDirectUrl=nullptr;
 
@@ -287,7 +287,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if(!pFi)
 	{
-		fiaccess.PrepareRegisteredFileItemWithStorage(sFilePathRel, false);
+		fiaccess = fiaccess.Create(sFilePathRel, false);
 		pFi=fiaccess.getFiPtr();
 	}
 	if (!pFi)
@@ -903,8 +903,8 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 	};
 	auto pfi(make_shared<tInjectItem>(toRel, bTryLink));
 	// register it in global scope
-	fileItemMgmt fi;
-	if(!fi.RegisterFileItem(pfi))
+	auto fiUser = TFileItemUser::Create(pfi, true);
+	if(!fiUser)
 	{
 		MTLOGASSERT(false, "Couldn't register copy item");
 		return false;
@@ -2029,7 +2029,7 @@ void cacheman::ParseGenericRfc822File(filereader& reader,
 		else if (ParseKeyValLine(sLine, key, val))
 		{
 			// override the old key if existing, we don't merge
-			auto ins = contents.insert(make_pair(key, deque<string>
+			auto ins = contents.insert(make_pair(key, std::deque<std::string>
 			{ val }));
 			lastKey = key;
 			pLastVal = &ins.first->second;

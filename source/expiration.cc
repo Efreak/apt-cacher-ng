@@ -673,13 +673,12 @@ void expiration::TrimFiles()
 		{
 //			SendFmt << "let's truncate " << fil << " to " << stinfo.st_size << "<br>";
 			// it's unlikely to be accessed but better protect it
-			fileItemMgmt item;
-			item.PrepareRegisteredFileItemWithStorage(fil, true);
-			if(!item)
+			auto user = TFileItemUser::Create(fil, true);
+			if(!user)
 				continue;
-			lockguard g(item.m_ptr.get());
+			lockguard g(user.getFiPtr().get());
 			off_t nix;
-			if(item.m_ptr->GetStatusUnlocked(nix) >= fileitem::FIST_DLGOTHEAD)
+			if(user.getFiPtr()->GetStatusUnlocked(nix) >= fileitem::FIST_DLGOTHEAD)
 				continue;
 
 			if(0 != truncate(fil.c_str(), stinfo.st_size))

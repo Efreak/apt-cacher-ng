@@ -49,7 +49,9 @@ class job {
       eJobResult SendData(int confd, bool haveMoreJobs);
   
    private:
-      
+
+      TFileItemUser m_pItem;
+
 	  unique_fd m_filefd;
 	  conn *m_pParentCon;
       
@@ -67,7 +69,6 @@ class job {
       
       header m_reqHead; // copy of users requests header
 
-      fileItemMgmt m_pItem;
       off_t m_nSendPos, m_nCurrentRangeLast;
       off_t m_nAllDataCount;
       
