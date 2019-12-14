@@ -57,16 +57,15 @@ SHARED_PTR<CAddrInfo> fail_hint=make_shared<CAddrInfo>("503 Fatal system error w
  */
 void CAddrInfo::clean_dns_cache()
 {
-	if(cfg::dnscachetime <=0) return;
+	if(cfg::dnscachetime <= 0)
+		return;
 	auto now=GetTime();
 	ASSERT(dns_cache.size() == dns_exp_q.size());
-	while(!dns_cache.empty())
+	while(dns_cache.size() >= DNS_CACHE_MAX-1
+			|| (!dns_exp_q.empty() && dns_exp_q.front()->second->m_expTime >= now))
 	{
-		if(dns_exp_q.front()->second->m_expTime <= now || dns_cache.size() >= DNS_CACHE_MAX-1 )
-		{
-			dns_cache.erase(dns_exp_q.front());
-			dns_exp_q.pop_front();
-		}
+		dns_cache.erase(dns_exp_q.front());
+		dns_exp_q.pop_front();
 	}
 }
 
