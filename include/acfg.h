@@ -59,17 +59,17 @@ void ACNG_API PostProcConfig();
 
 bool DegradedMode();
 
+struct IHookHandler {
+		virtual void OnAccess()=0;
+		virtual void OnRelease()=0;
+		virtual ~IHookHandler() {}
+};
 struct tRepoData
 {
 	std::vector<tHttpUrl> m_backends;
 
 	// dirty little helper to execute custom actions when a jobs associates or forgets this data set
-	struct IHookHandler {
-		virtual void OnAccess()=0;
-		virtual void OnRelease()=0;
-		virtual ~IHookHandler() {
-		}
-	} *m_pHooks = nullptr;
+	IHookHandler *m_pHooks = nullptr;
 	tStrVec m_keyfiles;
 	tHttpUrl m_deltasrc;
 	tHttpUrl *m_pProxy = nullptr;

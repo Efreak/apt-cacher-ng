@@ -10,7 +10,7 @@ namespace acng
 
 #ifdef DEBUG
 
-struct t_logger
+struct ACNG_API t_logger
 {
 	t_logger(const char *szFuncName, const void * ptr); // starts the logger, shifts stack depth
 	~t_logger();

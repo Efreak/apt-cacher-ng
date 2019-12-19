@@ -46,7 +46,7 @@ void cleaner::WorkLoop()
 	for(;;)
 	{
 		// XXX: review the flow, is this always safe?
-		eType what = TYPE_EXCONNS;
+		eType what = TYPE_ACFGHOOKS;
 		time_t when = END_OF_TIME;
 
 		if(m_terminating)
@@ -81,11 +81,6 @@ void cleaner::WorkLoop()
 		case TYPE_ACFGHOOKS:
 			time_nextcand = cfg::BackgroundCleanup();
 			USRDBG("acng::cfg:ExecutePostponed, nextRunTime now: " << time_nextcand);
-			break;
-
-		case TYPE_EXCONNS:
-			time_nextcand = g_tcp_con_factory.BackgroundCleanup();
-			USRDBG("tcpconnect::ExpireCache, nextRunTime now: " << time_nextcand);
 			break;
 		case TYPE_EXFILEITEM:
 			time_nextcand = TFileItemUser::BackgroundCleanup();
@@ -171,7 +166,7 @@ void cleaner::dump_status()
 void ACNG_API dump_handler(evutil_socket_t fd, short what, void *arg) {
 	TFileItemUser::dump_status();
 	cleaner::GetInstance().dump_status();
-	g_tcp_con_factory.dump_status();
+	//g_tcp_con_factory.dump_status();
 	cfg::dump_trace();
 }
 

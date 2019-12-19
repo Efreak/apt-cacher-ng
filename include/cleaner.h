@@ -39,7 +39,7 @@ public:
 
 	enum eType : char
 	{
-		TYPE_EXFILEITEM, TYPE_ACFGHOOKS, /* TYPE_EXDNS,*/ TYPE_EXCONNS,
+		TYPE_EXFILEITEM, TYPE_ACFGHOOKS,
 		ETYPE_MAX
 	};
 	void ScheduleFor(time_t when, eType what);

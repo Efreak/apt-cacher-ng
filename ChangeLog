@@ -1,5 +1,10 @@
 apt-cacher-ng (3.4) SOMETIMES-YOU-EAT-THE-BEAR; urgency=low
 
+TODO: make idle connection timeout configurable
+TODO: document "made xxx configurable, fast disconnect of cached idle
+connections"
+TODO: how big is tConnectionCache::iterator?
+
   [ FEATURES AND USAGE IMPROVEMENTS ]
   * Allowed specification of different/multiple endpoints to bind with
     arbitrary ports, i.e. binding with non-default port on specific network interfaces
@@ -12,6 +17,21 @@ apt-cacher-ng (3.4) SOMETIMES-YOU-EAT-THE-BEAR; urgency=low
   * Minor speedup in acngfs with reused download agent
   * Using asynchronous libevent DNS resolver instead of getaddrinfo from OS,
     since the later turned out to be unstable in stress tests
+  * POTENTIAL SECURITY ISSUE:
+    - in certain situations, the maint job run by acngtool could leak the
+      administrator credentials from apt-cacher-ng configuration. This is only
+      likely if the attacker is able to impersonate the daemon with an own
+      server listening on the same port.
+    - The mitigation path for this is:
+      - SocketPath option is configured by default
+      - By default, acngtool only attempts to run the maint job through the
+        Unix Domain Socket. If SocketPath is not set but admin credentials are
+        configured, the operation is denied.
+      - For non-standard cases where acngtool is used to run special arbitrary
+        commands (ACNG_REQ variable) and the operation through SocketPath is not
+        possible (i.e. missing permissions or the tool is run on a different
+        host), the operation through TCP can be enforced with ACNG_INSECURE
+        environment variable
   * Safely ignore the HTTP 102 Processing status code and similar hints 
   * In case of stuck/creeping download of volatile files, move them out of the
     way faster and easier (replacing file entry) instead of moving them to a

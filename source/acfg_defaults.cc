@@ -16,7 +16,7 @@ namespace acng
 namespace cfg
 {
 
-string ACNG_API cachedir(CACHEDIR), logdir(LOGDIR), udspath, pidfile, reportpage,
+string ACNG_API cachedir(CACHEDIR), logdir(LOGDIR), udspath(UDSPATH), pidfile, reportpage,
 confdir, adminauth, adminauthB64, bindaddr, mirrorsrcs, suppdir(LIBDIR),
 capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 

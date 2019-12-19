@@ -3,6 +3,8 @@
 #include "debug.h"
 #include "lockable.h"
 
+#include <thread>
+
 #include <event2/dns.h>
 #include <event2/util.h>
 #include <event2/thread.h>
@@ -21,6 +23,7 @@ namespace acng
 event_base* evabase::base = nullptr;
 evdns_base* evabase::dnsbase = nullptr;
 std::atomic<bool> evabase::in_shutdown = ATOMIC_VAR_INIT(false);
+ACNG_API std::thread::id evabase::mainThreadId;
 
 struct event *handover_wakeup;
 const struct timeval timeout_asap{0,0};
@@ -35,20 +38,25 @@ void do_accept(evutil_socket_t server_fd, short what, void* arg);
 }
 
 struct t_event_desctor {
+	const event *ev;
 	evutil_socket_t fd;
 	event_callback_fn callback;
 	void *arg;
 };
 
+
+void cb_clean_cached_con(evutil_socket_t server_fd, short what, void* arg);
+
 /**
- * Forcibly run each callback and signal shutdown.
+ * Get interesting callbacks which need to be triggered
  */
-int teardown_event_activity(const event_base*, const event* ev, void* ret)
+int cb_collect_event(const event_base*, const event* ev, void* ret)
 {
 	t_event_desctor r;
 	event_base *nix;
 	short what;
 	auto lret((deque<t_event_desctor>*)ret);
+	r.ev = ev;
 	event_get_assignment(ev, &nix, &r.fd, &what, &r.callback, &r.arg);
 #ifdef DEBUG
 	if(r.callback == conserver::do_accept)
@@ -56,17 +64,17 @@ int teardown_event_activity(const event_base*, const event* ev, void* ret)
 #endif
 	if(r.callback == conserver::do_accept)
 		lret->emplace_back(move(r));
+	if(r.callback == acng::cb_clean_cached_con)
+		lret->emplace_back(move(r));
 	return 0;
 }
 
 ACNG_API int evabase::MainLoop()
 {
 		LOGSTART2s("Run", "GoGoGo");
-
 	#ifdef HAVE_SD_NOTIFY
 		sd_notify(0, "READY=1");
 	#endif
-
 		int r=event_base_loop(evabase::base, EVLOOP_NO_EXIT_ON_EMPTY);
 		in_shutdown = true;
 		event_base_loop(base, EVLOOP_NONBLOCK);
@@ -78,9 +86,10 @@ ACNG_API int evabase::MainLoop()
 		}
 		// send teardown hint to all event callbacks
 		deque<t_event_desctor> todo;
-		event_base_foreach_event(evabase::base, teardown_event_activity, &todo);
+		event_base_foreach_event(evabase::base, cb_collect_event, &todo);
 		for (const auto &ptr : todo)
 		{
+			if(!event_pending(ptr.ev, EV_READ|EV_WRITE|EV_SIGNAL|EV_TIMEOUT, nullptr)) continue;
 			DBGQLOG("Notifying event on " << ptr.fd);
 			ptr.callback(ptr.fd, EV_TIMEOUT, ptr.arg);
 		}
@@ -118,9 +127,18 @@ void evabase::Post(tCancelableAction&& act)
 	event_add(handover_wakeup, &timeout_asap);
 }
 
+void evabase::PostOrRun(tCancelableAction&& act)
+{
+	if(this_thread::get_id() == evabase::mainThreadId)
+		act(false);
+	else
+		Post(move(act));
+}
+
 evabase::evabase()
 {
 	evthread_use_pthreads();
+	evabase::mainThreadId = this_thread::get_id();
 	evabase::base = event_base_new();
 	evabase::dnsbase = evdns_base_new(evabase::base, 1);
 	handover_wakeup =  evtimer_new(base, cb_handover, nullptr);

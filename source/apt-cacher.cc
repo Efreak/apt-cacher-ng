@@ -22,7 +22,7 @@
 #include "fileio.h"
 #include "conserver.h"
 #include "cleaner.h"
-
+#include "tlsio.h"
 #include <iostream>
 using namespace std;
 
@@ -86,50 +86,53 @@ inline bool fork_away()
 }
 #endif
 
-void parse_options(int argc, const char **argv, bool& bStartCleanup)
+struct parse_options
 {
-	bool bExtraVerb=false;
-	LPCSTR szCfgDir=nullptr;
-	std::vector<LPCSTR> cmdvars;
-	bool ignoreCfgErrors = false;
-
-	for (auto p=argv+1; p<argv+argc; p++)
+	parse_options(int argc, const char **argv, bool &bStartCleanup)
 	{
-		if (!strncmp(*p, "--", 2))
-			break;
-		if (!strncmp(*p, "-h", 2))
-			usage();
-		if (!strncmp(*p, "-i", 2))
-			ignoreCfgErrors = true;
-		else if (!strncmp(*p, "-v", 2))
-			bExtraVerb = true;
-		else if (!strncmp(*p, "-e", 2))
-			bStartCleanup=true;
-		else if (!strcmp(*p, "-c"))
+		bool bExtraVerb = false;
+		LPCSTR szCfgDir = nullptr;
+		std::vector<LPCSTR> cmdvars;
+		bool ignoreCfgErrors = false;
+
+		for (auto p = argv + 1; p < argv + argc; p++)
 		{
-			++p;
-			if (p < argv + argc)
-				szCfgDir = *p;
-			else
-				usage(2);
+			if (!strncmp(*p, "--", 2))
+				break;
+			if (!strncmp(*p, "-h", 2))
+				usage();
+			if (!strncmp(*p, "-i", 2))
+				ignoreCfgErrors = true;
+			else if (!strncmp(*p, "-v", 2))
+				bExtraVerb = true;
+			else if (!strncmp(*p, "-e", 2))
+				bStartCleanup = true;
+			else if (!strcmp(*p, "-c"))
+			{
+				++p;
+				if (p < argv + argc)
+					szCfgDir = *p;
+				else
+					usage(2);
+			}
+			else if (**p) // not empty
+				cmdvars.emplace_back(*p);
 		}
-		else if(**p) // not empty
-			cmdvars.emplace_back(*p);
+
+		if (szCfgDir)
+			cfg::ReadConfigDirectory(szCfgDir, !ignoreCfgErrors);
+
+		for (auto &keyval : cmdvars)
+			if (!cfg::SetOption(keyval, 0))
+				usage(EXIT_FAILURE);
+
+		cfg::PostProcConfig();
+
+		if (bExtraVerb)
+			cfg::debug |= (log::LOG_DEBUG | log::LOG_MORE);
+
 	}
-
-	if(szCfgDir)
-		cfg::ReadConfigDirectory(szCfgDir, !ignoreCfgErrors);
-
-	for(auto& keyval : cmdvars)
-		if(!cfg::SetOption(keyval, 0))
-			usage(EXIT_FAILURE);
-
-	cfg::PostProcConfig();
-
-	if(bExtraVerb)
-		cfg::debug |= (log::LOG_DEBUG|log::LOG_MORE);
-
-}
+};
 
 void setup_sighandler()
 {
@@ -242,22 +245,17 @@ void term_handler(evutil_socket_t signum, short what, void *arg)
 	}
 }
 
-void CloseAllCachedConnections();
-
 struct tAppStartStop
 {
+
+	bool bRunCleanup = false;
+	parse_options m_opts;
+
 	evabase m_base;
 
 	tAppStartStop(int argc, const char**argv)
+	: m_opts(argc, argv, bRunCleanup)
 	{
-#ifdef HAVE_SSL
-			acng::globalSslInit();
-		#endif
-
-		bool bRunCleanup = false;
-
-		parse_options(argc, argv, bRunCleanup);
-
 		if (!log::open())
 		{
 			cerr
@@ -268,11 +266,30 @@ struct tAppStartStop
 
 		check_algos();
 
+#warning check tomcrypt build
+#ifdef HAVE_SSL
+
+		auto sslErr = atls::GetInitError();
+		if (!sslErr.empty())
+		{
+			cerr << sslErr << endl;
+			exit(EXIT_FAILURE);
+		}
+#endif
+
 		setup_sighandler();
 
 		SetupCacheDir();
 
 		//DelTree(cfg::cacheDirSlash + sReplDir);
+		if (bRunCleanup)
+		{
+			tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
+					cfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
+					fileno(stdout));
+			exit(0);
+		}
+
 
 		if (conserver::Setup() <= 0)
 		{
@@ -280,14 +297,6 @@ struct tAppStartStop
 					<< "No listening socket(s) could be created/prepared. "
 							"Check the network, check or unset the BindAddress directive.\n";
 			exit(EXIT_FAILURE);
-		}
-
-		if (bRunCleanup)
-		{
-			tSpecialRequest::RunMaintWork(tSpecialRequest::workExExpire,
-					cfg::reportpage + "?abortOnErrors=aOe&doExpire=Start",
-					fileno(stdout));
-			exit(0);
 		}
 
 		if (!cfg::foreground && !fork_away())
@@ -314,9 +323,9 @@ struct tAppStartStop
 		if (!cfg::pidfile.empty())
 			unlink(cfg::pidfile.c_str());
 		conserver::Shutdown();
-		CloseAllCachedConnections();
 		log::close(false);
-		globalSslDeInit();
+
+		atls::Deinit();
 	}
 };
 

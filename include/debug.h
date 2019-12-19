@@ -15,7 +15,7 @@
 namespace acng
 {
 
-#ifdef DEBUG
+#if defined(DEBUG) && !defined(NODEBUG)
 #define ASSERT(x) assert(x)
 #else
 #define ASSERT(x)

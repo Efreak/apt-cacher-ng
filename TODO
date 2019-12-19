@@ -1,3 +1,16 @@
+
+FIXME:
+if(active_jobs.empty())
+			{
+				if(con)
+					m_conFactory.RecycleIdleConnection(move(con));
+				return;
+			}
+		}
+
+-> return even if clean but then dont recycle
+
+
 Features:
 
 DontCache mode might causes hanging when the filter matches some files and some not:

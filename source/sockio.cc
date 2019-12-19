@@ -6,13 +6,6 @@
 #include <unordered_map>
 #include <mutex>
 
-#ifdef HAVE_SSL
-#include <openssl/evp.h>
-#include "openssl/ssl.h"
-#include "openssl/err.h"
-#include <openssl/crypto.h>
-#endif
-
 namespace acng
 {
 using namespace std;
@@ -102,44 +95,22 @@ void set_connect_sock_flags(evutil_socket_t fd)
 		evutil_make_socket_nonblocking(fd);
 }
 
-#ifdef HAVE_SSL
-std::deque<std::mutex> g_ssl_locks;
-void thread_lock_cb(int mode, int which, const char *f, int l)
+bool ACNG_API isUdsAccessible(cmstring& path)
 {
-	if (which >= int(g_ssl_locks.size()))
-		return; // weird
-	if (mode & CRYPTO_LOCK)
-		g_ssl_locks[which].lock();
-	else
-		g_ssl_locks[which].unlock();
+	Cstat s(path);
+	return s && S_ISSOCK(s.st_mode) && 0 == access(path.c_str(), W_OK);
 }
 
-//! Global init helper (might be non-reentrant)
-void ACNG_API globalSslInit()
+std::string formatIpPort(const evutil_addrinfo *p)
 {
-	static bool inited=false;
-	if(inited)
-		return;
-	inited = true;
-	SSL_load_error_strings();
-	ERR_load_BIO_strings();
-	ERR_load_crypto_strings();
-	ERR_load_SSL_strings();
-	OpenSSL_add_all_algorithms();
-	SSL_library_init();
-
-	g_ssl_locks.resize(CRYPTO_num_locks());
-    CRYPTO_set_id_callback(get_thread_id_cb);
-    CRYPTO_set_locking_callback(thread_lock_cb);
+	char buf[300], pbuf[30];
+	getnameinfo(p->ai_addr, p->ai_addrlen, buf, sizeof(buf), pbuf, sizeof(pbuf),
+			NI_NUMERICHOST | NI_NUMERICSERV);
+	return string(p->ai_family == PF_INET6 ? "[" : "") +
+			buf +
+			(p->ai_family == PF_INET6 ? "]" : "") +
+			":" + pbuf;
 }
-void ACNG_API globalSslDeInit()
-{
-	g_ssl_locks.clear();
-}
-#else
-void ACNG_API globalSslInit() {}
-void ACNG_API globalSslDeInit() {}
-#endif
 
 
 }

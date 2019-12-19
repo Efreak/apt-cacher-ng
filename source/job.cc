@@ -1,5 +1,5 @@
 
-//#define LOCAL_DEBUG
+#define NODEBUG
 #include "debug.h"
 
 #include "job.h"
@@ -923,10 +923,13 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 				}
 				case(STATE_ALLDONE):
 				returnSomething("STATE_ALLDONE?");
+				break;
 				case (STATE_ERRORCONT):
 				returnSomething("STATE_ERRORCONT?");
+				break;
 				case(STATE_FINISHJOB):
 				returnSomething("STATE_FINISHJOB?");
+				break;
 				case(STATE_TODISCON):
 				default:
 					return R_DISCON;

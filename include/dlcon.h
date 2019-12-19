@@ -1,11 +1,10 @@
 #ifndef _DLCON_H
 #define _DLCON_H
 
-#include "tcpconnect.h"
+#include "tcpconfactory.h"
 
 namespace acng
 {
-class IDlConFactory;
 class fileitem;
 
 /**
@@ -30,7 +29,7 @@ class ACNG_API dlcon
 	Impl *_p;
 
     public:
-        dlcon(cmstring& sOwnersHostname, const IDlConFactory &pConFactory = g_tcp_con_factory);
+        dlcon(cmstring& sOwnersHostname, IDlConFactory &pConFactory = GetTcpConFactory());
         ~dlcon();
 
         void WorkLoop();

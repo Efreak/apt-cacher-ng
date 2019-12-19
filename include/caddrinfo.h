@@ -36,7 +36,7 @@ public:
 	~CAddrInfo();
 
 	// async. DNS resolution on IO thread. Reports result through the reporter.
-	static void Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporter);
+	static void Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporter) noexcept;
 	// like above but blocking resolution
 	static SHARED_PTR<CAddrInfo> Resolve(cmstring & sHostname, cmstring &sPort);
 

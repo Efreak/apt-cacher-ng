@@ -50,7 +50,7 @@ void termsocket_async(int, event_base*);
 
 inline void termsocket_quick(int& fd)
 {
-	if(fd<0)
+	if(fd == -1)
 		return;
 	::shutdown(fd, SHUT_RDWR);
 	while(0 != ::close(fd))
@@ -84,6 +84,7 @@ std::string formatIpPort(const evutil_addrinfo *info);
 // common flags for a CONNECTING socket
 void set_connect_sock_flags(evutil_socket_t fd);
 
+bool isUdsAccessible(cmstring& path);
 
 }
 

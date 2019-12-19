@@ -61,7 +61,7 @@ class dlcon::Impl
 	friend class dlcon;
 
 	tDljQueue m_new_jobs;
-	const IDlConFactory &m_conFactory;
+	IDlConFactory &m_conFactory;
 	std::string m_ownersHostname;
 
 #ifdef HAVE_LINUX_EVENTFD
@@ -149,7 +149,7 @@ struct tDlJob
 		return m_pCurBackend ? *m_pCurBackend : m_remoteUri;
 	}
 
-	inline cfg::tRepoData::IHookHandler * GetConnStateTracker()
+	inline cfg::IHookHandler * GetConnStateTracker()
 	{
 		return m_pRepoDesc ? m_pRepoDesc->m_pHooks : nullptr;
 	}
@@ -761,7 +761,7 @@ private:
 
 public:
 
-Impl(cmstring& sOwnersHostname, const IDlConFactory &pConFactory) :
+Impl(cmstring& sOwnersHostname, IDlConFactory &pConFactory) :
 		m_conFactory(pConFactory),
 		m_ownersHostname(sOwnersHostname),
 		m_nTempPipelineDisable(0),
@@ -810,7 +810,7 @@ void SignalStop()
 }
 }; // Impl
 
-dlcon::dlcon(cmstring& sOwnersHostname, const IDlConFactory& pConFactory) : _p(new dlcon::Impl(sOwnersHostname, pConFactory)) {}
+dlcon::dlcon(cmstring& sOwnersHostname, IDlConFactory& pConFactory) : _p(new dlcon::Impl(sOwnersHostname, pConFactory)) {}
 dlcon::~dlcon() { delete _p; }
 void dlcon::WorkLoop() { return _p->WorkLoop(); }
 void dlcon::SignalStop(){ return _p->SignalStop(); }
@@ -1216,8 +1216,12 @@ inline unsigned dlcon::Impl::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &c
 void dlcon::Impl::WorkLoop()
 {
 	LOGSTART("dlcon::Impl::WorkLoop");
-    string sErrorMsg;
     m_inBuf.clear();
+
+	IDlConFactory::tConRes conResult;
+	auto& con = conResult.han;
+	auto& sErrorMsg = conResult.serr;
+
     
 	if (!m_inBuf.setsize(cfg::dlbufsize))
 	{
@@ -1225,7 +1229,7 @@ void dlcon::Impl::WorkLoop()
 		return;
 	}
 
-	if(fdWakeRead<0 || fdWakeWrite<0)
+	if(fdWakeRead == -1 || fdWakeWrite == -1)
 	{
 		log::err("Error creating pipe file descriptors");
 		return;
@@ -1235,7 +1239,6 @@ void dlcon::Impl::WorkLoop()
 
 	tDtorEx allJobReleaser([&](){ next_jobs.clear(); active_jobs.clear(); });
 
-	tDlStreamHandle con;
 	unsigned loopRes=0;
 
 	bool bStopRequesting=false; // hint to stop adding request headers until the connection is restarted
@@ -1266,7 +1269,7 @@ void dlcon::Impl::WorkLoop()
 	while(true) // outer loop: jobs, connection handling
 	{
 		// init state or transfer loop jumped out, what are the needed actions?
-		LOG("New next_jobs: " << next_jobs.size());
+		LOG("Next_jobs: " << next_jobs.size() << ", active: " << active_jobs.size());
 
 		if(m_ctrl_hint < 0) // check for ordered shutdown
 		{
@@ -1274,12 +1277,9 @@ void dlcon::Impl::WorkLoop()
 			 * queue. When the connection is dirty after that, it will be closed in the
 			 * ExchangeData() but if not then it can be assumed to be clean and reusable.
 			 */
-			if(active_jobs.empty())
-			{
-				if(con)
-					m_conFactory.RecycleIdleConnection(con);
-				return;
-			}
+			if(active_jobs.empty() && con)
+				m_conFactory.RecycleIdleConnection(move(con));
+			return;
 		}
 		int newCtrlMark = m_ctrl_hint;
 		if(newCtrlMark != lastCtrlMark)
@@ -1290,7 +1290,10 @@ void dlcon::Impl::WorkLoop()
 		}
 
 		if(next_jobs.empty() && active_jobs.empty())
-			goto go_select; // parent will notify RSN
+		{
+			LOG("awaiting wakeup from owner")
+			goto go_select; // nothing left, might receive new next_jobs soon
+		}
 
 		if(!con)
 		{
@@ -1318,16 +1321,13 @@ void dlcon::Impl::WorkLoop()
 				goto go_select; // nothing left, might receive new next_jobs soon
 			}
 
-			bool bUsed = false;
 			ASSERT(!next_jobs.empty());
-			auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
+			auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh) ->void
 			{
-				return m_conFactory.CreateConnected(tgt.sHost,
+				conResult = m_conFactory.CreateConnected(tgt.sHost,
 						tgt.GetPort(),
-						sErrorMsg,
-						&bUsed,
-						next_jobs.front().GetConnStateTracker(),
 						IFSSLORFALSE(tgt.bSSL),
+						next_jobs.front().GetConnStateTracker(),
 						timeout, fresh);
 		}	;
 
@@ -1340,27 +1340,29 @@ void dlcon::Impl::WorkLoop()
 			{
 				if(proxy)
 				{
-					con = doconnect(*proxy, cfg::optproxytimeout > 0 ?
+					doconnect(*proxy, cfg::optproxytimeout > 0 ?
 							cfg::optproxytimeout : cfg::nettimeout, false);
 					if(con)
 					{
-						if(!con->StartTunnel(peerHost, sErrorMsg, & proxy->sUserPass, true))
+						conResult.serr = con->StartTunnel(peerHost, & proxy->sUserPass, true);
+						// oh, reset as the flag then; actually, that's spaghetti, should be better part of the same flow
+						if(!conResult.serr.empty())
 							con.reset();
 					}
 				}
 				else
-					con = doconnect(peerHost, cfg::nettimeout, false);
+					doconnect(peerHost, cfg::nettimeout, false);
 			}
 			else
 #endif
 			{
 				if(proxy)
 				{
-					con = doconnect(*proxy, cfg::optproxytimeout > 0 ?
+					doconnect(*proxy, cfg::optproxytimeout > 0 ?
 							cfg::optproxytimeout : cfg::nettimeout, false);
 				}
 				else
-					con = doconnect(peerHost, cfg::nettimeout, false);
+					doconnect(peerHost, cfg::nettimeout, false);
 			}
 
 			if(!con && proxy && cfg::optproxytimeout>0)
@@ -1368,18 +1370,18 @@ void dlcon::Impl::WorkLoop()
 				ldbg("optional proxy broken, disable");
 				m_bProxyTot = true;
 				proxy = nullptr;
-			cfg::MarkProxyFailure();
-				con = doconnect(peerHost, cfg::nettimeout, false);
+				cfg::MarkProxyFailure();
+				doconnect(peerHost, cfg::nettimeout, false);
 			}
 
-			ldbg("connection valid? " << bool(con) << " was fresh? " << !bUsed);
+			ldbg("connection valid? " << bool(con) << " is from cache? " << conResult.wasReused);
 
 			if(con)
 			{
 				ldbg("target? [" << con->GetHostname() << "]:" << con->GetPort());
 
 				// must test this connection, just be sure no crap is in the pipe
-				if (bUsed && check_read_state(con->GetFD()))
+				if (conResult.wasReused && check_read_state(con->GetFD()))
 				{
 					ldbg("code: MoonWalker");
 					con.reset();
@@ -1448,10 +1450,12 @@ void dlcon::Impl::WorkLoop()
 			}
 		}
 
-
 		ldbg("Request(s) cooked, buffer contents: " << m_sendBuf);
+		ASSERT(!m_sendBuf.empty());
 
         go_select:
+
+		ASSERT(!con || con->GetFD() != -1); // if con is set, it should be in sane state
 
         // inner loop: plain communication until something happens. Maybe should use epoll here?
         loopRes=ExchangeData(sErrorMsg, con, active_jobs);
@@ -1478,7 +1482,7 @@ void dlcon::Impl::WorkLoop()
 			if (con && !(loopRes & all_err))
 			{
 				dbgline;
-				m_conFactory.RecycleIdleConnection(con);
+				m_conFactory.RecycleIdleConnection(move(con));
 				continue;
 			}
 		}
@@ -1502,7 +1506,7 @@ void dlcon::Impl::WorkLoop()
         	// reinsert them into the new task list and continue
 
         	// if conn was not reset above then it should be in good shape
-        	m_conFactory.RecycleIdleConnection(con);
+        	m_conFactory.RecycleIdleConnection(move(con));
         	goto move_jobs_back_to_q;
         }
 

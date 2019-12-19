@@ -9,7 +9,7 @@
 #include "dlcon.h"
 #include "job.h"
 #include "acbuf.h"
-#include "tcpconnect.h"
+#include "tcpconfactory.h"
 #include "cleaner.h"
 #include "conserver.h"
 
@@ -31,7 +31,7 @@ using namespace std;
 namespace acng
 {
 
-class conn::Impl
+struct conn::Impl
 {
 	friend class conn;
 	conn* _q = nullptr;
@@ -128,7 +128,7 @@ inline static bool CheckListbugs(const header &ph)
 inline static void RedirectBto2https(int fdClient, cmstring& uri)
 {
 	tSS clientBufOut;
-	clientBufOut << "HTTP/1.1 302 Redirect\r\nLocation: " << "https://bugs.debian.org:443/";
+	clientBufOut << "HTTP/1.1 302 Redirect\r\nLocation: https://bugs.debian.org:443/";
 	constexpr auto offset = _countof(POSTMARK) - 6;
 	clientBufOut.append(uri.c_str() + offset, uri.size() - offset);
 	clientBufOut << "\r\nConnection: close\r\n\r\n";
@@ -140,9 +140,9 @@ inline static void RedirectBto2https(int fdClient, cmstring& uri)
 }
 void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 {
-	tDlStreamHandle m_spOutCon;
+#if 1
+	IDlConFactory::tConRes outCon;
 
-	string sErr;
 	tSS clientBufOut;
 	clientBufOut.setsize(32 * 1024); // out to be enough for any BTS response
 
@@ -151,49 +151,53 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 	if (!url.SetHttpUrl(uri))
 		return;
 	auto proxy = cfg::GetProxyInfo();
-	if (!proxy)
+#warning XXX: design smell (DRY, SOLID), this is upper layer of connection management, should be moved to tcpconfactory (also mostly repeats dlcon::WorkLoop code)
+	while(true)
 	{
-		direct_connect:
-		m_spOutCon = g_tcp_con_factory.CreateConnected(url.sHost, url.GetPort(), sErr, 0, 0,
-				false, cfg::nettimeout, true);
-	}
-	else
-	{
-		// switch to HTTPS tunnel in order to get a direct connection through the proxy
-		m_spOutCon = g_tcp_con_factory.CreateConnected(proxy->sHost, proxy->GetPort(),
-				sErr, 0, 0, false, cfg::optproxytimeout > 0 ?
-						cfg::optproxytimeout : cfg::nettimeout,
-						true);
-
-		if (m_spOutCon)
+		if (!proxy)
 		{
-			if (!m_spOutCon->StartTunnel(tHttpUrl(url.sHost, url.GetPort(),
-					true), sErr, & proxy->sUserPass, false))
-			{
-				m_spOutCon.reset();
-			}
+			// without proxy
+			outCon = GetTcpConFactory().CreateConnected(url.sHost,
+					url.GetPort(), false, nullptr, cfg::nettimeout, true);
+			break;
 		}
-		else if(cfg::optproxytimeout > 0) // ok... try without
+
+		// switch to HTTPS tunnel in order to get a direct connection through the proxy
+		outCon = GetTcpConFactory().CreateConnected(proxy->sHost,
+				proxy->GetPort(), false, nullptr,
+				cfg::optproxytimeout > 0 ?
+						cfg::optproxytimeout : cfg::nettimeout, true);
+		if (outCon.han)
+		{
+			outCon.serr = outCon.han->StartTunnel(
+					tHttpUrl(url.sHost, url.GetPort(), true), &proxy->sUserPass,
+					false);
+			if (!outCon.serr.empty())
+				outCon.han.reset();
+			break;
+		}
+		else if (cfg::optproxytimeout > 0) // ok... try without
 		{
 			cfg::MarkProxyFailure();
-			goto direct_connect;
+			continue;
 		}
+
 	}
 
-	if (m_spOutCon)
+	if (outCon.han)
 		clientBufOut << "HTTP/1.0 200 Connection established\r\n\r\n";
 	else
 	{
-		clientBufOut << "HTTP/1.0 502 CONNECT error: " << sErr << "\r\n\r\n";
+		clientBufOut << "HTTP/1.0 502 CONNECT error: " << outCon.serr << "\r\n\r\n";
 		clientBufOut.send(fdClient);
 		return;
 	}
 
-	if (!m_spOutCon)
+	if (!outCon.han)
 		return;
 
 	// for convenience
-	int ofd = m_spOutCon->GetFD();
+	int ofd = outCon.han->GetFD();
 	acbuf &serverBufOut = clientBufIn, &serverBufIn = clientBufOut;
 
 	int maxfd = 1 + std::max(fdClient, ofd);
@@ -239,6 +243,7 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 				return;
 	}
 	return;
+#endif
 }
 }
 
@@ -445,9 +450,10 @@ bool conn::Impl::SetupDownloader()
 		if(!m_pDlClient)
 			return false;
 		auto pin = m_pDlClient;
-		m_dlerthr = move(thread([pin](){
+		m_dlerthr = thread([pin]()
+		{
 			pin->WorkLoop();
-		}));
+		});
 		m_badState = false;
 		return true;
 	}

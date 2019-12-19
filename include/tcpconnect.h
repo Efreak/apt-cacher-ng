@@ -8,11 +8,11 @@
 #ifndef TCPCONNECT_H_
 #define TCPCONNECT_H_
 
-#include <memory>
 #include "meta.h"
 #include "sockio.h"
 #include "acfg.h"
-#include <memory>
+#include "confactory.h"
+#include <unordered_map>
 
 #ifdef HAVE_SSL
 #include <openssl/bio.h>
@@ -22,33 +22,48 @@
 namespace acng
 {
 
-class tcpconnect;
 class fileitem;
-typedef std::shared_ptr<tcpconnect> tDlStreamHandle;
+using tConnectionCache = std::unordered_multimap<std::string, tDlStreamHandle>;
+
+// XXX: this is actually not a really clean abstraction, the "tcpconnect" class is used
+// as plain base class also for UDS. OTOH the overhead is low, not worth restructuring
+// everything and dragging larger vtables around.
 
 class ACNG_API tcpconnect
 {
 public:
 	virtual ~tcpconnect();
+	tcpconnect(cmstring& sHost, cmstring& sPort, bool bSsl, cfg::IHookHandler *pStateReport);
 
-	virtual int GetFD() { return m_conFd; }
-	inline cmstring & GetHostname() { return m_sHostName; }
-	inline cmstring & GetPort() { return m_sPort; }
-	void Disconnect();
+	virtual evutil_socket_t GetFD() const { return m_conFd; }
+	inline cmstring & GetHostname() const { return m_sHostName; }
+	inline cmstring & GetPort() const { return m_sPort; }
 
 #ifdef HAVE_SSL
-	inline BIO* GetBIO() { return m_bio;};
+	inline BIO* GetBIO() const { return m_bio;};
 #endif
 
 protected:
 	tcpconnect operator=(const tcpconnect&);
 	tcpconnect(const tcpconnect&) =default;
-	tcpconnect(cfg::tRepoData::IHookHandler *pStateReport);
 
-	int m_conFd =-1;
+	evutil_socket_t m_conFd = -1;
+	// this comes probably for free, 2xint32 fits into 64bit word
+	evutil_socket_t m_bUseSsl = (evutil_socket_t) false;
 	mstring m_sHostName, m_sPort;
+	cfg::IHookHandler *m_pStateObserver=nullptr;
 
 	std::weak_ptr<fileitem> m_lastFile;
+
+	static void DoConnect(tDlStreamHandle han,
+			int timeout,
+			IDlConFactory::funcRetCreated resRep);
+
+	void Disconnect();
+
+	// the actual stack/state information for the connection progress
+	struct tConnProgress;
+	friend struct tConnProgress;
 
 public:
 	//! @brief Remember the file name belonging to the recently initiated transfer
@@ -56,81 +71,21 @@ public:
 	//! @brief Invalidate (truncate) recently touched file
 	void KillLastFile();
 	//! @brief Request tunneling with CONNECT and change identity if succeeded, and start TLS
-	bool StartTunnel(const tHttpUrl & realTarget, mstring& sError, cmstring *psAuthorization, bool bDoSSLinit);
-
-private:
-	std::string _Connect(int timeout);
-	cfg::tRepoData::IHookHandler *m_pStateObserver=nullptr;
+	mstring StartTunnel(const tHttpUrl & realTarget, cmstring *psAuthorization, bool bDoSSLinit);
 
 protected:
 #ifdef HAVE_SSL
+	SSL *m_ssl = nullptr;
 	BIO *m_bio = nullptr;
-	SSL_CTX * m_ctx = nullptr;
-	SSL * m_ssl = nullptr;
-	bool SSLinit(mstring &sErr, cmstring &host, cmstring &port);
+	mstring SSLinit(cmstring &host, cmstring &port);
 #endif
 
+	// intrusive storage of some cache parameters
+	// it's a trade-off: those fields are likely to be used multiple times so this saves the allocation of another control block
 	friend class dl_con_factory;
+	tConnectionCache::iterator m_cacheIt;
+	event *m_pCacheCheckEvent = nullptr;
 };
-
-class IDlConFactory
-{
-public:
-	/// Moves the connection handle to the reserve pool (resets the specified sptr).
-	/// Should only be supplied with IDLE connection handles in a sane state.
-	virtual void RecycleIdleConnection(tDlStreamHandle & handle) const =0;
-	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
-				mstring &sErrOut,
-				bool *pbSecondHand,
-				cfg::tRepoData::IHookHandler *pStateTracker
-				,bool ssl
-				,int timeout
-				,bool mustbevirgin
-		) const =0;
-	virtual ~IDlConFactory() {};
-};
-
-class ACNG_API dl_con_factory : public IDlConFactory
-{
-public:
-	/// Moves the connection handle to the reserve pool (resets the specified sptr).
-	/// Should only be supplied with IDLE connection handles in a sane state.
-	virtual void RecycleIdleConnection(tDlStreamHandle & handle) const override;
-	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
-				mstring &sErrOut,
-				bool *pbSecondHand,
-				cfg::tRepoData::IHookHandler *pStateTracker
-				,bool ssl
-				,int timeout
-				,bool mustbevirgin
-		) const override;
-	virtual ~dl_con_factory() {};
-	void dump_status();
-	time_t BackgroundCleanup();
-protected:
-	friend class tcpconnect;
-};
-
-extern dl_con_factory g_tcp_con_factory;
-
-/*
-// little tool for related classes, helps counting all object instances
-class instcount
-{
-	private:
-	typedef std::atomic_uint tInstCounter;
-	tInstCounter& m_instCount;
-
-public:
-	inline instcount(tInstCounter& cter) : m_instCount(cter) {
-		m_instCount.fetch_add(1);
-	}
-	virtual ~instcount() {
-		m_instCount.fetch_add(-1);
-	}
-	unsigned int GetInstCount(unsigned type) { return m_instCount.load();}
-};
-*/
 }
 
 #endif /* TCPCONNECT_H_ */

@@ -731,12 +731,10 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 
 TFileItemUser::~TFileItemUser()
 {
-	LOGSTART("TFileItemUser::~TFileItemUser");
-
-	lockguard managementLock(mapItemsMx);
-
 	if (!m_ptr) // unregistered before? or not shared?
 		return;
+
+	lockguard managementLock(mapItemsMx);
 
 	auto ucount = --m_ptr->usercount;
 	if (ucount > 0)

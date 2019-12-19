@@ -34,5 +34,5 @@
 #cmakedefine HAVE_CHECKSUM
 #define CACHEDIR "@ACNG_CACHE_DIR@"
 #define LOGDIR "@ACNG_LOG_DIR@"
-
+#define UDSPATH "@SOCKET_PATH@"
 #cmakedefine DEBUG

@@ -16,7 +16,7 @@
 #include "acfg.h"
 #include "lockable.h"
 #include "cleaner.h"
-#include "tcpconnect.h"
+#include "tcpd.h"
 
 #include "fileitem.h"
 #include "dlcon.h"
@@ -157,8 +157,6 @@ protected:
 public:
 	tDlDescRemote(cmstring &p, uint n) : tDlDesc(p,n), bIsFirst(true)
 	{
-		// expire the caches every time, should not cost much anyway
-		g_tcp_con_factory.BackgroundCleanup();
 	};
 
 	int Read(char *retbuf, const char *path, off_t pos, size_t len)
@@ -742,7 +740,7 @@ int main(int argc, char *argv[])
    argv[nMyArgCount]=argv[0]; // application path
    argv=&argv[nMyArgCount];
    argc-=nMyArgCount;
-
+   // XXX: evabase setup, and maybe drop the cleaner thread since no longer needed for conpool cleanup?
    std::thread thr([]() { dler.WorkLoop(); });
 	tDtorEx cleaner([&]()
 	{

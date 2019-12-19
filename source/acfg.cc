@@ -602,7 +602,7 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 	}
 }
 
-struct tHookHandler: public tRepoData::IHookHandler, public base_with_mutex
+struct tHookHandler: public IHookHandler, public base_with_mutex
 {
 	string cmdRel, cmdCon;
 	time_t downDuration, downTimeNext;

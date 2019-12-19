@@ -430,6 +430,15 @@ tErrnoFmter::tErrnoFmter(const char *prefix)
 	add_msg(strerror_r(err, buf, sizeof(buf)-1), err, buf, this);
 }
 
+tErrnoFmter::tErrnoFmter(const char *prefix, int err)
+{
+	char buf[64];
+	buf[0]=buf[sizeof(buf)-1]=0x0;
+	if(prefix)
+		assign(prefix);
+	add_msg(strerror_r(err, buf, sizeof(buf)-1), err, buf, this);
+}
+
 #ifdef DEBUG
 
 static struct : public base_with_mutex, public std::map<pthread_t, int>

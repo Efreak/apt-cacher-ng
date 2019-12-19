@@ -34,6 +34,7 @@ struct tAlternatingDnsIterator
 
 	const evutil_addrinfo* next();
 	tAlternatingDnsIterator(const evutil_addrinfo*);
+	tAlternatingDnsIterator() : m_idx(false), m_toggle(false){};
 };
 
 }
