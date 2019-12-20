@@ -10,14 +10,14 @@
 namespace acng
 {
 
-class CAddrInfo
+class ACNG_API CAddrInfo
 {
 	// not to be copied ever
 	CAddrInfo(const CAddrInfo&) = delete;
 	CAddrInfo operator=(const CAddrInfo&) = delete;
 
-	// some hints for cached entries
-	std::unique_ptr<std::string> m_sError;
+	// resolution results (or hint for caching)
+	std::string m_sError;
 	time_t m_expTime = MAX_VAL(time_t);
 
 	// raw returned data from getaddrinfo
@@ -25,27 +25,31 @@ class CAddrInfo
 	// shortcut for iterators, first in the list with TCP target
 	evutil_addrinfo * m_tcpAddrInfo = nullptr;
 
-public:
-	
 	CAddrInfo() = default;
-	// blocking DNS resolution. Supposed to be called only once!
-	bool ResolveTcpTarget(const mstring & sHostname, const mstring &sPort, mstring & sErrorBuf,
-			const evutil_addrinfo* hints,
-			bool & bTransientError);
 
 	void Reset();
+	static void clean_dns_cache();
+
+public:
+	typedef std::function<void(SHARED_PTR<CAddrInfo>)> tDnsResultReporter;
 
 	~CAddrInfo();
 
-	static SHARED_PTR<CAddrInfo> CachedResolve(const mstring & sHostname, const mstring &sPort,
-			mstring &sErrorMsgBuf);
+	// async. DNS resolution on IO thread. Reports result through the reporter.
+	static void Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporter);
+	// like above but blocking resolution
+	static SHARED_PTR<CAddrInfo> Resolve(cmstring & sHostname, cmstring &sPort);
 
-	//tDnsIterator getIterator(int pf_filter) const { return tDnsIterator(pf_filter, this); }
-	/**
-	 * Return a pre-located pointer which points on the first TCP compatible address or nullptr
-	 * if no such found.
-	 */
 	const evutil_addrinfo *getTcpAddrInfo() const { return m_tcpAddrInfo; }
+	const std::string& getError() const { return m_sError; }
+
+	// iih, just for building of a special element regardsless of private ctor
+	static SHARED_PTR<CAddrInfo> make_fatal_failure_hint();
+
+	// C-style callback for libevent
+	static void cb_dns(int result, struct evutil_addrinfo *results, void *arg);
+
+	CAddrInfo(const char *szErrorMessage) : m_sError(szErrorMessage) {}
 };
 
 typedef SHARED_PTR<CAddrInfo> CAddrInfoPtr;

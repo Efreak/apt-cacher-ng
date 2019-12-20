@@ -79,7 +79,7 @@ protected:
 
 	bool SendRawData(const char *data, size_t len, int flags);
 
-	mstring & GetHostname();
+	cmstring & GetMyHostPort();
 	void SendChunkedPageHeader(const char *httpstatus, const char *mimetype);
 	LPCSTR m_szDecoFile = nullptr;
 	LPCSTR GetTaskName();
@@ -88,7 +88,7 @@ protected:
 private:
 	tSpecialRequest(const tSpecialRequest&);
 	tSpecialRequest& operator=(const tSpecialRequest&);
-	mstring m_sHostname;
+	mstring m_sHostPort;
 	bool m_bChunkHeaderSent=false;
 
 public:

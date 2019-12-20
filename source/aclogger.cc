@@ -201,13 +201,21 @@ void misc(const string & sLine, const char cLogType)
 		fStat.flush();
 }
 
-void err(const char *msg, const char *client)
+void err(const char *msg, size_t len)
 {
 	if(!logIsEnabled)
 		return;
 
+	auto xlog = [msg, len](ostream& chan){
+		static char buf[32];
+		const time_t tm=time(nullptr);
+		ctime_r(&tm, buf);
+		buf[24]='|';
+		chan.write(buf, 25).write(msg, len).write(szNEWLINE, 1);
+		if(cfg::debug & LOG_FLUSH)
+			chan.flush();
+	};
 	lockguard g(&mx);
-
 	if(!fErr.is_open())
 	{
 #ifdef DEBUG // basic debugging of acngtool
@@ -215,23 +223,11 @@ void err(const char *msg, const char *client)
 #endif
 		return;
 	}
-	
-	static char buf[32];
-	const time_t tm=time(nullptr);
-	ctime_r(&tm, buf);
-	buf[24]=0;
-	fErr << buf << '|';
-	if(client)
-		fErr << client << ": ";
-	fErr << msg << '\n';
-
+	xlog(fErr);
 #ifdef DEBUG
-	if(cfg::debug & log::LOG_DEBUG)
-		cerr << buf << msg <<endl;
+	if(cfg::debug & LOG_DEBUG)
+		xlog(cerr);
 #endif
-
-	if(cfg::debug & log::LOG_DEBUG)
-		fErr.flush();
 }
 
 void ACNG_API flush()
@@ -441,6 +437,7 @@ static struct : public base_with_mutex, public std::map<pthread_t, int>
 
 t_logger::t_logger(const char *szFuncName,  const void * ptr)
 {
+	if(!cfg::debug) return;
 	m_id = pthread_self();
 	m_szName = szFuncName;
 	callobj = uintptr_t(ptr);
@@ -456,6 +453,7 @@ t_logger::t_logger(const char *szFuncName,  const void * ptr)
 
 t_logger::~t_logger()
 {
+	if(!cfg::debug) return;
 	m_nLevel--;
 	GetFmter() << "<< " << m_szName << " [T:"<<m_id<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
 	Write();

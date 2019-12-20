@@ -9,7 +9,6 @@
 #include "sockio.h"
 #include "fileio.h"
 #include "evabase.h"
-#include "evasocket.h"
 #include "dnsiter.h"
 #include <signal.h>
 #include <arpa/inet.h>
@@ -21,16 +20,11 @@
 #include <unordered_set>
 #include <iostream>
 #include <algorithm>    // std::min_element, std::max_element
+#include <thread>
 
 #ifdef HAVE_LIBWRAP
 #include <tcpd.h>
 #endif
-
-#ifdef HAVE_SD_NOTIFY
-#include <systemd/sd-daemon.h>
-#endif
-
-#include <event2/event.h>
 
 #include "debug.h"
 
@@ -48,25 +42,35 @@ namespace conserver
 {
 
 int yes(1);
-vector<SHARED_PTR<acng::event_socket> > g_vecSocks;
 
 base_with_condition g_thread_push_cond_var;
 deque<unique_ptr<conn>> g_freshConQueue;
 unsigned g_nStandbyThreads = 0, g_nTotalThreads=0;
-
-bool g_suspended = false; // temporary suspended operation
-SHARED_PTR<acng::event_socket> g_resumer;
+const struct timeval g_resumeTimeout { 2, 11 };
 
 void SetupConAndGo(unique_fd fd, const char *szClientName);
-void do_resume();
 
 // safety mechanism, detect when the number of incoming connections
 // is growing A LOT faster than it can be processed 
 #define MAX_BACKLOG 200
 
-void do_accept(const std::shared_ptr<evasocket>& soc)
+void cb_resume(evutil_socket_t fd, short what, void* arg)
 {
-	LOGSTART2s("do_accept", soc->fd());
+	if(evabase::in_shutdown) return; // ignore, this stays down now
+	event_add((event*) arg, nullptr);
+}
+
+void do_accept(evutil_socket_t server_fd, short what, void* arg)
+{
+	LOGSTART2s("do_accept", server_fd);
+	auto self((event*)arg);
+
+	if(evabase::in_shutdown)
+	{
+		close(server_fd);
+		event_free(self);
+		return;
+	}
 
 	struct sockaddr_storage addr;
 	socklen_t addrlen = sizeof(addr);
@@ -74,7 +78,7 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 	int fd = -1;
 	while(true)
 	{
-		fd = accept(soc->fd(), (struct sockaddr*) &addr, &addrlen);
+		fd = accept(server_fd, (struct sockaddr*) &addr, &addrlen);
 
 		if (fd != -1)
 			break;
@@ -89,7 +93,8 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 		case ENOBUFS:
 		case ENOMEM:
 			// resource exhaustion, might recover when another connection handler has stopped, disconnect this one for now
-			conserver::HandleOverload();
+			event_del(self);
+			event_base_once(evabase::base, -1, EV_TIMEOUT, cb_resume, self, &g_resumeTimeout);
 			return;
 		default:
 			return;
@@ -124,7 +129,7 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 				fromhost(&req);
 				if (!hosts_access(&req))
 				{
-					log::err("ERROR: access not permitted by hosts files", hbuf);
+					log::err(string(hbuf) + "|ERROR: access not permitted by hosts files");
 					return;
 				}
 #else
@@ -143,10 +148,10 @@ auto ThreadAction = []()
 
 	while (true)
 	{
-		while (g_freshConQueue.empty() && !g_global_shutdown)
+		while (g_freshConQueue.empty() && !evabase::in_shutdown)
 			g_thread_push_cond_var.wait(g);
 
-		if (g_global_shutdown)
+		if (evabase::in_shutdown)
 			break;
 
 		auto c = move(g_freshConQueue.front());
@@ -161,7 +166,7 @@ auto ThreadAction = []()
 
 		g_nStandbyThreads++;
 
-		if (int(g_nStandbyThreads) >= cfg::tpstandbymax || g_global_shutdown)
+		if (int(g_nStandbyThreads) >= cfg::tpstandbymax || evabase::in_shutdown)
 			break;
 	}
 
@@ -175,7 +180,7 @@ auto ThreadAction = []()
 auto SpawnThreadsAsNeeded = []()
 {
 	// check the kill-switch
-		if(int(g_nTotalThreads+1)>=cfg::tpthreadmax || g_global_shutdown)
+		if(int(g_nTotalThreads+1)>=cfg::tpthreadmax || evabase::in_shutdown)
 		return false;
 
 	// need a custom one
@@ -237,10 +242,10 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 	}
 }
 
-bool bind_and_listen(shared_ptr<evasocket> mSock, const evutil_addrinfo *pAddrInfo)
+bool bind_and_listen(evutil_socket_t mSock, const evutil_addrinfo *pAddrInfo, cmstring& port)
 		{
 	LOGSTART2s("bind_and_listen", formatIpPort(pAddrInfo));
-			if ( ::bind(mSock->fd(), pAddrInfo->ai_addr, pAddrInfo->ai_addrlen))
+			if ( ::bind(mSock, pAddrInfo->ai_addr, pAddrInfo->ai_addrlen))
 			{
 				log::flush();
 				perror("Couldn't bind socket");
@@ -250,25 +255,23 @@ bool bind_and_listen(shared_ptr<evasocket> mSock, const evutil_addrinfo *pAddrIn
 					if(pAddrInfo->ai_family == PF_UNIX)
 						cerr << "Error creating or binding the UNIX domain socket - please check permissions!" <<endl;
 					else
-						cerr << "Port " << cfg::port << " is busy, see the manual (Troubleshooting chapter) for details." <<endl;
+						cerr << "Port " << port << " is busy, see the manual (Troubleshooting chapter) for details." <<endl;
 				cerr.flush();
 				}
 				return false;
 			}
-			if (listen(mSock->fd(), SO_MAXCONN))
+			if (listen(mSock, SO_MAXCONN))
 			{
 				perror("Couldn't listen on socket");
 				return false;
 			}
-
-			g_vecSocks.emplace_back(
-					make_shared<event_socket>(evabase::instance,
-					mSock,
-					EV_READ | EV_PERSIST,
-					[](const std::shared_ptr<evasocket>& sock, short) {do_accept(sock);})
-					);
-			// and activate it once
-			g_vecSocks.back()->enable();
+			auto ev = event_new(evabase::base, mSock, EV_READ|EV_PERSIST, do_accept, event_self_cbarg());
+			if(!ev)
+			{
+				cerr << "Socket creation error" << endl;
+				return false;
+			}
+			event_add(ev, nullptr);
 			return true;
 		};
 
@@ -276,23 +279,26 @@ std::string scratchBuf;
 
 unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 {
-	LOGSTART2s("Setup::ConAddr", 0);
+	LOGSTARTs("Setup::ConAddr");
+	USRDBG("Binding on host: " << addi << ", port: " << port);
 
-	CAddrInfo resolver;
 	auto hints = evutil_addrinfo();
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_family = PF_UNSPEC;
-	bool ignored;
-	if(!resolver.ResolveTcpTarget(addi ? addi : sEmptyString, port, scratchBuf, &hints, ignored))
+
+	evutil_addrinfo* dnsret;
+	int r = evutil_getaddrinfo(addi, port.c_str(), &hints, &dnsret);
+	if(r)
 	{
 		log::flush();
 		perror("Error resolving address for binding");
 		return 0;
 	}
+	tDtorEx dnsclean([dnsret]() {if(dnsret) evutil_freeaddrinfo(dnsret);});
 
 	std::unordered_set<std::string> dedup;
-	tDnsIterator iter(PF_UNSPEC, resolver.getTcpAddrInfo());
+	tDnsIterator iter(PF_UNSPEC, dnsret);
 	unsigned res(0);
 	for(const evutil_addrinfo *p; !!(p=iter.next());)
 	{
@@ -302,7 +308,7 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 		int nSockFd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
 		if (nSockFd == -1)
 		{
-			// STFU on lag of IPv6?
+			// STFU on lack of IPv6?
 			switch(errno)
 			{
 				case EAFNOSUPPORT:
@@ -315,7 +321,6 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 				continue;
 			}
 		}
-		auto mSock = evasocket::create(nSockFd);
 		// if we have a dual-stack IP implementation (like on Linux) then
 		// explicitly disable the shadow v4 listener. Otherwise it might be
 		// bound or maybe not, and then just sometimes because of configurable
@@ -323,10 +328,10 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 		// we just cannot know for sure but we need to.
 #if defined(IPV6_V6ONLY) && defined(SOL_IPV6)
 		if(p->ai_family==AF_INET6)
-			setsockopt(mSock->fd(), SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
+			setsockopt(nSockFd, SOL_IPV6, IPV6_V6ONLY, &yes, sizeof(yes));
 #endif
-		setsockopt(mSock->fd(), SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
-		res += bind_and_listen(mSock, p);
+		setsockopt(nSockFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+		res += bind_and_listen(nSockFd, p, port);
 	}
 	return res;
 };
@@ -335,25 +340,19 @@ int ACNG_API Setup()
 {
 	LOGSTART2s("Setup", 0);
 	
-	if (cfg::fifopath.empty() && cfg::port.empty())
+	if (cfg::udspath.empty() && (cfg::port.empty() && cfg::bindaddr.empty()))
 	{
 		cerr << "Neither TCP nor UNIX interface configured, cannot proceed.\n";
 		exit(EXIT_FAILURE);
 	}
 
-	{
-		lockguard g(g_thread_push_cond_var);
-		g_resumer = std::make_shared<event_socket>(evabase::instance, evasocket::create(-1), 0,
-				[](const std::shared_ptr<evasocket>&, short)
-				{	do_resume();});
-	}
 	unsigned nCreated = 0;
 
-	if (cfg::fifopath.empty())
+	if (cfg::udspath.empty())
 		log::err("Not creating Unix Domain Socket, fifo_path not specified");
 	else
 	{
-		string & sPath = cfg::fifopath;
+		string & sPath = cfg::udspath;
 		auto addr_unx = sockaddr_un();
 
 		size_t size = sPath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
@@ -362,7 +361,7 @@ int ACNG_API Setup()
 		{
 			cerr << "Error creating Unix Domain Socket, ";
 			cerr.flush();
-			perror(cfg::fifopath.c_str());
+			perror(cfg::udspath.c_str());
 			cerr << "Check socket file and directory permissions" <<endl;
 			exit(EXIT_FAILURE);
 		};
@@ -387,17 +386,25 @@ int ACNG_API Setup()
 		ai.ai_addrlen = size;
 		ai.ai_family = PF_UNIX;
 
-		nCreated += bind_and_listen(evasocket::create(sockFd), &ai);
+		nCreated += bind_and_listen(sockFd, &ai, "0");
 	}
 
-	if (atoi(cfg::port.c_str()) <= 0)
-		log::err("Not creating TCP listening socket, no valid port specified!");
-	else
 	{
 		bool custom_listen_ip = false;
+		tHttpUrl url;
 		for(const auto& sp: tSplitWalk(&cfg::bindaddr))
 		{
-			nCreated += setup_tcp_listeners(sp.c_str(), cfg::port);
+			auto isUrl = url.SetHttpUrl(sp, false);
+			if(!isUrl && atoi(cfg::port.c_str()) <= 0)
+			{
+				USRDBG("Not creating TCP listening socket for " <<  sp
+						<< ", no custom nor default port specified!");
+				continue;
+			}
+//	XXX: uri parser accepts anything wihtout shema, good for this situation but maybe bad for strict validation...
+//			USRDBG("Binding as host:port URI? " << isUrl << ", addr: " << url.ToURI(false));
+			nCreated += setup_tcp_listeners(isUrl ? url.sHost.c_str() : sp.c_str(),
+					isUrl ? url.GetPort(cfg::port) : cfg::port);
 			custom_listen_ip = true;
 		}
 		// just TCP_ANY if none was specified
@@ -407,69 +414,24 @@ int ACNG_API Setup()
 	return nCreated;
 }
 
-int ACNG_API Run()
-{
-	LOGSTART2s("Run", "GoGoGo");
-
-#ifdef HAVE_SD_NOTIFY
-	sd_notify(0, "READY=1");
-#endif
-
-	return event_base_loop(evabase::instance->base, EVLOOP_NO_EXIT_ON_EMPTY);
-}
-
 void Shutdown()
 {
-	DBGQLOG("Closing listening sockets\n");
-	// terminate activities
-	g_vecSocks.clear();
-	g_resumer.reset();
-
-	{
 		lockuniq g(g_thread_push_cond_var);
 		// global hint to all conn objects
-		g_global_shutdown = true;
 		DBGQLOG("Notifying worker threads\n");
 		g_thread_push_cond_var.notifyAll();
 		while(g_nTotalThreads)
 			g_thread_push_cond_var.wait(g);
-	}
-}
-
-const struct timeval g_resumeTimeout { 2, 11 };
-
-void HandleOverload()
-{
-	lockguard g(g_thread_push_cond_var);
-	g_suspended = true;
-	for(auto& it: g_vecSocks)
-	{
-		it->disable();
-	}
-	g_resumer->enable(&g_resumeTimeout);
-}
-
-void do_resume()
-{
-	lockguard g(g_thread_push_cond_var);
-	if(!g_suspended) return;
-	if(!g_resumer) return; // already in shutdown phase
-	g_resumer->disable();
-	for(auto& it: g_vecSocks)
-	{
-		it->enable();
-	}
-	g_suspended = false;
 }
 
 void FinishConnection(int fd)
 {
-	if(fd == -1)
+	if(fd == -1 || evabase::in_shutdown)
 		return;
 
-	termsocket_async(fd, evabase::instance->base);
+	termsocket_async(fd, evabase::base);
 	// there is a good chance that more resources are available now
-	do_resume();
+//	do_resume();
 }
 
 }

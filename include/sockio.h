@@ -43,9 +43,8 @@ using namespace std;
 namespace acng
 {
 
-#ifdef HAVE_SSL
 void globalSslInit();
-#endif
+void globalSslDeInit();
 
 void termsocket_async(int, event_base*);
 
@@ -84,6 +83,7 @@ std::string formatIpPort(const evutil_addrinfo *info);
 
 // common flags for a CONNECTING socket
 void set_connect_sock_flags(evutil_socket_t fd);
+
 
 }
 

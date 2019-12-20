@@ -1,35 +1,42 @@
 #ifndef __EVABASE_H__
 #define __EVABASE_H__
 
-#include "config.h"
+#include "meta.h"
+#include <event.h>
 
-struct event_base;
-#include <memory>
-#include <unordered_set>
+struct evdns_base;
 
 namespace acng
 {
-
-class socket_activity_base;
-
 /**
- * Event lib abstraction - destructible event base
+ * This class is an adapter for general libevent handling, roughly fitting it into conventions of the rest of ACNG.
+ * Partly static and partly dynamic, for pure convenience! Expected to be a singleton anyway.
  */
 class ACNG_API evabase
 {
-	std::unordered_set<socket_activity_base*> m_weak_ref_users;
-
 public:
-	event_base *base;
-	/** Share the global instance created by main() */
-	static std::shared_ptr<evabase> instance;
-	evabase();
-	~evabase();
+static event_base *base;
+static evdns_base *dnsbase;
+static std::atomic<bool> in_shutdown;
 
-	// add a "free running" activity reference to the collection, for later shutdown
-	void register_activity(socket_activity_base*);
-	void unregister_activity(socket_activity_base*);
-	void invoke_shutdown_activities();
+/**
+ * Runs the main loop for a program around the event_base loop.
+ * When finished, clean up some resources left behind (fire off specific events
+ * which have actions that would cause blocking otherwise).
+ */
+int MainLoop();
+
+static void SignalStop();
+
+using tCancelableAction = std::function<void(bool)>;
+
+/**
+ * Push an action into processing queue. In case operation is not possible, runs the action with the cancel flag (bool argument set to true)
+ */
+static void Post(tCancelableAction&&);
+
+evabase();
+~evabase();
 };
 
 }

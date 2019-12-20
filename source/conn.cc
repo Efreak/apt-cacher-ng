@@ -7,16 +7,22 @@
 #include "job.h"
 #include "header.h"
 #include "dlcon.h"
+#include "job.h"
 #include "acbuf.h"
 #include "tcpconnect.h"
 #include "cleaner.h"
 #include "conserver.h"
 
+#include "lockable.h"
+#include "sockio.h"
+#include "evabase.h"
+#include <iostream>
+#include <thread>
+
 #include <sys/select.h>
 #include <signal.h>
 #include <string.h>
 #include <errno.h>
-#include <iostream>
 
 using namespace std;
 
@@ -25,38 +31,90 @@ using namespace std;
 namespace acng
 {
 
-conn::conn(unique_fd fd, const char *c) :
-			m_fd(move(fd)),
-			m_confd(m_fd.get())
+class conn::Impl
 {
-	if(c) // if nullptr, pick up later when sent by the wrapper
-		m_sClientHost=c;
+	friend class conn;
+	conn* _q = nullptr;
 
-	LOGSTART2("con::con", "fd: " << m_confd << ", clienthost: " << c);
+	unique_fd m_fd;
+	int m_confd;
+	bool m_badState = false;
 
-#ifdef DEBUG
-	m_nProcessedJobs=0;
+	deque<job> m_jobs2send;
+
+#ifdef KILLABLE
+      // to awake select with dummy data
+      int wakepipe[2];
 #endif
 
+	std::thread m_dlerthr;
+
+	// for jobs
+	friend class job;
+	bool SetupDownloader();
+	std::shared_ptr<dlcon> m_pDlClient;
+	mstring m_sClientHost;
+
+	// some accounting
+	mstring logFile, logClient;
+	off_t fileTransferIn = 0, fileTransferOut = 0;
+	bool m_bLogAsError = false;
+	void writeAnotherLogRecord(const mstring &pNewFile,
+			const mstring &pNewClient);
+
+	// This method collects the logged data counts for certain file.
+	// Since the user might restart the transfer again and again, the counts are accumulated (for each file path)
+	void LogDataCounts(cmstring &file, const char *xff, off_t countIn,
+			off_t countOut, bool bAsError);
+
+#ifdef DEBUG
+      unsigned m_nProcessedJobs;
+#endif
+
+  	Impl(unique_fd fd, const char *c) :
+		m_fd(move(fd)),
+		m_confd(m_fd.get())
+
+  	{
+  		if(c) // if nullptr, pick up later when sent by the wrapper
+  			m_sClientHost=c;
+
+  		LOGSTART2("con::con", "fd: " << m_confd << ", clienthost: " << c);
+
+  	#ifdef DEBUG
+  		m_nProcessedJobs=0;
+  	#endif
+
+  	};
+  	~Impl() {
+  		LOGSTART("con::~con (Destroying connection...)");
+
+  		// our user's connection is released but the downloader task created here may still be serving others
+  		// tell it to stop when it gets the chance and delete it then
+
+  		m_jobs2send.clear();
+
+  		writeAnotherLogRecord(sEmptyString, sEmptyString);
+
+  		if(m_pDlClient)
+  			m_pDlClient->SignalStop();
+  		if(m_dlerthr.joinable())
+  			m_dlerthr.join();
+  		log::flush();
+  		conserver::FinishConnection(m_confd);
+  	}
+
+  	void WorkLoop();
 };
 
-conn::~conn() {
-	LOGSTART("con::~con (Destroying connection...)");
-
-	// our user's connection is released but the downloader task created here may still be serving others
-	// tell it to stop when it gets the chance and delete it then
-
-	for (auto jit : m_jobs2send) delete jit;
-
-	writeAnotherLogRecord(sEmptyString, sEmptyString);
-
-	if(m_pDlClient)
-		m_pDlClient->SignalStop();
-	if(m_dlerthr.joinable())
-		m_dlerthr.join();
-	log::flush();
-	conserver::FinishConnection(m_confd);
-}
+// call forwarding
+conn::conn(unique_fd fd, const char *c) : _p(new Impl(move(fd), move(c))) { _p->_q = this;};
+conn::~conn() { delete _p; }
+void conn::WorkLoop() {	return _p->WorkLoop(); }
+void conn::LogDataCounts(cmstring &file, const char *xff, off_t countIn, off_t countOut,
+		bool bAsError) {return _p->LogDataCounts(file, xff, countIn, countOut, bAsError); }
+dlcon* conn::SetupDownloader()
+{ return _p->SetupDownloader() ? _p->m_pDlClient.get() : nullptr; }
 
 namespace RawPassThrough
 {
@@ -184,7 +242,7 @@ void PassThrough(acbuf &clientBufIn, int fdClient, cmstring& uri)
 }
 }
 
-void conn::WorkLoop() {
+void conn::Impl::WorkLoop() {
 
 	LOGSTART("con::WorkLoop");
 
@@ -197,7 +255,7 @@ void conn::WorkLoop() {
 	auto client_timeout(GetTime() + cfg::nettimeout);
 
 	int maxfd=m_confd;
-	while(!g_global_shutdown && !m_badState) {
+	while(!evabase::in_shutdown && !m_badState) {
 		fd_set rfds, wfds;
 		FD_ZERO(&wfds);
 		FD_ZERO(&rfds);
@@ -206,24 +264,19 @@ void conn::WorkLoop() {
 		if(inBuf.freecapa()==0)
 			return; // shouldn't even get here
 
-		job *pjSender(nullptr);
 		bool hasMoreJobs = m_jobs2send.size()>1;
 
-		if ( !m_jobs2send.empty())
-		{
-			pjSender=m_jobs2send.front();
-			FD_SET(m_confd, &wfds);
-		}
+		if ( !m_jobs2send.empty()) FD_SET(m_confd, &wfds);
 
 		ldbg("select con");
 		int ready = select(maxfd+1, &rfds, &wfds, nullptr, CTimeVal().For(SHORT_TIMEOUT));
 
-		if(g_global_shutdown)
+		if(evabase::in_shutdown)
 			break;
 
 		if(ready == 0)
 		{
-			USRDBG("Timeout occurred, apt client disappeared silently?");
+			//USRDBG("Timeout occurred, idle client hanging around?");
 			if(GetTime() > client_timeout)
 				return; // yeah, time to leave
 			continue;
@@ -244,7 +297,8 @@ void conn::WorkLoop() {
 
 		ldbg("select con back");
 
-		if(FD_ISSET(m_confd, &rfds)) {
+		if(FD_ISSET(m_confd, &rfds))
+		{
 			int n=inBuf.sysread(m_confd);
 			ldbg("got data: " << n <<", inbuf size: "<< inBuf.size());
 			if(n<=0) // error, incoming junk overflow or closed connection
@@ -301,9 +355,7 @@ void conn::WorkLoop() {
 
 				if(h.type == header::CONNECT)
 				{
-
 					inBuf.drop(nHeadBytes);
-
 					tSplitWalk iter(& h.frontLine);
 					if(iter.Next() && iter.Next())
 					{
@@ -337,20 +389,14 @@ void conn::WorkLoop() {
 
 				ldbg("Parsed REQUEST:" << h.frontLine);
 				ldbg("Rest: " << (inBuf.size()-nHeadBytes));
-
-				{
-					job * j = new job(std::move(h), this);
-					j->PrepareDownload(inBuf.rptr());
-
-					if(m_badState) return;
-
-					inBuf.drop(nHeadBytes);
-
-					m_jobs2send.emplace_back(j);
+				m_jobs2send.emplace_back(std::move(h), _q);
+				m_jobs2send.back().PrepareDownload(inBuf.rptr());
+				if (m_badState)
+					return;
+				inBuf.drop(nHeadBytes);
 #ifdef DEBUG
-					m_nProcessedJobs++;
+				m_nProcessedJobs++;
 #endif
-				}
 			}
 			catch(bad_alloc&)
 			{
@@ -361,9 +407,9 @@ void conn::WorkLoop() {
 		if(inBuf.freecapa()==0)
 			return; // cannot happen unless being attacked
 
-		if(FD_ISSET(m_confd, &wfds) && pjSender)
+		if(FD_ISSET(m_confd, &wfds) && !m_jobs2send.empty())
 		{
-			switch(pjSender->SendData(m_confd, hasMoreJobs))
+			switch(m_jobs2send.front().SendData(m_confd, hasMoreJobs))
 			{
 			case(job::R_DISCON):
 				{
@@ -373,9 +419,6 @@ void conn::WorkLoop() {
 			case(job::R_DONE):
 				{
 					m_jobs2send.pop_front();
-					delete pjSender;
-					pjSender=nullptr;
-
 					ldbg("Remaining jobs to send: " << m_jobs2send.size());
 					break;
 				}
@@ -388,7 +431,7 @@ void conn::WorkLoop() {
 	}
 }
 
-bool conn::SetupDownloader(const char *pszOrigin)
+bool conn::Impl::SetupDownloader()
 {
 	if(m_badState)
 		return false;
@@ -398,20 +441,7 @@ bool conn::SetupDownloader(const char *pszOrigin)
 
 	try
 	{
-		if(cfg::exporigin)
-		{
-			string sXff;
-			if(pszOrigin)
-			{
-				sXff = *pszOrigin;
-				sXff += ", ";
-			}
-			sXff+=m_sClientHost;
-			m_pDlClient.reset(new dlcon(false, &sXff));
-		}
-		else
-			m_pDlClient.reset(new dlcon(false));
-
+		m_pDlClient = make_shared<dlcon>(m_sClientHost);
 		if(!m_pDlClient)
 			return false;
 		auto pin = m_pDlClient;
@@ -429,7 +459,7 @@ bool conn::SetupDownloader(const char *pszOrigin)
 	}
 }
 
-void conn::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
+void conn::Impl::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
 		off_t nNewOut, bool bAsError)
 {
 	string sClient;
@@ -439,7 +469,7 @@ void conn::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
 	{
 		sClient=xff;
 		trimString(sClient);
-		string::size_type pos = sClient.find_last_of(SPACECHARS);
+		auto pos = sClient.find_last_of(SPACECHARS);
 		if (pos!=stmiss)
 			sClient.erase(0, pos+1);
 	}
@@ -451,7 +481,7 @@ void conn::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
 }
 
 // sends the stats to logging and replaces file/client identities with the new context
-void conn::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient)
+void conn::Impl::writeAnotherLogRecord(const mstring &pNewFile, const mstring &pNewClient)
 {
 		log::transfer(fileTransferIn, fileTransferOut, logClient, logFile, m_bLogAsError);
 		fileTransferIn = fileTransferOut = 0;

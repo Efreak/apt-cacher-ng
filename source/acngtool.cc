@@ -23,7 +23,7 @@
 #include <cstdio>
 #include <cstring>
 #include <functional>
-
+#include <thread>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -38,6 +38,7 @@
 #include "filereader.h"
 #include "csmapping.h"
 #include "cleaner.h"
+#include "evabase.h"
 
 using namespace std;
 using namespace acng;
@@ -67,8 +68,8 @@ struct ACNG_API CPrintItemFactory : public IFitemFactory
 				m_nSizeChecked = m_nSizeSeen = 0;
 				return m_status = FIST_INITED;
 			}
-			virtual int GetFileFd() override
-			{	return 1;}; // something, don't care for now
+			virtual unique_fd GetFileFd() override
+			{	return unique_fd();}; // something, don't care for now
 			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
 					bool, bool&) override
 			{
@@ -146,8 +147,8 @@ struct CReportItemFactory : public IFitemFactory
 				m_nSizeChecked = m_nSizeSeen = 0;
 				return m_status = FIST_INITED;
 			}
-			virtual int GetFileFd() override
-			{	return 1;}; // something, don't care for now
+			virtual unique_fd GetFileFd() override
+			{	return unique_fd();}; // something, don't care for now
 			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
 					bool, bool&) override
 			{
@@ -214,7 +215,7 @@ struct CReportItemFactory : public IFitemFactory
 	}
 };
 
-int wcat(LPCSTR url, LPCSTR proxy, IFitemFactory*, IDlConFactory *pdlconfa = &g_tcp_con_factory);
+int wcat(LPCSTR url, LPCSTR proxy, IFitemFactory*, const IDlConFactory &pdlconfa = g_tcp_con_factory);
 
 static void usage(int retCode = 0, LPCSTR cmd = nullptr)
 {
@@ -472,8 +473,8 @@ int maint_job()
 	tStrVec hostips;
 #if 0 // FIXME, processing on UDS gets stuck somewhere
 	// prefer UDS if configured in a sane way
-	if (startsWithSz(cfg::fifopath, "/"))
-		hostips.emplace_back(cfg::fifopath);
+	if (startsWithSz(cfg::udspath, "/"))
+		hostips.emplace_back(cfg::udspath);
 #endif
 	auto nips = Tokenize(cfg::bindaddr, SPACECHARS, hostips, true);
 	if (!nips)
@@ -485,19 +486,19 @@ int maint_job()
 		// internal connection result
 		struct maintfac: public IDlConFactory
 		{
-			bool m_bOK = false;
-			mstring m_hname;
+			mutable bool m_bOK = false;
+			mutable mstring m_hname;
 			maintfac(cmstring& s) :
 					m_hname(s)
 			{
 			}
 
-			void RecycleIdleConnection(tDlStreamHandle & handle) override
+			void RecycleIdleConnection(tDlStreamHandle & handle) const override
 			{
 				// keep going, no recycling/restoring
 			}
 			virtual tDlStreamHandle CreateConnected(cmstring &, cmstring &, mstring &, bool *,
-					cfg::tRepoData::IHookHandler *, bool, int, bool) override
+					cfg::tRepoData::IHookHandler *, bool, int, bool) const override
 			{
 				string serr;
 
@@ -523,9 +524,9 @@ int maint_job()
 
 						struct sockaddr_un addr;
 						addr.sun_family = PF_UNIX;
-						strcpy(addr.sun_path, cfg::fifopath.c_str());
+						strcpy(addr.sun_path, cfg::udspath.c_str());
 						socklen_t adlen =
-								cfg::fifopath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
+								cfg::udspath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
 						if (connect(m_conFd, (struct sockaddr*) &addr, adlen))
 						{
 #ifdef DEBUG
@@ -573,7 +574,7 @@ int maint_job()
 #endif
 
 		CReportItemFactory printItemFactory;
-		auto retcode = wcat(urlPath.c_str(), nullptr, &printItemFactory, &factoryWrapper);
+		auto retcode = wcat(urlPath.c_str(), nullptr, &printItemFactory, factoryWrapper);
 		if (retcode)
 		{
 			if (!factoryWrapper.m_bOK) // connection failed, try another IP
@@ -997,7 +998,7 @@ int main(int argc, const char **argv)
 	return g_exitCode;
 }
 
-int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac)
+int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, const IDlConFactory &pDlconFac)
 {
 	cfg::dnscachetime=0;
 	cfg::persistoutgoing=0;
@@ -1013,18 +1014,31 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	string xurl(surl);
 	if(!url.SetHttpUrl(xurl, false))
 		return -2;
-	dlcon dl(true, nullptr, pDlconFac);
+	if(url.bSSL)
+		globalSslInit();
+
+	dlcon dl("", pDlconFac);
+
+	evabase eb;
+	std::thread evthr([&]() { eb.MainLoop(); });
+	std::thread thr([&]() {	dl.WorkLoop();});
+	tDtorEx cleaner([&]()
+	{
+		::acng::cleaner::GetInstance().Stop();
+		dl.SignalStop();
+		eb.SignalStop();
+		thr.join();
+		evthr.join();
+	});
 
 	auto fi=fac->Create();
-	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT);
-	dl.WorkLoop();
-	auto fistatus = fi->GetStatus();
-	header hh = fi->GetHeader();
-	int st=hh.getStatus();
-
+	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT, nullptr);
+	int st;
+	auto fistatus = fi->WaitForFinish(&st);
 	if(fistatus == fileitem::FIST_COMPLETE && st == 200)
 		return EXIT_SUCCESS;
 
+	auto hh = fi->GetHeader();
 	// don't reveal passwords
 	auto xpos=xurl.find('@');
 	if(xpos!=stmiss)

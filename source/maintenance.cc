@@ -140,36 +140,35 @@ public:
 	}
 };
 
-string & tSpecialRequest::GetHostname()
+const string & tSpecialRequest::GetMyHostPort()
 {
-	if (m_sHostname.empty())
+	if(!m_sHostPort.empty())
+		return m_sHostPort;
+
+	struct sockaddr_storage ss;
+	socklen_t slen = sizeof(ss);
+	char hbuf[NI_MAXHOST], pbuf[10];
+
+	if (0 == getsockname(m_parms.fd, (struct sockaddr*) &ss, &slen)
+			&& 0 == getnameinfo((struct sockaddr*) &ss, sizeof(ss), hbuf, sizeof(hbuf), pbuf,
+							sizeof(pbuf), NI_NUMERICHOST | NI_NUMERICSERV))
 	{
-		struct sockaddr_storage ss;
-		socklen_t slen = sizeof(ss);
-		char hbuf[NI_MAXHOST];
+		auto p = hbuf;
+		bool bAddBrs(false);
+		if (0 == strncmp(hbuf, "::ffff:", 7) && strpbrk(p, "0123456789."))
+			p += 7; // no more colons there, looks like v4 IP in v6 space -> crop it
+		else if (strchr(p, (int) ':'))
+			bAddBrs = true; // full v6 address for sure, add brackets
 
-		if (0==getsockname(m_parms.fd, (struct sockaddr *)&ss, &slen) && 0
-				==getnameinfo((struct sockaddr*) &ss, sizeof(ss), hbuf,
-						sizeof(hbuf),
-						nullptr, 0, NI_NUMERICHOST))
-		{
-			const char *p=hbuf;
-			bool bAddBrs(false);
-			if(0==strncmp(hbuf, "::ffff:", 7) && strpbrk(p, "0123456789."))
-				p+=7; // no more colons there, looks like v4 IP in v6 space -> crop it
-			else if(strchr(p, (int) ':'))
-				bAddBrs=true; // full v6 address for sure, add brackets
-
-			if(bAddBrs)
-				m_sHostname="[";
-			m_sHostname+=p;
-			if(bAddBrs)
-				m_sHostname+="]";
-		}
+		if (bAddBrs)
+			m_sHostPort = string("[") + p + "]";
 		else
-			m_sHostname="IP-of-this-cache-server";
+			m_sHostPort = p;
+		m_sHostPort += (":" + cfg::port);
 	}
-	return m_sHostname;
+	else
+		m_sHostPort = "IP-of-this-cache-server:" + cfg::port;
+	return m_sHostPort;
 }
 
 LPCSTR tSpecialRequest::GetTaskName()

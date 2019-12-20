@@ -28,14 +28,10 @@ using namespace std;
 #define CHUNKDEFAULT false
 #endif
 
-
 namespace acng
 {
 
 mstring sHttp11("HTTP/1.1");
-
-#define SPECIAL_FD -42
-inline bool IsValidFD(int fd) { return fd>=0 || SPECIAL_FD == fd; }
 
 tTraceData traceData;
 void cfg::dump_trace()
@@ -76,8 +72,7 @@ public:
 		m_nSizeChecked = m_nSizeSeen = 0;
 		return m_status = FIST_INITED;
 	}
-	virtual int GetFileFd() override
-			{ return SPECIAL_FD; }; // something, don't care for now
+	unique_fd GetFileFd() override { return unique_fd(); }; // something, don't care for now
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t, const char *,
 			bool, bool&) override
 	{
@@ -165,8 +160,7 @@ public:
 class tGeneratedFitemBase : public fileitem
 {
 public:
-	virtual int GetFileFd() override
-	{ return SPECIAL_FD; }; // something, don't care for now
+	unique_fd GetFileFd() override { return unique_fd(); }; // something, don't care for now
 
 	tSS m_data;
 
@@ -230,15 +224,13 @@ job::~job()
 	int stcode = 200;
 	if(m_pItem) stcode = m_pItem.getFiPtr()->GetHeader().getStatus();
 
-	bool bErr=m_sFileLoc.empty() || stcode >= 400;
+	bool bErr = m_sFileLoc.empty() || stcode >= 400;
 
 	m_pParentCon->LogDataCounts(
 			m_sFileLoc + (bErr ? (miscError + ltos(stcode) + ']') : sEmptyString),
 			m_reqHead.h[header::XFORWARDEDFOR],
 			(m_pItem ? m_pItem.getFiPtr()->GetTransferCount() : 0),
 			m_nAllDataCount, bErr);
-	
-	checkforceclose(m_filefd);
 }
 
 
@@ -293,7 +285,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 					seal();
 				}
 			};
-			m_pItem.RegisterFileitemLocalOnly(new dirredirect(visPath));
+			m_pItem = TFileItemUser::Create(make_shared<dirredirect>(visPath), false);
 			return;
 		}
 
@@ -306,8 +298,8 @@ inline void job::PrepareLocalDownload(const string &visPath,
 				seal(); // for now...
 			}
 		};
-		listing *p=new listing(visPath);
-		m_pItem.RegisterFileitemLocalOnly(p); // assign to smart pointer ASAP, operations might throw
+		auto p = make_shared<listing>(visPath);
+		m_pItem = TFileItemUser::Create(p, false);
 		tSS & page = p->m_data;
 
 		page << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>Index of "
@@ -397,7 +389,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 			if(!sMimeType.empty())
 				m_head.set(header::CONTENT_TYPE, sMimeType);
 		};
-		virtual int GetFileFd() override
+		unique_fd GetFileFd() override
 		{
 			int fd=open(m_sPathRel.c_str(), O_RDONLY);
 		#ifdef HAVE_FADVISE
@@ -405,10 +397,10 @@ inline void job::PrepareLocalDownload(const string &visPath,
 			if(fd>=0)
 				posix_fadvise(fd, 0, m_nSizeChecked, POSIX_FADV_SEQUENTIAL);
 		#endif
-			return fd;
+			return unique_fd(fd);
 		}
 	};
-	m_pItem.RegisterFileitemLocalOnly(new tLocalGetFitem(absPath, stbuf));
+	m_pItem = TFileItemUser::Create(make_shared<tLocalGetFitem>(absPath, stbuf), false);
 }
 
 inline bool job::ParseRange()
@@ -589,7 +581,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 		bForceFreshnessChecks = ( ! cfg::offlinemode && m_type == FILE_VOLATILE);
 
-		m_pItem.PrepareRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
+		m_pItem = TFileItemUser::Create(m_sFileLoc, bForceFreshnessChecks);
 	}
 	catch(std::out_of_range&) // better safe...
 	{
@@ -644,7 +636,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
     if( fistate < fileitem::FIST_DLGOTHEAD) // needs a downloader
     {
     	dbgline;
-    	if(!m_pParentCon->SetupDownloader(m_reqHead.h[header::XFORWARDEDFOR]))
+    	if(!m_pParentCon->SetupDownloader())
     	{
     		USRDBG( "Error creating download handler for "<<m_sFileLoc);
     		goto report_overload;
@@ -669,11 +661,11 @@ try
 						fistate = _SwitchToPtItem();
 				}
 
-					if (m_pParentCon->m_pDlClient->AddJob(m_pItem.getFiPtr(),
+					if (m_pParentCon->SetupDownloader()->AddJob(m_pItem.getFiPtr(),
 							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
 							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
 									(LPCSTR) ( bPtMode ? headBuf : nullptr),
-							cfg::redirmax))
+							cfg::redirmax, m_reqHead.h[header::XFORWARDEDFOR]))
 				{
 					ldbg("Download job enqueued for " << m_sFileLoc);
 				}
@@ -824,8 +816,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 						return R_AGAIN;
 					}
 
-					m_filefd=m_pItem.getFiPtr()->GetFileFd();
-					if(!IsValidFD(m_filefd)) THROW_ERROR("503 IO error");
+					m_filefd.reset(m_pItem.getFiPtr()->GetFileFd());
 
 					m_state=m_bChunkMode ? STATE_SEND_CHUNK_HEADER : STATE_SEND_PLAIN_DATA;
 					ldbg("next state will be: " << (int) m_state);
@@ -847,7 +838,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 
 					size_t nMax2SendNow=min(nGoodDataSize-m_nSendPos, m_nCurrentRangeLast+1-m_nSendPos);
 					ldbg("~sendfile: on "<< m_nSendPos << " up to : " << nMax2SendNow);
-					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd, m_nSendPos, nMax2SendNow);
+					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd.get(), m_nSendPos, nMax2SendNow);
 					ldbg("~sendfile: " << n << " new m_nSendPos: " << m_nSendPos);
 
 					if(n>0)
@@ -885,7 +876,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 
 					if(m_nChunkRemainingBytes==0)
 						GOTOENDE; // done
-					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd, m_nSendPos, m_nChunkRemainingBytes);
+					int n = m_pItem.getFiPtr()->SendData(confd, m_filefd.get(), m_nSendPos, m_nChunkRemainingBytes);
 					if(n<0)
 						THROW_ERROR("400 Client error");
 					m_nChunkRemainingBytes-=n;
@@ -1112,7 +1103,7 @@ fileitem::FiStatus job::_SwitchToPtItem()
 	// Changing to local pass-through file item
 	LOGSTART("job::_SwitchToPtItem");
 	// exception-safe sequence
-	m_pItem.RegisterFileitemLocalOnly(new tPassThroughFitem(m_sFileLoc));
+	m_pItem = TFileItemUser::Create(make_shared<tPassThroughFitem>(m_sFileLoc), false);
 	return m_pItem.getFiPtr()->Setup(true);
 }
 
@@ -1137,9 +1128,9 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation, const
 		}
 	};
 
-	erroritem *p = new erroritem("noid", errorLine, bodytext);
+	auto p = make_shared<erroritem>("noid", errorLine, bodytext);
 	p->HeadRef().set(header::LOCATION, szLocation);
-	m_pItem.RegisterFileitemLocalOnly(p);
+	m_pItem = TFileItemUser::Create(p, false);
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
 	m_state=STATE_SEND_MAIN_HEAD;
 }

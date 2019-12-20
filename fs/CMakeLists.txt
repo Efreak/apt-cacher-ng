@@ -16,10 +16,6 @@ if(fuse_FOUND AND HAVE_FUSE_25)
         # not linking acngstuff lib, too many dependencies, so building a custom variant with MINIBUILD flag
         list(APPEND fsSRCS httpfs.cc)
 
-        if(CMAKE_BUILD_TYPE MATCHES Debug)
-                list(APPEND fsSRCS ../source/aclogger.cc)
-        endif()
-
         ADD_EXECUTABLE(acngfs ${fsSRCS})
         SET_TARGET_PROPERTIES(acngfs PROPERTIES COMPILE_FLAGS "${ACNG_COMPFLAGS} ${ACNG_CXXFLAGS} ${acngfs_cflags}")
         INSTALL(TARGETS acngfs DESTINATION ${LIBDIR})

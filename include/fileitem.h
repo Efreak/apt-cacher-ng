@@ -7,6 +7,7 @@
 #include "config.h"
 #include "lockable.h"
 #include "header.h"
+#include "fileio.h"
 #include <unordered_map>
 
 namespace acng
@@ -14,7 +15,8 @@ namespace acng
 
 class fileitem;
 typedef std::shared_ptr<fileitem> tFileItemPtr;
-typedef std::unordered_multimap<mstring, tFileItemPtr> tFiGlobMap;
+typedef std::unordered_map<mstring, tFileItemPtr> tFiGlobMap;
+
 
 //! Base class containing all required data and methods for communication with the download sources
 class ACNG_API fileitem : public base_with_condition
@@ -37,7 +39,7 @@ public:
 	// initialize file item, return the status
 	virtual FiStatus Setup(bool bDynType);
 	
-	virtual int GetFileFd();
+	virtual unique_fd GetFileFd();
 	uint64_t GetTransferCount();
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow)=0;
@@ -92,17 +94,16 @@ protected:
 	header m_head;
 	int m_filefd;
 	int m_nDlRefsCount;
-	int usercount;
+	std::atomic_int usercount = ATOMIC_VAR_INIT(0);
 	FiStatus m_status;
 	mstring m_sPathRel;
 	time_t m_nTimeDlStarted, m_nTimeDlDone;
 	virtual int Truncate2checkedSize() {return 0;};
 
-private:
-	// helper data for global registration control. Access is synchronized by the global lock,
-	// not the internal lock here
+protected:
+	// this is owned by TFileItemUser and covered by its locking; it serves as flag for shared objects and a self-reference for fast and exact deletion
 	tFiGlobMap::iterator m_globRef;
-	friend class fileItemMgmt;
+	friend class TFileItemUser;
 };
 
 // dl item implementation with storage on disk
@@ -110,9 +111,8 @@ class fileitem_with_storage : public fileitem
 {
 public:
 	inline fileitem_with_storage(cmstring &s) {m_sPathRel=s;};
-	inline fileitem_with_storage(cmstring &s, int nUsers) {m_sPathRel=s; usercount=nUsers; };
 	virtual ~fileitem_with_storage();
-        int Truncate2checkedSize() override;
+	int Truncate2checkedSize() override;
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow) override;
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
@@ -130,21 +130,16 @@ protected:
 
 #ifndef MINIBUILD
 
-// auto_ptr like object that "owns" a fileitem while it's registered in the global
-// access table. Might cause item's deletion when destroyed
-class fileItemMgmt
+// "owner" of a file item, cares about sharing and user's reference counting
+class TFileItemUser
 {
 public:
-
-	// public constructor wrapper, get a unique object from the map or a new one
-	bool PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore);
+	// public constructor wrapper, create a sharable item with storage or share an existin one
+	static TFileItemUser Create(cmstring &sPathUnescaped, bool bConsiderAltStore) WARN_UNUSED;
 
 	// related to GetRegisteredFileItem but used for registration of custom file item
 	// implementations created elsewhere (which still need to obey regular work flow)
-	bool RegisterFileItem(tFileItemPtr spCustomFileItem);
-
-	// deletes global registration and replaces m_ptr with another copy
-	void RegisterFileitemLocalOnly(fileitem* replacement);
+	static TFileItemUser Create(tFileItemPtr spCustomFileItem, bool isShareable)  WARN_UNUSED;
 
 	//! @return: true iff there is still something in the pool for later cleaning
 	static time_t BackgroundCleanup();
@@ -152,21 +147,18 @@ public:
 	static void dump_status();
 
 	// when copied around, invalidates the original reference
-	~fileItemMgmt();
-	inline fileItemMgmt() {}
+	~TFileItemUser();
 	inline tFileItemPtr getFiPtr() {return m_ptr;}
 	inline operator bool() const {return (bool) m_ptr;}
+	// invalid dummy constructor
+	inline TFileItemUser() {}
 
-	tFileItemPtr m_ptr;
-
+	TFileItemUser(const TFileItemUser &src) = delete;
+	TFileItemUser& operator=(const TFileItemUser &src) = delete;
+	TFileItemUser& operator=(TFileItemUser &&src) { m_ptr.swap(src.m_ptr); return *this; }
+	TFileItemUser(TFileItemUser &&src) { m_ptr.swap(src.m_ptr); };
 private:
-	void Unreg();
-
-	fileItemMgmt(const fileItemMgmt &src);
-	fileItemMgmt& operator=(const fileItemMgmt &src);
-
-	inline fileitem* operator->() const {return m_ptr.get();}
-
+	tFileItemPtr m_ptr;
 };
 #else
 #define fileItemMgmt void

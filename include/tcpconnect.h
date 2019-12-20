@@ -8,11 +8,10 @@
 #ifndef TCPCONNECT_H_
 #define TCPCONNECT_H_
 
-#include <atomic>
 #include <memory>
 #include "meta.h"
 #include "sockio.h"
-
+#include "acfg.h"
 #include <memory>
 
 #ifdef HAVE_SSL
@@ -60,7 +59,7 @@ public:
 	bool StartTunnel(const tHttpUrl & realTarget, mstring& sError, cmstring *psAuthorization, bool bDoSSLinit);
 
 private:
-	bool _Connect(mstring &sErrOut, int timeout);
+	std::string _Connect(int timeout);
 	cfg::tRepoData::IHookHandler *m_pStateObserver=nullptr;
 
 protected:
@@ -79,7 +78,7 @@ class IDlConFactory
 public:
 	/// Moves the connection handle to the reserve pool (resets the specified sptr).
 	/// Should only be supplied with IDLE connection handles in a sane state.
-	virtual void RecycleIdleConnection(tDlStreamHandle & handle) =0;
+	virtual void RecycleIdleConnection(tDlStreamHandle & handle) const =0;
 	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
 				mstring &sErrOut,
 				bool *pbSecondHand,
@@ -87,7 +86,7 @@ public:
 				,bool ssl
 				,int timeout
 				,bool mustbevirgin
-		) =0;
+		) const =0;
 	virtual ~IDlConFactory() {};
 };
 
@@ -96,7 +95,7 @@ class ACNG_API dl_con_factory : public IDlConFactory
 public:
 	/// Moves the connection handle to the reserve pool (resets the specified sptr).
 	/// Should only be supplied with IDLE connection handles in a sane state.
-	virtual void RecycleIdleConnection(tDlStreamHandle & handle) override;
+	virtual void RecycleIdleConnection(tDlStreamHandle & handle) const override;
 	virtual tDlStreamHandle CreateConnected(cmstring &sHostname, cmstring &sPort,
 				mstring &sErrOut,
 				bool *pbSecondHand,
@@ -104,13 +103,12 @@ public:
 				,bool ssl
 				,int timeout
 				,bool mustbevirgin
-		) override;
+		) const override;
 	virtual ~dl_con_factory() {};
 	void dump_status();
 	time_t BackgroundCleanup();
 protected:
 	friend class tcpconnect;
-	static std::atomic_uint g_nconns;
 };
 
 extern dl_con_factory g_tcp_con_factory;

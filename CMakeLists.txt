@@ -131,7 +131,6 @@ set(USE_LTO_DEFAULT off)
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
    set(USE_LTO_DEFAULT off)
-   _append(ACNG_COMPFLAGS -DDEBUG)
 else()
    set(CMAKE_REQUIRED_FLAGS "-Wl,--gc-sections")
    CHECK_CXX_COMPILER_FLAG("-Os -fdata-sections -ffunction-sections -Wl,--gc-sections" GC_SECTIONS)
@@ -276,7 +275,7 @@ SET(CMAKE_REQUIRED_LIBRARIES "")
 
 set(HAVE_CHECKSUM on)
 
-pkg_check_modules(libevent libevent)
+pkg_check_modules(libevent "libevent>=2.1.2")
 if(NOT libevent_FOUND)
         message(FATAL_ERROR "!! Error: proper libevent installation is required")
 else()
@@ -384,4 +383,6 @@ CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}
 CMAKE_INSTALL_FULL_SYSCONFDIR: ${CMAKE_INSTALL_FULL_SYSCONFDIR}
 LIBDIR: ${LIBDIR}
 AVAHIDIR: ${AVAHIDIR}
+DEBUG: ${DEBUG}
+CMAKE_BINARY_DIR: ${CMAKE_BUILD_TYPE}
 ")

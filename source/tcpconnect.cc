@@ -47,13 +47,10 @@ atomic_int nConCount(0), nDisconCount(0), nReuseCount(0);
 namespace acng
 {
 
-ACNG_API std::atomic_uint dl_con_factory::g_nconns(0);
 ACNG_API dl_con_factory g_tcp_con_factory;
 
 tcpconnect::tcpconnect(cfg::tRepoData::IHookHandler *pObserver) : m_pStateObserver(pObserver)
 {
-	if(cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
-		dl_con_factory::g_nconns.fetch_add(1);
 	if(pObserver)
 		pObserver->OnAccess();
 }
@@ -62,8 +59,6 @@ tcpconnect::~tcpconnect()
 {
 	LOGSTART("tcpconnect::~tcpconnect, terminating outgoing connection class");
 	Disconnect();
-	if(cfg::maxdlspeed != cfg::RESERVED_DEFVAL)
-		dl_con_factory::g_nconns.fetch_add(-1);
 #ifdef HAVE_SSL
 	if(m_ctx)
 	{
@@ -79,16 +74,16 @@ tcpconnect::~tcpconnect()
 	}
 }
 
-inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
+std::string tcpconnect::_Connect(int timeout)
 {
 	LOGSTART2("tcpconnect::_Connect", "hostname: " << m_sHostName);
 
-	auto dns = CAddrInfo::CachedResolve(m_sHostName, m_sPort, sErrorMsg);
+	auto dnsres = CAddrInfo::Resolve(m_sHostName, m_sPort);
 
-	if(!dns)
+	if(!dnsres || !dnsres->getTcpAddrInfo())
 	{
-		USRDBG(sErrorMsg);
-		return false; // sErrorMsg got the info already, no other chance to fix it
+		USRDBG(dnsres->getError());
+		return dnsres->getError();
 	}
 
 	::signal(SIGPIPE, SIG_IGN);
@@ -124,7 +119,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 				return false;
 			}
 			set_connect_sock_flags(fd);
-#if DEBUG
+#ifdef DEBUG
 			log::err(string("Connecting: ") + formatIpPort(dns));
 #endif
 			while (true)
@@ -147,16 +142,15 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			}
 		}
 	};
-	auto iter = tAlternatingDnsIterator(dns->getTcpAddrInfo());
+	auto iter = tAlternatingDnsIterator(dnsres->getTcpAddrInfo());
 	tConData prim {ADDR_PICKED, -1, time_start + timeout, iter.next() };
 	tConData alt {NO_ALTERNATIVES, -1, time_start + cfg::fasttimeout, nullptr };
 	CTimeVal tv;
 	// pickup the first and/or probably the best errno code which can be reported to user
 	int error_prim = 0;
 
-	auto retGood = [&](int& fd) { std::swap(fd, m_conFd); return true; };
-	auto retError = [&](const std::string &errStr) { sErrorMsg = errStr; return false; };
-	auto withErrnoError = [&]() { return retError(tErrnoFmter("500 Connection failure: "));	};
+	auto retGood = [&](int& fd) { std::swap(fd, m_conFd); return sEmptyString; };
+	auto withErrnoError = [&]() { return tErrnoFmter("500 Connection failure: ");	};
 	auto withThisErrno = [&withErrnoError](int myErr) { errno = myErr; return withErrnoError(); };
 
 	// ok, initial condition, one target should be always there, iterator would also hop to the next fallback if allowed
@@ -219,7 +213,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			checkforceclose(prim.fd);
 			break;
 		default: // this should be unreachable
-			return retError("500 Internal error at " STRINGIFY(__LINE__));
+			return "500 Internal error at " STRINGIFY(__LINE__);
 		}
 
 		switch(alt.state)
@@ -280,7 +274,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			break;
 		}
 		default: // this should be unreachable
-			return retError("500 Internal error at " STRINGIFY(__LINE__));
+			return "500 Internal error at " STRINGIFY(__LINE__);
 		}
 
 		select_set_t selset;
@@ -361,7 +355,7 @@ ACNG_API void CloseAllCachedConnections()
 
 tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &sPort,
 		mstring &sErrOut, bool *pbSecondHand, cfg::tRepoData::IHookHandler *pStateTracker
-		,bool bSsl, int timeout, bool nocache)
+		,bool bSsl, int timeout, bool nocache) const
 {
 	LOGSTART2s("tcpconnect::CreateConnected", "hostname: " << sHostname << ", port: " << sPort
 			<< (bSsl?" with ssl":" , no ssl"));
@@ -420,7 +414,7 @@ tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &s
 			p->m_sPort=sPort;
 		}
 
-		if(!p || !p->_Connect(sErrOut, timeout) || p->GetFD()<0) // failed or worthless
+		if(!p || !p->_Connect(timeout).empty() || p->GetFD()<0) // failed or worthless
 			p.reset();
 #ifdef HAVE_SSL
 		else if(bSsl)
@@ -440,7 +434,7 @@ tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &s
 	return p;
 }
 
-void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
+void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle) const
 {
 	if(!handle)
 		return;
@@ -684,21 +678,6 @@ bool tcpconnect::SSLinit(mstring &sErr, cmstring &sHostname, cmstring &sPort)
 			return withSslError("Incompatible remote certificate");
 	}
 	return true;
-}
-
-//! Global initialization helper (might be non-reentrant)
-void ACNG_API globalSslInit()
-{
-	static bool inited=false;
-	if(inited)
-		return;
-	inited = true;
-	SSL_load_error_strings();
-	ERR_load_BIO_strings();
-	ERR_load_crypto_strings();
-	ERR_load_SSL_strings();
-	OpenSSL_add_all_algorithms();
-	SSL_library_init();
 }
 
 #endif

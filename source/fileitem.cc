@@ -23,7 +23,6 @@ using namespace std;
 namespace acng
 {
 #define MAXTEMPDELAY acng::cfg::maxtempdelay // 27
-mstring ACNG_API sReplDir("_altStore" SZPATHSEP);
 
 static tFiGlobMap mapItems;
 #ifndef MINIBUILD
@@ -109,7 +108,7 @@ uint64_t fileitem::GetTransferCount()
 	return ret;
 }
 
-int fileitem::GetFileFd() {
+unique_fd fileitem::GetFileFd() {
 	LOGSTART("fileitem::GetFileFd");
 	setLockGuard;
 
@@ -118,11 +117,11 @@ int fileitem::GetFileFd() {
 
 #ifdef HAVE_FADVISE
 	// optional, experimental
-	if(fd>=0)
+	if(fd != -1)
 		posix_fadvise(fd, 0, m_nSizeChecked, POSIX_FADV_SEQUENTIAL);
 #endif
 
-	return fd;
+	return unique_fd(fd);
 }
 
 off_t GetFileSize(cmstring & path, off_t defret)
@@ -240,6 +239,7 @@ bool fileitem::CheckUsableRange_unlocked(off_t nRangeLastByte)
 			&& atoofft(m_head.h[header::CONTENT_LENGTH], -255) > nRangeLastByte);
 }
 
+// XXX: bForce is ultima ratio and there should be a better way; draft in the revamp branch...
 bool fileitem::SetupClean(bool bForce)
 {
 	setLockGuard;
@@ -687,7 +687,10 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 			if (m_filefd >= 0 && !m_head.h[header::CONTENT_LENGTH])
 			{
 				m_head.set(header::CONTENT_LENGTH, m_nSizeChecked);
-				m_head.StoreToFile(CACHE_BASE + m_sPathRel + ".head");
+				// only update the file on disk if this item is still shared
+				lockguard lockGlobalMap(mapItemsMx);
+				if(m_globRef != mapItems.end())
+					m_head.StoreToFile(SABSPATHEX(m_sPathRel, ".head"));
 			}
 		}
 	}
@@ -726,63 +729,43 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 	return true;
 }
 
-fileItemMgmt::~fileItemMgmt()
+TFileItemUser::~TFileItemUser()
 {
-	LOGSTART("fileItemMgmt::~fileItemMgmt");
-	Unreg();
-}
-
-inline void fileItemMgmt::Unreg()
-{
-	LOGSTART("fileItemMgmt::Unreg");
-
-	if(!m_ptr) // unregistered before?
-		return;
+	LOGSTART("TFileItemUser::~TFileItemUser");
 
 	lockguard managementLock(mapItemsMx);
 
-	// invalid or not globally registered?
-	if(m_ptr->m_globRef == mapItems.end())
+	if (!m_ptr) // unregistered before? or not shared?
 		return;
 
-	auto local_ptr(m_ptr); // might disappear
-	lockguard fitemLock(*local_ptr);
+	auto ucount = --m_ptr->usercount;
+	if (ucount > 0)
+		return; // still used
 
-	if ( -- m_ptr->usercount <= 0)
+	// invalid or not globally registered?
+	if (m_ptr->m_globRef == mapItems.end())
+		return;
+
+	// some file items will be held ready for some time
+
+	if (MAXTEMPDELAY && m_ptr->m_bCheckFreshness
+			&& m_ptr->m_status == fileitem::FIST_COMPLETE)
 	{
-		if(m_ptr->m_status < fileitem::FIST_COMPLETE && m_ptr->m_status != fileitem::FIST_INITED)
-		{
-			ldbg("usercount dropped to zero while downloading?: " << (int) m_ptr->m_status);
-		}
-
-		// some file items will be held ready for some time
-		time_t when(0);
-		if (MAXTEMPDELAY && m_ptr->m_bCheckFreshness &&
-				m_ptr->m_status == fileitem::FIST_COMPLETE &&
-				((when = m_ptr->m_nTimeDlStarted+MAXTEMPDELAY) > GetTime()))
+		auto when = m_ptr->m_nTimeDlStarted + MAXTEMPDELAY;
+		if (when > GetTime())
 		{
 			cleaner::GetInstance().ScheduleFor(when, cleaner::TYPE_EXFILEITEM);
 			return;
 		}
-
-		// nothing, let's put the item into shutdown state
-		m_ptr->m_status = fileitem::FIST_DLSTOP;
-		m_ptr->m_head.frontLine="HTTP/1.1 500 Cache file item expired";
-		m_ptr->notifyAll();
-
-		LOG("*this is last entry, deleting dl/fi mapping");
-		mapItems.erase(m_ptr->m_globRef);
-		m_ptr->m_globRef = mapItems.end();
-
-		// make sure it's not double-unregistered accidentally!
-		m_ptr.reset();
 	}
+	// no more readers for this item, can be discarded
+	mapItems.erase(m_ptr->m_globRef);
 }
 
-
-bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore)
+TFileItemUser TFileItemUser::Create(cmstring &sPathUnescaped, bool makeWay)
 {
-	LOGSTART2("fileitem::GetFileItem", sPathUnescaped);
+	LOGSTART2s("TFileItemUser::Create", sPathUnescaped);
+	TFileItemUser ret;
 
 	try
 	{
@@ -791,87 +774,93 @@ bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 		auto it = mapItems.find(sPathRel);
 		if(it != mapItems.end())
 		{
-			if (bConsiderAltStore)
+			auto& fi = it->second;
+			if (makeWay && !fi->m_sPathRel.empty())
 			{
-				// detect items that got stuck somehow
+				// detect items that got stuck somehow and move it out of the way
 				time_t now(GetTime());
-				time_t extime(now - cfg::stucksecs);
-				if (it->second->m_nTimeDlDone < extime)
+				if(fi->m_nTimeDlDone > now + MAXTEMPDELAY  + 2
+						|| fi->m_nTimeDlStarted > now - cfg::stucksecs)
 				{
-					// try to find its sibling which is in good state?
-					for (; it!=mapItems.end() && it->first == sPathRel; ++it)
+
+					auto pathAbs = SABSPATH(fi->m_sPathRel);
+					auto xName = pathAbs + ltos(now);
+					if(0 != creat(xName.c_str(), cfg::fileperms))
 					{
-						if (it->second->m_nTimeDlDone >= extime)
-						{
-							it->second->usercount++;
-							LOG("Sharing an existing REPLACEMENT file item");
-							m_ptr = it->second;
-							return true;
-						}
+						// oh, that's bad, no permissions on the folder whatsoever?
+						log::err(string("Failure to create replacement of ") + fi->m_sPathRel + " - CHECK FOLDER PERMISSIONS!");
 					}
-					// ok, then create a modded name version in the replacement directory
-					mstring sPathRelMod(sPathRel);
-					replaceChars(sPathRelMod, "/\\", '_');
-					sPathRelMod.insert(0, sReplDir + ltos(getpid()) + "_" + ltos(now) + "_");
-					LOG("Registering a new REPLACEMENT file item...");
-					auto sp(make_shared<fileitem_with_storage>(sPathRelMod, 1));
-					sp->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
-					m_ptr = sp;
-					return true;
+					else
+					{
+						// if we can create files there then renaming should not be a problem
+						unlink(pathAbs.c_str());
+						rename(xName.c_str(), pathAbs.c_str());
+						fi->m_globRef = mapItems.end();
+						mapItems.erase(it);
+						goto add_as_new;
+					}
 				}
 			}
 			LOG("Sharing existing file item");
 			it->second->usercount++;
-			m_ptr = it->second;
-			return true;
+			ret.m_ptr = it->second;
+			return ret;
 		}
-		LOG("Registering the NEW file item...");
-		auto sp(make_shared<fileitem_with_storage>(sPathRel, 1));
-		sp->m_globRef = mapItems.insert(make_pair(sPathRel, sp));
-		//lockGlobalMap.unLock();
-		m_ptr = sp;
-		return true;
+		else
+		{
+			add_as_new:
+			LOG("Registering the NEW file item...");
+			auto sp(make_shared<fileitem_with_storage>(sPathRel));
+			sp->usercount++;
+			auto res = mapItems.emplace(sPathRel, sp);
+			ASSERT(res.second);
+			sp->m_globRef = res.first;
+			//lockGlobalMap.unLock();
+			ret.m_ptr = sp;
+			return ret;
+		}
 	}
 	catch(std::bad_alloc&)
 	{
+		return TFileItemUser();
 	}
-	return false;
 }
 
 // make the fileitem globally accessible
-bool fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
+TFileItemUser TFileItemUser::Create(tFileItemPtr spCustomFileItem, bool isShareable)
 {
-	LOGSTART2("fileitem::RegisterFileItem", spCustomFileItem->m_sPathRel);
+	LOGSTART2s("TFileItemUser::Create", spCustomFileItem->m_sPathRel);
+
+	TFileItemUser ret;
 
 	if (!spCustomFileItem || spCustomFileItem->m_sPathRel.empty())
-		return false;
+		return ret;
 
-	Unreg();
+
+	if(!isShareable)
+	{
+		ret.m_ptr = spCustomFileItem;
+		return ret;
+	}
 
 	lockguard lockGlobalMap(mapItemsMx);
 
-	if(ContHas(mapItems, spCustomFileItem->m_sPathRel))
-		return false; // conflict, another agent is already active
-
-	spCustomFileItem->m_globRef = mapItems.emplace(spCustomFileItem->m_sPathRel,
+	auto installed = mapItems.emplace(spCustomFileItem->m_sPathRel,
 			spCustomFileItem);
-	spCustomFileItem->usercount = 1;
-	m_ptr = spCustomFileItem;
-	return true;
-}
 
-void fileItemMgmt::RegisterFileitemLocalOnly(fileitem* replacement)
-{
-	LOGSTART2("fileItemMgmt::ReplaceWithLocal", replacement);
-	Unreg();
-	m_ptr.reset(replacement);
-}
+	if(!installed.second)
+		return ret; // conflict, another agent is already active
 
+	spCustomFileItem->m_globRef = installed.first;
+	spCustomFileItem->usercount++;
+	ret.m_ptr = spCustomFileItem;
+	return ret;
+}
 
 // this method is supposed to be awaken periodically and detects items with ref count manipulated by
 // the request storm prevention mechanism. Items shall be be dropped after some time if no other
 // thread but us is using them.
-time_t fileItemMgmt::BackgroundCleanup()
+time_t TFileItemUser::BackgroundCleanup()
 {
 	LOGSTART2s("fileItemMgmt::BackgroundCleanup", GetTime());
 	lockguard lockGlobalMap(mapItemsMx);
@@ -918,6 +907,9 @@ time_t fileItemMgmt::BackgroundCleanup()
 
 ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, size_t count)
 {
+	if(out_fd == -1 || in_fd == -1)
+		return -1;
+
 #ifndef HAVE_LINUX_SENDFILE
 	return sendfile_generic(out_fd, in_fd, &nSendPos, count);
 #else
@@ -930,7 +922,7 @@ ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, 
 #endif
 }
 
-void fileItemMgmt::dump_status()
+void TFileItemUser::dump_status()
 {
 	tSS fmt;
 	log::err("File descriptor table:\n");
@@ -954,7 +946,7 @@ void fileItemMgmt::dump_status()
 					<< item.second->m_nSizeSeen
 					<< "\n\tGotAt: " << item.second->m_nTimeDlStarted << "\n\n";
 		}
-		log::err(fmt.c_str(), nullptr);
+		log::err(fmt);
 	}
 	log::flush();
 }
@@ -962,12 +954,6 @@ void fileItemMgmt::dump_status()
 fileitem_with_storage::~fileitem_with_storage()
 {
 	Truncate2checkedSize();
-
-	if(startsWith(m_sPathRel, sReplDir))
-	{
-		::unlink(SZABSPATH(m_sPathRel));
-		::unlink((SABSPATH(m_sPathRel)+".head").c_str());
-	}
 }
 
 int fileitem_with_storage::Truncate2checkedSize()
