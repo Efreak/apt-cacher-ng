@@ -239,7 +239,7 @@ bool fileitem::CheckUsableRange_unlocked(off_t nRangeLastByte)
 			&& atoofft(m_head.h[header::CONTENT_LENGTH], -255) > nRangeLastByte);
 }
 
-#warning FIXME: bForce is brute force and may have unwanted side effects
+// XXX: bForce is ultima ratio and there should be a better way; draft in the revamp branch...
 bool fileitem::SetupClean(bool bForce)
 {
 	setLockGuard;
@@ -762,7 +762,6 @@ TFileItemUser::~TFileItemUser()
 	mapItems.erase(m_ptr->m_globRef);
 }
 
-#warning check all refs, all must be stored in object
 TFileItemUser TFileItemUser::Create(cmstring &sPathUnescaped, bool makeWay)
 {
 	LOGSTART2s("TFileItemUser::Create", sPathUnescaped);
