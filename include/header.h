@@ -2,6 +2,7 @@
 #define _HEADER_H
 
 #include <string>
+#include <array>
 #include <unordered_set>
 #include <map>
 #include "meta.h"
@@ -46,12 +47,10 @@ class ACNG_API header {
       eHeadType type = INVALID;
       mstring frontLine;
       
-      char *h[HEADPOS_MAX] = {0};
-                           
-      inline header(){};
+      std::array<char*, HEADPOS_MAX> h;
+      inline header() : h() {}
       ~header();
       header(const header &);
-      header(header &&);
       header& operator=(const header&); 
       
       static mstring GenInfoHeaders();
@@ -92,6 +91,11 @@ class ACNG_API header {
        */
       // XXX: maybe redesign the unkFunc to just use pointer and length instead of strings
       int Load(const char *src, unsigned length, const std::function<void(cmstring&, cmstring&)> &unkFunc = std::function<void(cmstring&, cmstring&)>());
+      void swap( header& other );
+
+      bool IsNullOrEmpty(eHeadPos pos) { return !h[pos] || !*(h[pos]);}
+
+      bool ParseRange(off_t &nReqRangeFrom, off_t &nReqRangeTo);
 };
 
 inline bool BODYFREECODE(int status)

@@ -34,6 +34,10 @@
 #ifdef _MSC_VER
 #define __func__ __FUNCTION__
 #endif
+// take the best we can get in this case
+#ifndef __GNUC__
+#define __PRETTY_FUNCTION__ __func__
+#endif
 
 
 #ifdef __GNUC__
@@ -91,6 +95,8 @@ extern cmstring FAKEDATEMARK;
 #define CPATHSEP CPATHSEPUNX
 #define szNEWLINE "\n"
 #endif
+
+static const cmstring sCRLF("\r\n");
 
 // some alternative versions of these flags
 
@@ -201,46 +207,72 @@ bool ParseKeyValLine(const mstring & sIn, mstring & sOutKey, mstring & sOutVal);
 
 extern cmstring PROT_PFX_HTTPS, PROT_PFX_HTTP;
 
-class ACNG_API tHttpUrl
+struct ACNG_API tHostPortProto
 {
-
-private:
+protected:
 	mstring sPort;
-
 public:
+	mstring sHost, sUserPass;
+	bool bSSL=false;
+	inline cmstring& GetDefaultPortForProto() const {
+		return bSSL ? sDefPortHTTPS : sDefPortHTTP;
+	}
+	inline cmstring& GetPort() const { return !sPort.empty() ? sPort : GetDefaultPortForProto(); }
+	bool operator==(const tHostPortProto& other) const
+	{
+		return other.sPort == sPort && other.sHost == sHost && other.bSSL == bSSL;
+	}
+    // arithmetics might be weird but it provides reliable order in efficient way
+    bool operator<(const tHostPortProto& other) const
+    {
+        if( !(other.bSSL) != !(bSSL) )
+            return !(other.bSSL) < !(bSSL);
+        auto cm = other.sHost.compare(sHost);
+        if(cm < 0)
+            return true;
+        if(cm > 0)
+            return false;
+        return sPort < other.sPort;
+
+    }
+	bool operator!=(const tHostPortProto& other) const
+	{
+		return !(other == *this);
+	}
+	tHostPortProto(cmstring &h, cmstring &port, bool bSsl) : sPort(port), sHost(h), bSSL(bSsl)
+	{
+	}
+    tHostPortProto() =default;
+    void SetPort(cmstring& newPort) { sPort = newPort; }
+};
+
+// XXX: better add a global custom specialization of std::hash
+struct HostPortProtoHash
+{
+    unsigned operator()(const tHostPortProto& a) const
+    {
+        return (std::hash<std::string>()(a.sHost) ^ std::hash<std::string>()(a.GetPort())) + a.bSSL;
+    }
+};
+
+class ACNG_API tHttpUrl : public tHostPortProto
+{
+public:
+    using tHostPortProto::tHostPortProto; // ctor
+
+	mstring sPath;
 	bool SetHttpUrl(cmstring &uri, bool unescape = true);
 	mstring ToURI(bool bEscaped) const;
-	mstring sHost, sPath, sUserPass;
 
-	bool bSSL=false;
 	inline cmstring & GetProtoPrefix() const
 	{
 		return bSSL ? PROT_PFX_HTTPS : PROT_PFX_HTTP;
 	}
-	tHttpUrl(const acng::tHttpUrl& a)
-	{
-		sHost = a.sHost;
-		sPort = a.sPort;
-		sPath = a.sPath;
-		sUserPass = a.sUserPass;
-		bSSL = a.bSSL;
-	}
-	tHttpUrl & operator=(const tHttpUrl &a)
-	{
-		if(&a == this) return *this;
-		sHost = a.sHost;
-		sPort = a.sPort;
-		sPath = a.sPath;
-		sUserPass = a.sUserPass;
-		bSSL = a.bSSL;
-		return *this;
-	}
 	bool operator==(const tHttpUrl &a) const
 	{
-		return a.sHost == sHost && a.sPort == sPort && a.sPath == sPath
-				&& a.sUserPass == sUserPass && a.bSSL == bSSL;
+		return tHostPortProto::operator ==(a) && a.sPath == sPath;
 	}
-	;bool operator!=(const tHttpUrl &a) const
+	bool operator!=(const tHttpUrl &a) const
 	{
 		return !(a == *this);
 	}
@@ -252,19 +284,18 @@ public:
 		sUserPass.clear();
 		bSSL = false;
 	}
+
 	inline cmstring& GetDefaultPortForProto() const {
 		return bSSL ? sDefPortHTTPS : sDefPortHTTP;
 	}
 	inline cmstring& GetPort(cmstring& szDefVal) const { return !sPort.empty() ? sPort : szDefVal; }
 	inline cmstring& GetPort() const { return GetPort(GetDefaultPortForProto()); }
 
-	inline tHttpUrl(cmstring &host, cmstring& port, bool ssl) :
-			sPort(port), sHost(host), bSSL(ssl)
-	{
-	}
-	inline tHttpUrl() =default;
 	// evil method that should only be called for specific purposes in certain locations
 	tHttpUrl* NormalizePath() { StrSubst(sPath, "//", "/"); return this; }
+
+	inline tStrPair HostPort() { return tStrPair(sHost, GetPort()); }
+
 };
 
 #define POKE(x) for(;;) { ssize_t n=write(x, "", 1); if(n>0 || (EAGAIN!=errno && EINTR!=errno)) break;  }

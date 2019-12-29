@@ -591,7 +591,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 			}
 		}
 
-		if (m_filefd<0)
+		if (m_filefd == -1)
 		{
 			tErrnoFmter efmt("503 Cache storage error - ");
 #ifdef DEBUG

@@ -204,5 +204,20 @@ void ACNG_API mkdirhier(cmstring& path)
 		if(pos == stmiss) break;
 	}
 }
+int open4write(cmstring &sPath)
+{
+	const char *szPath=sPath.c_str();
+	int fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, cfg::fileperms);
+	if(fd != -1)
+		return fd;
+	auto e(errno); // better keep this errno
+	// maybe bad symlink or something in the way which can be removed?
+	if(::unlink(szPath))
+	{
+		errno = e;
+		return -1;
+	}
+	return open(szPath, O_WRONLY|O_CREAT|O_TRUNC, cfg::fileperms);
+}
 
 }

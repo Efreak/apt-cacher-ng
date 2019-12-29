@@ -131,7 +131,7 @@ protected:
 	/// make sure to have at least minWriteCapa bytes extra available for writing
 	inline void reserve_atleast(size_t minWriteCapa)
 	{
-		if(w+minWriteCapa+1 < m_nCapacity) return;
+        if(m_buf && (w+minWriteCapa+1 < m_nCapacity)) return;
 		auto capaNew=2*(w+minWriteCapa);
 		if(!setsize(capaNew)) throw std::bad_alloc();
 	}

@@ -80,14 +80,6 @@ header::header(const header &s)
 		h[i] = s.h[i] ? strdup(s.h[i]) : nullptr;
 }
 
-header::header(header &&s)
-:type(s.type)
-{
-	frontLine.swap(s.frontLine);
-	swap(h, s.h);
-}
-
-
 header& header::operator=(const header& s)
 {
 	type=s.type;
@@ -305,19 +297,9 @@ tSS header::ToString() const
 int header::StoreToFile(cmstring &sPath) const
 {
 	int nByteCount(0);
-	const char *szPath=sPath.c_str();
-	int fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, cfg::fileperms);
-	if(fd<0)
-	{
-		fd=-errno;
-		// maybe there is something in the way which can be removed?
-		if(::unlink(szPath))
-			return fd;
-
-		fd=open(szPath, O_WRONLY|O_CREAT|O_TRUNC, cfg::fileperms);
-		if(fd<0)
-			return -errno;
-	}
+	int fd=open4write(sPath);
+	if(fd == -1)
+		return -errno;
 	
 	auto hstr=ToString();
 	const char *p=hstr.rptr();
@@ -326,7 +308,7 @@ int header::StoreToFile(cmstring &sPath) const
 	for(string::size_type pos=0; pos<(uint)nByteCount;)
 	{
 		int ret=write(fd, p+pos, nByteCount-pos);
-		if(ret<0)
+		if(ret == -1)
 		{
 			if(EAGAIN == errno || EINTR == errno)
 				continue;
@@ -374,5 +356,45 @@ bool header::ParseDate(const char *s, struct tm *tm)
 
 	return false;
 }
+
+void header::swap(header& other)
+{
+	std::swap(other.type, type);
+	frontLine.swap(other.frontLine);
+	h.swap(other.h);
+}
+
+inline bool header::ParseRange(off_t &nReqRangeFrom, off_t &nReqRangeTo)
+{
+	/*
+	 * Range: bytes=453291-
+	 * ...
+	 * Content-Length: 7271829
+	 * Content-Range: bytes 453291-7725119/7725120
+	 */
+
+	const char *pRange = h[header::RANGE];
+	// working around a bug in old curl versions
+	if (!pRange)
+		pRange = h[header::CONTENT_RANGE];
+	if (pRange)
+	{
+		int nRangeItems = sscanf(pRange, "bytes=" OFF_T_FMT
+		"-" OFF_T_FMT, &nReqRangeFrom, &nReqRangeTo);
+		// working around bad (old curl style) requests
+		if (nRangeItems <= 0)
+		{
+			nRangeItems = sscanf(pRange, "bytes "
+			OFF_T_FMT "-" OFF_T_FMT, &nReqRangeFrom, &nReqRangeTo);
+		}
+
+		if (nRangeItems < 1) // weird...
+			nReqRangeFrom = nReqRangeTo = -2;
+		else
+			return true;
+	}
+	return false;
+}
+
 
 }

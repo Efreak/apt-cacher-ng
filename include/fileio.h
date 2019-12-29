@@ -115,6 +115,8 @@ public:
 };
 */
 
+// open and/or create file for storage with the flags from our config
+int open4write(cmstring &sPath);
 using unique_fd = resource_owner<int, justforceclose, -1>;
 
 }

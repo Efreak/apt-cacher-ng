@@ -195,6 +195,7 @@ static void SetupCacheDir()
 	tSS buf;
 	buf << cacheDirSlash << "testfile." << tv.tv_usec * tv.tv_sec * (LPCSTR(buf.wptr()) - LPCSTR(&tv));
 	mkbasedir(buf.c_str()); // try or force its directory creation
+#warning obey fileperms, or better use create4write function everywhere where O_CREAT is used
 	int t=open( buf.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 00644);
 	if (t>=0)
 	{
