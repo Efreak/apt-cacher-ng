@@ -729,7 +729,7 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 	return true;
 }
 
-TFileItemUser::~TFileItemUser()
+void StopUsingFileitem(tFileItemPtr m_ptr)
 {
 	if (!m_ptr) // unregistered before? or not shared?
 		return;
@@ -761,10 +761,9 @@ TFileItemUser::~TFileItemUser()
 }
 
 #warning check all refs, all must be stored in object
-TFileItemUser TFileItemUser::Create(cmstring &sPathUnescaped, bool makeWay)
+TFileItemUser fileitem::Create(cmstring &sPathUnescaped, bool makeWay)
 {
-	LOGSTART2s("TFileItemUser::Create", sPathUnescaped);
-	TFileItemUser ret;
+	LOGSTART2s("fileitem::Create", sPathUnescaped);
 
 	try
 	{
@@ -802,8 +801,7 @@ TFileItemUser TFileItemUser::Create(cmstring &sPathUnescaped, bool makeWay)
 			}
 			LOG("Sharing existing file item");
 			it->second->usercount++;
-			ret.m_ptr = it->second;
-			return ret;
+			return TFileItemUser(it->second);
 		}
 		else
 		{
@@ -814,9 +812,7 @@ TFileItemUser TFileItemUser::Create(cmstring &sPathUnescaped, bool makeWay)
 			auto res = mapItems.emplace(sPathRel, sp);
 			ASSERT(res.second);
 			sp->m_globRef = res.first;
-			//lockGlobalMap.unLock();
-			ret.m_ptr = sp;
-			return ret;
+			return TFileItemUser(sp);
 		}
 	}
 	catch(std::bad_alloc&)
@@ -826,21 +822,15 @@ TFileItemUser TFileItemUser::Create(cmstring &sPathUnescaped, bool makeWay)
 }
 
 // make the fileitem globally accessible
-TFileItemUser TFileItemUser::Create(tFileItemPtr spCustomFileItem, bool isShareable)
+TFileItemUser fileitem::Create(tFileItemPtr spCustomFileItem, bool isShareable)
 {
-	LOGSTART2s("TFileItemUser::Create", spCustomFileItem->m_sPathRel);
-
-	TFileItemUser ret;
+	LOGSTART2s("fileitem::Create", spCustomFileItem->m_sPathRel);
 
 	if (!spCustomFileItem || spCustomFileItem->m_sPathRel.empty())
-		return ret;
-
+		return TFileItemUser();
 
 	if(!isShareable)
-	{
-		ret.m_ptr = spCustomFileItem;
-		return ret;
-	}
+		return TFileItemUser(spCustomFileItem);
 
 	lockguard lockGlobalMap(mapItemsMx);
 
@@ -848,18 +838,17 @@ TFileItemUser TFileItemUser::Create(tFileItemPtr spCustomFileItem, bool isSharea
 			spCustomFileItem);
 
 	if(!installed.second)
-		return ret; // conflict, another agent is already active
+		return TFileItemUser(); // conflict, another agent is already active
 
 	spCustomFileItem->m_globRef = installed.first;
 	spCustomFileItem->usercount++;
-	ret.m_ptr = spCustomFileItem;
-	return ret;
+	return TFileItemUser(spCustomFileItem);
 }
 
 // this method is supposed to be awaken periodically and detects items with ref count manipulated by
 // the request storm prevention mechanism. Items shall be be dropped after some time if no other
 // thread but us is using them.
-time_t TFileItemUser::BackgroundCleanup()
+time_t fileitem::BackgroundCleanup()
 {
 	LOGSTART2s("fileItemMgmt::BackgroundCleanup", GetTime());
 	lockguard lockGlobalMap(mapItemsMx);
@@ -921,7 +910,7 @@ ssize_t fileitem_with_storage::SendData(int out_fd, int in_fd, off_t &nSendPos, 
 #endif
 }
 
-void TFileItemUser::dump_status()
+void fileitem::dump_status()
 {
 	tSS fmt;
 	log::err("File descriptor table:\n");

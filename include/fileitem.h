@@ -16,7 +16,8 @@ namespace acng
 class fileitem;
 typedef std::shared_ptr<fileitem> tFileItemPtr;
 typedef std::unordered_map<mstring, tFileItemPtr> tFiGlobMap;
-
+void StopUsingFileitem(tFileItemPtr);
+using TFileItemUser = resource_owner_default<tFileItemPtr,StopUsingFileitem>;
 
 //! Base class containing all required data and methods for communication with the download sources
 class ACNG_API fileitem : public base_with_condition
@@ -101,9 +102,22 @@ protected:
 	virtual int Truncate2checkedSize() {return 0;};
 
 protected:
-	// this is owned by TFileItemUser and covered by its locking; it serves as flag for shared objects and a self-reference for fast and exact deletion
+	// this is owned by fileitem and covered by its locking; it serves as flag for shared objects and a self-reference for fast and exact deletion
 	tFiGlobMap::iterator m_globRef;
-	friend class TFileItemUser;
+	friend void ::acng::StopUsingFileitem(tFileItemPtr);
+
+public:
+	// public constructor wrapper, create a sharable item with storage or share an existin one
+	static TFileItemUser Create(cmstring &sPathUnescaped, bool bConsiderAltStore) WARN_UNUSED;
+
+	// related to GetRegisteredFileItem but used for registration of custom file item
+	// implementations created elsewhere (which still need to obey regular work flow)
+	static TFileItemUser Create(tFileItemPtr spCustomFileItem, bool isShareable)  WARN_UNUSED;
+
+	//! @return: true iff there is still something in the pool for later cleaning
+	static time_t BackgroundCleanup();
+
+	static void dump_status();
 };
 
 // dl item implementation with storage on disk
@@ -127,42 +141,6 @@ public:
 protected:
 	int MoveRelease2Sidestore();
 };
-
-#ifndef MINIBUILD
-
-// "owner" of a file item, cares about sharing and user's reference counting
-class TFileItemUser
-{
-public:
-	// public constructor wrapper, create a sharable item with storage or share an existin one
-	static TFileItemUser Create(cmstring &sPathUnescaped, bool bConsiderAltStore) WARN_UNUSED;
-
-	// related to GetRegisteredFileItem but used for registration of custom file item
-	// implementations created elsewhere (which still need to obey regular work flow)
-	static TFileItemUser Create(tFileItemPtr spCustomFileItem, bool isShareable)  WARN_UNUSED;
-
-	//! @return: true iff there is still something in the pool for later cleaning
-	static time_t BackgroundCleanup();
-
-	static void dump_status();
-
-	// when copied around, invalidates the original reference
-	~TFileItemUser();
-	inline tFileItemPtr getFiPtr() {return m_ptr;}
-	inline operator bool() const {return (bool) m_ptr;}
-	// invalid dummy constructor
-	inline TFileItemUser() {}
-
-	TFileItemUser(const TFileItemUser &src) = delete;
-	TFileItemUser& operator=(const TFileItemUser &src) = delete;
-	TFileItemUser& operator=(TFileItemUser &&src) { m_ptr.swap(src.m_ptr); return *this; }
-	TFileItemUser(TFileItemUser &&src) { m_ptr.swap(src.m_ptr); };
-private:
-	tFileItemPtr m_ptr;
-};
-#else
-#define fileItemMgmt void
-#endif // not MINIBUILD
 
 }
 #endif

@@ -83,7 +83,7 @@ void cleaner::WorkLoop()
 			USRDBG("acng::cfg:ExecutePostponed, nextRunTime now: " << time_nextcand);
 			break;
 		case TYPE_EXFILEITEM:
-			time_nextcand = TFileItemUser::BackgroundCleanup();
+			time_nextcand = fileitem::BackgroundCleanup();
 			USRDBG("fileitem::DoDelayedUnregAndCheck, nextRunTime now: " << time_nextcand);
 			break;
 
@@ -164,7 +164,7 @@ void cleaner::dump_status()
 
 
 void ACNG_API dump_handler(evutil_socket_t fd, short what, void *arg) {
-	TFileItemUser::dump_status();
+	fileitem::dump_status();
 	cleaner::GetInstance().dump_status();
 	//g_tcp_con_factory.dump_status();
 	cfg::dump_trace();

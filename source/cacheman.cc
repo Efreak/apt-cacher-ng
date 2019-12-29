@@ -25,7 +25,7 @@
 #include <string>
 #include <iostream>
 #include <algorithm>
-
+#include <deque>
 #include <unistd.h>
 
 #ifdef DEBUG
@@ -276,7 +276,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	const cfg::tRepoData *pRepoDesc=nullptr;
 	mstring sRemoteSuffix, sFilePathAbs(SABSPATH(sFilePathRel));
 
-	TFileItemUser fiaccess;
+	TFileItemUser fiUser;
 	tHttpUrl parserPath, parserHead;
 	const tHttpUrl *pResolvedDirectUrl=nullptr;
 
@@ -287,8 +287,8 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if(!pFi)
 	{
-		fiaccess = fiaccess.Create(sFilePathRel, false);
-		pFi=fiaccess.getFiPtr();
+		fiUser = fileitem::Create(sFilePathRel, false);
+		pFi = *fiUser;
 	}
 	if (!pFi)
 	{
@@ -903,8 +903,8 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 	};
 	auto pfi(make_shared<tInjectItem>(toRel, bTryLink));
 	// register it in global scope
-	auto fiUser = TFileItemUser::Create(pfi, true);
-	if(!fiUser)
+	auto fiUser = fileitem::Create(pfi, true);
+	if(!*fiUser)
 	{
 		MTLOGASSERT(false, "Couldn't register copy item");
 		return false;

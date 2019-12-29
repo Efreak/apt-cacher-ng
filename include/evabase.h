@@ -10,7 +10,7 @@ struct evdns_base;
 namespace acng
 {
 
-using tAutoEv = auto_raii<event*, event_free, nullptr>;
+using tAutoEv = resource_owner<event*, event_free, nullptr>;
 
 /**
  * This class is an adapter for general libevent handling, roughly fitting it into conventions of the rest of ACNG.

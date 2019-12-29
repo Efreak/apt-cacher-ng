@@ -497,24 +497,24 @@ struct tDtorEx {
 	inline ~tDtorEx() { _action(); }
 };
 
-// mostly unique_ptr semantics on a non-pointer type with preserved invalid value
-template<typename T, void TFreeFunc(T), T inval_default>
-struct auto_raii
+// mostly unique_ptr semantics for a non-pointer type with preserved invalid value, using a custom disposer function
+template<typename T, void TDisposeFunction(T), T inval_default>
+struct resource_owner
 {
     T m_p;
-    auto_raii() : m_p(inval_default) {}
-    explicit auto_raii(T xp) : m_p(xp) {}
-    ~auto_raii() { reset(); };
+    resource_owner() : m_p(inval_default) {}
+    explicit resource_owner(T xp) : m_p(xp) {}
+    ~resource_owner() { reset(); };
     T release() { auto ret=m_p; m_p = inval_default; return ret;}
     T get() const { return m_p; }
     T operator*() { return m_p; }
-    auto_raii(const auto_raii&) = delete;
-    auto_raii(auto_raii && other)
+    resource_owner(const resource_owner&) = delete;
+    resource_owner(resource_owner && other)
 	{
 		m_p = other.m_p;
 		other.m_p = inval_default;
 	}
-	auto_raii& reset(auto_raii &&other)
+	resource_owner& reset(resource_owner &&other)
 	{
 		if (&other != this)
 		{
@@ -531,7 +531,7 @@ struct auto_raii
 		}
 		return *this;
 	}
-	auto_raii& reset(T xnew = inval_default)
+	resource_owner& reset(T xnew = inval_default)
 	{
 		if (xnew == m_p)
 			return *this;
@@ -540,11 +540,41 @@ struct auto_raii
 			m_p = xnew;
 			return *this;
 		}
-		TFreeFunc(m_p);
+		TDisposeFunction(m_p);
 		m_p = xnew;
 		return *this;
 	}
 	bool valid() const { return inval_default != m_p;}
+};
+
+// something similar but the owned object needs to be default-constructible and moveable
+// OTOH this allows to use it for non-primitive types which doesn't work with resource_owner due to non-type argument restrictions
+template<typename T, void TDisposeFunction(T)>
+struct resource_owner_default
+{
+    T m_p;
+    resource_owner_default() : m_p() {}
+    explicit resource_owner_default(T xp) : m_p(xp) {}
+    ~resource_owner_default() {};
+    T get() const { return m_p; }
+    T operator*() { return m_p; }
+    resource_owner_default(const resource_owner_default&) = delete;
+    resource_owner_default(resource_owner_default && other)
+	{
+		m_p = move(other.m_p);
+	}
+    resource_owner_default& operator=(resource_owner_default &&other)
+	{
+		if (&other != this)
+			m_p = move(other.m_p);
+		return *this;
+	}
+    resource_owner_default& operator=(T &&other)
+	{
+		if (&other != this)
+			m_p = move(other.m_p);
+		return *this;
+	}
 };
 
 // from bgtask.cc

@@ -115,7 +115,7 @@ public:
 };
 */
 
-using unique_fd = auto_raii<int, justforceclose, -1>;
+using unique_fd = resource_owner<int, justforceclose, -1>;
 
 }
 
