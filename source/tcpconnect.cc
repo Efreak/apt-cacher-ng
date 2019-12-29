@@ -110,17 +110,17 @@ struct tcpconnect::tConnProgress
 		};
 		void stop()
 		{
-			ev.replace();
-			fd.replace();
+			ev.reset();
+			fd.reset();
 		}
 		void init_timeout(event_callback_fn cb, void *arg)
 		{
-			ev.replace(event_new(evabase::base, -1, EV_TIMEOUT, cb, arg));
+			ev.reset(event_new(evabase::base, -1, EV_TIMEOUT, cb, arg));
 			event_add(*ev, CTimeVal().Remaining(cfg::fasttimeout));
 		}
 		eConnRes init_con(event_callback_fn cb, int tmout,void *arg)
 		{
-			fd.replace(::socket(dns->ai_family, dns->ai_socktype, dns->ai_protocol));
+			fd.reset(::socket(dns->ai_family, dns->ai_socktype, dns->ai_protocol));
 			if(*fd == -1)
 				return eConnRes::ERROR;
 			set_connect_sock_flags(fd.get());
@@ -137,7 +137,7 @@ struct tcpconnect::tConnProgress
 				if (errno == EINPROGRESS)
 				{
 					errno = 0;
-					ev.replace(event_new(evabase::base, *fd, EV_READ|EV_WRITE, cb, arg));
+					ev.reset(event_new(evabase::base, *fd, EV_READ|EV_WRITE, cb, arg));
 					event_add(*ev, CTimeVal().For(tmout));
 					return eConnRes::STARTED;
 				}

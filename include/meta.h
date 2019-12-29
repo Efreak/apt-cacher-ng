@@ -497,14 +497,14 @@ struct tDtorEx {
 	inline ~tDtorEx() { _action(); }
 };
 
-// partly unique_ptr semantics (almost) on a non-pointer type
+// mostly unique_ptr semantics on a non-pointer type with preserved invalid value
 template<typename T, void TFreeFunc(T), T inval_default>
 struct auto_raii
 {
     T m_p;
     auto_raii() : m_p(inval_default) {}
     explicit auto_raii(T xp) : m_p(xp) {}
-    ~auto_raii() { replace(); };
+    ~auto_raii() { reset(); };
     T release() { auto ret=m_p; m_p = inval_default; return ret;}
     T get() const { return m_p; }
     T operator*() { return m_p; }
@@ -516,18 +516,33 @@ struct auto_raii
 	}
 	auto_raii& reset(auto_raii &&other)
 	{
-		if (&other == this)
-			return *this;
-		m_p = other.m_p;
-		other.m_p = inval_default;
+		if (&other != this)
+		{
+			T orig = other.get();
+			try
+			{
+				reset(other.release());
+			}
+			catch (...)
+			{
+				other.m_p = orig;
+				throw;
+			}
+		}
 		return *this;
 	}
-	auto_raii& replace(T xnew = inval_default)
+	auto_raii& reset(T xnew = inval_default)
 	{
-		 if (m_p != inval_default)
-			 TFreeFunc(m_p);
-		 m_p = xnew;
-		 return *this;
+		if (xnew == m_p)
+			return *this;
+		if (m_p == inval_default)
+		{
+			m_p = xnew;
+			return *this;
+		}
+		TFreeFunc(m_p);
+		m_p = xnew;
+		return *this;
 	}
 	bool valid() const { return inval_default != m_p;}
 };

@@ -43,7 +43,7 @@ public:
 };
 
 inline IDlConFactory::tConRes MAKE_CON_RES(cmstring& msg) { return {tDlStreamHandle(), msg, false}; };
-inline IDlConFactory::tConRes MAKE_CON_RES_DUMMY() { return MAKE_CON_RES("500 Canceled"); };
+inline IDlConFactory::tConRes MAKE_CON_RES_DUMMY() { return MAKE_CON_RES("500 Cancelled"); };
 inline IDlConFactory::tConRes MAKE_CON_RES_NOSSL() { return MAKE_CON_RES("500 SSL_NOT_SUPPORTED_BY_PROXY"); }
 
 }
