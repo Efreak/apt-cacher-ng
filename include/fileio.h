@@ -57,7 +57,7 @@ void set_nb(int fd);
 void set_block(int fd);
 
 inline void forceclose(int& fd) { while(0 != ::close(fd)) { if(errno != EINTR) break; }; fd=-1; }
-inline void justforceclose(int fd) { while(0 != ::close(fd)) { if(errno != EINTR) break; }; }
+void ACNG_API justforceclose(int fd) { while(0 != ::close(fd)) { if(errno != EINTR) break; }; }
 inline void checkforceclose(int &fd)
 {
 	if (fd == -1)
@@ -117,7 +117,6 @@ public:
 
 // open and/or create file for storage with the flags from our config
 int open4write(cmstring &sPath);
-using unique_fd = resource_owner<int, justforceclose, -1>;
 
 }
 

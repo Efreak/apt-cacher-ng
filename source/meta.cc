@@ -445,6 +445,7 @@ bool CsAsciiToBin(const char *a, uint8_t b[], unsigned short binLength)
 	}
 	return true;
 }
+#warning move to acbuf::add_hex_chars - but only after merging refactored version from the may branch
 bool Hex2buf(const char *a, size_t len, acbuf& ret)
 {
 	if(len%2)

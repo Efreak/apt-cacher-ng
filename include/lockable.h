@@ -4,6 +4,7 @@
 #include <config.h>
 
 #include <mutex>
+#include <shared_mutex>
 #include <condition_variable>
 
 namespace acng
@@ -45,6 +46,11 @@ struct ACNG_API base_with_condition : public base_with_mutex
 };
 
 #define setLockGuard std::lock_guard<std::mutex> local_helper_lockguard(m_obj_mutex);
+
+#if IS_CXX17
+#else
+using any_shared_mutex = std::shared_timed_mutex;
+#endif
 
 }
 

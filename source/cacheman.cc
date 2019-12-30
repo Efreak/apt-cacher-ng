@@ -285,9 +285,12 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	header hor;
 	hor.LoadFromFile(sFilePathAbs + ".head");
 
+	bool reDL = bIsVolatileFile && m_bForceDownload;
+
 	if(!pFi)
 	{
-		fiUser = fileitem::Create(sFilePathRel, false);
+		fiUser = fileitem::Create(sFilePathRel,
+						reDL ? fileitem::ESharingStrategy::ALWAYS_REPLACE_AND_RESET : fileitem::ESharingStrategy::ALWAYS_ATTACH);
 		pFi = *fiUser;
 	}
 	if (!pFi)
@@ -299,8 +302,9 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if (bIsVolatileFile && m_bForceDownload)
 	{
-		if (!pFi->SetupClean())
-			GOTOREPMSG("Item busy, cannot reload");
+#warning fixme, that was the old code for redownload, now see reDL
+//		if (!pFi->Setup(true, true))
+//			GOTOREPMSG("Item busy, cannot reload");
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
 			SendFmt << "Downloading " << sFilePathRel << "...\n";
 	}
@@ -749,34 +753,34 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 }
 
 
-
+#if 0
 bool cacheman::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sReferencePathRel,
 		off_t nWantedSize)
 {
+#warning this whole function is crap and is the only reason for passing a custom item to download function
 
-
-	class tHeadOnlyStorage: public fileitem_with_storage
+	class tHeadOnlyStorage: public fileitem
 	{
 	public:
 
-		cmstring & m_sTempDataRel, &m_sReferencePathRel;
+		cmstring & m_sTempDataRel;
+		 // storage ref to physical data file
+		cmstring &m_sReferencePathRel;
 		off_t m_nGotSize;
 
 		tHeadOnlyStorage(cmstring & sTempDataRel, cmstring &sReferencePathRel) :
-
-			fileitem_with_storage(sTempDataRel) // storage ref to physical data file
-					,
 			m_sTempDataRel(sTempDataRel),
 			m_sReferencePathRel(sReferencePathRel), m_nGotSize(-1)
-
-
 		{
+			m_sPathRel = sReferencePathRel;
 			m_bAllowStoreData = false;
 			m_bHeadOnly = true;
 			m_head.LoadFromFile(SABSPATH(m_sReferencePathRel+".head"));
 		}
+#warning implement storeheader
 		~tHeadOnlyStorage()
 		{
+#warning FIXME, BS, lookslike that was a workaround for allowstoredata=false, now storing in addition to the wanted path?
 			m_head.StoreToFile( CACHE_BASE + m_sPathRel + ".head");
 			m_nGotSize = atoofft(m_head.h[header::CONTENT_LENGTH], -17);
 		}
@@ -786,12 +790,16 @@ bool cacheman::GetAndCheckHead(cmstring & sTempDataRel, cmstring &sReferencePath
 	return (Download(sReferencePathRel, true, eMsgHideAll, p)
 			&& ( (tHeadOnlyStorage*) p.get())->m_nGotSize == nWantedSize);
 }
+#endif
 
 
 
 bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 		bool bSetIfileFlags, const header *pHead, bool bTryLink)
 {
+	return false;
+#warning FIXME, implement Set() of fileitem
+#if 0
 	LOGSTART("tCacheMan::Inject");
 
 	// XXX should it really filter it here?
@@ -920,6 +928,7 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 	}
 
 	return bOK;
+#endif
 }
 
 void cacheman::StartDlder()
@@ -1646,7 +1655,7 @@ void cacheman::SyncSiblings(cmstring &srcPathRel,const tStrDeq& targets)
 			&& srcDirFile.second == tgtDirFile.second)
 				//&& 0 == strcmp(srcType, GetTypeSuffix(targetDirFile.second)))
 		{
-			Inject(srcPathRel, tgt, true, 0, false);
+			Inject(srcPathRel, tgt, true, nullptr, false);
 		}
 	}
 }
@@ -2029,8 +2038,7 @@ void cacheman::ParseGenericRfc822File(filereader& reader,
 		else if (ParseKeyValLine(sLine, key, val))
 		{
 			// override the old key if existing, we don't merge
-			auto ins = contents.insert(make_pair(key, std::deque<std::string>
-			{ val }));
+			auto ins = contents.insert(make_pair(key, tStrDeq { val }));
 			lastKey = key;
 			pLastVal = &ins.first->second;
 		}

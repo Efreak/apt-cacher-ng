@@ -63,7 +63,7 @@ public:
 	tPassThroughFitem(std::string s) :
 	m_pData(nullptr), m_nConsumable(0), m_nConsumed(0)
 	{
-		m_sPathRel = s;
+		m_sCachePathRel = s;
 		m_bAllowStoreData=false;
 		m_nSizeChecked = m_nSizeSeen = 0;
 	};
@@ -73,7 +73,7 @@ public:
 		return m_status = FIST_INITED;
 	}
 	unique_fd GetFileFd() override { return unique_fd(); }; // something, don't care for now
-	virtual bool DownloadStartedStoreHeader(const header & h, size_t, const char *,
+	virtual bool DownloadStarted(const header & h, size_t, const char *,
 			bool, bool&) override
 	{
 		setLockGuard;
@@ -81,7 +81,7 @@ public:
 		m_status=FIST_DLGOTHEAD;
 		return true;
 	}
-	virtual bool StoreFileData(const char *data, unsigned int size) override
+	virtual bool StoreBody(const char *data, unsigned int size) override
 	{
 		lockuniq g(this);
 
@@ -164,10 +164,17 @@ public:
 
 	tSS m_data;
 
+	// never used to store data
+	bool DownloadStarted(const header &, size_t, const char *, bool, bool&)
+	override
+	{return false;};
+	void UpdateUseDate() override {}
+	void SinkDestroy(bool delHed, bool delData) override {}
+
 	tGeneratedFitemBase(const string &sFitemId, const char *szFrontLineMsg) : m_data(256)
 	{
 		m_status=FIST_COMPLETE;
-		m_sPathRel=sFitemId;
+		m_sCachePathRel=sFitemId;
 		m_head.type = header::ANSWER;
 		m_head.frontLine = "HTTP/1.1 ";
 		m_head.frontLine += (szFrontLineMsg ? szFrontLineMsg : "500 Internal Failure");
@@ -188,12 +195,14 @@ public:
 		m_nSizeChecked = m_data.size();
 		m_head.set(header::CONTENT_LENGTH, m_nSizeChecked);
 	}
-	// never used to store data
-	bool DownloadStartedStoreHeader(const header &, size_t, const char *, bool, bool&)
-	override
-	{return false;};
-	bool StoreFileData(const char *, unsigned int) override {return false;};
+	bool StoreBody(const char *, unsigned int) override {return false;};
 	header & HeadRef() { return m_head; }
+
+protected:
+	const char* SinkOpen(off_t hint_start, off_t hint_length) override {return nullptr;}
+	void DetectNotModifiedDownload(char upcomingByte,
+			off_t reportedSize) override {}
+	bool SinkCtrl(bool errorAbort, bool sync, bool trim, bool close) override {return true;}
 };
 
 job::job(header &&h, conn *pParent) :
@@ -285,7 +294,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 					seal();
 				}
 			};
-			m_pItem = fileitem::Create(make_shared<dirredirect>(visPath), false);
+			m_pItem = make_shared<dirredirect>(visPath);
 			return;
 		}
 
@@ -299,7 +308,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 			}
 		};
 		auto p = make_shared<listing>(visPath);
-		m_pItem = fileitem::Create(p, false);
+		m_pItem = p;
 		tSS & page = p->m_data;
 
 		page << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>Index of "
@@ -364,43 +373,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 		SetErrorResponse("403 Unsupported data type");
 		return;
 	}
-	/*
-	 * This variant of file item handler sends a local file. The
-	 * header data is generated as needed, the relative cache path variable
-	 * is reused for the real path.
-	 */
-	class tLocalGetFitem : public fileitem_with_storage
-	{
-	public:
-		tLocalGetFitem(string sLocalPath, struct stat &stdata) :
-			fileitem_with_storage(sLocalPath)
-		{
-			m_bAllowStoreData=false;
-			m_status=FIST_COMPLETE;
-			m_nSizeChecked=m_nSizeSeen=stdata.st_size;
-			m_bCheckFreshness=false;
-			m_head.type=header::ANSWER;
-			m_head.frontLine="HTTP/1.1 200 OK";
-			m_head.set(header::CONTENT_LENGTH, stdata.st_size);
-			m_head.prep(header::LAST_MODIFIED, 26);
-			if(m_head.h[header::LAST_MODIFIED])
-				FormatTime(m_head.h[header::LAST_MODIFIED], 26, stdata.st_mtim.tv_sec);
-			cmstring &sMimeType=cfg::GetMimeType(sLocalPath);
-			if(!sMimeType.empty())
-				m_head.set(header::CONTENT_TYPE, sMimeType);
-		};
-		unique_fd GetFileFd() override
-		{
-			int fd=open(m_sPathRel.c_str(), O_RDONLY);
-		#ifdef HAVE_FADVISE
-			// optional, experimental
-			if(fd>=0)
-				posix_fadvise(fd, 0, m_nSizeChecked, POSIX_FADV_SEQUENTIAL);
-		#endif
-			return unique_fd(fd);
-		}
-	};
-	m_pItem = fileitem::Create(make_shared<tLocalGetFitem>(absPath, stbuf), false);
+	m_pItem = fileitem::Create(absPath, stbuf);
 }
 
 inline bool job::ParseRange()
@@ -581,7 +554,10 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 		bForceFreshnessChecks = ( ! cfg::offlinemode && m_type == FILE_VOLATILE);
 
-		m_pItem = fileitem::Create(m_sFileLoc, bForceFreshnessChecks);
+		m_pItem = fileitem::Create(m_sFileLoc,
+				bForceFreshnessChecks ?
+						fileitem::ESharingStrategy::REPLACE_IF_TOO_OLD :
+						fileitem::ESharingStrategy::ALWAYS_ATTACH);
 	}
 	catch(std::out_of_range&) // better safe...
 	{
@@ -607,7 +583,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 	// might need to update the filestamp because nothing else would trigger it
 	if(cfg::trackfileuse && fistate >= fileitem::FIST_DLGOTHEAD && fistate < fileitem::FIST_DLERROR)
-		(**m_pItem).UpdateHeadTimestamp();
+		(**m_pItem).UpdateUseDate();
 
 	if(fistate==fileitem::FIST_COMPLETE)
 		return; // perfect, done here
@@ -616,7 +592,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 	// no matter whether the file is complete or not
 	// handles different cases: GET with range, HEAD with range, HEAD with no range
 	if((m_nReqRangeFrom>=0 && m_nReqRangeTo>=0)
-			|| (m_reqHead.type==header::HEAD && 0!=(m_nReqRangeTo=-1)))
+			|| (m_reqHead.type == header::HEAD && 0!=(m_nReqRangeTo=-1)))
 	{
 		lockguard g(**m_pItem);
 		if((**m_pItem).CheckUsableRange_unlocked(m_nReqRangeTo))
@@ -944,7 +920,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 	return R_DISCON;
 }
 
-
+#warning by ref?
 inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 		const off_t &nGooddataSize, header& respHead)
 {
@@ -1105,7 +1081,9 @@ fileitem::FiStatus job::_SwitchToPtItem()
 	// Changing to local pass-through file item
 	LOGSTART("job::_SwitchToPtItem");
 	// exception-safe sequence
-	m_pItem = fileitem::Create(make_shared<tPassThroughFitem>(m_sFileLoc), false);
+
+#warning FIXME: implement pass-throug
+	//m_pItem = fileitem::Create(make_shared<tPassThroughFitem>(m_sFileLoc), false);
 	return (**m_pItem).Setup(true);
 }
 
@@ -1132,7 +1110,7 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation, const
 
 	auto p = make_shared<erroritem>("noid", errorLine, bodytext);
 	p->HeadRef().set(header::LOCATION, szLocation);
-	m_pItem = fileitem::Create(p, false);
+	m_pItem = p;
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
 	m_state=STATE_SEND_MAIN_HEAD;
 }

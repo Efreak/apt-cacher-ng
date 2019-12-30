@@ -119,18 +119,7 @@ int getUUID();
 
 #define SPACECHARS " \f\n\r\t\v"
 
-#ifdef COMPATGCC47
-class tStrMap : public std::map<mstring, mstring>
-{
-public:
-	void emplace(cmstring& key, cmstring& value)
-	{
-		EMPLACE_PAIR_COMPAT(*this, key, value);
-	}
-};
-#else
 typedef std::map<mstring, mstring> tStrMap;
-#endif
 
 inline void trimFront(mstring &s, LPCSTR junk=SPACECHARS)
 {
@@ -578,32 +567,38 @@ struct resource_owner
 	bool valid() const { return inval_default != m_p;}
 };
 
-// something similar but the owned object needs to be default-constructible and moveable
-// OTOH this allows to use it for non-primitive types which doesn't work with resource_owner due to non-type argument restrictions
+// something similar to resource_owner but the owned object needs to be default-constructible and movable.
+// This is made for non-primitive types which doesn't work with resource_owner due to non-type argument restrictions.
 template<typename T, void TDisposeFunction(T)>
-struct resource_owner_default
+struct disposable_resource_owner
 {
     T m_p;
-    resource_owner_default() : m_p() {}
-    explicit resource_owner_default(T xp) : m_p(xp) {}
-    ~resource_owner_default() {};
+    disposable_resource_owner() : m_p() {}
+    explicit disposable_resource_owner(T xp) : m_p(xp) {}
+    ~disposable_resource_owner() { TDisposeFunction(m_p); };
     T get() const { return m_p; }
     T operator*() { return m_p; }
-    resource_owner_default(const resource_owner_default&) = delete;
-    resource_owner_default(resource_owner_default && other)
+    disposable_resource_owner(const disposable_resource_owner&) = delete;
+    disposable_resource_owner(disposable_resource_owner && other)
 	{
 		m_p = move(other.m_p);
 	}
-    resource_owner_default& operator=(resource_owner_default &&other)
+    disposable_resource_owner& operator=(disposable_resource_owner &&other)
 	{
 		if (&other != this)
+		{
+			TDisposeFunction(m_p);
 			m_p = move(other.m_p);
+		}
 		return *this;
 	}
-    resource_owner_default& operator=(T &&other)
+    disposable_resource_owner& operator=(T &&other)
 	{
 		if (&other != this)
+		{
+			TDisposeFunction(m_p);
 			m_p = move(other.m_p);
+		}
 		return *this;
 	}
 };
@@ -675,6 +670,10 @@ enum class srt
 {
 	a = 0
 };
+
+void justforceclose(int);
+using unique_fd = resource_owner<int, justforceclose, -1>;
+
 }
 
 #endif // _META_H

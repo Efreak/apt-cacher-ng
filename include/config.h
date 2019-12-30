@@ -77,4 +77,13 @@ namespace acng
 #endif // ACNG_DLL
 
 }
+
+#if __cplusplus >= 201703L
+#define IS_CXX17
+#endif
+
+#if __cplusplus >= 201402L
+#define IS_CXX14
+#endif
+
 #endif // __CONFIG_H

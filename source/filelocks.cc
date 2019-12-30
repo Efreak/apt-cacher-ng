@@ -9,6 +9,7 @@ using namespace std;
 
 namespace acng
 {
+
 base_with_condition g_mmapLocksMx;
 
 decltype(TFileShrinkGuard::g_mmapLocks) TFileShrinkGuard::g_mmapLocks;

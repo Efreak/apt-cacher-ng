@@ -160,6 +160,11 @@ enum ControLineType : uint8_t
 };
 #define maark "41d_a6aeb8-26dfa" // random enough to not match anything existing *g*
 
+inline static mstring DetoxPath4Cache(cmstring &sPathRaw)
+{
+	return cfg::stupidfs ? DosEscape(sPathRaw) : sPathRaw;
+}
+
 }
 
 #endif

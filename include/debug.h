@@ -71,6 +71,13 @@ inline void dump_proc_status_always()
 	}
 };
 
+inline void _LogWithErrno(const char *msg, const std::string & sFile)
+{
+	tErrnoFmter f;
+	log::err(tSS() << sFile <<
+			" storage error [" << msg << "], last errno: " << f);
+}
+
 }
 
 #endif // __DEBUG_H__

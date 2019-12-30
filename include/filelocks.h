@@ -2,11 +2,10 @@
 #ifndef FILELOCKS_H_
 #define FILELOCKS_H_
 
-#include <memory>
 #include <set>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
+
+struct stat;
 
 namespace acng
 {

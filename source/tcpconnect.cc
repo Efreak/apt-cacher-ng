@@ -306,7 +306,7 @@ void tcpconnect::KillLastFile()
 	tFileItemPtr p = m_lastFile.lock();
 	if (!p)
 		return;
-	p->SetupClean(true);
+	p->SinkDestroy(true, true);
 #endif
 }
 

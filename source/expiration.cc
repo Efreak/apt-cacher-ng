@@ -669,6 +669,7 @@ void expiration::TrimFiles()
 		Cstat stinfo(fil);
 		if(!stinfo)
 			continue;
+#warning wtf hardcoded number?
 		if(now - 86400 > stinfo.st_mtim.tv_sec)
 		{
 //			SendFmt << "let's truncate " << fil << " to " << stinfo.st_size << "<br>";

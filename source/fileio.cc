@@ -147,13 +147,15 @@ ssize_t sendfile_generic(int out_fd, int in_fd, off_t *offset, size_t count)
 		
 		for(decltype(readcount) nPos(0);nPos<readcount;)
 		{
-			auto r=write(out_fd, buf+nPos, readcount-nPos);
-			if(r==0) continue; // not nice but needs to deliver it
-			if(r<0)
+			auto r = write(out_fd, buf+nPos, readcount-nPos);
+			switch(r)
 			{
+			case 0: continue; // not nice but needs to deliver it
+			case -1:
 				if(errno==EAGAIN || errno==EINTR)
 					continue;
 				return r;
+			default: return -1;
 			}
 			nPos+=r;
 		}
@@ -218,6 +220,12 @@ int open4write(cmstring &sPath)
 		return -1;
 	}
 	return open(szPath, O_WRONLY|O_CREAT|O_TRUNC, cfg::fileperms);
+}
+
+off_t GetFileSize(cmstring & path, off_t defret)
+{
+	struct stat stbuf;
+	return (0==::stat(path.c_str(), &stbuf)) ? stbuf.st_size : defret;
 }
 
 }

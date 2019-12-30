@@ -477,7 +477,7 @@ struct tDlJob
 			if (0 == nToStore)
 				break;
 
-			if (!m_pStorage->StoreFileData(inBuf.rptr(), nToStore))
+			if (!m_pStorage->StoreBody(inBuf.rptr(), nToStore))
 			{
 				dbgline;
 				sErrorMsg = "502 Could not store data";
@@ -660,7 +660,7 @@ struct tDlJob
 					}
 				}
 
-				if(!m_pStorage->DownloadStartedStoreHeader(h, hDataLen,
+				if(!m_pStorage->DownloadStarted(h, hDataLen,
 						inBuf.rptr(), bHotItem, bDoRetry))
 				{
 					if(bDoRetry)
@@ -688,7 +688,7 @@ struct tDlJob
 			{
 				ldbg("STATE_FINISHJOB");
 				m_DlState = STATE_GETHEADER;
-				m_pStorage->StoreFileData(nullptr, 0);
+				m_pStorage->StoreBody(nullptr, 0);
 				return HINT_DONE | m_eReconnectASAP;
 			}
 			else if (m_DlState == STATE_GETCHUNKHEAD)
