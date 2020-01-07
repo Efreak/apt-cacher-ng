@@ -1,6 +1,6 @@
 apt-cacher-ng (3.2.1) A-LITTLE-BUGFIX-FOR-A-MAN; urgency=low
 
-  * POTENTIAL SECURITY ISSUE:
+  * POTENTIAL SECURITY ISSUE (CVE-2020-5202):
     - in certain situations, the maint job run by acngtool could leak the
       administrator credentials from apt-cacher-ng configuration. This is only
       likely if the attacker is able to impersonate the daemon with an own
@@ -15,6 +15,8 @@ apt-cacher-ng (3.2.1) A-LITTLE-BUGFIX-FOR-A-MAN; urgency=low
         possible (i.e. missing permissions or the tool is run on a different
         host), the operation through TCP can be enforced with ACNG_INSECURE
         environment variable
+  * Support .zst compressed packages (reference:
+    https://www.archlinux.org/news/now-using-zstandard-instead-of-xz-for-package-compression/ )
 
  -- Eduard Bloch <blade@debian.org>  Sat, 30 Nov 2019 18:59:08 +0100
 
