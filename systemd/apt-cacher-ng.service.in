@@ -9,7 +9,7 @@ RequiresMountsFor=@ACNG_CACHE_DIR@
 
 [Service]
 # the SocketPath option can be removed if the inetd bridge functionality is not needed
-ExecStart=@CMAKE_INSTALL_FULL_SBINDIR@/apt-cacher-ng SocketPath=@RUNDIR@/apt-cacher-ng/socket -c @CFGDIR@ ForeGround=1
+ExecStart=@CMAKE_INSTALL_FULL_SBINDIR@/apt-cacher-ng -c "@CFGDIR@" ForeGround=1
 User=apt-cacher-ng
 Group=apt-cacher-ng
 # This can be changed to notify if the support was enabled at build time

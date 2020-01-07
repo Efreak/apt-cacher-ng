@@ -93,7 +93,7 @@ MapNameToString n2sTbl[] = {
 		,{  "CacheDir",                &cachedir}
 		,{  "LogDir",                  &logdir}
 		,{  "SupportDir",              &suppdir}
-		,{  "SocketPath",              &fifopath}
+		,{  "SocketPath",              &udspath}
 		,{  "PidFile",                 &pidfile}
 		,{  "ReportPage",              &reportpage}
 		,{  "VfilePattern",            &vfilepat}
@@ -1139,8 +1139,8 @@ void PostProcConfig()
 	   cfg::requestapx = unEscape(cfg::requestapx);
 
    // create working paths before something else fails somewhere
-   if(!fifopath.empty())
-	   mkbasedir(cfg::fifopath);
+   if(!udspath.empty())
+	   mkbasedir(cfg::udspath);
    if(!cachedir.empty())
 	   mkbasedir(cfg::cachedir);
    if(! pidfile.empty())

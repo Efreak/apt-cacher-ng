@@ -87,11 +87,12 @@ Remap-secdeb: security.debian.org ; security.debian.org deb.debian.org/debian-se
 ReportPage: acng-report.html
 
 # Socket file for accessing through local UNIX socket instead of TCP/IP. Can be
-# used with inetd (via bridge tool in.acng from apt-cacher-ng package).
+# used with inetd (via bridge tool in.acng from apt-cacher-ng package), is also
+# used internally for administrative purposes.
 #
-# Default: not set, UNIX socket bridge is disabled.
+# Default: @SOCKET_PATH@
 #
-# SocketPath:/var/run/apt-cacher-ng/socket
+# SocketPath: /var/run/apt-cacher-ng/socket
 
 # If set to 1, makes log files be written to disk on every new line. Default
 # is 0, buffers are flushed after the client disconnects. Technically,

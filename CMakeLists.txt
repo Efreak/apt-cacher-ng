@@ -38,6 +38,8 @@ endif()
 if(NOT DEFINED(RUNDIR))
 	set(RUNDIR "/run")
 endif()
+set(SOCKET_PATH "${RUNDIR}/${PACKAGE}/socket")
+
 
 IF(NOT DEFINED(ACNG_CACHE_DIR))
         set(ACNG_CACHE_DIR "/var/tmp" CACHE STRING "Cache folder for examples and default configuration")
