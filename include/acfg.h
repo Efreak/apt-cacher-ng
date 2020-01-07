@@ -27,7 +27,7 @@ static const int RESERVED_DEFVAL = -4223;
 
 static const int REDIRMAX_DEFAULT = 5;
 
-extern mstring cachedir, logdir, confdir, fifopath, user, group, pidfile, suppdir,
+extern mstring cachedir, logdir, confdir, udspath, user, group, pidfile, suppdir,
 reportpage, vfilepat, pfilepat, wfilepat, agentname, adminauth, adminauthB64,
 bindaddr, port, sUmask,
 tmpDontcacheReq, tmpDontcachetgt, tmpDontcache, mirrorsrcs, requestapx,

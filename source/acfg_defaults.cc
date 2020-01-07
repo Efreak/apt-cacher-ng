@@ -16,7 +16,7 @@ namespace acng
 namespace cfg
 {
 
-string ACNG_API cachedir(CACHEDIR), logdir(LOGDIR), fifopath, pidfile, reportpage,
+string ACNG_API cachedir(CACHEDIR), logdir(LOGDIR), udspath(UDSPATH), pidfile, reportpage,
 confdir, adminauth, adminauthB64, bindaddr, mirrorsrcs, suppdir(LIBDIR),
 capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 
@@ -128,7 +128,7 @@ mstring connectPermPattern("~~~");
 
 #ifdef DEBUG
 int debug(3), foreground(true);
-//string cachedir("/var/cache/acng"), logdir("/var/log/acng"), fifopath, pidfile;
+//string cachedir("/var/cache/acng"), logdir("/var/log/acng"), udspath, pidfile;
 #else
 int debug(0), foreground(false);
 #endif

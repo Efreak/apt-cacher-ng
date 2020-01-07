@@ -201,7 +201,7 @@ void misc(const string & sLine, const char cLogType)
 		fStat.flush();
 }
 
-void err(const char *msg, const char *client)
+void ACNG_API err(const char *msg, const char *client)
 {
 	if(!logIsEnabled)
 		return;
