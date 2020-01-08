@@ -1,7 +1,9 @@
 apt-cacher-ng (3.3.1-1) unstable; urgency=medium
 
-  * Bugfix upstream release update (for CVE-2020-5202)
-    + Enforce secured call to the server in maint job triggering
+  * Bugfix upstream release update
+    + (CVE-2020-5202) Enforce secured call to the server in maint job triggering
+    + Allow .zst compression for tarballs (closes: Bug#948259, thanks
+      to Arnaud Rebillout)
 
  -- Eduard Bloch <blade@debian.org>  Tue, 07 Jan 2020 21:36:58 +0100
 
