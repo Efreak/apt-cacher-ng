@@ -721,18 +721,17 @@ inline void dlcon::wake()
 	}
 
 }
-inline void dlcon::awaken_check()
+
+void ACNG_API dlcon::awaken_check()
 {
-	LOGSTART("dlcon::awaken_check");
 	eventfd_t xtmp;
-	for(int i=0; ; ++i)
+	for(int i=0; i < 1000 ; ++i)
 	{
 		auto tmp = eventfd_read(fdWakeRead, &xtmp);
-		LOG("got one event, res: " << tmp << ", errno: " << errno);
-		if(i > 100) // breakpoint... OS bug? what's the errno?
-			break;
-		if(tmp == -1 && errno == EAGAIN) continue;
-		break;
+		if(tmp == 0)
+			return;
+		if(errno != EAGAIN)
+			return;
 	}
 }
 
