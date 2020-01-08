@@ -14,6 +14,7 @@
 #include "fileitem.h"
 #include "fileio.h"
 #include "sockio.h"
+#include "evabase.h"
 
 #ifdef HAVE_LINUX_EVENTFD
 #include <sys/eventfd.h>
@@ -762,7 +763,7 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 			return false;
 	}
 	setLockGuard;
-	if(m_bStopASAP)
+	if(m_bStopASAP || evabase::in_shutdown)
 		return false;
 /*
 	ASSERT(
@@ -858,7 +859,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 
 		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, CTimeVal().ForNetTimeout());
 		ldbg("returned: " << r << ", errno: " << errno);
-		if(m_bStopASAP)
+		if(m_bStopASAP || evabase::in_shutdown)
 		{
 			return HINT_DISCON;
 		}
@@ -1175,7 +1176,7 @@ void dlcon::WorkLoop()
         	setLockGuard;
         	LOG("New jobs: " << m_qNewjobs.size());
 
-        	if(m_bStopASAP)
+        	if(m_bStopASAP || evabase::in_shutdown)
         	{
         		/* The no-more-users checking logic will purge orphaned items from the inpipe
         		 * queue. When the connection is dirty after that, it will be closed in the
@@ -1362,7 +1363,7 @@ void dlcon::WorkLoop()
         // inner loop: plain communication until something happens. Maybe should use epoll here?
         loopRes=ExchangeData(sErrorMsg, con, inpipe);
         ldbg("loopRes: "<< loopRes);
-        if(m_bStopASAP)
+        if(m_bStopASAP || evabase::in_shutdown)
         	return;
 
         /* check whether we have a pipeline stall. This may happen because a) we are done or

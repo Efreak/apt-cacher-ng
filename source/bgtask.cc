@@ -12,6 +12,7 @@
 #include "acfg.h"
 #include "meta.h"
 #include "filereader.h"
+#include "evabase.h"
 
 #include <limits.h>
 #include <errno.h>
@@ -284,7 +285,7 @@ void tSpecOpDetachable::Run()
 bool tSpecOpDetachable::CheckStopSignal()
 {
 	lockguard g(&g_StateCv);
-	return g_sigTaskAbort;
+	return g_sigTaskAbort || evabase::in_shutdown;
 }
 
 void tSpecOpDetachable::DumpLog(time_t id)

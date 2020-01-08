@@ -21,6 +21,7 @@ class ACNG_API evabase
 
 public:
 	event_base *base;
+	static std::atomic<bool> in_shutdown;
 	/** Share the global instance created by main() */
 	static std::shared_ptr<evabase> instance;
 	evabase();

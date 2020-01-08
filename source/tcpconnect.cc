@@ -20,6 +20,7 @@
 #include "fileitem.h"
 #include "cleaner.h"
 #include "dnsiter.h"
+#include "evabase.h"
 #include <tuple>
 
 using namespace std;
@@ -296,6 +297,8 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 		}
 
 		auto res = select(selset.nfds(), nullptr, &selset.fds, nullptr, tv.Remaining(time_inter));
+		if(evabase::in_shutdown)
+			return withThisErrno(ETIMEDOUT);
 		if (res < 0)
 		{
 			if (EINTR != errno)
