@@ -5,6 +5,8 @@ apt-cacher-ng (3.3.1-1) unstable; urgency=medium
     + Allow .zst compression for tarballs (closes: Bug#948259, thanks
       to Arnaud Rebillout)
     + Added branch information to Vcs-Git control line (closes: #913594)
+    + Hint about not set (by debconf) CacheDir variable in zz_debconf.conf
+      (closes: #929031)
 
  -- Eduard Bloch <blade@debian.org>  Wed, 08 Jan 2020 21:01:26 +0100
 
