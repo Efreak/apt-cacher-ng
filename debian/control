@@ -5,7 +5,7 @@ Maintainer: Eduard Bloch <blade@debian.org>
 Build-Depends: debhelper (>= 9), cmake (>= 2.6.2), libbz2-dev, zlib1g-dev, liblzma-dev, libfuse-dev [!hurd-i386], pkg-config, libwrap0-dev, lsb-base (>> 3.0-6), debhelper (>= 9.20160709) | dh-systemd (>= 1.5), po-debconf, libssl-dev, libsystemd-dev (>= 210) [linux-any] | libsystemd-daemon-dev [linux-any], libpthread-stubs0-dev, libevent-dev
 Standards-Version: 4.1.1
 Homepage: http://www.unix-ag.uni-kl.de/~bloch/acng/
-Vcs-Git: https://salsa.debian.org/blade/apt-cacher-ng.git
+Vcs-Git: https://salsa.debian.org/blade/apt-cacher-ng.git -b debian/sid_v3.3.x
 Vcs-Browser: https://salsa.debian.org/blade/apt-cacher-ng/tree/debian/sid
 
 Package: apt-cacher-ng

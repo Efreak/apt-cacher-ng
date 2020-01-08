@@ -4,8 +4,9 @@ apt-cacher-ng (3.3.1-1) unstable; urgency=medium
     + (CVE-2020-5202) Enforce secured call to the server in maint job triggering
     + Allow .zst compression for tarballs (closes: Bug#948259, thanks
       to Arnaud Rebillout)
+    + Added branch information to Vcs-Git control line (closes: #913594)
 
- -- Eduard Bloch <blade@debian.org>  Tue, 07 Jan 2020 21:36:58 +0100
+ -- Eduard Bloch <blade@debian.org>  Wed, 08 Jan 2020 21:01:26 +0100
 
 apt-cacher-ng (3.3-2) unstable; urgency=low
 
