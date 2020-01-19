@@ -1,6 +1,7 @@
 apt-cacher-ng (3.3.1-2) unstable; urgency=high
 
-  * Fix FTBFS on mipsel/mips64el
+  * Fixes FTBFS on mipsel/mips64el
+  * Fixes missing last-minute changes in actual upstream version 3.3.1
 
  -- Eduard Bloch <blade@debian.org>  Sun, 19 Jan 2020 21:24:09 +0100
 
