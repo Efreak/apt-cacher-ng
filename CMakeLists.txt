@@ -115,7 +115,7 @@ if(${USE_GOLD})
         set(CMAKE_REQUIRED_FLAGS "")
 endif()
 
-foreach(linkarg ${link_arg_test_list})
+foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1)
 	STRING(REGEX REPLACE "=|-|," "" optname "${linkarg}")
 	set(CMAKE_REQUIRED_FLAGS "${linkarg}")
 	CHECK_CXX_COMPILER_FLAG("" "LD_${optname}")
