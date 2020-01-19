@@ -15,6 +15,7 @@ namespace acng
 {
 
 std::shared_ptr<evabase> evabase::instance;
+std::atomic<bool> evabase::in_shutdown = ATOMIC_VAR_INIT(false);
 
 evabase::evabase() : base (event_base_new())
 {

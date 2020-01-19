@@ -17,8 +17,10 @@ apt-cacher-ng (3.3.1) A-LITTLE-BUGFIX-FOR-A-MAN; urgency=medium
         environment variable
   * Support .zst compressed packages (reference:
     https://www.archlinux.org/news/now-using-zstandard-instead-of-xz-for-package-compression/ )
+  * Added global cancelation points for the daemon shutdown phase, now
+    terminating sooner especially when a maintenance jobs runs in background
 
- -- Eduard Bloch <blade@debian.org>  Tue, 07 Jan 2020 21:33:24 +0100
+ -- Eduard Bloch <blade@debian.org>  Wed, 08 Jan 2020 20:47:37 +0100
 
 apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
 

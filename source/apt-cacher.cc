@@ -237,6 +237,7 @@ void term_handler(evutil_socket_t signum, short what, void *arg)
 	case (SIGINT):
 	case (SIGQUIT):
 	{
+		evabase::in_shutdown.store(true);
 		if(evabase::instance)
 			event_base_loopbreak(evabase::instance->base);
 		break;
