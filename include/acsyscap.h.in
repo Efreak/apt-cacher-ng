@@ -31,3 +31,4 @@
 #cmakedefine BINDIR "@BINDIR@"
 #cmakedefine SBINDIR "@SBINDIR@"
 #cmakedefine HAVE_CHECKSUM
+#define UDSPATH "@SOCKET_PATH@"

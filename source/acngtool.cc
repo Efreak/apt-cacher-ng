@@ -27,7 +27,7 @@
 #include <cstdio>
 #include <cstring>
 #include <functional>
-
+#include <thread>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -38,7 +38,7 @@
 #include "dlcon.h"
 #include "fileio.h"
 #include "fileitem.h"
-
+#include "sockio.h"
 #ifdef HAVE_SSL
 #include "openssl/bio.h"
 #include "openssl/ssl.h"
@@ -56,6 +56,13 @@ using namespace std;
 using namespace acng;
 
 bool g_bVerbose = false;
+
+// from sockio.cc in more recent versions
+bool isUdsAccessible(cmstring& path)
+{
+	Cstat s(path);
+	return s && S_ISSOCK(s.st_mode) && 0 == access(path.c_str(), W_OK);
+}
 
 // dummies to satisfy references
 namespace acng
@@ -117,6 +124,54 @@ struct CPrintItemFactory : public IFitemFactory
 	}
 };
 
+// That is relevant to push the download agent logics correctly and are shown in logs;
+// not relevant for the actual connection since it's rerouted through TUdsFactory
+#define FAKE_UDS_HOSTNAME "UNIX-DOMAIN-SOCKET"
+
+SHARED_PTR<fileitem> CreateStdoutItem()
+{
+	class tPrintItem: public fileitem
+	{
+	public:
+		tPrintItem()
+		{
+			m_bAllowStoreData = false;
+			m_nSizeChecked = m_nSizeSeen = 0;
+		}
+		virtual FiStatus Setup(bool) override
+		{
+			m_nSizeChecked = m_nSizeSeen = 0;
+			return m_status = FIST_INITED;
+		}
+		virtual int GetFileFd() override
+		{
+			return 1;
+		}
+		; // something, don't care for now
+		virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char*, bool, bool&)
+				override
+		{
+			m_head = h;
+			auto opt_dbg = getenv("ACNGTOOL_DEBUG_DOWNLOAD");
+			if (opt_dbg && *opt_dbg)
+				std::cerr << (std::string) h.ToString() << std::endl;
+			return true;
+		}
+		virtual bool StoreFileData(const char *data, unsigned int size) override
+		{
+			if (!size)
+				m_status = FIST_COMPLETE;
+
+			return (size == fwrite(data, sizeof(char), size, stdout));
+		}
+		ssize_t SendData(int, int, off_t&, size_t) override
+		{
+			return 0;
+		}
+	};
+	return make_shared<tPrintItem>();
+}
+
 struct verbprint
 {
 	int cnt = 0;
@@ -145,98 +200,115 @@ struct verbprint
 	}
 } vprint;
 
-struct CReportItemFactory : public IFitemFactory
+/**
+ * Create a special processor which looks for error markers in the download stream and
+ * reports the result only then.
+ */
+SHARED_PTR<fileitem> CreateReportItem()
 {
-	virtual SHARED_PTR<fileitem> Create()
+	class tRepItem: public fileitem
 	{
-		class tRepItem : public fileitem
+		acbuf lineBuf;
+		string m_key = maark;
+		tStrVec m_errMsg;
+
+	public:
+		tRepItem()
 		{
-			acbuf lineBuf;
-			string m_key = maark;
-			tStrVec m_errMsg;
-
-		public:
-
-			tRepItem()
+			m_bAllowStoreData = false;
+			m_nSizeChecked = m_nSizeSeen = 0;
+			lineBuf.setsize(1 << 16);
+			memset(lineBuf.wptr(), 0, 1 << 16);
+		}
+		;
+		virtual FiStatus Setup(bool) override
+		{
+			m_nSizeChecked = m_nSizeSeen = 0;
+			return m_status = FIST_INITED;
+		}
+		virtual int GetFileFd() override
+		{
+			return 1;
+		}
+		; // something, don't care for now
+		virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char*, bool, bool&)
+				override
+		{
+			m_head = h;
+			return true;
+		}
+		virtual bool StoreFileData(const char *data, unsigned int size) override
+		{
+			if (!size)
 			{
-				m_bAllowStoreData=false;
-				m_nSizeChecked = m_nSizeSeen = 0;
-				lineBuf.setsize(1<<16);
-				memset(lineBuf.wptr(), 0, 1<<16);
-			};
-			virtual FiStatus Setup(bool) override
-			{
-				m_nSizeChecked = m_nSizeSeen = 0;
-				return m_status = FIST_INITED;
+				m_status = FIST_COMPLETE;
+				vprint.fin();
 			}
-			virtual int GetFileFd() override
-			{	return 1;}; // something, don't care for now
-			virtual bool DownloadStartedStoreHeader(const header &h, size_t, const char *,
-					bool, bool&) override
+			auto consumed = std::min(size, lineBuf.freecapa());
+			memcpy(lineBuf.wptr(), data, consumed);
+			lineBuf.got(consumed);
+			for (;;)
 			{
-				m_head = h;
-				return true;
-			}
-			virtual bool StoreFileData(const char *data, unsigned int size) override
-			{
-				if(!size)
+				LPCSTR p = lineBuf.rptr();
+				auto end = mempbrk(p, "\r\n", lineBuf.size());
+				if (!end)
+					break;
+				string s(p, end - p);
+				lineBuf.drop(s.length() + 1);
+				vprint.dot();
+				if (startsWith(s, m_key))
 				{
-					m_status = FIST_COMPLETE;
-					vprint.fin();
-				}
-				auto consumed = std::min(size, lineBuf.freecapa());
-				memcpy(lineBuf.wptr(), data, consumed);
-				lineBuf.got(consumed);
-				for(;;)
-				{
-					LPCSTR p = lineBuf.rptr();
-					auto end = mempbrk(p, "\r\n", lineBuf.size());
-					if(!end)
-						break;
-					string s(p, end-p);
-					lineBuf.drop(s.length()+1);
-					vprint.dot();
-					if(startsWith(s, m_key))
+					// that's for us... "<key><type> content\n"
+					char *endchar = nullptr;
+					p = s.c_str();
+					auto val = strtoul(p + m_key.length(), &endchar, 10);
+					if (!endchar || !*endchar)
+						continue; // heh? shall not finish here
+					switch (ControLineType(val))
 					{
-						// that's for us... "<key><type> content\n"
-						char *endchar = nullptr;
-						p = s.c_str();
-						auto val = strtoul(p + m_key.length(), &endchar, 10);
-						if(!endchar || !*endchar)
-							continue; // heh? shall not finish here
-						switch(ControLineType(val))
-						{
-						case ControLineType::BeforeError:
-							m_errMsg.emplace_back(endchar, s.size() - (endchar - p));
-							vprint.msg(m_errMsg.back());
-							break;
-						case ControLineType::Error:
-						{
-							if(!g_bVerbose) // printed before
-								for(auto l : m_errMsg)
-									cerr << l << endl;
-							m_errMsg.clear();
-							string msg(endchar, s.size() - (endchar - p));
-							vprint.fin();
-							cerr << msg << endl;
-							break;
-						}
-						default:
-							continue;
-						}
+					case ControLineType::BeforeError:
+						m_errMsg.emplace_back(endchar, s.size() - (endchar - p));
+						vprint.msg(m_errMsg.back());
+						break;
+					case ControLineType::Error:
+					{
+						if (!g_bVerbose) // printed before
+							for (auto l : m_errMsg)
+								cerr << l << endl;
+						m_errMsg.clear();
+						string msg(endchar, s.size() - (endchar - p));
+						vprint.fin();
+						cerr << msg << endl;
+						break;
+					}
+					default:
+						continue;
 					}
 				}
-				return true;
 			}
-			ssize_t SendData(int , int, off_t &, size_t ) override
-			{
-				return 0;
-			}
-		};
-		return make_shared<tRepItem>();
-	}
-};
+			return true;
+		}
+		ssize_t SendData(int, int, off_t&, size_t) override
+		{
+			return 0;
+		}
+	};
+	return make_shared<tRepItem>();
+}
 
+void DownloadItem(const tHttpUrl &url, IDlConFactory &pDlconFac, const SHARED_PTR<fileitem> &fi)
+{
+	dlcon dl("", nullptr, &pDlconFac);
+	std::thread dlThread([&]() {dl.WorkLoop();});
+	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT);
+	int st;
+	auto fistatus = fi->WaitForFinish(&st);
+	// just be sure to set a proper error code
+	if(fistatus != fileitem::FIST_COMPLETE && fi->GetHeader().getStatus() < 400)
+		fi->GetHeader().frontLine = "909 Incomplete download";
+	dl.SignalStop();
+	dlThread.join();
+}
 int wcat(LPCSTR url, LPCSTR proxy, IFitemFactory*, IDlConFactory *pdlconfa = &g_tcp_con_factory);
 
 static void usage(int retCode = 0, LPCSTR cmd = nullptr)
@@ -488,127 +560,147 @@ inline bool patchChunk(tPatchSequence& idx, LPCSTR pline, size_t len, tPatchSequ
 	return true;
 }
 
-int maint_job()
+/**
+ * Helper which implements a custom connection class that runs through a specified Unix Domain
+ * Socket (see base class for the name).
+ */
+struct TUdsFactory : public ::acng::IDlConFactory
 {
-	cfg::SetOption("proxy=", nullptr);
-
-	tStrVec hostips;
-#if 0 // FIXME, processing on UDS gets stuck somewhere
-	// prefer UDS if configured in a sane way
-	if (startsWithSz(cfg::fifopath, "/"))
-		hostips.emplace_back(cfg::fifopath);
-#endif
-	auto nips = Tokenize(cfg::bindaddr, SPACECHARS, hostips, true);
-	if (!nips)
-		hostips.emplace_back("localhost");
-
-	for (const auto& hostaddr : hostips)
+	void RecycleIdleConnection(tDlStreamHandle &handle) override
 	{
-		// use an own connection factory which does "the right thing" and leaks the
-		// internal connection result
-		struct maintfac: public IDlConFactory
+		// keep going, no recycling/restoring
+	}
+	tDlStreamHandle CreateConnected(cmstring&, cmstring&, mstring& sErrorOut, bool*,
+			cfg::tRepoData::IHookHandler*, bool, int, bool) override
+	{
+		struct udsconnection: public tcpconnect
 		{
-			bool m_bOK = false;
-			mstring m_hname;
-			maintfac(cmstring& s) :
-					m_hname(s)
+			bool failed = false;
+			udsconnection() : tcpconnect(nullptr)
 			{
-			}
+				// some static and dummy parameters, and invalidate SSL for sure
+				m_ssl = nullptr;
+				m_bio = nullptr;
+				m_sHostName = FAKE_UDS_HOSTNAME;
+				m_sPort = cfg::port;
 
-			void RecycleIdleConnection(tDlStreamHandle & handle) override
-			{
-				// keep going, no recycling/restoring
-			}
-			virtual tDlStreamHandle CreateConnected(cmstring &, cmstring &, mstring &, bool *,
-					cfg::tRepoData::IHookHandler *, bool, int, bool) override
-			{
-				string serr;
-
-				if (m_hname[0] != '/') // not UDS
+				m_conFd = socket(PF_UNIX, SOCK_STREAM, 0);
+				if (m_conFd < 0)
 				{
-					auto mhandle = g_tcp_con_factory.CreateConnected(m_hname, cfg::port, serr, 0, 0,
-							false, 30, true);
-					m_bOK = mhandle.get();
-					return mhandle;
+					failed = true;
+					return;
 				}
-				// otherwise build a fake connection on unix domain socket
-				struct udsconnection: public tcpconnect
+				struct sockaddr_un addr;
+				addr.sun_family = PF_UNIX;
+				strcpy(addr.sun_path, cfg::fifopath.c_str());
+				socklen_t adlen = cfg::fifopath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
+				if (connect(m_conFd, (struct sockaddr*) &addr, adlen))
 				{
-					udsconnection(cmstring& udspath, bool *ok) :
-							tcpconnect(nullptr)
-					{
-#ifdef DEBUG
-						cerr << "Socket path: " << udspath << endl;
-#endif
-						auto m_conFd = socket(PF_UNIX, SOCK_STREAM, 0);
-						if (m_conFd < 0)
-							return;
-
-						struct sockaddr_un addr;
-						addr.sun_family = PF_UNIX;
-						strcpy(addr.sun_path, cfg::fifopath.c_str());
-						socklen_t adlen =
-								cfg::fifopath.length() + 1 + offsetof(struct sockaddr_un, sun_path);
-						if (connect(m_conFd, (struct sockaddr*) &addr, adlen))
-						{
-#ifdef DEBUG
-							perror("connect");
-#endif
-							return;
-						}
-						// basic identification needed
-						tSS ids;
-						ids << "GET / HTTP/1.0\r\nX-Original-Source: localhost\r\n\r\n";
-						if (!ids.send(m_conFd))
-							return;
-
-						m_ssl = nullptr;
-						m_bio = nullptr;
-						// better match the TCP socket parameters
-						m_sHostName = "localhost";
-						m_sPort = sDefPortHTTP;
-						*ok = true;
-					}
-				};
-				return make_shared<udsconnection>(m_hname, &m_bOK);
+					DBGQLOG(tErrnoFmter("connect result: "));
+					checkforceclose(m_conFd);
+					failed = true;
+					return;
+				}
+				// basic identification needed
+				tSS ids;
+				ids << "GET / HTTP/1.0\r\nX-Original-Source: localhost\r\n\r\n";
+				if (!ids.send(m_conFd))
+				{
+					failed = true;
+					return;
+				}
 			}
 		};
-		maintfac factoryWrapper(hostaddr);
-		tSS urlPath;
-		urlPath << "http://";
-		if (!cfg::adminauth.empty())
-			urlPath << UserinfoEscape(cfg::adminauth) << "@";
-		if (hostaddr[0] == '/')
-			urlPath << "localhost";
-		else
-			urlPath << hostaddr << ":" << cfg::port;
-
-		if (cfg::reportpage.empty())
-			return -1;
-		if(cfg::reportpage[0] != '/')
-			urlPath << "/";
-		urlPath << cfg::reportpage;
-		LPCSTR req = getenv("ACNGREQ");
-		urlPath << (req ? req : "?doExpire=Start+Expiration&abortOnErrors=aOe");
-
-#ifdef DEBUG
-		cerr << "Constructed URL: " << (string) urlPath << endl;
-#endif
-
-		CReportItemFactory printItemFactory;
-		auto retcode = wcat(urlPath.c_str(), nullptr, &printItemFactory, &factoryWrapper);
-		if (retcode)
-		{
-			if (!factoryWrapper.m_bOK) // connection failed, try another IP
-				continue;
-			// otherwise the stuff has been printed
-			return 2;
-		}
-		else
-			return 0;
+		auto ret = make_shared<udsconnection>();
+		// mimic regular processing of a bad result here!
+		if(ret && ret->failed) ret.reset();
+		if(!ret) sErrorOut = "912 Cannot establish control connection";
+		return ret;
 	}
-	// all attempts failed
-	return 3;
+};
+
+int maint_job()
+{
+	if (cfg::reportpage.empty())
+	{
+		cerr << "ReportPage is not configured in the server config, aborting..." <<endl;
+		return -1;
+	}
+
+	// base target URL, can be adapted for TCP requests
+	tHttpUrl url("localhost", cfg::port, false);
+	url.sUserPass = cfg::adminauth;
+	LPCSTR req = getenv("ACNGREQ");
+	url.sPath = "/" + cfg::reportpage + (req ? req : "?doExpire=Start+Expiration&abortOnErrors=aOe");
+
+	auto isInsecForced = []() { auto se = getenv("ACNG_INSECURE"); return se && *se; };
+
+	// by default, use the socket connection; if credentials require it -> enforce it
+	bool have_cred = !url.sUserPass.empty(),
+			have_uds = !cfg::fifopath.empty(),
+			try_tcp = !have_cred;
+	bool uds_ok = have_uds && isUdsAccessible(cfg::fifopath);
+
+	if(have_cred)
+	{
+		if(isInsecForced()) // so try TCP anyway
+		{
+			try_tcp = true;
+		}
+		else if(have_uds && !uds_ok)
+		{
+			cerr << "This operation transmits credentials but the socket (" << cfg::fifopath
+					<< ") is currently not accessible!" << endl;
+			return EXIT_FAILURE;
+		}
+		else if(!have_uds)
+		{
+			cerr << "This operation transmits credentials but SocketPath is not configured to a safe location in the server configuration. "
+					"Please set SocketPath to a safe location, or set ACNG_INSECURE environment variable to override this check."
+					<<endl;
+			return EXIT_FAILURE;
+		}
+		// ok, otherwise use Unix Domain Socket
+	}
+
+	bool response_ok = false;
+	if(have_uds && uds_ok)
+	{
+		DBGQLOG("Trying UDS path")
+		auto fi =CreateReportItem();
+		url.sHost = FAKE_UDS_HOSTNAME;
+		TUdsFactory udsConFac;
+		DownloadItem(url, udsConFac, fi);
+		response_ok = fi->GetHeader().getStatus() == 200;
+		DBGQLOG("UDS result: " << response_ok)
+	}
+	if(!response_ok && try_tcp)
+	{
+		DBGQLOG("Trying TCP path")
+		// never use a proxy here (insecure?), those are most likely local IPs
+		cfg::SetOption("Proxy=", nullptr);
+		cfg::nettimeout = 30;
+		vector<string> hostips;
+		Tokenize(cfg::bindaddr, SPACECHARS, hostips, false);
+		if(hostips.empty())
+			hostips.emplace_back("127.0.0.1");
+		for (const auto &tgt : hostips)
+		{
+			url.sHost = tgt;
+			auto fi = CreateReportItem();
+			DownloadItem(url, g_tcp_con_factory, fi);
+			response_ok = fi->GetHeader().getStatus() == 200;
+			if (response_ok)
+				break;
+		}
+	}
+	if(!response_ok)
+	{
+		cerr << "Could not make a valid request to the server. Please visit "
+				<< url.ToURI(false) << " and check special conditions." <<endl;
+		return EXIT_FAILURE;
+	}
+	return EXIT_SUCCESS;
 }
 
 int patch_file(string sBase, string sPatch, string sResult)

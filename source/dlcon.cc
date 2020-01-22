@@ -1315,8 +1315,8 @@ void dlcon::WorkLoop()
 				}
         	}
         }
-
 		ldbg("Request(s) cooked, buffer contents: " << m_sendBuf);
+		ASSERT(!m_sendBuf.empty());
 
         go_select:
 

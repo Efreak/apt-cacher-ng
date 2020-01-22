@@ -58,6 +58,8 @@ endif()
 if(NOT DEFINED(RUNDIR))
 	set(RUNDIR "/run")
 endif()
+set(SOCKET_PATH "${RUNDIR}/${PACKAGE}/socket")
+
 
 # carefully splicing of command line arguments, even from lists
 macro(_append varname)

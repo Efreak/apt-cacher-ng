@@ -1,3 +1,29 @@
+apt-cacher-ng (3.2.1) SHAUN-OF-THE-LIVING; urgency=medium
+
+  * POTENTIAL SECURITY ISSUE (CVE-2020-5202):
+    - in certain situations, the maint job run by acngtool could leak the
+      administrator credentials from apt-cacher-ng configuration. This is only
+      likely if the attacker is able to impersonate the daemon with an own
+      server listening on the same port.
+    - The mitigation path for this is:
+      - SocketPath option is configured by default
+      - By default, acngtool only attempts to run the maint job through the
+        Unix Domain Socket. If SocketPath is not set but admin credentials are
+        configured, the operation is denied.
+      - For non-standard cases where acngtool is used to run special arbitrary
+        commands (ACNG_REQ variable) and the operation through SocketPath is not
+        possible (i.e. missing permissions or the tool is run on a different
+        host), the operation through TCP can be enforced with ACNG_INSECURE
+        environment variable
+
+  [ REALITY SYNC ]
+  * increased size of the decompression line buffer for config file reading
+    (Debian bug #942634)
+  * Support .zst compressed packages (reference:
+    https://www.archlinux.org/news/now-using-zstandard-instead-of-xz-for-package-compression/ )
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 22 Jan 2020 20:53:50 +0100
+
 apt-cacher-ng (3.2) MY-NAME-IS-ANYBODY; urgency=medium
 
   * Maintenance release

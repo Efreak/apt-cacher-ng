@@ -16,12 +16,12 @@ namespace acng
 namespace cfg
 {
 
-string cachedir("/var/tmp"), logdir("/var/tmp"), fifopath, pidfile, reportpage,
+string cachedir("/var/tmp"), logdir("/var/tmp"), fifopath(UDSPATH), pidfile, reportpage,
 confdir, adminauth, adminauthB64, bindaddr, mirrorsrcs, suppdir(LIBDIR),
 capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 
 #define INFOLDER "(^|.*/)"
-#define COMPRLIST "(\\.gz|\\.bz2|\\.lzma|\\.xz)"
+#define COMPRLIST "(\\.gz|\\.bz2|\\.lzma|\\.xz|\\.zst)"
 #define ALXPATTERN ".*\\.(db|files|abs)(\\.tar" COMPRLIST ")?"
 #define COMPOPT COMPRLIST"?"
 //#define COMPONENT_OPTIONAL "(-[a-z0-9-])"

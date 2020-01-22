@@ -257,7 +257,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 
 void tcpconnect::Disconnect()
 {
-	LOGSTART("tcpconnect::_Disconnect");
+	LOGSTART2("tcpconnect::_Disconnect", m_sHostName);
 
 #ifdef DEBUG
 	nDisconCount.fetch_add(m_conFd >=0);
