@@ -1,4 +1,4 @@
-apt-cacher-ng (3.2.1) A-LITTLE-BUGFIX-FOR-A-MAN; urgency=low
+apt-cacher-ng (3.2.1) SHAUN-OF-THE-LIVING; urgency=medium
 
   * POTENTIAL SECURITY ISSUE (CVE-2020-5202):
     - in certain situations, the maint job run by acngtool could leak the
@@ -15,14 +15,14 @@ apt-cacher-ng (3.2.1) A-LITTLE-BUGFIX-FOR-A-MAN; urgency=low
         possible (i.e. missing permissions or the tool is run on a different
         host), the operation through TCP can be enforced with ACNG_INSECURE
         environment variable
+
+  [ REALITY SYNC ]
+  * increased size of the decompression line buffer for config file reading
+    (Debian bug #942634)
   * Support .zst compressed packages (reference:
     https://www.archlinux.org/news/now-using-zstandard-instead-of-xz-for-package-compression/ )
 
-  [ BUGFIXES ]
-  * increased size of the decompression line buffer for config file reading
-    (Debian bug #942634)
-
- -- Eduard Bloch <blade@debian.org>  Sat, 30 Nov 2019 18:59:08 +0100
+ -- Eduard Bloch <blade@debian.org>  Wed, 22 Jan 2020 20:53:50 +0100
 
 apt-cacher-ng (3.2) MY-NAME-IS-ANYBODY; urgency=medium
 
