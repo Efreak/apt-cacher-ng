@@ -1,6 +1,10 @@
-apt-cacher-ng (3.2-3) unstable; urgency=medium
+apt-cacher-ng (3.2.1-1) unstable; urgency=medium
 
-  * Increase decompression line buffer size (closes: #942634)
+  * Minor bugfix upstream release
+    + (CVE-2020-5202) Enforce secured call to the server in maint job triggering
+    + Allow .zst compression for tarballs (closes: Bug#948259, thanks
+      to Arnaud Rebillout)
+    + Upstreaming fix from #928957
 
  -- Eduard Bloch <blade@debian.org>  Mon, 28 Oct 2019 22:14:46 +0100
 
