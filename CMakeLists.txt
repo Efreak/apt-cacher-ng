@@ -108,7 +108,7 @@ if(CXX_VIHI)
         _append(ACNG_CXXFLAGS -fvisibility-inlines-hidden)
 endif()
 
-foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1 -Wl,-fuse-ld=gold -Wl,--threads)
+foreach(linkarg -Wl,--as-needed -Wl,-O1 -Wl,--discard-all -Wl,--no-undefined -Wl,--build-id=sha1 -Wl,-fuse-ld=gold)
 	STRING(REGEX REPLACE "=|-|," "" optname "${linkarg}")
 	set(CMAKE_REQUIRED_FLAGS "${linkarg}")
 	CHECK_CXX_COMPILER_FLAG("" "LD_${optname}")
