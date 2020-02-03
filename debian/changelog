@@ -1,13 +1,13 @@
-apt-cacher-ng (3.2.1-1) unstable; urgency=medium
+apt-cacher-ng (3.2.1-1) buster; urgency=medium
 
   * Minor bugfix upstream release
     + (CVE-2020-5202) Enforce secured call to the server in maint job triggering
     + Allow .zst compression for tarballs (closes: Bug#948259, thanks
       to Arnaud Rebillout)
-    + Upstreaming fix from #928957 and workaround of FTBFS on mips(64)el
-      (no multithreading with gold linker)
+    + Upstreaming fix from #928957 and adding workaround of build failure on
+      mips(64)el (no multithreading with gold linker)
 
- -- Eduard Bloch <blade@debian.org>  Mon, 03 Feb 2020 19:45:28 +0100
+ -- Eduard Bloch <blade@debian.org>  Mon, 03 Feb 2020 20:54:45 +0100
 
 apt-cacher-ng (3.2-2) unstable; urgency=medium
 
