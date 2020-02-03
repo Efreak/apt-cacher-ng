@@ -806,6 +806,13 @@ bool expiration::ProcessRegular(const string & sPathAbs, const struct stat &stin
 			flags.eIdxType = EIDX_SHA256DILIST;
 			flags.vfile_ondisk = true;
 			flags.uptodate = false;
+
+			// the original source context will probably provide a viable source for
+			// this URL - it might go 404 if the whole folder is missing but then the
+			// referenced content would also be outdated/gone and not worth keeping
+			// in the cache anyway
+
+			flags.forgiveDlErrors = true;
 		}
 		// and last but not least - care only about the modern version of that index
 		m_metaFilesRel.erase(idir + "MD5SUMS");

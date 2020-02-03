@@ -22,6 +22,15 @@ apt-cacher-ng (3.2.1) SHAUN-OF-THE-LIVING; urgency=medium
   * Support .zst compressed packages (reference:
     https://www.archlinux.org/news/now-using-zstandard-instead-of-xz-for-package-compression/ )
 
+  [ Debian Stable Bugfix ]
+  * Fix of Debian bug #928957: overoptimistic guessing of the SHA256SUMS file location
+    Incorrect assumption of an existing SHA256SUMS file for Debian
+    repositories makes the expiration task fail without a proper way for the
+    end user to recover from it. Now ignore a download error in this case
+    (similar handling as for other guesses), assuming that permanent 404ing
+    for other reasons than removal of remote content can be considered
+    unlikely.
+
  -- Eduard Bloch <blade@debian.org>  Wed, 22 Jan 2020 20:53:50 +0100
 
 apt-cacher-ng (3.2) MY-NAME-IS-ANYBODY; urgency=medium
