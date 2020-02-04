@@ -1,3 +1,9 @@
+apt-cacher-ng (3.3.1-2~bpo10+1) buster-backports; urgency=medium
+
+  * Straight rebuild for buster-backports
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 04 Feb 2020 22:43:08 +0100
+
 apt-cacher-ng (3.3.1-2) unstable; urgency=high
 
   * Fixes FTBFS on mipsel/mips64el
