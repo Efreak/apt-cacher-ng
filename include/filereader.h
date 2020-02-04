@@ -19,7 +19,7 @@ class IDecompressor;
  * Could use boost::iostream templates for most of that, but Boost became such a monster nowadays.
  * And for my work, my class behaves smarter.
  */
-class filereader {
+class ACNG_API filereader {
 	
 public:
 	filereader();

@@ -14,6 +14,7 @@
 #include "fileitem.h"
 #include "fileio.h"
 #include "sockio.h"
+#include "evabase.h"
 
 #ifdef HAVE_LINUX_EVENTFD
 #include <sys/eventfd.h>
@@ -24,7 +25,7 @@ using namespace std;
 // evil hack to simulate random disconnects
 //#define DISCO_FAILURE
 
-#define MAX_RETRY 11
+#define MAX_RETRY cfg::dlretriesmax
 
 namespace acng
 {
@@ -48,14 +49,21 @@ dlcon::dlcon(bool bManualExecution, string *xff, IDlConFactory *pConFactory) :
 {
 	LOGSTART("dlcon::dlcon");
 #ifdef HAVE_LINUX_EVENTFD
-	m_wakeventfd=eventfd(0, 0);
-	if(m_wakeventfd>=0)
+	m_wakeventfd = eventfd(0, 0);
+	if(m_wakeventfd == -1)
+		m_bStopASAP = true;
+	else
 		set_nb(m_wakeventfd);
 #else
 	if (0 == pipe(m_wakepipe))
 	{
 		set_nb(m_wakepipe[0]);
 		set_nb(m_wakepipe[1]);
+	}
+	else
+	{
+		m_wakepipe[0] = m_wakepipe[1] = -1;
+		m_bStopASAP = true;
 	}
 #endif
 	if (xff)
@@ -150,6 +158,7 @@ struct tDlJob
 
 	~tDlJob()
 	{
+		LOGSTART("tDlJob::~tDlJob");
 		if (m_pStorage)
 			m_pStorage->DecDlRefCount(sErrorMsg.empty() ? sGenericError : sErrorMsg);
 	}
@@ -485,7 +494,7 @@ struct tDlJob
 				}
 
 				ldbg("contents: " << std::string(inBuf.rptr(), hDataLen));
-				inBuf.drop(hDataLen);
+				inBuf.drop((unsigned long) hDataLen);
 				if (h.type != header::ANSWER)
 				{
 					dbgline;
@@ -594,8 +603,9 @@ struct tDlJob
 					{
 						// this was redirected and the destination is BAD!
 						h.frontLine="HTTP/1.1 501 Redirected to invalid target";
-						void DropDnsCache();
-						DropDnsCache();
+						// XXX: not sure this is the right attribution
+						//void DropDnsCache();
+						//DropDnsCache();
 					}
 				}
 
@@ -698,16 +708,47 @@ private:
 	tDlJob & operator=(const tDlJob&);
 };
 
+#ifdef HAVE_LINUX_EVENTFD
+inline void dlcon::wake()
+{
+	LOGSTART("dlcon::wake");
+	if(fdWakeWrite == -1)
+		return;
+	while(true)
+	{
+		auto r=eventfd_write(fdWakeWrite, 1);
+		if(r == 0 || (errno != EINTR && errno != EAGAIN))
+			break;
+	}
+
+}
+
+void ACNG_API dlcon::awaken_check()
+{
+	eventfd_t xtmp;
+	for(int i=0; i < 1000 ; ++i)
+	{
+		auto tmp = eventfd_read(fdWakeRead, &xtmp);
+		if(tmp == 0)
+			return;
+		if(errno != EAGAIN)
+			return;
+	}
+}
+
+#else
 void dlcon::wake()
 {
-	if (fdWakeWrite<0)
-		return;
-#ifdef HAVE_LINUX_EVENTFD
-	while(eventfd_write(fdWakeWrite, 1)<0) ;
-#else
+	LOGSTART("dlcon::wake");
 	POKE(fdWakeWrite);
-#endif
 }
+inline void dlcon::awaken_check()
+{
+	LOGSTART("dlcon::awaken_check");
+	for (char tmp; ::read(m_wakepipe[0], &tmp, 1) > 0;) ;
+}
+
+#endif
 
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const cfg::tRepoData *pBackends,
@@ -722,6 +763,8 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 			return false;
 	}
 	setLockGuard;
+	if(m_bStopASAP || evabase::in_shutdown)
+		return false;
 /*
 	ASSERT(
 			todo->m_pStorage->m_nRangeLimit < 0
@@ -746,7 +789,6 @@ void dlcon::SignalStop()
 	// stop all activity as soon as possible
 	m_bStopASAP=true;
 	m_qNewjobs.clear();
-
 	wake();
 }
 
@@ -769,7 +811,6 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 			<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
 
 	fd_set rfds, wfds;
-	struct timeval tv;
 	int r = 0;
 	int fd = con ? con->GetFD() : -1;
 	FD_ZERO(&rfds);
@@ -808,8 +849,6 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 		}
 
 		ldbg("select dlcon");
-		tv.tv_sec = cfg::nettimeout;
-		tv.tv_usec = 0;
 
 		// jump right into data processing but only once
 		if(bReEntered)
@@ -818,10 +857,14 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 			goto proc_data;
 		}
 
-		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, &tv);
+		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, CTimeVal().ForNetTimeout());
 		ldbg("returned: " << r << ", errno: " << errno);
+		if(m_bStopASAP || evabase::in_shutdown)
+		{
+			return HINT_DISCON;
+		}
 
-		if (r < 0)
+		if (r == -1)
 		{
 			if (EINTR == errno)
 				continue;
@@ -837,6 +880,8 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 		else if (r == 0) // looks like a timeout
 		{
 			sErrorMsg = "500 Connection timeout";
+			LOG(sErrorMsg);
+
 			// was there anything to do at all?
 			if(inpipe.empty())
 				return HINT_SWITCH;
@@ -849,18 +894,7 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 
 		if (FD_ISSET(fdWakeRead, &rfds))
 		{
-			dbgline;
-#ifdef HAVE_LINUX_EVENTFD
-			eventfd_t xtmp;
-			int tmp;
-			do {
-				tmp = eventfd_read(fdWakeRead, &xtmp);
-			} while (tmp < 0 && (errno == EINTR || errno == EAGAIN));
-
-#else
-			for (int tmp; read(m_wakepipe[0], &tmp, 1) > 0;)
-				;
-#endif
+			awaken_check();
 			return HINT_SWITCH;
 		}
 
@@ -1104,6 +1138,8 @@ void dlcon::WorkLoop()
 		return;
 	}
 
+	tDtorEx allJobReleaser([&](){ m_qNewjobs.clear(); });
+
 	tDljQueue inpipe;
 	tDlStreamHandle con;
 	unsigned loopRes=0;
@@ -1140,7 +1176,7 @@ void dlcon::WorkLoop()
         	setLockGuard;
         	LOG("New jobs: " << m_qNewjobs.size());
 
-        	if(m_bStopASAP)
+        	if(m_bStopASAP || evabase::in_shutdown)
         	{
         		/* The no-more-users checking logic will purge orphaned items from the inpipe
         		 * queue. When the connection is dirty after that, it will be closed in the
@@ -1186,7 +1222,6 @@ void dlcon::WorkLoop()
 
 				bool bUsed = false;
 				ASSERT(!m_qNewjobs.empty());
-
 				auto doconnect = [&](const tHttpUrl& tgt, int timeout, bool fresh)
 				{
 					return m_pConFactory->CreateConnected(tgt.sHost,
@@ -1315,8 +1350,8 @@ void dlcon::WorkLoop()
 				}
         	}
         }
-
 		ldbg("Request(s) cooked, buffer contents: " << m_sendBuf);
+		ASSERT(!m_sendBuf.empty());
 
         go_select:
 
@@ -1328,6 +1363,8 @@ void dlcon::WorkLoop()
         // inner loop: plain communication until something happens. Maybe should use epoll here?
         loopRes=ExchangeData(sErrorMsg, con, inpipe);
         ldbg("loopRes: "<< loopRes);
+        if(m_bStopASAP || evabase::in_shutdown)
+        	return;
 
         /* check whether we have a pipeline stall. This may happen because a) we are done or
          * b) because of the remote hostname change or c) the client stopped sending tasks.

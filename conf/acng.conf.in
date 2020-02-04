@@ -11,19 +11,25 @@
 # software package downloads. It's supposed to be in a directory specified by
 # the -c option of apt-cacher-ng, see apt-cacher-ng(8) for details.
 # RULES:
-# Letter case in variable names does not matter, names and values should be
-# separated with colons. For boolean variables, zero number is considered false,
-# non-zero considered true. If a default value is not explicitly mentioned in
-# the description, the commented value assignments mostly represent the default
-# values of the particular variables.
+# - letter case in variable names does not matter
+# - names and values are separated by colon or equals sign
+# - for boolean variables, zero means false, non-zero means true
+# - "default value" means built-in (!) defaults, i.e. something which the
+#   program uses if the option is not set here or in other config files.
+#   That value might be explicitly mentioned in the description. Where it is
+#   not, there is no reason to assume any of the examples to be the default
+#   value! In doubt, use acngtool to query the value of the particular variable.
 
 # Storage directory for downloaded data and related maintenance activity.
 #
-CacheDir: /var/cache/apt-cacher-ng
+# Note: When the value for CacheDir is changed, change the file
+# /lib/systemd/system/apt-cacher-ng.service too
+#
+CacheDir: @ACNG_CACHE_DIR@
 
 # Log file directory, can be set empty to disable logging
 #
-LogDir: /var/log/apt-cacher-ng
+LogDir: @ACNG_LOG_DIR@
 
 # A place to look for additional configuration and resource files if they are not
 # found in the configuration directory
@@ -81,11 +87,12 @@ Remap-secdeb: security.debian.org ; security.debian.org deb.debian.org/debian-se
 ReportPage: acng-report.html
 
 # Socket file for accessing through local UNIX socket instead of TCP/IP. Can be
-# used with inetd (via bridge tool in.acng from apt-cacher-ng package).
+# used with inetd (via bridge tool in.acng from apt-cacher-ng package), is also
+# used internally for administrative purposes.
 #
-# Default: not set, UNIX socket bridge is disabled.
+# Default: @SOCKET_PATH@
 #
-# SocketPath:/var/run/apt-cacher-ng/socket
+# SocketPath: /var/run/apt-cacher-ng/socket
 
 # If set to 1, makes log files be written to disk on every new line. Default
 # is 0, buffers are flushed after the client disconnects. Technically,
@@ -189,6 +196,17 @@ ExThreshold: 4
 # is refused when this value is reached (below zero = unlimited).
 # MaxConThreads: -1
 #
+# Timeout for a forced disconnect in cases where a client connection is about
+# to be closed but remote refuses to confirm the disconnect request. Setting
+# this to a lower value mitigates the effects of resource starvation in case of
+# a DOS attack but increases the risk of failing to flush the remaining portion
+# of data.
+# DisconnectTimeout: 15
+
+# By default, if a remote suddenly reconnects, ACNG tries at least two times to
+# redownload from the same or different location (if known).
+# DlMaxRetries: 2
+
 # Pigeonholing files (like static vs. volatile contents) is done by (extended)
 # regular expressions.
 #
@@ -273,7 +291,13 @@ ExThreshold: 4
 
 # Network timeout for outgoing connections, in seconds.
 #
-# NetworkTimeout: 60
+# NetworkTimeout: 40
+
+# Fast fallback timeout, in seconds. This is the time to wait before
+# alternative target addresses for a client connection are tried, which can be
+# usefull for quick fallback to IPv4 in case of whacky IPv6 configuration.
+#
+# FastTimeout = 4
 
 # Sometimes it makes sense to not store the data in cache and just return the
 # package data to client while it comes in. The following DontCache* parameters
@@ -323,7 +347,7 @@ ExThreshold: 4
 # between them or explicitly create them.
 #
 # LocalDirs: woo /data/debarchive/woody ; hamm /data/debarchive/hamm
-LocalDirs: acng-doc @DOCDIR@
+LocalDirs: acng-doc @CMAKE_INSTALL_FULL_DOCDIR@
 
 # Precache a set of files referenced by specified index files. This can be used
 # to create a partial mirror usable for offline work. There are certain limits

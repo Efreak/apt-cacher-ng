@@ -146,6 +146,7 @@ if [ "$1" = "configure" ]; then
    case "$RET" in
       keep|"")
          # maybe never displayed to user
+         CDIRCONF='# CacheDir set to "keep", not overriding here'
          ;;
       *)
          # ok, configured by debconf, will be created as needed

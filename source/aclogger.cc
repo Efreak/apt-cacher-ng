@@ -30,7 +30,11 @@ namespace log
 ofstream fErr, fStat;
 static acmutex mx;
 
+#ifndef DEBUG
 bool logIsEnabled = false;
+#else
+bool logIsEnabled = true;
+#endif
 
 std::atomic<off_t> totalIn(0), totalOut(0);
 
@@ -197,7 +201,7 @@ void misc(const string & sLine, const char cLogType)
 		fStat.flush();
 }
 
-void err(const char *msg, const char *client)
+void ACNG_API err(const char *msg, const char *client)
 {
 	if(!logIsEnabled)
 		return;
@@ -230,7 +234,7 @@ void err(const char *msg, const char *client)
 		fErr.flush();
 }
 
-void flush()
+void ACNG_API flush()
 {
 	if(!logIsEnabled)
 		return;

@@ -2,7 +2,7 @@
 #define SOCKIO_H_
 
 #include "meta.h"
-
+#include "fileio.h"
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
@@ -14,6 +14,9 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <cstddef>
+
+#include <event2/event.h>
+#include <event2/util.h>
 
 using namespace std;
 
@@ -44,9 +47,9 @@ namespace acng
 void globalSslInit();
 #endif
 
-void termsocket(int);
+void termsocket_async(int, event_base*);
 
-inline void termsocket_quick(int fd)
+inline void termsocket_quick(int& fd)
 {
 	if(fd<0)
 		return;
@@ -66,6 +69,21 @@ inline bool check_read_state(int fd)
 	struct timeval tv = { 0, 0};
 	return (1 == select(fd + 1, &rfds, nullptr, nullptr, &tv) && FD_ISSET(fd, &rfds));
 }
+
+struct select_set_t
+{
+	int m_max = -1;
+	fd_set fds;
+	void add(int n) { if(m_max == -1 ) FD_ZERO(&fds); if(n>m_max) m_max = n; FD_SET(n, &fds); }
+	bool is_set(int fd) { return FD_ISSET(fd, &fds); }
+	int nfds() { return m_max + 1; }
+	operator bool() const { return m_max != -1; }
+};
+
+std::string formatIpPort(const evutil_addrinfo *info);
+
+// common flags for a CONNECTING socket
+void set_connect_sock_flags(evutil_socket_t fd);
 
 }
 

@@ -8,7 +8,7 @@ LDIR=/var/log/$NAME
 CFG=/etc/$NAME
 
 if [ "$1" = "purge" ]; then
-   rm -rf "$CDIR"
+   rm -rf "$CDIR" ||:
    rm -f $LDIR/apt-cacher.err.* $LDIR/apt-cacher.err $LDIR/apt-cacher.log $LDIR/apt-cacher.log.* $LDIR/maint_*.log
    rmdir $LDIR 2>/dev/null || true
    rm -rf /var/lib/apt-cacher-ng

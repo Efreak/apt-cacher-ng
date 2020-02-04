@@ -1,6 +1,8 @@
 #ifndef _LOCKABLE_H
 #define _LOCKABLE_H
 
+#include <config.h>
+
 #include <mutex>
 #include <condition_variable>
 
@@ -33,7 +35,7 @@ struct lockuniq {
 	void reLockSafe() { if(!_guard.owns_lock()) _guard.lock(); }
 };
 
-struct base_with_condition : public base_with_mutex
+struct ACNG_API base_with_condition : public base_with_mutex
 {
 	std::condition_variable m_obj_cond;
 	void notifyAll() { m_obj_cond.notify_all(); }

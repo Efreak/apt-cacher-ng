@@ -5,11 +5,12 @@
 #include <unordered_set>
 #include <map>
 #include "meta.h"
+#include "acbuf.h"
 
 namespace acng
 {
 
-class header {
+class ACNG_API header {
    public:
       enum eHeadType : char
 	  {
@@ -50,6 +51,7 @@ class header {
       inline header(){};
       ~header();
       header(const header &);
+      header(header &&);
       header& operator=(const header&); 
       
       static mstring GenInfoHeaders();

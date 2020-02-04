@@ -9,7 +9,7 @@
 namespace acng
 {
 
-class IFileHandler
+class ACNG_API IFileHandler
 {
 public:
 	virtual bool ProcessRegular(const std::string &sPath, const struct stat &) =0;

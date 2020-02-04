@@ -1,1 +1,3 @@
 apt-cacher-ng: possible-gpl-code-linked-with-openssl
+apt-cacher-ng: package-name-doesnt-match-sonames libsupacng
+apt-cacher-ng: shlib-without-versioned-soname
