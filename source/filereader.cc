@@ -432,7 +432,7 @@ filereader::~filereader() {
 
 std::atomic_int g_nThreadsToKill;
 
-void handle_sigbus()
+void ACNG_API handle_sigbus()
 {
 	if (!cfg::sigbuscmd.empty())
 	{
@@ -753,7 +753,7 @@ bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE
 }
 
 // test checksum wrapper classes and their algorithms, also test conversion methods
-void check_algos()
+void ACNG_API check_algos()
 {
 #ifdef HAVE_CHECKSUM
 	const char testvec[]="abc";

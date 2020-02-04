@@ -1,3 +1,92 @@
+apt-cacher-ng (3.3.1) A-LITTLE-BUGFIX-FOR-A-MAN; urgency=medium
+
+  * POTENTIAL SECURITY ISSUE (CVE-2020-5202):
+    - in certain situations, the maint job run by acngtool could leak the
+      administrator credentials from apt-cacher-ng configuration. This is only
+      likely if the attacker is able to impersonate the daemon with an own
+      server listening on the same port.
+    - The mitigation path for this is:
+      - SocketPath option is configured by default
+      - By default, acngtool only attempts to run the maint job through the
+        Unix Domain Socket. If SocketPath is not set but admin credentials are
+        configured, the operation is denied.
+      - For non-standard cases where acngtool is used to run special arbitrary
+        commands (ACNG_REQ variable) and the operation through SocketPath is not
+        possible (i.e. missing permissions or the tool is run on a different
+        host), the operation through TCP can be enforced with ACNG_INSECURE
+        environment variable
+  * Support .zst compressed packages (reference:
+    https://www.archlinux.org/news/now-using-zstandard-instead-of-xz-for-package-compression/ )
+  * Added global cancelation points for the daemon shutdown phase, now
+    terminating sooner especially when a maintenance jobs runs in background
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 08 Jan 2020 20:47:37 +0100
+
+apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
+
+  [ POSSIBLY BREAKING CHANGES ]
+  * the setting of cachedir and logdir in the built-in defaults is now
+    configurable at build time (-DACNG_CACHE_DIR=... -DACNG_LOG_DIR=...)
+    and this settings are also propagated into generated configuration examples
+  * Dropping support for CMake prior to v3.1, dropped most custom variables
+    for target locations, now relying on public CMake variables from
+    GNUInstallDirs module; for details, see
+    https://cmake.org/cmake/help/v3.2/module/GNUInstallDirs.html
+  * Dropping support for OpenSSL before 1.0.2
+
+  [ FEATURES AND IMPROVEMENTS ]
+  * Change of default network timeout to 40 seconds
+  * Reduced automatic retries on remote disconnects to two
+  * Alternative fallback scheme for non-primary target connection attempts
+    (with default timeout value of 4s, see FastTimeout setting). By default,
+    this should help with unstable (blocking) IPv6 routing where IPv4 is still
+    operational (Debian bug #942122)
+  * Refactored DNS resolution&caching code, potential fix of rate connection
+    problems
+  * RequiresMountsFor directive in systemd service file example with
+    additional remarks on keeping this in sync with the config (as in Debian
+    bug #929035 and partly suggested in #942355)
+  * PFilePattern extensions for Fedora 29 and 30, by Alan Jenkins, Debian
+    bug #928270 (thanks!)
+  * VFilePattern extension for Centos8, by Andy Lowther, Debian bug #944143
+    (thanks!)
+  * added very explicit explanation on what "default value" means in the
+    acng.conf example (Debian bug #855995) and also how to print it
+    (with acngtool, Debian bug #914746)
+  * Mirror database update
+  * Configurable timeout for forced client disconnect on the last portion of
+    data
+
+  [ BUGFIXES ]
+  * increased size of the decompression line buffer for config file reading
+    (Debian bug #942634)
+  * fixes potential data race in DNS resolution
+  * Typo in INSTALL file (Debian bug #913593)
+  * In Arch Linux database mirror list, rewrite https URLs to http since the
+    official JSON query only returns https versions, also add a different
+    source (from Debian bug #942844)
+  * Generation of Sourceforge mirror redirectors list is fixed
+  * Fixed an ancient bug where there last answered request might have been
+    delayed in processing due to incorrect selection of MSG_MORE flag
+  * Potential crash on shutdown prevented (misordered destructor sequence,
+    insufficient tracking of remaining active tasks)
+  * Correct shutdown of blocked incoming connection on daemon shutdown
+  * Limit of simultaneous DNS resolver requests to 8 due to observed
+    instability of glibc (probably
+    https://sourceware.org/ml/libc-alpha/2015-10/msg00865.html )
+
+  [ INTERNAL REFACTORING ]
+  * Overhauling code deployment, using a shared library (reducing installed
+    file size by up to 20%)
+  * dropped rfc2553emu code from old APT, using the platform abstraction from
+    libevent instead
+  * partial redesign for more singlethreaded IO operation
+  * Disabled LTO by default, still crashing gold linker with certain option
+    combinations
+  * Moved lingering on CLOSE_WAIT sockets to the single main thread
+
+ -- Eduard Bloch <blade@debian.org>  Sun, 10 Nov 2019 18:59:08 +0100
+
 apt-cacher-ng (3.2) MY-NAME-IS-ANYBODY; urgency=medium
 
   * Maintenance release

@@ -28,10 +28,9 @@ namespace acng
  * need to invalidate previous entries sitting in the prio-queue.
  *
  */
-class cleaner : public base_with_condition
+class ACNG_API cleaner : public base_with_condition
 {
 public:
-	cleaner();
 	void Init();
 	virtual ~cleaner();
 
@@ -45,14 +44,15 @@ public:
 	};
 	void ScheduleFor(time_t when, eType what);
 	void dump_status();
+	static cleaner& GetInstance(bool initAsNoop=false);
 
 private:
+	cleaner(bool noop=false);
 	pthread_t m_thr;
 	time_t stamps[cleaner::ETYPE_MAX];
 	bool m_terminating = false;
+	bool m_noop=false;
 };
-
-extern cleaner g_victor; // ... down to the nap
 
 }
 

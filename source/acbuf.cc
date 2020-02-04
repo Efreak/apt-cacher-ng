@@ -98,11 +98,10 @@ bool tSS::send(int nConFd, mstring* sErrorStatus)
 		{
 			if (EINTR == errno || EAGAIN == errno)
 			{
-				struct timeval tv{cfg::nettimeout, 0};
 				fd_set wfds;
 				FD_ZERO(&wfds);
 				FD_SET(nConFd, &wfds);
-				auto r=::select(nConFd + 1, nullptr, &wfds, nullptr, &tv);
+				auto r=::select(nConFd + 1, nullptr, &wfds, nullptr, CTimeVal().ForNetTimeout());
 				if(!r && errno != EINTR)
 				{
 					if(sErrorStatus)
@@ -127,12 +126,10 @@ bool tSS::send(int nConFd, mstring* sErrorStatus)
 
 bool tSS::recv(int nConFd, mstring* sErrorStatus)
 {
-	struct timeval tv
-	{ cfg::nettimeout, 0 };
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(nConFd, &rfds);
-	auto r = ::select(nConFd + 1, &rfds, nullptr, nullptr, &tv);
+	auto r = ::select(nConFd + 1, &rfds, nullptr, nullptr, CTimeVal().ForNetTimeout());
 	if (!r)
 	{
 		if(errno == EINTR)

@@ -1,3 +1,61 @@
+apt-cacher-ng (3.3.1-2~bpo9+1) stretch-backports-sloppy; urgency=medium
+
+  * Straight port to stretch-backports-sloppy
+
+ -- Eduard Bloch <blade@debian.org>  Tue, 04 Feb 2020 22:51:05 +0100
+
+apt-cacher-ng (3.3.1-2) unstable; urgency=high
+
+  * Fixes FTBFS on mipsel/mips64el
+  * Fixes missing last-minute changes in actual upstream version 3.3.1
+
+ -- Eduard Bloch <blade@debian.org>  Sun, 19 Jan 2020 21:24:09 +0100
+
+apt-cacher-ng (3.3.1-1) unstable; urgency=medium
+
+  * Bugfix upstream release update
+    + (CVE-2020-5202) Enforce secured call to the server in maint job triggering
+    + Allow .zst compression for tarballs (closes: Bug#948259, thanks
+      to Arnaud Rebillout)
+    + Added branch information to Vcs-Git control line (closes: #913594)
+    + Hint about not set (by debconf) CacheDir variable in zz_debconf.conf
+      (closes: #929031)
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 08 Jan 2020 21:01:26 +0100
+
+apt-cacher-ng (3.3-2) unstable; urgency=low
+
+  * Upload to Sid
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 14 Nov 2019 13:56:58 +0100
+
+apt-cacher-ng (3.3-1) experimental; urgency=low
+
+  * New upstream version v3.3
+    Contains a good number of internal changes, including:
+    - Alternative fallback scheme for non-primary target connection
+      attempts (with default timeout value of 4s, see FastTimeout
+      setting). By default, this should help with unstable (blocking) IPv6
+      routing where IPv4 is still operational (closes: #942122)
+    - RequiresMountsFor directive in systemd service file example with
+      additional remarks on keeping this in sync with the config
+      (closes: #929035, #942355)
+    - PFilePattern extensions for Fedora 29 and 30, by Alan Jenkins,
+      closes: #928270, thanks!)
+    - VFilePattern extension for Centos8, by Andy Lowther,
+      closes: #944143 (thanks!)
+    - added very explicit explanation on what "default value" means in the
+      acng.conf example (closes: #855995) and also how to print it (with
+      acngtool, closes: #914746)
+    - Typo in INSTALL file (closes: #913593)
+    - In Arch Linux database mirror list, rewrite https URLs to http since
+      the official JSON query only returns https versions, also add a
+      different source (closes: #942844, thanks!)
+  * Make errors on purging of cache folder non-fatal (closes: #915082)
+  * Recommends: ca-certificates (closes: #926282)
+
+ -- Eduard Bloch <blade@debian.org>  Sun, 10 Nov 2019 19:00:40 +0100
+
 apt-cacher-ng (3.2-3~bpo9+1) stretch-backports-sloppy; urgency=medium
 
   * Straight rebuild for stretch-backports-sloppy

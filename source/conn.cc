@@ -10,6 +10,7 @@
 #include "acbuf.h"
 #include "tcpconnect.h"
 #include "cleaner.h"
+#include "conserver.h"
 
 #include <sys/select.h>
 #include <signal.h>
@@ -19,21 +20,19 @@
 
 using namespace std;
 
+#define SHORT_TIMEOUT 4
 
 namespace acng
 {
 
-conn::conn(int fdId, const char *c) :
-			m_confd(fdId),
-			m_bStopActivity(false),
-			m_dlerthr(0),
-			m_pDlClient(nullptr),
-			m_pTmpHead(nullptr)
+conn::conn(unique_fd fd, const char *c) :
+			m_fd(move(fd)),
+			m_confd(m_fd.get())
 {
 	if(c) // if nullptr, pick up later when sent by the wrapper
 		m_sClientHost=c;
 
-	LOGSTART2("con::con", "fd: " << fdId << ", clienthost: " << c);
+	LOGSTART2("con::con", "fd: " << m_confd << ", clienthost: " << c);
 
 #ifdef DEBUG
 	m_nProcessedJobs=0;
@@ -43,31 +42,20 @@ conn::conn(int fdId, const char *c) :
 
 conn::~conn() {
 	LOGSTART("con::~con (Destroying connection...)");
-	termsocket(m_confd);
 
 	// our user's connection is released but the downloader task created here may still be serving others
 	// tell it to stop when it gets the chance and delete it then
 
-	std::list<job*>::iterator jit;
-	for (jit=m_jobs2send.begin(); jit!=m_jobs2send.end(); jit++)
-		delete *jit;
+	for (auto jit : m_jobs2send) delete jit;
 
 	writeAnotherLogRecord(sEmptyString, sEmptyString);
 
 	if(m_pDlClient)
-	{
 		m_pDlClient->SignalStop();
-		pthread_join(m_dlerthr, nullptr);
-
-		delete m_pDlClient;
-		m_pDlClient=nullptr;
-	}
-	if(m_pTmpHead)
-	{
-		delete m_pTmpHead;
-		m_pTmpHead=nullptr;
-	}
+	if(m_dlerthr.joinable())
+		m_dlerthr.join();
 	log::flush();
+	conserver::FinishConnection(m_confd);
 }
 
 namespace RawPassThrough
@@ -205,8 +193,11 @@ void conn::WorkLoop() {
 	acbuf inBuf;
 	inBuf.setsize(32*1024);
 
+	// define a much shorter timeout than network timeout in order to be able to disconnect bad clients quickly
+	auto client_timeout(GetTime() + cfg::nettimeout);
+
 	int maxfd=m_confd;
-	while(!m_bStopActivity) {
+	while(!g_global_shutdown && !m_badState) {
 		fd_set rfds, wfds;
 		FD_ZERO(&wfds);
 		FD_ZERO(&rfds);
@@ -216,6 +207,7 @@ void conn::WorkLoop() {
 			return; // shouldn't even get here
 
 		job *pjSender(nullptr);
+		bool hasMoreJobs = m_jobs2send.size()>1;
 
 		if ( !m_jobs2send.empty())
 		{
@@ -223,18 +215,18 @@ void conn::WorkLoop() {
 			FD_SET(m_confd, &wfds);
 		}
 
-
 		ldbg("select con");
+		int ready = select(maxfd+1, &rfds, &wfds, nullptr, CTimeVal().For(SHORT_TIMEOUT));
 
-		struct timeval tv;
-		tv.tv_sec = cfg::nettimeout;
-		tv.tv_usec = 23;
-		int ready = select(maxfd+1, &rfds, &wfds, nullptr, &tv);
+		if(g_global_shutdown)
+			break;
 
 		if(ready == 0)
 		{
 			USRDBG("Timeout occurred, apt client disappeared silently?");
-			return;
+			if(GetTime() > client_timeout)
+				return; // yeah, time to leave
+			continue;
 		}
 		else if (ready<0)
 		{
@@ -243,6 +235,11 @@ void conn::WorkLoop() {
 
 			ldbg("select error in con, errno: " << errno);
 			return; // FIXME: good error message?
+		}
+		else
+		{
+			// ok, something is still flowing, increase deadline
+			client_timeout = GetTime() + cfg::nettimeout;
 		}
 
 		ldbg("select con back");
@@ -266,13 +263,8 @@ void conn::WorkLoop() {
 		while(inBuf.size()>0) {
 			try
 			{
-				if(!m_pTmpHead)
-					m_pTmpHead = new header();
-				if(!m_pTmpHead)
-					return; // no resources? whatever
-
-				m_pTmpHead->clear();
-				int nHeadBytes=m_pTmpHead->Load(inBuf.rptr(), inBuf.size());
+				header h;
+				int nHeadBytes=h.Load(inBuf.rptr(), inBuf.size());
 				ldbg("header parsed how? " << nHeadBytes);
 				if(nHeadBytes == 0)
 				{ // Either not enough data received, or buffer full; make space and retry
@@ -286,13 +278,13 @@ void conn::WorkLoop() {
 				}
 
 				// also must be identified before
-				if (m_pTmpHead->type == header::POST)
+				if (h.type == header::POST)
 				{
 					if (cfg::forwardsoap && !m_sClientHost.empty())
 					{
-						if (RawPassThrough::CheckListbugs(*m_pTmpHead))
+						if (RawPassThrough::CheckListbugs(h))
 						{
-							tSplitWalk iter(&m_pTmpHead->frontLine);
+							tSplitWalk iter(&h.frontLine);
 							if(iter.Next() && iter.Next())
 								RawPassThrough::RedirectBto2https(m_confd, iter);
 						}
@@ -307,12 +299,12 @@ void conn::WorkLoop() {
 					return;
 				}
 
-				if(m_pTmpHead->type == header::CONNECT)
+				if(h.type == header::CONNECT)
 				{
 
 					inBuf.drop(nHeadBytes);
 
-					tSplitWalk iter(&m_pTmpHead->frontLine);
+					tSplitWalk iter(& h.frontLine);
 					if(iter.Next() && iter.Next())
 					{
 						cmstring tgt(iter);
@@ -334,21 +326,24 @@ void conn::WorkLoop() {
 
 					inBuf.drop(nHeadBytes);
 
-					if(m_pTmpHead->h[header::XORIG] && *(m_pTmpHead->h[header::XORIG]))
+					if(h.h[header::XORIG] && * h.h[header::XORIG])
 					{
-						m_sClientHost=m_pTmpHead->h[header::XORIG];
+						m_sClientHost=h.h[header::XORIG];
 						continue; // OK
 					}
 					else
 						return;
 				}
 
-				ldbg("Parsed REQUEST:" << m_pTmpHead->frontLine);
+				ldbg("Parsed REQUEST:" << h.frontLine);
 				ldbg("Rest: " << (inBuf.size()-nHeadBytes));
 
 				{
-					job * j = new job(m_pTmpHead, this);
+					job * j = new job(std::move(h), this);
 					j->PrepareDownload(inBuf.rptr());
+
+					if(m_badState) return;
+
 					inBuf.drop(nHeadBytes);
 
 					m_jobs2send.emplace_back(j);
@@ -356,8 +351,6 @@ void conn::WorkLoop() {
 					m_nProcessedJobs++;
 #endif
 				}
-
-				m_pTmpHead=nullptr; // owned by job now
 			}
 			catch(bad_alloc&)
 			{
@@ -370,7 +363,7 @@ void conn::WorkLoop() {
 
 		if(FD_ISSET(m_confd, &wfds) && pjSender)
 		{
-			switch(pjSender->SendData(m_confd))
+			switch(pjSender->SendData(m_confd, hasMoreJobs))
 			{
 			case(job::R_DISCON):
 				{
@@ -395,14 +388,11 @@ void conn::WorkLoop() {
 	}
 }
 
-void * _StartDownloader(void *pVoidDler)
-{
-	static_cast<dlcon*>(pVoidDler) -> WorkLoop();
-	return nullptr;
-}
-
 bool conn::SetupDownloader(const char *pszOrigin)
 {
+	if(m_badState)
+		return false;
+
 	if (m_pDlClient)
 		return true;
 
@@ -417,27 +407,26 @@ bool conn::SetupDownloader(const char *pszOrigin)
 				sXff += ", ";
 			}
 			sXff+=m_sClientHost;
-			m_pDlClient=new dlcon(false, &sXff);
+			m_pDlClient.reset(new dlcon(false, &sXff));
 		}
 		else
-			m_pDlClient=new dlcon(false);
+			m_pDlClient.reset(new dlcon(false));
 
 		if(!m_pDlClient)
 			return false;
-	}
-	catch(bad_alloc&)
-	{
-		return false;
-	}
-
-	if (0==pthread_create(&m_dlerthr, nullptr, _StartDownloader,
-			(void *)m_pDlClient))
-	{
+		auto pin = m_pDlClient;
+		m_dlerthr = move(thread([pin](){
+			pin->WorkLoop();
+		}));
+		m_badState = false;
 		return true;
 	}
-	delete m_pDlClient;
-	m_pDlClient=nullptr;
-	return false;
+	catch(...)
+	{
+		m_badState = true;
+		m_pDlClient.reset();
+		return false;
+	}
 }
 
 void conn::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,

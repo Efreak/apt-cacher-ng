@@ -172,7 +172,7 @@ bool xtouch(cmstring &wanted)
 	return true;
 }
 
-void mkbasedir(cmstring & path)
+void ACNG_API mkbasedir(cmstring & path)
 {
 	if(0==mkdir(GetDirPart(path).c_str(), cfg::dirperms) || EEXIST == errno)
 		return; // should succeed in most cases
@@ -191,7 +191,7 @@ void mkbasedir(cmstring & path)
     }
 }
 
-void mkdirhier(cmstring& path)
+void ACNG_API mkdirhier(cmstring& path)
 {
 	if(0==mkdir(path.c_str(), cfg::dirperms) || EEXIST == errno)
 		return; // should succeed in most cases

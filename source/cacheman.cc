@@ -601,7 +601,7 @@ static short FindCompIdx(cmstring &s)
 	return -1;
 }
 
-void DelTree(const string &what)
+void ACNG_API DelTree(const string &what)
 {
 	class killa : public IFileHandler
 	{
@@ -1226,7 +1226,7 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 		tFingerprint probe;
 		if(!probe.Set(split, CSTYPE_SHA256) || !split.Next())
 			continue;
-		EMPLACE_PAIR_COMPAT(patchSums, split.str(), probe);
+		patchSums.emplace(split.str(), probe);
 	}
 	cmstring sPatchResultAbs(SABSPATH(sPatchResultRel));
 	cmstring sPatchInputAbs(SABSPATH(sPatchInputRel));
@@ -2246,7 +2246,7 @@ void cacheman::PrintStats(cmstring &title)
 	{
 		total += f.second.space;
 		if(f.second.space)
-			EMPLACE_PAIR_COMPAT(sorted,f.second.space, &f.first);
+			sorted.emplace(f.second.space, &f.first);
 	}
 	if(!total)
 		return;

@@ -26,13 +26,14 @@ namespace acng
 cmstring sPathSep(SZPATHSEP);
 cmstring sPathSepUnix(SZPATHSEPUNIX);
 #ifndef MINIBUILD
-cmstring sDefPortHTTP("80");
-cmstring sDefPortHTTPS("443");
+std::string ACNG_API sDefPortHTTP = "80", sDefPortHTTPS = "443";
 #endif
 
 cmstring PROT_PFX_HTTPS(WITHLEN("https://")), PROT_PFX_HTTP(WITHLEN("http://"));
 cmstring FAKEDATEMARK(WITHLEN("Sat, 26 Apr 1986 01:23:39 GMT+3"));
 cmstring hendl("<br>\n");
+
+std::atomic<bool> g_global_shutdown;
 
 /*
 int getUUID() {
@@ -125,7 +126,7 @@ void find_base_name(const char *in, const char * &pos, UINT &len)
 /*!
  * \brief Simple split function, outputs resulting tokens into a string vector, with or without purging the previous contents
  */
-tStrVec::size_type Tokenize(const string & in, const char *sep,
+ACNG_API tStrVec::size_type Tokenize(const string & in, const char *sep,
 		tStrVec & out, bool bAppend, std::string::size_type nStartOffset)
 {
 	if(!bAppend)
@@ -325,7 +326,7 @@ string tHttpUrl::ToURI(bool bUrlEscaped) const
 
 #if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
 
-tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
+ACNG_API tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
 {
 	tStrDeq srcs;
 #ifdef HAVE_WORDEXP
@@ -825,7 +826,7 @@ LPCSTR GetTypeSuffix(cmstring& s)
 	return pos == stmiss ? p + s.length() : p + pos;
 }
 
-off_t atoofft(LPCSTR p)
+off_t ACNG_API atoofft(LPCSTR p)
 {
 	using namespace std;
 	if(sizeof(long long) == sizeof(off_t))
