@@ -113,6 +113,7 @@ if(LD_MULTITHREADED)
 endif()
 set(CMAKE_REQUIRED_FLAGS "")
 
+option(ENABLE_TESTS "Enable unit test build (requires googletest installation)" off)
 option(USE_SSL "Use OpenSSL library for TLS and other crypto functionality" on)
 option(GC_SECTIONS "Extra stripping of global elements from data sections" off)
 
@@ -365,6 +366,10 @@ add_subdirectory(fs)
 add_subdirectory(source)
 add_subdirectory(conf)
 add_subdirectory(systemd)
+
+if(ENABLE_TESTS)
+add_subdirectory(test)
+endif()
 
 ###
 ### Extra install rules for static files
