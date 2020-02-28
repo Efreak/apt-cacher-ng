@@ -86,4 +86,8 @@ namespace acng
 #define IS_CXX14
 #endif
 
+//#ifdef UNDER_TEST
+//#include "sut_config.h"
+//#endif
+
 #endif // __CONFIG_H

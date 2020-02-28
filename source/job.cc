@@ -61,6 +61,7 @@ protected:
 
 public:
 	tPassThroughFitem(std::string s) :
+		fileitem(s),
 	m_pData(nullptr), m_nConsumable(0), m_nConsumed(0)
 	{
 		m_sCachePathRel = s;
@@ -171,7 +172,9 @@ public:
 	void UpdateUseDate() override {}
 	void SinkDestroy(bool delHed, bool delData) override {}
 
-	tGeneratedFitemBase(const string &sFitemId, const char *szFrontLineMsg) : m_data(256)
+	tGeneratedFitemBase(const string &sFitemId, const char *szFrontLineMsg) :
+		fileitem(sFitemId),
+		m_data(256)
 	{
 		m_status=FIST_COMPLETE;
 		m_sCachePathRel=sFitemId;
@@ -294,7 +297,7 @@ inline void job::PrepareLocalDownload(const string &visPath,
 					seal();
 				}
 			};
-			m_pItem = make_shared<dirredirect>(visPath);
+			m_pItem.reset(make_shared<dirredirect>(visPath));
 			return;
 		}
 
@@ -308,8 +311,8 @@ inline void job::PrepareLocalDownload(const string &visPath,
 			}
 		};
 		auto p = make_shared<listing>(visPath);
-		m_pItem = p;
 		tSS & page = p->m_data;
+		m_pItem.reset(p);
 
 		page << "<!DOCTYPE html>\n<html lang=\"en\"><head><title>Index of "
 				<< visPath << "</title></head>"
@@ -554,10 +557,13 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 		bForceFreshnessChecks = ( ! cfg::offlinemode && m_type == FILE_VOLATILE);
 
+#warning implement the creation
+#if 0
 		m_pItem = fileitem::Create(m_sFileLoc,
 				bForceFreshnessChecks ?
 						fileitem::ESharingStrategy::REPLACE_IF_TOO_OLD :
 						fileitem::ESharingStrategy::ALWAYS_ATTACH);
+#endif
 	}
 	catch(std::out_of_range&) // better safe...
 	{
@@ -1110,7 +1116,7 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation, const
 
 	auto p = make_shared<erroritem>("noid", errorLine, bodytext);
 	p->HeadRef().set(header::LOCATION, szLocation);
-	m_pItem = p;
+	m_pItem.reset(p);
 	//aclog::err(tSS() << "fileitem is now " << uintptr_t(m_pItem.get()));
 	m_state=STATE_SEND_MAIN_HEAD;
 }

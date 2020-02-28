@@ -4,6 +4,7 @@
 
 #include <string>
 #include <memory>
+#include <unordered_map>
 
 #include "config.h"
 #include "lockable.h"
@@ -26,9 +27,10 @@ using TFileItemUser = disposable_resource_owner<tFileItemPtr,StopUsingFileitem>;
 // XXX: OTOH adding a reader-lock to every getter would suck too, many wasted cycles
 class ACNG_API fileitem : public base_with_condition
 {
-	mstring m_sCachePathRel;
 
 public:
+
+	mstring m_sCachePathRel;
 
 	enum class ESharingStrategy
 	{
@@ -54,7 +56,7 @@ public:
 	FIST_DLSTOP
 	};
 	
-	fileitem(cmstring& s) : m_sCachePathRel(DetoxPath4Cache(s)) {}
+	fileitem(cmstring& s) : m_sCachePathRel(s) {}
 	virtual ~fileitem() {};
 
 	// Initialise file item, return the status
@@ -179,7 +181,8 @@ public:
 	 *
 	 * PRECONDITION: Item is not shared
 	 */
-	virtual bool SinkMoveOutOfTheWay() =0;
+#warning crap, should be eventually gone
+	virtual bool SinkMoveOutOfTheWay() {};
 
 protected:
 
@@ -199,6 +202,8 @@ protected:
 
 	static TFileItemUser Install(std::function<tFileItemPtr()> lazyItemConstructor, cmstring& sPathRel, ESharingStrategy collisionHint);
 };
+
+typedef std::unordered_map<std::string,SHARED_PTR<fileitem> /*, hashfib, eq_fib*/> tFiGlobMap;
 
 }
 #endif

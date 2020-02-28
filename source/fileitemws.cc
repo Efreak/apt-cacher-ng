@@ -4,6 +4,15 @@
 #include "debug.h"
 #include "filelocks.h"
 
+// just a dummy for now
+acng::TFileItemUser acng::fileitem:: Create(cmstring& absPath, const struct stat& statInfo)
+{
+	abort();
+	return acng::TFileItemUser();
+}
+
+#if 0
+
 using namespace std;
 
 namespace acng
@@ -368,13 +377,13 @@ bool fileitem_with_storage::StoreBody(const char *data, unsigned int size)
 
 
 
+/**
+ * This variant of file item handler sends a local file. The
+ * header data is generated as needed, the relative cache path variable
+ * is reused for the real path.
+ */
 TFileItemUser fileitem::Create(cmstring& absPath, const struct stat& statInfo)
 {
-	/*
-	 * This variant of file item handler sends a local file. The
-	 * header data is generated as needed, the relative cache path variable
-	 * is reused for the real path.
-	 */
 	class tLocalGetFitem : public fileitem_with_storage
 	{
 	public:
@@ -446,3 +455,5 @@ TFileItemUser fileitem::Create(cmstring &sPathUnescaped, fileitem::ESharingStrat
 }
 
 }
+
+#endif

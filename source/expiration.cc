@@ -672,6 +672,8 @@ void expiration::TrimFiles()
 #warning wtf hardcoded number?
 		if(now - 86400 > stinfo.st_mtim.tv_sec)
 		{
+#warning FIXME, restore trimming, with better technology
+#if 0
 //			SendFmt << "let's truncate " << fil << " to " << stinfo.st_size << "<br>";
 			// it's unlikely to be accessed but better protect it
 			auto user = fileitem::Create(fil, true);
@@ -684,7 +686,7 @@ void expiration::TrimFiles()
 
 			if(0 != truncate(fil.c_str(), stinfo.st_size))
 				SendFmt << "Error at " << fil << " (" << tErrnoFmter() << ")" << sBRLF;
-
+#endif
 		}
 	}
 }

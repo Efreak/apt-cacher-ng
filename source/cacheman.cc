@@ -289,8 +289,12 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if(!pFi)
 	{
+
+#warning disabled, redesign strategy for DB architecture
+#if 0
 		fiUser = fileitem::Create(sFilePathRel,
 						reDL ? fileitem::ESharingStrategy::ALWAYS_REPLACE_AND_RESET : fileitem::ESharingStrategy::ALWAYS_ATTACH);
+#endif
 		pFi = *fiUser;
 	}
 	if (!pFi)
@@ -1264,7 +1268,7 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 			if(!split.Next())
 				continue;
 			string pname = split.str();
-			trimString(pname);
+			trimBoth(pname);
 			if(pname.empty())
 				return false; // XXX: maybe throw int with line number
 

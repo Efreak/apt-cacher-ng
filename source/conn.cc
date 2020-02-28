@@ -474,7 +474,7 @@ void conn::Impl::LogDataCounts(cmstring & sFile, const char *xff, off_t nNewIn,
 	else if (xff)
 	{
 		sClient=xff;
-		trimString(sClient);
+		trimBoth(sClient);
 		auto pos = sClient.find_last_of(SPACECHARS);
 		if (pos!=stmiss)
 			sClient.erase(0, pos+1);

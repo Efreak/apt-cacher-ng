@@ -3,6 +3,7 @@
 #define FILELOCKS_H_
 
 #include <set>
+#include <memory>
 #include <sys/types.h>
 
 struct stat;

@@ -28,6 +28,8 @@
 #include <cstdlib>
 #include <errno.h>
 
+#include "astrop.h"
+
 #define EXTREME_MEMORY_SAVING false
 
 
@@ -117,46 +119,8 @@ static const cmstring sCRLF("\r\n");
 //#define PATHSEP "/"
 int getUUID();
 
-#define SPACECHARS " \f\n\r\t\v"
-
 typedef std::map<mstring, mstring> tStrMap;
 
-inline void trimFront(mstring &s, LPCSTR junk=SPACECHARS)
-{
-	mstring::size_type pos = s.find_first_not_of(junk);
-	if(pos != 0)
-		s.erase(0, pos);
-}
-
-inline void trimBack(mstring &s, LPCSTR junk=SPACECHARS)
-{
-	mstring::size_type pos = s.find_last_not_of(junk);
-	s.erase(pos+1);
-}
-
-inline void trimString(mstring &s, LPCSTR junk=SPACECHARS)
-{
-	trimBack(s, junk);
-	trimFront(s, junk);
-}
-
-#define trimLine(x) { trimFront(x); trimBack(x); }
-
-#define startsWith(where, what) (0==(where).compare(0, (what).size(), (what)))
-#define endsWith(where, what) ((where).size()>=(what).size() && \
-		0==(where).compare((where).size()-(what).size(), (what).size(), (what)))
-#define startsWithSz(where, what) (0==(where).compare(0, sizeof((what))-1, (what)))
-#define endsWithSzAr(where, what) ((where).size()>=(sizeof((what))-1) && \
-		0==(where).compare((where).size()-(sizeof((what))-1), (sizeof((what))-1), (what)))
-#define stripSuffix(where, what) if(endsWithSzAr(where, what)) where.erase(where.size()-sizeof(what)+1);
-#define stripPrefixChars(where, what) where.erase(0, where.find_first_not_of(what))
-
-#define setIfNotEmpty(where, cand) { if(where.empty() && !cand.empty()) where = cand; }
-#define setIfNotEmpty2(where, cand, alt) { if(where.empty()) { if(!cand.empty()) where = cand; else where = alt; } }
-
-mstring GetBaseName(cmstring &in);
-mstring GetDirPart(cmstring &in);
-tStrPair SplitDirPath(cmstring& in);
 
 LPCSTR GetTypeSuffix(cmstring& s);
 
@@ -371,69 +335,7 @@ ACNG_API mstring offttosH(off_t n);
 //template<typename charp>
 ACNG_API off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeString, charp *next)
 
-
-void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar);
-
 extern cmstring sEmptyString;
-
-//! iterator-like helper for string splitting, for convenient use with for-loops
-// Works exactly once!
-class tSplitWalk
-{
-	cmstring &s;
-	mutable mstring::size_type start, len, oob;
-	LPCSTR m_seps;
-
-public:
-	inline tSplitWalk(cmstring *line, LPCSTR separators=SPACECHARS, unsigned begin=0)
-	: s(*line), start(begin), len(stmiss), oob(line->size()), m_seps(separators) {}
-	inline bool Next() const
-	{
-		if(len != stmiss) // not initial state, find the next position
-			start = start + len + 1;
-
-		if(start>=oob)
-			return false;
-
-		start = s.find_first_not_of(m_seps, start);
-
-		if(start<oob)
-		{
-			len = s.find_first_of(m_seps, start);
-			len = (len == stmiss) ? oob-start : len-start;
-		}
-		else if (len != stmiss) // not initial state, end reached
-			return false;
-		else if(s.empty()) // initial state, no parts
-			return false;
-		else // initial state, use the whole string
-		{
-			start = 0;
-			len = oob;
-		}
-
-		return true;
-	}
-	inline mstring str() const { return s.substr(start, len); }
-	inline operator mstring() const { return str(); }
-	inline LPCSTR remainder() const { return s.c_str() + start; }
-
-	struct iterator
-	{
-		tSplitWalk* _walker = nullptr;
-		// default is end sentinel
-		bool bEol = true;
-		iterator() {}
-		iterator(tSplitWalk& walker) : _walker(&walker) { bEol = !walker.Next(); }
-		// just good enough for basic iteration and end detection
-		bool operator==(const iterator& other) const { return (bEol && other.bEol); }
-		bool operator!=(const iterator& other) const { return !(other == *this); }
-		iterator operator++() { bEol = !_walker->Next(); return *this; }
-		std::string operator*() { return _walker->str(); }
-	};
-	iterator begin() {return iterator(*this); }
-	iterator end() { return iterator(); }
-};
 
 //bool CreateDetachedThread(void *(*threadfunc)(void *));
 
@@ -568,7 +470,7 @@ struct resource_owner
 };
 
 // something similar to resource_owner but the owned object needs to be default-constructible and movable.
-// This is made for non-primitive types which doesn't work with resource_owner due to non-type argument restrictions.
+// This is made for non-primitive types which don't work with resource_owner due to non-type argument restrictions.
 template<typename T, void TDisposeFunction(T)>
 struct disposable_resource_owner
 {
@@ -592,15 +494,22 @@ struct disposable_resource_owner
 		}
 		return *this;
 	}
+    void reset(T&& newVal)
+    {
+    	TDisposeFunction(m_p);
+    	m_p = std::move(newVal);
+    }
+    /*
     disposable_resource_owner& operator=(T &&other)
 	{
-		if (&other != this)
+		if (&other != m_p)
 		{
 			TDisposeFunction(m_p);
 			m_p = move(other.m_p);
 		}
 		return *this;
 	}
+	*/
 };
 
 // from bgtask.cc

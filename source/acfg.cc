@@ -88,6 +88,13 @@ typedef decltype(repoparms)::iterator tPairRepoNameData;
 // maps hostname:port -> { <pathprefix,repopointer>, ... }
 std::unordered_map<string, list<pair<cmstring,tPairRepoNameData>>> mapUrl2pVname;
 
+// information with limited livespan - consumed and released by PostProcConfig
+struct tCfgTempData
+{
+	std::map<std::string, std::vector<std::string>> remap_lines;
+};
+auto temp_load_cfg = std::make_unique<tCfgTempData>();
+
 MapNameToString n2sTbl[] = {
 		{   "Port",                    &port}
 		,{  "CacheDir",                &cachedir}
@@ -203,49 +210,6 @@ tProperty n2pTbl[] =
 	ret += kv.first + " " + kv.second + "; ";
 	return ret;
 } },
-{ "Remap-", [](cmstring& key, cmstring& value) -> bool
-{
-	if(g_bNoComplex)
-	return true;
-
-	string vname=key.substr(6, key.npos);
-	if(vname.empty())
-	{
-		if(!g_bQuiet)
-		cerr << "Bad repository name in " << key << endl;
-		return false;
-	}
-	int type(-1); // nothing =-1; prefixes =0 ; backends =1; flags =2
-		for(tSplitWalk split(&value); split.Next();)
-		{
-			cmstring s(split);
-			if(s.empty())
-			continue;
-			if(s.at(0)=='#')
-			break;
-			if(type<0)
-			type=0;
-			if(s.at(0)==';')
-			++type;
-			else if(0 == type)
-			AddRemapInfo(false, s, vname);
-			else if(1 == type)
-			AddRemapInfo(true, s, vname);
-			else if(2 == type)
-			AddRemapFlag(s, vname);
-		}
-		if(type<0)
-		{
-			if(!g_bQuiet)
-			cerr << "Invalid entry, no configuration: " << key << ": " << value <<endl;
-			return false;
-		}
-		_AddHooksFile(vname);
-		return true;
-	}, [](bool) -> string
-	{
-		return "# mixed options";
-	} },
 { "AllowUserPorts", [](cmstring& key, cmstring& value) -> bool
 {
 	if(!pUserPorts)
@@ -355,16 +319,11 @@ int * GetIntPtr(LPCSTR key, int &base) {
 	return nullptr;
 }
 
-tProperty* GetPropPtr(cmstring& key)
+tProperty* GetPropPtr(LPCSTR szkey)
 {
-	auto sep = key.find('-');
-	auto szkey = key.c_str();
 	for (auto &ent : n2pTbl)
 	{
 		if (0 == strcasecmp(szkey, ent.name))
-			return &ent;
-		// identified as prefix, with matching length?
-		if(sep != stmiss && 0==strncasecmp(szkey, ent.name, sep) && 0 == ent.name[sep+1])
 			return &ent;
 	}
 	return nullptr;
@@ -478,9 +437,11 @@ inline bool ParseOptionLine(const string &sLine, string &key, string &val)
 		pos=posCol;
 
 	key=sLine.substr(0, pos);
+	trimBack(key);
+	trimFront(key);
 	val=sLine.substr(pos+1);
-	trimString(key);
-	trimString(val);
+	trimBack(val);
+	trimFront(val);
 	if(key.empty())
 		return false; // weird
 
@@ -676,7 +637,7 @@ inline void _ParseLocalDirs(cmstring &value)
 	for(tSplitWalk splitter(&value, ";"); splitter.Next(); )
 	{
 		mstring token=splitter.str();
-		trimString(token);
+		trimBoth(token);
 		tStrPos pos = token.find_first_of(SPACECHARS);
 		if(stmiss == pos)
 		{
@@ -684,9 +645,9 @@ inline void _ParseLocalDirs(cmstring &value)
 			continue;
 		}
 		string from(token, 0, pos);
-		trimString(from, "/");
+		trimBoth(from, "/");
 		string what(token, pos);
-		trimString(what, SPACECHARS "'\"");
+		trimBoth(what, SPACECHARS "'\"");
 		if(what.empty())
 		{
 			cerr << "Unsupported target of " << from << ": " << what << ", ignoring it" << endl;
@@ -764,8 +725,13 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 	int * pnTarget;
 	tProperty * ppTarget;
 	int nNumBase(10);
+	auto szKey(key.c_str());
 
-	if ( nullptr != (psTarget = GetStringPtr(key.c_str())))
+	if(0 == strncasecmp(szKey, "remap-", 6))
+	{
+		temp_load_cfg->remap_lines[key.substr(6)].emplace_back(value);
+	}
+	else if ( nullptr != (psTarget = GetStringPtr(szKey)))
 	{
 
 		if(pDupeCheck && !g_bQuiet)
@@ -779,7 +745,7 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 
 		*psTarget=value;
 	}
-	else if ( nullptr != (pnTarget = GetIntPtr(key.c_str(), nNumBase)))
+	else if ( nullptr != (pnTarget = GetIntPtr(szKey, nNumBase)))
 	{
 
 		if(pDupeCheck && !g_bQuiet)
@@ -822,7 +788,7 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 			return false;
 		}
 	}
-	else if ( nullptr != (ppTarget = GetPropPtr(key)))
+	else if ( nullptr != (ppTarget = GetPropPtr(szKey)))
 	{
 		return ppTarget->set(key, value);
 	}
@@ -1134,7 +1100,8 @@ void PostProcConfig()
 
    stripPrefixChars(cfg::reportpage, '/');
 
-   trimString(cfg::requestapx);
+   trimBack(cfg::requestapx);
+   trimFront(cfg::requestapx);
    if(!cfg::requestapx.empty())
 	   cfg::requestapx = unEscape(cfg::requestapx);
 
@@ -1203,6 +1170,53 @@ void PostProcConfig()
 	   cerr << "Warning, remote pipeline depth of 0 makes no sense, assuming 1." << endl;
 	   pipelinelen = 1;
    }
+
+   for(const auto& it: temp_load_cfg->remap_lines)
+   {
+	   const auto& vname = it.first;
+   	if(vname.empty())
+   	{
+   		if(!g_bQuiet)
+   		cerr << "Bad repository name, check Remap-... directives" << endl;
+   		continue;
+#warning abort startup?
+		}
+		for (const auto &value : it.second)
+		{
+
+			enum xtype
+			{
+				INIT = -1, PREFIXES, BACKENDS, FLAGS
+			} type = INIT;
+			for (tSplitWalk split(&value); split.Next();)
+			{
+				cmstring s(split);
+				if (s.empty())
+					continue;
+				if (s.at(0) == '#')
+					break;
+				if (type < PREFIXES)
+					type = PREFIXES;
+				if (s.at(0) == ';')
+					type=xtype(type+1);
+				else if (PREFIXES == type)
+					AddRemapInfo(false, s, vname);
+				else if (BACKENDS == type)
+					AddRemapInfo(true, s, vname);
+				else if (FLAGS == type)
+					AddRemapFlag(s, vname);
+			}
+			if (type < PREFIXES)
+			{
+				if (!g_bQuiet)
+					cerr << "Invalid entry, no valid configuration for Remap-" << vname << ": "
+							<< value << endl;
+				continue;
+#warning abort startup?
+			}
+		}
+		_AddHooksFile(vname);
+	}
 
 } // PostProcConfig
 

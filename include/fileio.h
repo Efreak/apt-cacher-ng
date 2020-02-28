@@ -57,7 +57,7 @@ void set_nb(int fd);
 void set_block(int fd);
 
 inline void forceclose(int& fd) { while(0 != ::close(fd)) { if(errno != EINTR) break; }; fd=-1; }
-void ACNG_API justforceclose(int fd) { while(0 != ::close(fd)) { if(errno != EINTR) break; }; }
+void ACNG_API justforceclose(int fd);
 inline void checkforceclose(int &fd)
 {
 	if (fd == -1)
@@ -73,15 +73,14 @@ inline void checkforceclose(int &fd)
 
 inline void checkForceFclose(FILE* &fh)
 {
-	if (fh)
+	if (!fh)
+		return;
+	int fd = fileno(fh);
+	if (0 != ::fclose(fh) && errno != EBADF)
 	{
-		int fd = fileno(fh);
-		if (0 != ::fclose(fh) && errno != EBADF)
-		{
-			forceclose(fd);
-		}
-		fh = nullptr;
+		forceclose(fd);
 	}
+	fh = nullptr;
 }
 
 // more efficient than tDtorEx with lambda

@@ -228,4 +228,6 @@ off_t GetFileSize(cmstring & path, off_t defret)
 	return (0==::stat(path.c_str(), &stbuf)) ? stbuf.st_size : defret;
 }
 
+void ACNG_API justforceclose(int fd) { while(0 != ::close(fd)) { if(errno != EINTR) break; }; }
+
 }

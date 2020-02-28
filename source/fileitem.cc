@@ -17,11 +17,12 @@ using namespace std;
 namespace acng
 {
 
+#if 0
 struct hashfib
 {
 	std::size_t operator()(cmstring* ps) const noexcept
 	{
-		return ps ? std::hash(*ps) : 0;
+		return ps ? std::hash<std::string>(*ps) : 0;
 	}
 };
 struct eq_fib
@@ -32,8 +33,8 @@ struct eq_fib
 		return *ps == *pt;
 	}
 };
+#endif
 // lookup for the shared file items. The key is a plain pointer, in order to save some memory; this okay because the cache path remains the same as long as the item is shared
-typedef std::unordered_map<cmstring*,SHARED_PTR<fileitem>, hashfib, eq_fib> tFiGlobMap;
 tFiGlobMap mapItems;
 acmutex mapItemsMx;
 std::deque<TFileItemUser> orderedExpQueue;
@@ -474,6 +475,9 @@ void StopUsingFileitem(tFileItemPtr ptr)
 	if (ucount > 0 || !ptr->m_bWasShared)
 		return;
 
+#warning FIXME, completely broken
+
+#if 0
 	auto it = mapItems.find(&ptr->m_sCachePathRel);
 	// not there or is not us
 	if(it == mapItems.end() || !it->second || ptr.get() != it->second.get())
@@ -493,6 +497,7 @@ void StopUsingFileitem(tFileItemPtr ptr)
 	{
 		mapItems.erase(it);
 	}
+#endif
 }
 
 // make the fileitem globally accessible
@@ -570,6 +575,9 @@ time_t fileitem::BackgroundCleanup()
 
 void fileitem::dump_status()
 {
+
+#warning restore me, status dumper
+#if 0
 	tSS fmt;
 	log::err("File descriptor table:\n");
 	for(const auto& it : mapItems)
@@ -591,13 +599,18 @@ void fileitem::dump_status()
 		log::err(fmt);
 	}
 	log::flush();
+
+#endif
 }
 
 TFileItemUser fileitem::Install(std::function<tFileItemPtr()> lazyItemConstructor, cmstring& sKeyPathRel, ESharingStrategy collisionHint)
 {
+#warning FIXME: restore/redo all this logics
+	return TFileItemUser();
+#if 0
 	auto item2use = [](tFileItemPtr& p) {if(p) p->usercount++; return TFileItemUser(p);};
 	lockguard lockGlobalMap(mapItemsMx);
-	auto it = mapItems.find(&sKeyPathRel);
+	auto it = mapItems.find(sKeyPathRel);
 	if(it != mapItems.end())
 	{
 		if(collisionHint == ESharingStrategy::ALWAYS_ATTACH)
@@ -648,7 +661,7 @@ TFileItemUser fileitem::Install(std::function<tFileItemPtr()> lazyItemConstructo
 	ASSERT(res.second);
 	sp->m_globRef = res.first;
 	return sp;
-
+#endif
 
 }
 
