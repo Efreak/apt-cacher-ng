@@ -11,4 +11,5 @@ TEST(cfg, remap)
 	ASSERT_TRUE(cfg::SetOption("Remap-foo = bla blub http://fakeserver/irgendwas ; http://realmirror/pub/kubuntu", nullptr));
 	ASSERT_TRUE(cfg::SetOption("Remap-bar = bla blub http://fakeserver/irgendwas ; http://realmirror/pub/kubuntu", nullptr));
 	ASSERT_TRUE(cfg::SetOption("Remap-foo: another_foo_prefix", nullptr));
+	ASSERT_NO_THROW(cfg::PostProcConfig());
 }

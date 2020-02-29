@@ -9,11 +9,14 @@
 #define INCLUDE_ASTROP_H_
 
 #include <string>
+#include "string_view.hpp"
 
 #define SPACECHARS " \f\n\r\t\v"
 
 namespace acng
 {
+
+using string_view = nonstd::string_view;
 
 //! iterator-like helper for string splitting, for convenient use with for-loops
 // Works exactly once!
@@ -56,6 +59,7 @@ public:
 	inline std::string str() const { return s.substr(start, len); }
 	inline operator std::string() const { return str(); }
 	inline const char* remainder() const { return s.c_str() + start; }
+	inline string_view view() const { return string_view(s.data() + start, len); }
 
 	struct iterator
 	{
@@ -76,15 +80,36 @@ public:
 
 inline void trimFront(std::string &s, const char* junk=SPACECHARS)
 {
-	std::string::size_type pos = s.find_first_not_of(junk);
-	if(pos != 0)
+	auto pos = s.find_first_not_of(junk);
+	if(pos == std::string::npos)
+		s.clear();
+	else if(pos>0)
 		s.erase(0, pos);
+}
+
+inline string_view trimFront(string_view s, const char* junk=SPACECHARS)
+{
+	auto pos = s.find_first_not_of(junk);
+	if(pos == std::string::npos)
+		return string_view(s.data(),0);
+	return string_view(s.data() + pos, s.size()-pos);
 }
 
 inline void trimBack(std::string &s, const char* junk=SPACECHARS)
 {
-	std::string::size_type pos = s.find_last_not_of(junk);
-	s.erase(pos+1);
+	auto pos = s.find_last_not_of(junk);
+	if(pos == std::string::npos)
+		s.clear();
+	else if(pos>0)
+		s.erase(pos+1);
+}
+
+inline string_view trimBack(string_view s, const char* junk=SPACECHARS)
+{
+	auto pos = s.find_last_not_of(junk);
+	if(pos == std::string::npos)
+		return string_view(s.data(),0);
+	return string_view(s.data(), pos+1);
 }
 
 inline void trimBoth(std::string &s, const char* junk=SPACECHARS)

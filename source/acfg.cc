@@ -418,7 +418,7 @@ inline decltype(repoparms)::iterator GetRepoEntryRef(const string & sRepName)
 	return rv.first;
 }
 
-inline bool ParseOptionLine(const string &sLine, string &key, string &val)
+inline bool ParseOptionLine(string_view sLine, string &key, string &val)
 {
 	string::size_type posCol = sLine.find(":");
 	string::size_type posEq = sLine.find("=");
@@ -436,10 +436,10 @@ inline bool ParseOptionLine(const string &sLine, string &key, string &val)
 	else
 		pos=posCol;
 
-	key=sLine.substr(0, pos);
+	key=sLine.substr(0, pos).to_string();
 	trimBack(key);
 	trimFront(key);
-	val=sLine.substr(pos+1);
+	val=sLine.substr(pos+1).to_string();
 	trimBack(val);
 	trimFront(val);
 	if(key.empty())
@@ -452,7 +452,7 @@ inline bool ParseOptionLine(const string &sLine, string &key, string &val)
 }
 
 
-inline void AddRemapFlag(const string & token, const string &repname)
+inline void AddRemapFlag(string_view token, const string &repname)
 {
 	mstring key, value;
 	if(!ParseOptionLine(token, key, value))
@@ -497,24 +497,24 @@ inline void AddRemapFlag(const string & token, const string &repname)
 	}
 }
 
-tStrDeq ExpandFileTokens(cmstring &token)
+tStrDeq ExpandFileTokens(string_view token)
 {
-	string sPath = token.substr(5);
+	auto sPath = token.substr(5);
 	if (sPath.empty())
 		BARF("Bad file spec for repname, file:?");
 	bool bAbs = IsAbsolute(sPath);
 	if (suppdir.empty() || bAbs)
 	{
-		if (!bAbs)
-			sPath = confdir + sPathSep + sPath;
-		return ExpandFilePattern(sPath, true);
+		return ExpandFilePattern(
+				bAbs ? sPath.to_string() : (confdir + sPathSep + sPath.to_string())
+						, true);
 	}
-	auto pat = confdir + sPathSep + sPath;
+	auto pat = PathCombine(confdir, sPath);
 	StrSubst(pat, "//", "/");
 	auto res = ExpandFilePattern(pat, true);
 	if (res.size() == 1 && !Cstat(res.front()))
 		res.clear(); // not existing, wildcard returned
-	pat = suppdir + sPathSep + sPath;
+	pat = PathCombine(suppdir, sPath);
 	StrSubst(pat, "//", "/");
 	auto suppres = ExpandFilePattern(pat, true);
 	if (suppres.size() == 1 && !Cstat(suppres.front()))
@@ -533,14 +533,14 @@ tStrDeq ExpandFileTokens(cmstring &token)
 	return res;
 }
 
-inline void AddRemapInfo(bool bAsBackend, const string & token,
+inline void AddRemapInfo(bool bAsBackend, const string_view token,
 		const string &repname)
 {
 	if (0!=token.compare(0, 5, "file:"))
 	{
 		tHttpUrl url;
 		if(! url.SetHttpUrl(token))
-			BARF(token + " <-- bad URL detected");
+			BARF(token.to_string() + " <-- bad URL detected");
 		_FixPostPreSlashes(url.sPath);
 
 		if (bAsBackend)
@@ -556,7 +556,7 @@ inline void AddRemapInfo(bool bAsBackend, const string & token,
 		for(auto& src : ExpandFileTokens(token))
 			count += func(src, repname);
 		if(!count)
-			for(auto& src : ExpandFileTokens(token + ".default"))
+			for(auto& src : ExpandFileTokens(token.to_string() + ".default"))
 				count = func(src, repname);
 		if(!count && !g_bQuiet)
 			cerr << "WARNING: No configuration was read from " << token << endl;
@@ -1036,6 +1036,7 @@ void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 	}
 }
 
+#warning catch exception on all users
 void PostProcConfig()
 {
 	mapUrl2pVname.rehash(mapUrl2pVname.size());
@@ -1171,15 +1172,14 @@ void PostProcConfig()
 	   pipelinelen = 1;
    }
 
-   for(const auto& it: temp_load_cfg->remap_lines)
-   {
-	   const auto& vname = it.first;
-   	if(vname.empty())
-   	{
-   		if(!g_bQuiet)
-   		cerr << "Bad repository name, check Remap-... directives" << endl;
-   		continue;
-#warning abort startup?
+	for (const auto &it : temp_load_cfg->remap_lines)
+	{
+		const auto &vname = it.first;
+		if (vname.empty())
+		{
+			if (!g_bQuiet)
+				throw tStartupException("Bad repository name, check Remap-... directives");
+			continue;
 		}
 		for (const auto &value : it.second)
 		{
@@ -1190,16 +1190,17 @@ void PostProcConfig()
 			} type = INIT;
 			for (tSplitWalk split(&value); split.Next();)
 			{
-				cmstring s(split);
+				auto s = split.view();
 				if (s.empty())
 					continue;
 				if (s.at(0) == '#')
 					break;
-				if (type < PREFIXES)
-					type = PREFIXES;
 				if (s.at(0) == ';')
-					type=xtype(type+1);
-				else if (PREFIXES == type)
+				{
+					type = xtype(type + 1);
+					continue;
+				}
+				if (PREFIXES == type)
 					AddRemapInfo(false, s, vname);
 				else if (BACKENDS == type)
 					AddRemapInfo(true, s, vname);
@@ -1209,15 +1210,13 @@ void PostProcConfig()
 			if (type < PREFIXES)
 			{
 				if (!g_bQuiet)
-					cerr << "Invalid entry, no valid configuration for Remap-" << vname << ": "
-							<< value << endl;
+					throw tStartupException(std::string("Invalid entry, no valid configuration for Remap-") + ": " + value);
 				continue;
-#warning abort startup?
 			}
 		}
 		_AddHooksFile(vname);
 	}
-
+	temp_load_cfg.reset();
 } // PostProcConfig
 
 void dump_config(bool includeDelicate)

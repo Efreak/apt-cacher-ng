@@ -436,7 +436,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
     	goto report_invpath;
     if(!tokenizer.Next() || !tokenizer.Next()) // at path...
     	goto report_invpath;
-    UrlUnescapeAppend(tokenizer, sReqPath);
+    UrlUnescapeAppend(tokenizer.view(), sReqPath);
     if(!tokenizer.Next()) // at proto
     	goto report_invpath;
     m_bIsHttp11 = (sHttp11 == tokenizer.str());

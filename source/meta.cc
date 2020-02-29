@@ -188,11 +188,25 @@ bool ParseKeyValLine(const string & sIn, string & sOutKey, string & sOutVal)
 	return true;
 }
 
-
 bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 {
+	return SetHttpUrlSafe(unescape ? UrlUnescape(sUrlRaw) : sUrlRaw);
+}
+
+bool tHttpUrl::SetHttpUrl(string_view sUrlRaw, bool unescape)
+{
+	if(unescape)
+		{
+		std::string s = UrlUnescape(sUrlRaw);
+		return SetHttpUrlSafe(string_view(s));
+		}
+	else
+		return SetHttpUrlSafe(sUrlRaw);
+}
+
+bool tHttpUrl::SetHttpUrlSafe(string_view url)
+{
 	clear();
-	mstring url = unescape ? UrlUnescape(sUrlRaw) : sUrlRaw;
 
 	trimBack(url);
 	trimFront(url);
@@ -203,9 +217,9 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 	tStrPos hStart(0), l=url.length(), hEndSuc(0), pStart(0), p;
 	bool bCheckBrac=false;
 	
-	if(0==strncasecmp(url.c_str(), "http://", 7))
+	if(url.length() >=7 && 0==strncasecmp(url.data(), "http://", 7))
 		hStart=7;
-	else if(0==strncasecmp(url.c_str(), "https://", 8))
+	else if(url.length() >= 8 && 0==strncasecmp(url.data(), "https://", 8))
 	{
 #ifndef HAVE_SSL
 	log::err("E_NOTIMPLEMENTED: SSL");
@@ -244,12 +258,12 @@ bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 	if(pStart==0)
 		sPath="/";
 	else
-		sPath=url.substr(pStart);
+		sPath=url.substr(pStart).to_string();
 
 	if(url[hStart]=='_') // those are reserved
 		return false;
 	
-	sHost=url.substr(hStart, hEndSuc-hStart);
+	sHost.assign(url.data() + hStart, hEndSuc-hStart);
 
 	// credentials might be in there, strip them off
 	l=sHost.rfind('@');
@@ -360,7 +374,7 @@ ACNG_API tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted, bool bQuiet)
 
 #ifndef MINIBUILD
 
-bool IsAbsolute(cmstring &dirToFix)
+bool IsAbsolute(string_view dirToFix)
 {
 	bool bAbs=false;
 #ifdef WIN32
@@ -660,7 +674,7 @@ mstring DosEscape(cmstring &s)
 	return ret;
 }
 
-bool UrlUnescapeAppend(cmstring &from, mstring & to)
+bool UrlUnescapeAppend(string_view from, mstring & to)
 {
 	bool ret=true;
 	for(tStrPos i=0; i<from.length(); i++)
@@ -679,6 +693,16 @@ bool UrlUnescapeAppend(cmstring &from, mstring & to)
 			i+=2;
 		}
 	}
+	return ret;
+}
+
+
+std::string PathCombine(string_view a, string_view b)
+{
+	auto ret = trimBack(a, SZPATHSEP).to_string();
+	auto bb = trimFront(b, SZPATHSEP);
+	ret+=CPATHSEP;
+	ret.append(bb.data(), bb.data()+bb.length());
 	return ret;
 }
 
@@ -818,6 +842,14 @@ mstring UrlUnescape(cmstring &from)
 	UrlUnescapeAppend(from, ret);
 	return ret;
 }
+
+mstring UrlUnescape(string_view from)
+{
+	mstring ret; // let the compiler optimize
+	UrlUnescapeAppend(from, ret);
+	return ret;
+}
+
 //mstring DosEscape(cmstring &s);
 // just the bare minimum to make sure the string does not break HTML formating
 mstring html_sanitize(cmstring& in)

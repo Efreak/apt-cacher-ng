@@ -60,3 +60,19 @@ TEST(algorithms,bin_str_long_match)
 	ASSERT_EQ(result, "something/else");
 
 }
+
+TEST(strop,views)
+{
+	using namespace acng;
+	using namespace nonstd::string_view_literals;
+	string_view x = "foo  ", prex = "  foo";
+	ASSERT_EQ(trimFront(x), "foo  ");
+	ASSERT_EQ(trimBack(x), "foo");
+	ASSERT_EQ(trimFront(prex), "foo");
+	ASSERT_EQ(trimBack(prex), "  foo");
+
+	ASSERT_EQ("foo/bar", PathCombine(string_view(WITHLEN("foo")), string_view(WITHLEN("bar"))));
+	ASSERT_EQ("foo/bar", PathCombine("foo", "/bar"));
+	ASSERT_EQ("foo/bar", PathCombine(string_view(WITHLEN("foo/")), string_view(WITHLEN("/bar"))));
+	ASSERT_EQ("foo/bar", PathCombine(string_view(WITHLEN("foo/")), string_view(WITHLEN("bar"))));
+}

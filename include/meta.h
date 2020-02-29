@@ -210,11 +210,14 @@ struct HostPortProtoHash
 
 class ACNG_API tHttpUrl : public tHostPortProto
 {
+	bool SetHttpUrlSafe(string_view uri);
+
 public:
     using tHostPortProto::tHostPortProto; // ctor
 
 	mstring sPath;
 	bool SetHttpUrl(cmstring &uri, bool unescape = true);
+	bool SetHttpUrl(string_view uri, bool unescape = true);
 	mstring ToURI(bool bEscaped) const;
 
 	inline cmstring & GetProtoPrefix() const
@@ -305,9 +308,11 @@ tStrDeq ExpandFilePattern(cmstring& pattern, bool bSorted=false, bool bQuiet=fal
 
 mstring UrlEscape(cmstring &s);
 void UrlEscapeAppend(cmstring &s, mstring &sTarget);
-bool UrlUnescapeAppend(cmstring &from, mstring & to);
+//bool UrlUnescapeAppend(cmstring &from, mstring & to);
+bool UrlUnescapeAppend(string_view from, mstring & to);
 // Decode with result as return value, no error reporting
-mstring UrlUnescape(cmstring &from);
+mstring UrlUnescape(string_view from);
+
 mstring DosEscape(cmstring &s);
 // just the bare minimum to make sure the string does not break HTML formating
 mstring html_sanitize(cmstring& in);
@@ -340,8 +345,8 @@ extern cmstring sEmptyString;
 //bool CreateDetachedThread(void *(*threadfunc)(void *));
 
 void DelTree(cmstring &what);
-
-bool IsAbsolute(cmstring &dirToFix);
+std::string PathCombine(string_view a, string_view b);
+bool IsAbsolute(string_view dirToFix);
 
 mstring unEscape(cmstring &s);
 
@@ -583,6 +588,11 @@ enum class srt
 void justforceclose(int);
 using unique_fd = resource_owner<int, justforceclose, -1>;
 
+class tStartupException : public std::runtime_error
+{
+public:
+	using runtime_error :: runtime_error;
+};
 }
 
 #endif // _META_H

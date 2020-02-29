@@ -370,7 +370,8 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 				pResolvedDirectUrl = parserPath.NormalizePath();
 
 			// and prefer the source from xorig which is likely to deliver better result
-			if(hor.h[header::XORIG] && parserHead.SetHttpUrl(hor.h[header::XORIG], false))
+			if(hor.h[header::XORIG] && parserHead.SetHttpUrl(
+					string_view(hor.h[header::XORIG], strlen(hor.h[header::XORIG])), false))
 				pResolvedDirectUrl = parserHead.NormalizePath();
 			else if(sGuessedFrom
 					&& hor.LoadFromFile(SABSPATH(*sGuessedFrom + ".head"))
@@ -545,7 +546,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 				if (!pResolvedDirectUrl)
 				{
 					auto p = pFi->GetHeaderUnlocked().h[header::XORIG];
-					if (p && parserHead.SetHttpUrl(p))
+					if (p && parserHead.SetHttpUrl(string_view(p, strlen(p))))
 						pResolvedDirectUrl = &parserHead;
 				}
 				auto newurl(*pResolvedDirectUrl);
@@ -2062,7 +2063,7 @@ bool cacheman::ParseDebianIndexLine(tRemoteFileInfo& info, cmstring& fline)
 	info.fpr.size = atoofft((LPCSTR) val.c_str(), -2L);
 	if (info.fpr.size < 0 || !split.Next())
 		return false;
-	UrlUnescapeAppend(split, info.sFileName);
+	UrlUnescapeAppend(split.view(), info.sFileName);
 	return true;
 }
 
