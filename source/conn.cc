@@ -343,7 +343,7 @@ void conn::Impl::WorkLoop() {
 					{
 						if (RawPassThrough::CheckListbugs(h))
 						{
-							tSplitWalk iter(&h.frontLine);
+							tSplitWalk iter(h.frontLine, SPACECHARS, false);
 							if(iter.Next() && iter.Next())
 								RawPassThrough::RedirectBto2https(m_confd, iter);
 						}
@@ -361,7 +361,7 @@ void conn::Impl::WorkLoop() {
 				if(h.type == header::CONNECT)
 				{
 					inBuf.drop(nHeadBytes);
-					tSplitWalk iter(& h.frontLine);
+					tSplitWalk iter(h.frontLine, SPACECHARS, false);
 					if(iter.Next() && iter.Next())
 					{
 						cmstring tgt(iter);

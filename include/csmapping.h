@@ -72,6 +72,7 @@ public:
 	virtual void add(const char *data, size_t size) = 0;
 	virtual void finish(uint8_t* ret) = 0;
 	static std::unique_ptr<csumBase> GetChecker(CSTYPES);
+	inline void add(string_view data) { return add(data.data(), data.size()); }
 };
 
 // kind of file identity, compares by file size and checksum (MD5 or SHA*)
@@ -94,7 +95,7 @@ struct tFingerprint {
 		memcpy(csum, a.csum, sizeof(csum));
 		return *this;
 	}
-	
+#warning to string_view parameter, should simplify some uses
 	bool SetCs(const mstring & hexString, CSTYPES eCstype = CSTYPE_INVALID)
 	{
 		auto l = hexString.size();
@@ -134,7 +135,7 @@ struct tFingerprint {
 	 * Keeps the splitter pointed at last token, expects splitter be set at previous position.
 	 * @return false if data is crap or wantedType was set but does not fit what's in the first token.
 	 */
-	inline bool Set(const tSplitWalk & splitInput, CSTYPES wantedType = CSTYPE_INVALID)
+	inline bool Set(tSplitWalk splitInput, CSTYPES wantedType = CSTYPE_INVALID)
 	{
 		if(!splitInput.Next())
 			return false;

@@ -277,7 +277,7 @@ bool bind_and_listen(evutil_socket_t mSock, const evutil_addrinfo *pAddrInfo, cm
 
 std::string scratchBuf;
 
-unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
+unsigned setup_tcp_listeners(cmstring& addi, const std::string& port)
 {
 	LOGSTARTs("Setup::ConAddr");
 	USRDBG("Binding on host: " << addi << ", port: " << port);
@@ -288,7 +288,7 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 	hints.ai_family = PF_UNSPEC;
 
 	evutil_addrinfo* dnsret;
-	int r = evutil_getaddrinfo(addi, port.c_str(), &hints, &dnsret);
+	int r = evutil_getaddrinfo(addi.c_str(), port.c_str(), &hints, &dnsret);
 	if(r)
 	{
 		log::flush();
@@ -392,7 +392,7 @@ int ACNG_API Setup()
 	{
 		bool custom_listen_ip = false;
 		tHttpUrl url;
-		for(const auto& sp: tSplitWalk(&cfg::bindaddr))
+		for(const auto sp: tSplitWalk(cfg::bindaddr, SPACECHARS, false))
 		{
 			auto isUrl = url.SetHttpUrl(sp, false);
 			if(!isUrl && atoi(cfg::port.c_str()) <= 0)
@@ -403,7 +403,7 @@ int ACNG_API Setup()
 			}
 //	XXX: uri parser accepts anything wihtout shema, good for this situation but maybe bad for strict validation...
 //			USRDBG("Binding as host:port URI? " << isUrl << ", addr: " << url.ToURI(false));
-			nCreated += setup_tcp_listeners(isUrl ? url.sHost.c_str() : sp.c_str(),
+			nCreated += setup_tcp_listeners(isUrl ? url.sHost : to_string(sp),
 					isUrl ? url.GetPort(cfg::port) : cfg::port);
 			custom_listen_ip = true;
 		}

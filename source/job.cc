@@ -430,7 +430,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
     fileitem::FiStatus fistate(fileitem::FIST_FRESH);
     bool bPtMode(false);
     bool bForceFreshnessChecks(false); // force update of the file, i.e. on dynamic index files?
-    tSplitWalk tokenizer(& m_reqHead.frontLine, SPACECHARS);
+    tSplitWalk tokenizer(m_reqHead.frontLine, SPACECHARS, false);
 
     if(m_reqHead.type!=header::GET && m_reqHead.type!=header::HEAD)
     	goto report_invpath;

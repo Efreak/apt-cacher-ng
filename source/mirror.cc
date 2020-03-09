@@ -304,6 +304,10 @@ bool CompDebVerLessThan(cmstring &s1, cmstring s2)
 	return 0==r;
 };
 
+/**
+ * This code attempts to find old versions of the same package and look whether they can be patched with debdelta into the one we need.
+ */
+#warning XXX: compare function requires system() calls which are costly. Maybe just consider _all_ found versions for patching?
 void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 {
 	if (m_bAsNeeded)
@@ -353,7 +357,8 @@ void pkgmirror::HandlePkgEntry(const tRemoteFileInfo &entry)
 			// filter dangerous strings, invalid version strings, higher/same version
 			for(const auto& oldeb: oldebs)
 			{
-				tSplitWalk split(&oldeb, "_");
+#warning add UT here asap, can probably be simplified a lot with plain stringview
+				tSplitWalk split(oldeb, "_", true);
 				if(split.Next() && split.Next())
 				{
 					mstring s(split);

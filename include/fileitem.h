@@ -181,8 +181,8 @@ public:
 	 *
 	 * PRECONDITION: Item is not shared
 	 */
-#warning crap, should be eventually gone
-	virtual bool SinkMoveOutOfTheWay() {};
+#warning crazy idea, remove ASAP
+	virtual bool SinkMoveOutOfTheWay() { return false; };
 
 protected:
 

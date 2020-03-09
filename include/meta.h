@@ -216,7 +216,7 @@ public:
     using tHostPortProto::tHostPortProto; // ctor
 
 	mstring sPath;
-	bool SetHttpUrl(cmstring &uri, bool unescape = true);
+//	bool SetHttpUrl(cmstring &uri, bool unescape = true);
 	bool SetHttpUrl(string_view uri, bool unescape = true);
 	mstring ToURI(bool bEscaped) const;
 

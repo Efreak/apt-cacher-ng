@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
-# enforce minimal C++ language level
-set(CMAKE_CXX_STANDARD 14)
+# try to set the best C++ language level
+set(CMAKE_CXX_STANDARD 20)
 # let it take the lowest version, we need some precursor of C++14x
 #set(CMAKE_CXX_STANDARD_REQUIRED on)
 

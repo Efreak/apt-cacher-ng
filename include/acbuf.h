@@ -86,6 +86,7 @@ public:
 // map char array to buffer pointer and size
 	inline tSS & operator<<(const char *val) { return add(val); }
 	inline tSS & operator<<(cmstring& val) { return add(val); };
+	inline tSS & operator<<(string_view val) { return add(val.data(), val.length()); };
 	inline tSS & operator<<(const acbuf& val) { return add(val.rptr(), val.size()); };
 
 #define __tss_nbrfmt(x, h, y) { reserve_atleast(22); got(sprintf(wptr(), m_fmtmode == hex ? h : x, y)); return *this; }

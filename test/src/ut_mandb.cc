@@ -65,14 +65,54 @@ TEST(strop,views)
 {
 	using namespace acng;
 	using namespace nonstd::string_view_literals;
-	string_view x = "foo  ", prex = "  foo";
-	ASSERT_EQ(trimFront(x), "foo  ");
-	ASSERT_EQ(trimBack(x), "foo");
-	ASSERT_EQ(trimFront(prex), "foo");
-	ASSERT_EQ(trimBack(prex), "  foo");
+	string_view a = "foo  ", b = "  foo";
+	auto x=a;
+	trimFront(x);
+	ASSERT_EQ(x, "foo  ");
+	x=a;
+	trimBack(x);
+	ASSERT_EQ(x, "foo");
+	auto prex=b;
+	trimFront(prex);
+	ASSERT_EQ(prex, "foo");
+	prex=b;
+	trimBack(prex);
+	ASSERT_EQ(prex, "  foo");
+
+	string_view xtra("  ");
+	trimFront(xtra);
+	ASSERT_TRUE(xtra.empty());
+	ASSERT_TRUE(xtra.data());
+	ASSERT_FALSE(* xtra.data());
+	xtra = "  ";
+	// compiler shall use the same memory here
+	ASSERT_EQ((void*) xtra.data(), (void*) "  ");
+	trimBack(xtra);
+	ASSERT_EQ((void*) xtra.data(), (void*) "  ");
+	ASSERT_TRUE(xtra.empty());
 
 	ASSERT_EQ("foo/bar", PathCombine(string_view(WITHLEN("foo")), string_view(WITHLEN("bar"))));
 	ASSERT_EQ("foo/bar", PathCombine("foo", "/bar"));
 	ASSERT_EQ("foo/bar", PathCombine(string_view(WITHLEN("foo/")), string_view(WITHLEN("/bar"))));
 	ASSERT_EQ("foo/bar", PathCombine(string_view(WITHLEN("foo/")), string_view(WITHLEN("bar"))));
+
+	tHttpUrl url;
+	ASSERT_TRUE(url.SetHttpUrl("http://meh:1234/path/more/path?fragment"));
+}
+
+TEST(strop,splitter)
+{
+	using namespace acng;
+	std::vector<string_view> exp {"foo", "bar", "blalba"};
+
+	tSplitWalk tknzr("  foo bar blalba", SPACECHARS, false);
+	std::vector<string_view> result;
+	for(auto it:tknzr) result.emplace_back(it);
+	ASSERT_EQ(result, exp);
+//#error und jetzt fuer stricten splitter
+
+	tknzr.reset("foo    bar blalba    ");
+//	std::vector<string_view> result2(tknzr.begin(), tknzr.end());
+	ASSERT_EQ(exp, std::vector<string_view>(tknzr.begin(), tknzr.end()));
+
 }

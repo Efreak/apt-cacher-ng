@@ -8,7 +8,7 @@
 #include "sockio.h"
 #include "lockable.h"
 #include "cleaner.h"
-
+#include "csmapping.h"
 #include <regex.h>
 
 #include <iostream>
@@ -57,25 +57,25 @@ tHttpUrl proxy_info;
 
 struct MapNameToString
 {
-	const char *name; mstring *ptr;
+	string_view name; mstring *ptr;
 };
 
 struct MapNameToInt
 {
-	const char *name; int *ptr;
+	string_view name; int *ptr;
 	const char *warn; uint8_t base;
 	uint8_t hidden;	// just a hint
 };
 
 struct tProperty
 {
-	const char *name;
-	std::function<bool(cmstring& key, cmstring& value)> set;
+	string_view name;
+	std::function<bool(string_view key, string_view value)> set;
 	std::function<mstring(bool superUser)> get; // returns a string value. A string starting with # tells to skip the output
 };
 
 // predeclare some
-void _ParseLocalDirs(cmstring &value);
+void _ParseLocalDirs(string_view value);
 void AddRemapInfo(bool bAsBackend, const string & token, const string &repname);
 void AddRemapFlag(const string & token, const string &repname);
 void _AddHooksFile(cmstring& vname);
@@ -182,7 +182,7 @@ MapNameToInt n2iTbl[] = {
 
 tProperty n2pTbl[] =
 {
-{ "Proxy", [](cmstring& key, cmstring& value)
+{ "Proxy", [](auto key, auto value)
 {
 	if(value.empty()) proxy_info=tHttpUrl();
 	else
@@ -197,7 +197,7 @@ tProperty n2pTbl[] =
 		return string("#");
 	return proxy_info.sHost.empty() ? sEmptyString : proxy_info.ToURI(false);
 } },
-{ "LocalDirs", [](cmstring& key, cmstring& value) -> bool
+{ "LocalDirs", [](auto key, auto value) -> bool
 {
 	if(g_bNoComplex)
 	return true;
@@ -210,13 +210,13 @@ tProperty n2pTbl[] =
 	ret += kv.first + " " + kv.second + "; ";
 	return ret;
 } },
-{ "AllowUserPorts", [](cmstring& key, cmstring& value) -> bool
+{ "AllowUserPorts", [](auto key, auto value) -> bool
 {
 	if(!pUserPorts)
 	pUserPorts=new bitset<TCP_PORT_MAX>;
-	for(tSplitWalk split(&value); split.Next();)
+	for(auto slice: tSplitWalk(value, SPACECHARS, false))
 	{
-		cmstring s(split);
+		auto s(to_string(slice)); // be zero-terminated
 		const char *start(s.c_str());
 		char *p(0);
 		unsigned long n=strtoul(start, &p, 10);
@@ -240,14 +240,13 @@ tProperty n2pTbl[] =
 		}
 	return (string) ret;
 } },
-{ "ConnectProto", [](cmstring& key, cmstring& value) -> bool
+{ "ConnectProto", [](auto key, auto value) -> bool
 {
 	int *p = conprotos;
-	for (tSplitWalk split(&value); split.Next(); ++p)
+	for (tSplitWalk split(value, SPACECHARS, false); split.Next(); ++p)
 	{
-		cmstring val(split);
-		if (val.empty())
-		break;
+		auto val(split.view());
+		if (val.empty()) break;
 
 		if (p >= conprotos + _countof(conprotos))
 		BARF("Too many protocols specified: " << val);
@@ -267,19 +266,19 @@ tProperty n2pTbl[] =
 		ret += string(" ") + (conprotos[1] == PF_INET6 ? "v6" : "v4");
 	return ret;
 } },
-{ "AdminAuth", [](cmstring& key, cmstring& value) -> bool
+{ "AdminAuth", [](auto key, auto value) -> bool
 {
-	adminauth=value;
-	adminauthB64=EncodeBase64Auth(value);
+	adminauth.assign(value.data(), value.length());
+	adminauthB64=EncodeBase64Auth(adminauth);
 	return true;
 }, [](bool) -> string
 {
 	return "#"; // TOP SECRET";
 } }
 ,
-{ "ExStartTradeOff", [](cmstring& key, cmstring& value) -> bool
+{ "ExStartTradeOff", [](auto, auto value) -> bool
 {
-	exstarttradeoff = strsizeToOfft(value.c_str());
+	exstarttradeoff = strsizeToOfft(to_string(value).c_str());
 	return true;
 }, [](bool) -> string
 {
@@ -298,17 +297,17 @@ tProperty n2pTbl[] =
 
 };
 
-string * GetStringPtr(LPCSTR key) {
+string * GetStringPtr(string_view key) {
 	for(auto &ent : n2sTbl)
 		if(0==strcasecmp(key, ent.name))
 			return ent.ptr;
 	return nullptr;
 }
 
-int * GetIntPtr(LPCSTR key, int &base) {
+int * GetIntPtr(string_view key, int &base) {
 	for(auto &ent : n2iTbl)
 	{
-		if(0==strcasecmp(key, ent.name))
+		if (0 == strcasecmp(key, ent.name))
 		{
 			if(ent.warn)
 				cerr << "Warning, " << key << ": " << ent.warn << endl;
@@ -319,21 +318,23 @@ int * GetIntPtr(LPCSTR key, int &base) {
 	return nullptr;
 }
 
-tProperty* GetPropPtr(LPCSTR szkey)
+tProperty* GetPropPtr(string_view key)
 {
 	for (auto &ent : n2pTbl)
 	{
-		if (0 == strcasecmp(szkey, ent.name))
+		if (0 == strcasecmp(key, ent.name))
 			return &ent;
 	}
 	return nullptr;
 }
 
-int * GetIntPtr(LPCSTR key)
+int * GetIntPtr(string_view key)
 {
 	for(auto &ent : n2iTbl)
-		if(0==strcasecmp(key, ent.name))
+	{
+		if (0 == strcasecmp(key, ent.name))
 			return ent.ptr;
+	}
 	return nullptr;
 }
 
@@ -390,8 +391,6 @@ bool ReadOneConfFile(const string & szFilename, bool bReadErrorIsFatal=true)
 	tCfgIter itor(szFilename);
 	itor.reader.CheckGoodState(bReadErrorIsFatal, &szFilename);
 
-	NoCaseStringMap dupeCheck;
-
 	while(itor.Next())
 	{
 #ifdef DEBUG
@@ -401,8 +400,8 @@ bool ReadOneConfFile(const string & szFilename, bool bReadErrorIsFatal=true)
 		tStrPos pos=itor.sLine.find('#');
 		if(stmiss != pos)
 			itor.sLine.erase(pos);
-
-		if(! SetOption(itor.sLine, &dupeCheck))
+#warning catch exception
+		if(! SetOption(itor.sLine))
 			BARF("Error reading main options, terminating.");
 	}
 	return true;
@@ -418,7 +417,7 @@ inline decltype(repoparms)::iterator GetRepoEntryRef(const string & sRepName)
 	return rv.first;
 }
 
-inline bool ParseOptionLine(string_view sLine, string &key, string &val)
+inline bool ParseOptionLine(string_view sLine, string_view &key, string_view &val)
 {
 	string::size_type posCol = sLine.find(":");
 	string::size_type posEq = sLine.find("=");
@@ -436,10 +435,10 @@ inline bool ParseOptionLine(string_view sLine, string &key, string &val)
 	else
 		pos=posCol;
 
-	key=sLine.substr(0, pos).to_string();
+	key=sLine.substr(0, pos);
 	trimBack(key);
 	trimFront(key);
-	val=sLine.substr(pos+1).to_string();
+	val=sLine.substr(pos+1);
 	trimBack(val);
 	trimFront(val);
 	if(key.empty())
@@ -454,7 +453,7 @@ inline bool ParseOptionLine(string_view sLine, string &key, string &val)
 
 inline void AddRemapFlag(string_view token, const string &repname)
 {
-	mstring key, value;
+	string_view key, value;
 	if(!ParseOptionLine(token, key, value))
 		return;
 
@@ -474,10 +473,9 @@ inline void AddRemapFlag(string_view token, const string &repname)
 		if(value.empty())
 			return;
 
-		if(!endsWithSzAr(value, "/"))
-			value+="/";
+		bool addSlash=!endsWithSzAr(value, "/");
 
-		if(!where.m_deltasrc.SetHttpUrl(value))
+		if(!where.m_deltasrc.SetHttpUrl(addSlash ? (to_string(value)+"/") : value))
 			cerr << "Couldn't parse Debdelta source URL, ignored " <<value <<endl;
 	}
 	else if(key=="proxy")
@@ -506,7 +504,7 @@ tStrDeq ExpandFileTokens(string_view token)
 	if (suppdir.empty() || bAbs)
 	{
 		return ExpandFilePattern(
-				bAbs ? sPath.to_string() : (confdir + sPathSep + sPath.to_string())
+				bAbs ? to_string(sPath) : (confdir + sPathSep + to_string(sPath))
 						, true);
 	}
 	auto pat = PathCombine(confdir, sPath);
@@ -540,7 +538,7 @@ inline void AddRemapInfo(bool bAsBackend, const string_view token,
 	{
 		tHttpUrl url;
 		if(! url.SetHttpUrl(token))
-			BARF(token.to_string() + " <-- bad URL detected");
+			BARF(to_string(token) + " <-- bad URL detected");
 		_FixPostPreSlashes(url.sPath);
 
 		if (bAsBackend)
@@ -556,7 +554,7 @@ inline void AddRemapInfo(bool bAsBackend, const string_view token,
 		for(auto& src : ExpandFileTokens(token))
 			count += func(src, repname);
 		if(!count)
-			for(auto& src : ExpandFileTokens(token.to_string() + ".default"))
+			for(auto& src : ExpandFileTokens(to_string(token) + ".default"))
 				count = func(src, repname);
 		if(!count && !g_bQuiet)
 			cerr << "WARNING: No configuration was read from " << token << endl;
@@ -606,25 +604,25 @@ inline void _AddHooksFile(cmstring& vname)
 		return;
 
 	struct tHookHandler &hs = *(new tHookHandler(vname));
-	mstring key,val;
+	string_view key,val;
 	while (itor.Next())
 	{
 		if(!ParseOptionLine(itor.sLine, key, val))
 			continue;
 
-		const char *p = key.c_str();
-		if (strcasecmp("PreUp", p) == 0)
+		if (strcasecmp("PreUp", key) == 0)
 		{
 			hs.cmdCon = val;
 		}
-		else if (strcasecmp("Down", p) == 0)
+		else if (strcasecmp("Down", key) == 0)
 		{
 			hs.cmdRel = val;
 		}
-		else if (strcasecmp("DownTimeout", p) == 0)
+		else if (strcasecmp("DownTimeout", key) == 0)
 		{
 			errno = 0;
-			unsigned n = strtoul(val.c_str(), nullptr, 10);
+			// XXX: maybe just forcibly terminate it because we know that it came from a string and data is writable. Or eventually make a better strtoul wrapper.
+			unsigned n = strtoul(to_string(val).c_str(), nullptr, 10);
 			if (!errno)
 				hs.downDuration = n;
 		}
@@ -632,28 +630,28 @@ inline void _AddHooksFile(cmstring& vname)
 	repoparms[vname].m_pHooks = &hs;
 }
 
-inline void _ParseLocalDirs(cmstring &value)
+inline void _ParseLocalDirs(string_view value)
 {
-	for(tSplitWalk splitter(&value, ";"); splitter.Next(); )
+	for(auto sliceFromTo: tSplitWalk(value, ";", true))
 	{
-		mstring token=splitter.str();
-		trimBoth(token);
-		tStrPos pos = token.find_first_of(SPACECHARS);
+		trimBoth(sliceFromTo);
+		tStrPos pos = sliceFromTo.find_first_of(SPACECHARS);
 		if(stmiss == pos)
 		{
-			cerr << "Cannot map " << token << ", needed format: virtualdir realdir, ignoring it";
+			cerr << "Cannot map " << sliceFromTo << ", needed format: virtualdir realdir, ignoring it";
 			continue;
 		}
-		string from(token, 0, pos);
+		// XXX: this is still kinda PITA, the best format which works here is: /foo "/var/cache/fooish bar/sdf"
+		string_view from(sliceFromTo.data(), pos);
 		trimBoth(from, "/");
-		string what(token, pos);
-		trimBoth(what, SPACECHARS "'\"");
-		if(what.empty())
+		sliceFromTo.remove_prefix(pos);
+		trimBoth(sliceFromTo, SPACECHARS "'\"");
+		if(sliceFromTo.empty())
 		{
-			cerr << "Unsupported target of " << from << ": " << what << ", ignoring it" << endl;
+			cerr << "Unsupported target of " << from << ": " << sliceFromTo << ", ignoring it" << endl;
 			continue;
 		}
-		localdirs[from]=what;
+		localdirs[to_string(from)]=to_string(sliceFromTo);
 	}
 }
 
@@ -670,21 +668,17 @@ cmstring & GetMimeType(cmstring &path)
 			{
 				// # regular types:
 				// text/plain             asc txt text pot brf  # plain ascii files
-
-				tSplitWalk split(&itor.sLine);
-				if (!split.Next())
-					continue;
-
-				mstring mimetype = split;
-				if (startsWithSz(mimetype, "#"))
-					continue;
-
-				while (split.Next())
+				string mimetype;
+				for(auto token: tSplitWalk(itor.sLine, SPACECHARS, false))
 				{
-					mstring suf = split;
-					if (startsWithSz(suf, "#"))
+					if(token.starts_with('#'))
 						break;
-					mimemap[suf] = mimetype;
+					if(mimetype.empty())
+					{
+						mimetype=to_string(token);
+						continue;
+					}
+					mimemap[to_string(token)] = mimetype;
 				}
 			}
 		}
@@ -714,9 +708,11 @@ cmstring & GetMimeType(cmstring &path)
 	return sEmptyString;
 }
 
-bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
+#warning add a --trace-config option to help identifying the problems. However, shall warn or abort if user-id is not matching
+#warning and document the trace mode
+bool SetOption(const string &sLine)
 {
-	string key, value;
+	string_view key, value;
 
 	if(!ParseOptionLine(sLine, key, value))
 		return false;
@@ -725,39 +721,20 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 	int * pnTarget;
 	tProperty * ppTarget;
 	int nNumBase(10);
-	auto szKey(key.c_str());
 
-	if(0 == strncasecmp(szKey, "remap-", 6))
+	if(key.length() > 6 && 0 == strncasecmp(key.data(), "remap-", 6))
 	{
-		temp_load_cfg->remap_lines[key.substr(6)].emplace_back(value);
+		temp_load_cfg->remap_lines[to_string(key.substr(6))].emplace_back(value);
 	}
-	else if ( nullptr != (psTarget = GetStringPtr(szKey)))
+	else if ( nullptr != (psTarget = GetStringPtr(key)))
 	{
-
-		if(pDupeCheck && !g_bQuiet)
-		{
-			mstring &w = (*pDupeCheck)[key];
-			if(w.empty())
-				w = value;
-			else
-				cerr << "WARNING: " << key << " was previously set to " << w << endl;
-		}
-
 		*psTarget=value;
 	}
-	else if ( nullptr != (pnTarget = GetIntPtr(szKey, nNumBase)))
+	else if ( nullptr != (pnTarget = GetIntPtr(key, nNumBase)))
 	{
-
-		if(pDupeCheck && !g_bQuiet)
-		{
-			mstring &w = (*pDupeCheck)[key];
-			if(w.empty())
-				w = value;
-			else
-				cerr << "WARNING: " << key << " was already set to " << w << endl;
-		}
-
-		const char *pStart=value.c_str();
+		// temp. copy is ok here since a number string is most likely SSOed
+		auto temp(to_string(value));
+		const char *pStart=temp.c_str();
 		if(! *pStart)
 		{
 			cerr << "Missing value for " << key << " option!" <<endl;
@@ -788,7 +765,7 @@ bool SetOption(const string &sLine, NoCaseStringMap *pDupeCheck)
 			return false;
 		}
 	}
-	else if ( nullptr != (ppTarget = GetPropPtr(szKey)))
+	else if ( nullptr != (ppTarget = GetPropPtr(key)))
 	{
 		return ppTarget->set(key, value);
 	}
@@ -1036,6 +1013,91 @@ void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
 	}
 }
 
+struct tMappingValidator : public IMappingConfigValidator
+{
+	string_view m_name, m_fpr;
+	std::unique_ptr<csumBase> m_summer;
+	enum { VALIDATING, NEW, MISMATCH } m_mode;
+
+	const string_view SIGNATURE = ACVERSION
+#ifdef DEBUG
+		","	__DATE__ "," __TIME__
+#endif
+			;
+	// dummy exception type, thrown to abort parsing
+	struct tMismatchException : public std::exception
+	{
+	};
+	void _initSummer()
+	{
+	m_summer = csumBase::GetChecker(CSTYPES::CSTYPE_MD5);
+	m_summer->add(SIGNATURE);
+	}
+	tMappingValidator(string_view name, string_view fpr) : m_name(name), m_fpr(fpr)
+	{
+		_initSummer();
+		if(fpr.starts_with(SIGNATURE))
+			m_mode = VALIDATING;
+		// TODO: load old DB config
+		// TODO: set mode
+	}
+
+};
+
+void LoadMappings(bool dry_run)
+{
+	for (const auto &it : temp_load_cfg->remap_lines)
+	{
+		const auto &vname = it.first;
+		if (vname.empty())
+		{
+			if (!g_bQuiet)
+				throw tStartupException("Bad repository name, check Remap-... directives");
+			continue;
+		}
+		for (const auto &remapLine : it.second)
+		{
+			enum xtype
+			{
+				PREFIXES, BACKENDS, FLAGS
+			} type = xtype(PREFIXES-1);
+			for (auto remapToken : tSplitWalk(remapLine, ";", true))
+			{
+				type = xtype(type + 1);
+				for (auto s : tSplitWalk(remapToken, SPACECHARS, false))
+				{
+					if (s.empty())
+						continue;
+					if (s.starts_with('#'))
+						goto next_remap_line;
+
+					switch (type)
+					{
+					case PREFIXES:
+						AddRemapInfo(false, s, vname);
+						break;
+					case BACKENDS:
+						AddRemapInfo(true, s, vname);
+						break;
+					case FLAGS:
+						AddRemapFlag(s, vname);
+						break;
+					}
+				}
+			}
+			if (type < PREFIXES) // no valid tokens?
+			{
+				if (!g_bQuiet)
+					throw tStartupException(std::string("Invalid entry, no valid configuration for Remap-") + ": " + remapLine);
+				continue;
+			}
+			next_remap_line:;
+		}
+		_AddHooksFile(vname);
+	}
+}
+
+
 #warning catch exception on all users
 void PostProcConfig()
 {
@@ -1172,50 +1234,8 @@ void PostProcConfig()
 	   pipelinelen = 1;
    }
 
-	for (const auto &it : temp_load_cfg->remap_lines)
-	{
-		const auto &vname = it.first;
-		if (vname.empty())
-		{
-			if (!g_bQuiet)
-				throw tStartupException("Bad repository name, check Remap-... directives");
-			continue;
-		}
-		for (const auto &value : it.second)
-		{
+   LoadMappings(true);
 
-			enum xtype
-			{
-				INIT = -1, PREFIXES, BACKENDS, FLAGS
-			} type = INIT;
-			for (tSplitWalk split(&value); split.Next();)
-			{
-				auto s = split.view();
-				if (s.empty())
-					continue;
-				if (s.at(0) == '#')
-					break;
-				if (s.at(0) == ';')
-				{
-					type = xtype(type + 1);
-					continue;
-				}
-				if (PREFIXES == type)
-					AddRemapInfo(false, s, vname);
-				else if (BACKENDS == type)
-					AddRemapInfo(true, s, vname);
-				else if (FLAGS == type)
-					AddRemapFlag(s, vname);
-			}
-			if (type < PREFIXES)
-			{
-				if (!g_bQuiet)
-					throw tStartupException(std::string("Invalid entry, no valid configuration for Remap-") + ": " + value);
-				continue;
-			}
-		}
-		_AddHooksFile(vname);
-	}
 	temp_load_cfg.reset();
 } // PostProcConfig
 
@@ -1532,10 +1552,14 @@ inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool 
 
 bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat)
 {
-	for(tSplitWalk split(&pat); split.Next(); )
+	return true;
+#warning FIXME. What was the spec? Add test!
+#if 0
+	for(tSplitWalk split(pat); split.Next(); )
 		if (!CompileUncachedRex(split, type, false))
 			return false;
 	return true;
+#endif
 }
 
 bool MatchUncacheable(const string & in, NOCACHE_PATTYPE type)

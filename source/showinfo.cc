@@ -138,12 +138,12 @@ tDeleter::tDeleter(const tRunParms& parms, const mstring& vmode)
 	}
 
 	auto del = (m_parms.type == workDELETE);
-
 	mstring params(m_parms.cmd, qpos+1);
 	mstring blob;
-	for(tSplitWalk split(&params, "&"); split.Next();)
+	for(tSplitWalk split(params, "&", true); split.Next();)
 	{
 		mstring tok(split);
+#warning can use view here. OTOH this whole method should be replaced with DB-based operation, user gets to see only the request id
 		if(startsWithSz(tok, "kf="))
 		{
 			char *end(0);

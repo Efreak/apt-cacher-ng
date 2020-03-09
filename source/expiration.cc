@@ -318,10 +318,11 @@ inline void expiration::DropExceptionalVersions()
     	map<mstring,tDiskFileInfo>* group;
     	~tPkgId() {group=0;};
 
+#warning add test
     	inline bool Set(cmstring& fileName, decltype(group) newgroup)
     	{
     		group = newgroup;
-    		tSplitWalk split(&fileName, "_");
+    		tSplitWalk split(fileName, "_", true);
     		if(!split.Next())
     			return false;
     		prevName=split;
@@ -329,8 +330,10 @@ inline void expiration::DropExceptionalVersions()
     			return false;
     		ver=split;
     		for (const char *p = prevArcSufx.c_str(); *p; ++p)
+    		{
     			if (!isalnum(uint(*p)) && !strchr(".-+:~", uint(*p)))
     				return false;
+    		}
     		if(!split.Next())
     			return false;
     		prevArcSufx=split;

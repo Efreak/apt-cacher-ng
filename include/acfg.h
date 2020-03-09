@@ -50,7 +50,7 @@ extern mstring agentheader;
 
 extern int conprotos[2];
 
-bool ACNG_API SetOption(const mstring &line, NoCaseStringMap *pDupeChecker);
+bool ACNG_API SetOption(const mstring &line);
 void ACNG_API dump_config(bool includingDelicateValues=false);
 void ACNG_API ReadConfigDirectory(const char*, bool bReadErrorIsFatal=true);
 
@@ -102,8 +102,8 @@ extern std::bitset<TCP_PORT_MAX> *pUserPorts;
 extern mstring cacheDirSlash; // guaranteed to have a trailing path separator
 
 void dump_trace();
-ACNG_API int * GetIntPtr(LPCSTR key);
-ACNG_API mstring * GetStringPtr(LPCSTR key);
+ACNG_API int * GetIntPtr(string_view key);
+ACNG_API mstring * GetStringPtr(string_view key);
 
 int CheckAdminAuth(LPCSTR auth);
 
@@ -111,6 +111,14 @@ extern bool g_bQuiet, g_bNoComplex;
 
 static const cmstring privStoreRelSnapSufix("_xstore/rsnap");
 static const cmstring privStoreRelQstatsSfx("_xstore/qstats");
+
+
+class IMappingConfigValidator
+{
+public:
+	virtual ~IMappingConfigValidator() =default;
+	virtual bool IsDryRun() =0;
+};
 
 } // namespace acfg
 

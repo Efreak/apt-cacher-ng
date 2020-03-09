@@ -187,12 +187,12 @@ bool ParseKeyValLine(const string & sIn, string & sOutKey, string & sOutVal)
 
 	return true;
 }
-
+/*
 bool tHttpUrl::SetHttpUrl(cmstring &sUrlRaw, bool unescape)
 {
 	return SetHttpUrlSafe(unescape ? UrlUnescape(sUrlRaw) : sUrlRaw);
 }
-
+*/
 bool tHttpUrl::SetHttpUrl(string_view sUrlRaw, bool unescape)
 {
 	if(unescape)
@@ -258,7 +258,7 @@ bool tHttpUrl::SetHttpUrlSafe(string_view url)
 	if(pStart==0)
 		sPath="/";
 	else
-		sPath=url.substr(pStart).to_string();
+		sPath=to_string(url.substr(pStart));
 
 	if(url[hStart]=='_') // those are reserved
 		return false;
@@ -699,10 +699,11 @@ bool UrlUnescapeAppend(string_view from, mstring & to)
 
 std::string PathCombine(string_view a, string_view b)
 {
-	auto ret = trimBack(a, SZPATHSEP).to_string();
-	auto bb = trimFront(b, SZPATHSEP);
+	trimBack(a, SZPATHSEP);
+	string ret(a.data(), a.length());
+	trimFront(b, SZPATHSEP);
 	ret+=CPATHSEP;
-	ret.append(bb.data(), bb.data()+bb.length());
+	ret.append(b.data(), b.data()+b.length());
 	return ret;
 }
 
@@ -894,7 +895,7 @@ mstring offttosH(off_t n)
 
 mstring offttosHdotted(off_t n)
 {
-	mstring ret(to_string(n));
+	mstring ret(std::to_string(n));
 	auto pos = ret.size()-1;
 	for(unsigned i=1; pos > 0; ++i, --pos)
 		if(0 == i%3)
