@@ -9,6 +9,8 @@
 #define INCLUDE_ASTROP_H_
 
 #include <string>
+#include <vector>
+#include <deque>
 #include "string_view.hpp"
 
 #define SPACECHARS " \f\n\r\t\v"
@@ -116,9 +118,10 @@ public:
 			return true;
 		}
 	}
+
+	// access operators for the current slice
 	inline std::string str() const { return std::string(m_input.data(), m_sliece_len); }
 	inline operator std::string() const { return str(); }
-//	inline string_view remainder() const { return s.c_str() + start; }
 	inline string_view view() const { return string_view(m_input.data(), m_sliece_len); }
 
 	struct iterator :
@@ -144,6 +147,16 @@ public:
 	};
 	iterator begin() {return iterator(*this); }
 	iterator end() { return iterator(); }
+	// little shortcut for collection creation; those methods are destructive to the parent, can only be used once
+	std::vector<string_view> to_vector() { return std::vector<string_view>(begin(), end()); }
+	std::vector<string_view> to_vector(unsigned nElementsToExpect)
+		{
+		std::vector<string_view> ret(nElementsToExpect);
+		ret.assign(begin(), end());
+		return ret;
+		}
+	std::deque<string_view> to_deque() { return std::deque<string_view>(begin(), end()); }
+
 };
 
 inline int strcasecmp(string_view a, string_view b)

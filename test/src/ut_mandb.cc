@@ -103,16 +103,34 @@ TEST(strop,views)
 TEST(strop,splitter)
 {
 	using namespace acng;
-	std::vector<string_view> exp {"foo", "bar", "blalba"};
+	std::deque<string_view> exp {"foo", "bar", "blalba"};
 
 	tSplitWalk tknzr("  foo bar blalba", SPACECHARS, false);
-	std::vector<string_view> result;
+	std::deque<string_view> result;
 	for(auto it:tknzr) result.emplace_back(it);
 	ASSERT_EQ(result, exp);
 //#error und jetzt fuer stricten splitter
 
 	tknzr.reset("foo    bar blalba    ");
 //	std::vector<string_view> result2(tknzr.begin(), tknzr.end());
-	ASSERT_EQ(exp, std::vector<string_view>(tknzr.begin(), tknzr.end()));
 
+	auto q = tknzr.to_deque();
+	ASSERT_EQ(exp, q);
+
+	ASSERT_EQ(result, q);
+
+	tSplitWalk strct("a;bb;;c", ";", true);
+	std::deque<string_view> soll {"a", "bb", "", "c"};
+	ASSERT_EQ(soll, strct.to_deque());
+	strct.reset(";a;bb;;c");
+	q = strct.to_deque();
+	ASSERT_NE(soll, q);
+	ASSERT_EQ(q.front(), "");
+	q.pop_front();
+	ASSERT_EQ(soll, q);
+	strct.reset(";a;bb;;c;");
+	q = strct.to_deque();
+	ASSERT_EQ(q.size(), 6);
+	ASSERT_EQ(q.front(), "");
+	ASSERT_EQ(q.back(), "");
 }
