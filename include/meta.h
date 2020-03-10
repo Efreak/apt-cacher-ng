@@ -593,7 +593,6 @@ class tStartupException : public std::runtime_error
 public:
 	tStartupException(const std::string& s) : std::runtime_error(s)
 	{
-
 	}
 };
 }

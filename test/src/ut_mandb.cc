@@ -15,50 +15,77 @@ TEST(dbman, startup)
 
 TEST(algorithms,bin_str_long_match)
 {
-	std::unordered_map<std::string,int> testPool = {
+	using namespace acng;
+	std::map<string_view,int> testPool = {
 			{"abra/kadabra", 1},
 			{"abba", 2},
 			{"something/else", 3},
 	};
-	std::string result;
-	int other_result;
-	auto matcher = [&](const std::string& tstr)
+	auto best_result = testPool.end();
+	auto probe_count=0;
+	// the costly lookup operation we want to call as few as possible
+	auto matcher = [&](string_view tstr) ->bool
 		{
+		probe_count++;
 		auto it = testPool.find(tstr);
 		if(it==testPool.end())
 			return false;
-		if(tstr.length() > result.length())
-		{
-			result = tstr;
-			other_result = it->second;
-		}
+		// pickup the longest seen result
+		if(best_result == testPool.end() || tstr.length() > best_result->first.length())
+			best_result=it;
 		return true;
 		};
-	acng::fish_longest_match(WITHLEN("something/else/matters/or/not"), '/', matcher);
-	ASSERT_EQ(result, "something/else");
-	result.clear();
-	acng::fish_longest_match(WITHLEN("something/elsewhere/matters/or/not"), '/', matcher);
-	ASSERT_EQ(result, "");
-	result.clear();
-	testPool.emplace("something", 42);
-	acng::fish_longest_match(WITHLEN("something/elsewhere/matters/or/not"), '/', matcher);
-	ASSERT_EQ(result, "something");
-	result.clear();
-	acng::fish_longest_match(WITHLEN(""), '/', matcher);
-	EXPECT_TRUE(result.empty());
-	acng::fish_longest_match(WITHLEN("abbakus"), '/', matcher);
-	EXPECT_TRUE(result.empty());
-	acng::fish_longest_match(WITHLEN("abba/forever.deb"), '/', matcher);
-	EXPECT_EQ(result, "abba");
-	result.clear();
-	acng::fish_longest_match(WITHLEN("abra/kadabra/veryverylongletusseewhathappenswhenthestirng,lengthiswaytoomuchorwhat"), '/', matcher);
-	EXPECT_EQ(result, "abra/kadabra");
-	result.clear();
-	acng::fish_longest_match(WITHLEN("veryverylongletusseewhathappenswhenthestirng,lengthiswaytoomuchorwhat"), '/', matcher);
-	EXPECT_TRUE(result.empty());
-	acng::fish_longest_match(WITHLEN("something/else"), '/', matcher);
-	ASSERT_EQ(result, "something/else");
 
+	fish_longest_match("something/else/matters/or/not", '/', matcher);
+	ASSERT_NE(testPool.end(), best_result);
+	ASSERT_EQ(best_result->first, "something/else");
+	best_result = testPool.end();
+	// not to be found
+	fish_longest_match("something/elsewhere/matters/or/not", '/', matcher);
+	ASSERT_EQ(testPool.end(), best_result);
+
+	testPool.emplace("something", 42);
+	fish_longest_match("something/elsewhere/matters/or/not", '/', matcher);
+	ASSERT_NE(testPool.end(), best_result);
+	ASSERT_EQ(best_result->first, "something");
+	best_result = testPool.end();
+
+	fish_longest_match("", '/', matcher);
+	ASSERT_EQ(testPool.end(), best_result);
+
+	fish_longest_match("/", '/', matcher);
+	ASSERT_EQ(testPool.end(), best_result);
+
+	acng::fish_longest_match("abbakus", '/', matcher);
+	ASSERT_EQ(testPool.end(), best_result);
+
+	acng::fish_longest_match("abba/forever.deb", '/', matcher);
+	ASSERT_NE(testPool.end(), best_result);
+	EXPECT_EQ(best_result->first, "abba");
+	best_result = testPool.end();
+
+	acng::fish_longest_match("abra/kadabra/veryverylongletusseewhathappenswhenthestirng,lengthiswaytoomuchorwhat", '/', matcher);
+	ASSERT_NE(testPool.end(), best_result);
+	EXPECT_EQ(best_result->first, "abra/kadabra");
+	best_result = testPool.end();
+
+	acng::fish_longest_match("veryverylongletusseewhathappenswhenthestirng,lengthiswaytoomuchorwhat", '/', matcher);
+	ASSERT_EQ(testPool.end(), best_result);
+	acng::fish_longest_match("something/else", '/', matcher);
+	ASSERT_NE(testPool.end(), best_result);
+	ASSERT_EQ(best_result->first, "something/else");
+	best_result = testPool.end();
+
+	// the longest match
+	fish_longest_match("abra/kadabra", '/', matcher);
+	ASSERT_NE(testPool.end(), best_result);
+	ASSERT_EQ(best_result->first, "abra/kadabra");
+	best_result = testPool.end();
+
+	probe_count=0;
+	fish_longest_match("bla bla blub ganz viele teile wer hat an der uhr ge dreh t ist es wir klich schon so frueh", ' ', matcher);
+	ASSERT_EQ(testPool.end(), best_result);
+	ASSERT_LE(probe_count, 5);
 }
 
 TEST(strop,views)

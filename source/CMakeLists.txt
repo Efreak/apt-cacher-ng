@@ -1,7 +1,7 @@
 set(SHAREDSRCS sockio.cc acbuf.cc acfg.cc acfg_defaults.cc aclogger.cc caddrinfo.cc dirwalk.cc dlcon.cc fileio.cc fileitem.cc filelocks.cc 
 filereader.cc header.cc meta.cc tcpconnect.cc cleaner.cc job.cc bgtask.cc cacheman.cc conn.cc conserver.cc 
 expiration.cc lockable.cc maintenance.cc mirror.cc pkgimport.cc showinfo.cc evabase.cc dnsiter.cc tcpconfactory.cc tlsio.cc fileitemws.cc
-rex.cc)
+rex.cc astrop.cc dbman.cc errnofmt.cc)
 set(ACNG_SRCS apt-cacher.cc)
 add_definitions(-DACNG_CORE_IN_SO)
 
@@ -23,6 +23,6 @@ INSTALL(TARGETS acngtool DESTINATION ${LIBDIR})
 # build a special version for test with full symbol visibility
 if(ENABLE_TESTS)
 	ADD_LIBRARY(supacngTEST STATIC ${SHAREDSRCS})
-	SET_TARGET_PROPERTIES(supacng PROPERTIES COMPILE_FLAGS "${ACNG_COMPFLAGS} ${ACNG_CXXFLAGS} ${CFLAGS_DAEMON} ${CFLAGS_PTHREAD} -fvisibility=default")
+  SET_TARGET_PROPERTIES(supacng PROPERTIES COMPILE_FLAGS "${ACNG_COMPFLAGS} ${ACNG_CXXFLAGS} ${CFLAGS_DAEMON} ${CFLAGS_PTHREAD} -fvisibility=default -DUNDER_TEST")
 endif()
 

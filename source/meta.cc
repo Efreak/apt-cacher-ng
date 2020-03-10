@@ -1002,40 +1002,4 @@ bool scaseequals(cmstring& a, cmstring& b)
     return true;
 }
 
-/**
- * Simple divide-n-conquer evaluation of the string. check_ex is the actual receiver of the result, it shall remember the longest string which was successfully evaluated, and other results which were won when the check was performed.
- *
- * Example: search for "foo/bar/oh/dear/more/stuff", will probably call check_ex with "foo/bar/oh", "foo/bar", "foo" (depending on the discovery results)
- */
-void fish_longest_match(const char *sz, size_t len, const char sep,
-		std::function<bool(const std::string&)> check_ex)
-{
-	size_t L = 0, R = len - 1;
-	// R shall point at the terminator of the payload
-	while (sz[R] == sep)
-		R--;
-	R++;
-	std::string tmpstr;
-	while (L < R)
-	{
-		auto m = (L + R) / 2;
-		auto n=m;
-		while (sz[m] != sep)
-		{
-			if (m == R)
-				break;
-			++m;
-		}
-		tmpstr.assign(sz, m);
-		if (check_ex(tmpstr))
-			L = m;
-		else
-		{
-			while(n>L && sz[n] !=sep)
-				--n;
-			R = n;
-		}
-	}
-}
-
 }

@@ -11,7 +11,10 @@
 #include <string>
 #include <vector>
 #include <deque>
+#include <functional>
 #include "string_view.hpp"
+
+#include <strings.h> // strncasecmp
 
 #define SPACECHARS " \f\n\r\t\v"
 
@@ -162,10 +165,10 @@ public:
 inline int strcasecmp(string_view a, string_view b)
 {
 	if(a.length() < b.length())
-		return INT_MAX;
+		return int(b.length()) +1;
 	if(a.length() > b.length())
-		return INT_MIN;
-	return strcasecmp(a, b);
+		return int(-a.length()) - 1;
+	return strncasecmp(a.data(), b.data(), a.length());
 }
 
 #define trimLine(x) { trimFront(x); trimBack(x); }
@@ -187,8 +190,8 @@ std::string GetDirPart(const std::string &in);
 std::pair<std::string,std::string> SplitDirPath(const std::string& in);
 
 
-void fish_longest_match(const char *stringToScan, size_t len, const char sep,
-		std::function<bool(const std::string&)> check_ex);
+void fish_longest_match(string_view stringToScan, const char sep,
+		std::function<bool(string_view)> check_ex);
 
 void replaceChars(std::string &s, const char* szBadChars, char goodChar);
 inline std::string to_string(string_view s) {return std::string(s.data(), s.length());}
