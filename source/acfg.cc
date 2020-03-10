@@ -9,7 +9,7 @@
 #include "lockable.h"
 #include "cleaner.h"
 #include "csmapping.h"
-#include <regex.h>
+#include "rex.h"
 
 #include <iostream>
 #include <fstream>
@@ -28,18 +28,17 @@ namespace acng
 
 bool bIsHashedPwd=false;
 
-#define BARF(x) {if(!g_bQuiet) { cerr << x << endl;} exit(EXIT_FAILURE); }
-#define BADSTUFF_PATTERN "\\.\\.($|%|/)"
 
-namespace rex
-{
-bool CompileExpressions();
-}
+struct ltstring {
+	bool operator()(const mstring &s1, const mstring &s2) const {
+		return strcasecmp(s1.c_str(), s2.c_str()) < 0;
+	}
+};
 
+typedef std::map<mstring, mstring, ltstring> NoCaseStringMap;
+typedef std::map<mstring, ltstring> NoCaseStringSet;
 
 namespace cfg {
-
-bool ACNG_API g_bQuiet=false, g_bNoComplex=false;
 
 extern std::atomic_bool degraded;
 
@@ -54,6 +53,36 @@ static class : public base_with_mutex, public NoCaseStringMap {} mimemap;
 std::bitset<TCP_PORT_MAX> *pUserPorts = nullptr;
 
 tHttpUrl proxy_info;
+
+void _ParseLocalDirs(string_view value)
+{
+	for(auto sliceFromTo: tSplitWalk(value, ";", true))
+	{
+		trimBoth(sliceFromTo);
+		tStrPos pos = sliceFromTo.find_first_of(SPACECHARS);
+		if(stmiss == pos)
+		{
+			cerr << "Cannot map " << sliceFromTo << ", needed format: virtualdir realdir, ignoring it";
+			continue;
+		}
+		// XXX: this is still kinda PITA, the best format which works here is: /foo "/var/cache/fooish bar/sdf"
+		string_view from(sliceFromTo.data(), pos);
+		trimBoth(from, "/");
+		sliceFromTo.remove_prefix(pos);
+		trimBoth(sliceFromTo, SPACECHARS "'\"");
+		if(sliceFromTo.empty())
+		{
+			cerr << "Unsupported target of " << from << ": " << sliceFromTo << ", ignoring it" << endl;
+			continue;
+		}
+		localdirs[to_string(from)]=to_string(sliceFromTo);
+	}
+}
+
+// dummy exception type, thrown to abort parsing
+struct tMismatchException : public std::exception
+{
+};
 
 struct MapNameToString
 {
@@ -74,26 +103,10 @@ struct tProperty
 	std::function<mstring(bool superUser)> get; // returns a string value. A string starting with # tells to skip the output
 };
 
-// predeclare some
-void _ParseLocalDirs(string_view value);
-void AddRemapInfo(bool bAsBackend, const string & token, const string &repname);
-void AddRemapFlag(const string & token, const string &repname);
-void _AddHooksFile(cmstring& vname);
-
-unsigned ReadBackendsFile(const string & sFile, const string &sRepName);
-unsigned ReadRewriteFile(const string & sFile, cmstring& sRepName);
-
 map<cmstring, tRepoData> repoparms;
 typedef decltype(repoparms)::iterator tPairRepoNameData;
 // maps hostname:port -> { <pathprefix,repopointer>, ... }
 std::unordered_map<string, list<pair<cmstring,tPairRepoNameData>>> mapUrl2pVname;
-
-// information with limited livespan - consumed and released by PostProcConfig
-struct tCfgTempData
-{
-	std::map<std::string, std::vector<std::string>> remap_lines;
-};
-auto temp_load_cfg = std::make_unique<tCfgTempData>();
 
 MapNameToString n2sTbl[] = {
 		{   "Port",                    &port}
@@ -179,7 +192,7 @@ MapNameToInt n2iTbl[] = {
 		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10, false}
 };
 
-
+#define BARF(msg) throw tStartupException(tSS() << msg)
 tProperty n2pTbl[] =
 {
 { "Proxy", [](auto key, auto value)
@@ -199,8 +212,6 @@ tProperty n2pTbl[] =
 } },
 { "LocalDirs", [](auto key, auto value) -> bool
 {
-	if(g_bNoComplex)
-	return true;
 	_ParseLocalDirs(value);
 	return !localdirs.empty();
 }, [](bool) -> string
@@ -349,7 +360,6 @@ struct tCfgIter
 	{
 		reader.OpenFile(fn, false, 1);
 	}
-	inline operator bool() const { return reader.CheckGoodState(false, &sFilename); }
 	inline bool Next()
 	{
 		while(reader.GetOneLine(sLine))
@@ -386,26 +396,6 @@ inline void _FixPostPreSlashes(string &val)
 		val.insert(0, "/", 1);
 }
 
-bool ReadOneConfFile(const string & szFilename, bool bReadErrorIsFatal=true)
-{
-	tCfgIter itor(szFilename);
-	itor.reader.CheckGoodState(bReadErrorIsFatal, &szFilename);
-
-	while(itor.Next())
-	{
-#ifdef DEBUG
-		cerr << itor.sLine <<endl;
-#endif
-		// XXX: To something about escaped/quoted version
-		tStrPos pos=itor.sLine.find('#');
-		if(stmiss != pos)
-			itor.sLine.erase(pos);
-#warning catch exception
-		if(! SetOption(itor.sLine))
-			BARF("Error reading main options, terminating.");
-	}
-	return true;
-}
 
 inline decltype(repoparms)::iterator GetRepoEntryRef(const string & sRepName)
 {
@@ -415,84 +405,6 @@ inline decltype(repoparms)::iterator GetRepoEntryRef(const string & sRepName)
 	// strange...
 	auto rv(repoparms.insert(make_pair(sRepName,tRepoData())));
 	return rv.first;
-}
-
-inline bool ParseOptionLine(string_view sLine, string_view &key, string_view &val)
-{
-	string::size_type posCol = sLine.find(":");
-	string::size_type posEq = sLine.find("=");
-	if (posEq==stmiss && posCol==stmiss)
-	{
-		if(!g_bQuiet)
-			cerr << "Not a valid configuration directive: " << sLine <<endl;
-		return false;
-	}
-	string::size_type pos;
-	if (posEq!=stmiss && posCol!=stmiss)
-		pos=min(posEq,posCol);
-	else if (posEq!=stmiss)
-		pos=posEq;
-	else
-		pos=posCol;
-
-	key=sLine.substr(0, pos);
-	trimBack(key);
-	trimFront(key);
-	val=sLine.substr(pos+1);
-	trimBack(val);
-	trimFront(val);
-	if(key.empty())
-		return false; // weird
-
-	if(endsWithSzAr(val, "\\"))
-		cerr << "Warning: multilines are not supported, consider using \\n." <<endl;
-
-	return true;
-}
-
-
-inline void AddRemapFlag(string_view token, const string &repname)
-{
-	string_view key, value;
-	if(!ParseOptionLine(token, key, value))
-		return;
-
-	tRepoData &where = repoparms[repname];
-
-	if(key=="keyfile")
-	{
-		if(value.empty())
-			return;
-		if (cfg::debug & log::LOG_FLUSH)
-			cerr << "Fatal keyfile for " <<repname<<": "<<value <<endl;
-
-		where.m_keyfiles.emplace_back(value);
-	}
-	else if(key=="deltasrc")
-	{
-		if(value.empty())
-			return;
-
-		bool addSlash=!endsWithSzAr(value, "/");
-
-		if(!where.m_deltasrc.SetHttpUrl(addSlash ? (to_string(value)+"/") : value))
-			cerr << "Couldn't parse Debdelta source URL, ignored " <<value <<endl;
-	}
-	else if(key=="proxy")
-	{
-		static std::list<tHttpUrl> alt_proxies;
-		tHttpUrl cand;
-		if(value.empty() || cand.SetHttpUrl(value))
-		{
-			alt_proxies.emplace_back(cand);
-			where.m_pProxy = & alt_proxies.back();
-		}
-		else
-		{
-			cerr << "Warning, failed to parse proxy setting " << value << " , "
-					<< endl << "ignoring it" <<endl;
-		}
-	}
 }
 
 tStrDeq ExpandFileTokens(string_view token)
@@ -531,35 +443,6 @@ tStrDeq ExpandFileTokens(string_view token)
 	return res;
 }
 
-inline void AddRemapInfo(bool bAsBackend, const string_view token,
-		const string &repname)
-{
-	if (0!=token.compare(0, 5, "file:"))
-	{
-		tHttpUrl url;
-		if(! url.SetHttpUrl(token))
-			BARF(to_string(token) + " <-- bad URL detected");
-		_FixPostPreSlashes(url.sPath);
-
-		if (bAsBackend)
-			repoparms[repname].m_backends.emplace_back(url);
-		else
-			mapUrl2pVname[url.sHost+":"+url.GetPort()].emplace_back(
-					url.sPath, GetRepoEntryRef(repname));
-	}
-	else
-	{
-		auto func = bAsBackend ? ReadBackendsFile : ReadRewriteFile;
-		unsigned count = 0;
-		for(auto& src : ExpandFileTokens(token))
-			count += func(src, repname);
-		if(!count)
-			for(auto& src : ExpandFileTokens(to_string(token) + ".default"))
-				count = func(src, repname);
-		if(!count && !g_bQuiet)
-			cerr << "WARNING: No configuration was read from " << token << endl;
-	}
-}
 
 struct tHookHandler: public IHookHandler, public base_with_mutex
 {
@@ -596,64 +479,6 @@ struct tHookHandler: public IHookHandler, public base_with_mutex
 		}
 	}
 };
-
-inline void _AddHooksFile(cmstring& vname)
-{
-	tCfgIter itor(cfg::confdir+"/"+vname+".hooks");
-	if(!itor)
-		return;
-
-	struct tHookHandler &hs = *(new tHookHandler(vname));
-	string_view key,val;
-	while (itor.Next())
-	{
-		if(!ParseOptionLine(itor.sLine, key, val))
-			continue;
-
-		if (strcasecmp("PreUp", key) == 0)
-		{
-			hs.cmdCon = val;
-		}
-		else if (strcasecmp("Down", key) == 0)
-		{
-			hs.cmdRel = val;
-		}
-		else if (strcasecmp("DownTimeout", key) == 0)
-		{
-			errno = 0;
-			// XXX: maybe just forcibly terminate it because we know that it came from a string and data is writable. Or eventually make a better strtoul wrapper.
-			unsigned n = strtoul(to_string(val).c_str(), nullptr, 10);
-			if (!errno)
-				hs.downDuration = n;
-		}
-	}
-	repoparms[vname].m_pHooks = &hs;
-}
-
-inline void _ParseLocalDirs(string_view value)
-{
-	for(auto sliceFromTo: tSplitWalk(value, ";", true))
-	{
-		trimBoth(sliceFromTo);
-		tStrPos pos = sliceFromTo.find_first_of(SPACECHARS);
-		if(stmiss == pos)
-		{
-			cerr << "Cannot map " << sliceFromTo << ", needed format: virtualdir realdir, ignoring it";
-			continue;
-		}
-		// XXX: this is still kinda PITA, the best format which works here is: /foo "/var/cache/fooish bar/sdf"
-		string_view from(sliceFromTo.data(), pos);
-		trimBoth(from, "/");
-		sliceFromTo.remove_prefix(pos);
-		trimBoth(sliceFromTo, SPACECHARS "'\"");
-		if(sliceFromTo.empty())
-		{
-			cerr << "Unsupported target of " << from << ": " << sliceFromTo << ", ignoring it" << endl;
-			continue;
-		}
-		localdirs[to_string(from)]=to_string(sliceFromTo);
-	}
-}
 
 
 cmstring & GetMimeType(cmstring &path)
@@ -708,75 +533,6 @@ cmstring & GetMimeType(cmstring &path)
 	return sEmptyString;
 }
 
-#warning add a --trace-config option to help identifying the problems. However, shall warn or abort if user-id is not matching
-#warning and document the trace mode
-bool SetOption(const string &sLine)
-{
-	string_view key, value;
-
-	if(!ParseOptionLine(sLine, key, value))
-		return false;
-
-	string * psTarget;
-	int * pnTarget;
-	tProperty * ppTarget;
-	int nNumBase(10);
-
-	if(key.length() > 6 && 0 == strncasecmp(key.data(), "remap-", 6))
-	{
-		temp_load_cfg->remap_lines[to_string(key.substr(6))].emplace_back(value);
-	}
-	else if ( nullptr != (psTarget = GetStringPtr(key)))
-	{
-		*psTarget=value;
-	}
-	else if ( nullptr != (pnTarget = GetIntPtr(key, nNumBase)))
-	{
-		// temp. copy is ok here since a number string is most likely SSOed
-		auto temp(to_string(value));
-		const char *pStart=temp.c_str();
-		if(! *pStart)
-		{
-			cerr << "Missing value for " << key << " option!" <<endl;
-			return false;
-		}
-		
-		errno=0;
-		char *pEnd(nullptr);
-		long nVal = strtol(pStart, &pEnd, nNumBase);
-
-		if(RESERVED_DEFVAL == nVal)
-		{
-			cerr << "Bad value for " << key << " (protected value, use another one)" <<endl;
-			return false;
-		}
-
-		*pnTarget=nVal;
-
-		if (errno)
-		{
-			cerr << "Invalid number for " << key << " ";
-			perror("option");
-			return false;
-		}
-		if(*pEnd)
-		{
-			cerr << "Bad value for " << key << " option or found trailing garbage: " << pEnd <<endl;
-			return false;
-		}
-	}
-	else if ( nullptr != (ppTarget = GetPropPtr(key)))
-	{
-		return ppTarget->set(key, value);
-	}
-	else
-	{
-		if(!g_bQuiet)
-			cerr << "Warning, unknown configuration directive: " << key <<endl;
-		return false;
-	}
-	return true;
-}
 
 void GetRepNameAndPathResidual(const tHttpUrl & in, tRepoResolvResult &result)
 {
@@ -818,56 +574,6 @@ const tRepoData * GetRepoData(cmstring &vname)
 	return & it->second;
 }
 
-unsigned ReadBackendsFile(const string & sFile, const string &sRepName)
-{
-	unsigned nAddCount=0;
-	string key, val;
-	tHttpUrl entry;
-
-	tCfgIter itor(sFile);
-	if(debug&6)
-		cerr << "Reading backend file: " << sFile <<endl;
-
-	if(!itor)
-	{
-		if(debug&6)
-			cerr << "No backend data found, file ignored."<<endl;
-		return 0;
-	}
-	
-	while(itor.Next())
-	{
-		if(debug & log::LOG_DEBUG)
-			cerr << "Backend URL: " << itor.sLine <<endl;
-
-		trimBack(itor.sLine);
-
-		if( entry.SetHttpUrl(itor.sLine)
-				||	( itor.sLine.empty() && ! entry.sHost.empty() && ! entry.sPath.empty()) )
-		{
-			_FixPostPreSlashes(entry.sPath);
-#ifdef DEBUG
-			cerr << "Backend: " << sRepName << " <-- " << entry.ToURI(false) <<endl;
-#endif		
-			repoparms[sRepName].m_backends.emplace_back(entry);
-			nAddCount++;
-			entry.clear();
-		}
-		else if(ParseKeyValLine(itor.sLine, key, val))
-		{
-			if(keyEq("Site", key))
-				entry.sHost=val;
-			else if(keyEq("Archive-http", key) || keyEq("X-Archive-http", key))
-				entry.sPath=val;
-		}
-		else
-		{
-			BARF("Bad backend description, around line " << sFile << ":"
-					<< itor.reader.GetCurrentLine());
-		}
-	}
-	return nAddCount;
-}
 
 void ShutDown()
 {
@@ -875,145 +581,13 @@ void ShutDown()
 	repoparms.clear();
 }
 
-/* This parses also legacy files, i.e. raw RFC-822 formated mirror catalogue from the
- * Debian archive maintenance repository.
- */
-unsigned ReadRewriteFile(const string & sFile, cmstring& sRepName)
-{
-	unsigned nAddCount=0;
-	filereader reader;
-	if(debug>4)
-		cerr << "Reading rewrite file: " << sFile <<endl;
-	reader.OpenFile(sFile, false, 1);
-	reader.CheckGoodState(true, &sFile);
-
-	tStrVec hosts, paths;
-	string sLine, key, val;
-	tHttpUrl url;
-
-	while (reader.GetOneLine(sLine))
-	{
-		trimFront(sLine);
-
-		if (0 == sLine.compare(0, 1, "#"))
-			continue;
-
-		if (url.SetHttpUrl(sLine))
-		{
-			_FixPostPreSlashes(url.sPath);
-
-			mapUrl2pVname[url.sHost + ":" + url.GetPort()].emplace_back(url.sPath,
-					GetRepoEntryRef(sRepName));
-#ifdef DEBUG
-			cerr << "Mapping: " << url.ToURI(false) << " -> " << sRepName << endl;
-#endif
-
-			++nAddCount;
-			continue;
-		}
-
-		// otherwise deal with the complicated RFC-822 format for legacy reasons
-
-		if (sLine.empty()) // end of block, eof, ... -> commit it
-		{
-			if (hosts.empty() && paths.empty())
-				continue; // dummy run or whitespace in a URL style list
-			if ( !hosts.empty() && paths.empty())
-			{
-				cerr << "Warning, missing path spec for the site " << hosts[0] <<", ignoring mirror."<< endl;
-				continue;
-			}
-			if ( !paths.empty() && hosts.empty())
-			{
-				BARF("Parse error, missing Site: field around line "
-						<< sFile << ":"<< reader.GetCurrentLine());
-			}
-			for (const auto& host : hosts)
-			{
-				for (const auto& path : paths)
-				{
-					//mapUrl2pVname[*itHost+*itPath]= &itHostiVec->first;
-					tHttpUrl url;
-					url.sHost=host;
-					url.sPath=path;
-					mapUrl2pVname[url.sHost+":"+url.GetPort()].emplace_back(url.sPath,
-							GetRepoEntryRef(sRepName));
-
-#ifdef DEBUG
-						cerr << "Mapping: "<< host << path
-						<< " -> "<< sRepName <<endl;
-#endif
-
-						++nAddCount;
-				}
-			}
-			hosts.clear();
-			paths.clear();
-			continue;
-		}
-
-		if(!ParseKeyValLine(sLine, key, val))
-		{
-			BARF("Error parsing rewrite definitions, around line "
-					<< sFile << ":"<< reader.GetCurrentLine() << " : " << sLine);
-		}
-		
-		// got something, interpret it...
-		if( keyEq("Site", key) || keyEq("Alias", key) || keyEq("Aliases", key))
-			Tokenize(val, SPACECHARS, hosts, true);
-		
-		if(keyEq("Archive-http", key) || keyEq("X-Archive-http", key))
-		{
-			// help STL saving some memory
-			if(sPopularPath==val)
-				paths.emplace_back(sPopularPath);
-			else
-			{
-				_FixPostPreSlashes(val);
-				paths.emplace_back(val);
-			}
-			continue;
-		}
-	}
-
-	return nAddCount;
-}
-
-
 tRepoData::~tRepoData()
 {
 	delete m_pHooks;
 }
 
-void ReadConfigDirectory(const char *szPath, bool bReadErrorIsFatal)
-{
-	dump_proc_status();
-	char buf[PATH_MAX];
-	if(!realpath(szPath, buf))
-		BARF("Failed to open config directory");
 
-	confdir=buf; // pickup the last config directory
-
-#if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
-	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
-		ReadOneConfFile(src, bReadErrorIsFatal);
-#else
-	ReadOneConfFile(confdir+SZPATHSEP"acng.conf", bReadErrorIsFatal);
-#endif
-	dump_proc_status();
-	if(debug & log::LOG_DEBUG)
-	{
-		unsigned nUrls=0;
-		for(const auto& x: mapUrl2pVname)
-			nUrls+=x.second.size();
-
-		if(debug&6)
-			cerr << "Loaded " << repoparms.size() << " backend descriptors\nLoaded mappings for "
-				<< mapUrl2pVname.size() << " hosts and " << nUrls<<" paths\n";
-	}
-}
-
-struct tMappingValidator : public IMappingConfigValidator
+struct tMappingValidator
 {
 	string_view m_name, m_fpr;
 	std::unique_ptr<csumBase> m_summer;
@@ -1024,10 +598,6 @@ struct tMappingValidator : public IMappingConfigValidator
 		","	__DATE__ "," __TIME__
 #endif
 			;
-	// dummy exception type, thrown to abort parsing
-	struct tMismatchException : public std::exception
-	{
-	};
 	void _initSummer()
 	{
 	m_summer = csumBase::GetChecker(CSTYPES::CSTYPE_MD5);
@@ -1044,200 +614,7 @@ struct tMappingValidator : public IMappingConfigValidator
 
 };
 
-void LoadMappings(bool dry_run)
-{
-	for (const auto &it : temp_load_cfg->remap_lines)
-	{
-		const auto &vname = it.first;
-		if (vname.empty())
-		{
-			if (!g_bQuiet)
-				throw tStartupException("Bad repository name, check Remap-... directives");
-			continue;
-		}
-		for (const auto &remapLine : it.second)
-		{
-			enum xtype
-			{
-				PREFIXES, BACKENDS, FLAGS
-			} type = xtype(PREFIXES-1);
-			for (auto remapToken : tSplitWalk(remapLine, ";", true))
-			{
-				type = xtype(type + 1);
-				for (auto s : tSplitWalk(remapToken, SPACECHARS, false))
-				{
-					if (s.empty())
-						continue;
-					if (s.starts_with('#'))
-						goto next_remap_line;
 
-					switch (type)
-					{
-					case PREFIXES:
-						AddRemapInfo(false, s, vname);
-						break;
-					case BACKENDS:
-						AddRemapInfo(true, s, vname);
-						break;
-					case FLAGS:
-						AddRemapFlag(s, vname);
-						break;
-					}
-				}
-			}
-			if (type < PREFIXES) // no valid tokens?
-			{
-				if (!g_bQuiet)
-					throw tStartupException(std::string("Invalid entry, no valid configuration for Remap-") + ": " + remapLine);
-				continue;
-			}
-			next_remap_line:;
-		}
-		_AddHooksFile(vname);
-	}
-}
-
-
-#warning catch exception on all users
-void PostProcConfig()
-{
-	mapUrl2pVname.rehash(mapUrl2pVname.size());
-	
-	if(port.empty()) // heh?
-		port=ACNG_DEF_PORT;
-
-	if(connectPermPattern == "~~~")
-	   connectPermPattern="^(bugs\\.debian\\.org|changelogs\\.ubuntu\\.com):443$";
-
-	// let's also apply the umask to the directory permissions
-	{
-		mode_t mask = umask(0);
-		umask(mask); // restore it...
-		dirperms &= ~mask;
-		fileperms &= ~mask;
-	}
-
-    // postprocessing
-
-#ifdef FORCE_CUSTOM_UMASK
-	if(!sUmask.empty())
-	{
-		mode_t nUmask=0;
-		if(sUmask.size()>4)
-			BARF("Invalid umask length\n");
-		for(unsigned int i=0; i<sUmask.size(); i++)
-		{
-			unsigned int val = sUmask[sUmask.size()-i-1]-'0';
-			if(val>7)
-				BARF("Invalid umask value\n");
-			nUmask |= (val<<(3*i));
-		
-		}
-		//cerr << "Got umask: " << nUmask <<endl;
-		umask(nUmask);
-	}
-#endif
-	
-   if(cachedir.empty() || cachedir[0] != CPATHSEP)
-   {
-	   cerr << "Warning: Cache directory unknown or not absolute, running in degraded mode!" << endl;
-	   degraded=true;
-   }
-   if(!rex::CompileExpressions())
-	   BARF("An error occurred while compiling file type regular expression!");
-   
-   if(cfg::tpthreadmax < 0)
-	   cfg::tpthreadmax = MAX_VAL(int);
-	   
-   // get rid of duplicated and trailing slash(es)
-	for(tStrPos pos; stmiss != (pos = cachedir.find(SZPATHSEP SZPATHSEP )); )
-		cachedir.erase(pos, 1);
-
-	cacheDirSlash=cachedir+CPATHSEP;
-
-   if(!pidfile.empty() && pidfile.at(0) != CPATHSEP)
-	   BARF("Pid file path must be absolute, terminating...");
-   
-   if(!cfg::agentname.empty())
-	   cfg::agentheader=string("User-Agent: ")+cfg::agentname + "\r\n";
-
-   stripPrefixChars(cfg::reportpage, '/');
-
-   trimBack(cfg::requestapx);
-   trimFront(cfg::requestapx);
-   if(!cfg::requestapx.empty())
-	   cfg::requestapx = unEscape(cfg::requestapx);
-
-   // create working paths before something else fails somewhere
-   if(!udspath.empty())
-	   mkbasedir(cfg::udspath);
-   if(!cachedir.empty())
-	   mkbasedir(cfg::cachedir);
-   if(! pidfile.empty())
-	   mkbasedir(cfg::pidfile);
-
-   if(nettimeout < 5) {
-	   cerr << "Warning: NetworkTimeout value too small, using: 5." << endl;
-	   nettimeout = 5;
-   }
-   if(fasttimeout < 0)
-   {
-	   fasttimeout = 0;
-   }
-
-   if(RESERVED_DEFVAL == forwardsoap)
-	   forwardsoap = !forcemanaged;
-
-   if(RESERVED_DEFVAL == exsupcount)
-	   exsupcount = (extreshhold >= 5);
-
-#ifdef _SC_NPROCESSORS_ONLN
-	numcores = (int) sysconf(_SC_NPROCESSORS_ONLN);
-#elif defined(_SC_NPROC_ONLN)
-	numcores = (int) sysconf(_SC_NPROC_ONLN);
-#endif
-
-   if(!rex::CompileUncExpressions(rex::NOCACHE_REQ,
-		   tmpDontcacheReq.empty() ? tmpDontcache : tmpDontcacheReq)
-   || !rex::CompileUncExpressions(rex::NOCACHE_TGT,
-		   tmpDontcacheTgt.empty() ? tmpDontcache : tmpDontcacheTgt))
-   {
-	   BARF("An error occurred while compiling regular expression for non-cached paths!");
-   }
-   tmpDontcache.clear();
-   tmpDontcacheTgt.clear();
-   tmpDontcacheReq.clear();
-
-   if(usewrap == RESERVED_DEFVAL)
-   {
-	   usewrap=(qgrep("apt-cacher-ng", "/etc/hosts.deny")
-			   || qgrep("apt-cacher-ng", "/etc/hosts.allow"));
-#ifndef HAVE_LIBWRAP
-	   cerr << "Warning: configured to use libwrap filters but feature is not built-in." <<endl;
-#endif
-   }
-
-   if(maxtempdelay<0)
-   {
-	   cerr << "Invalid maxtempdelay value, using default" <<endl;
-	   maxtempdelay=27;
-   }
-
-   if(redirmax == RESERVED_DEFVAL)
-	   redirmax = forcemanaged ? 0 : REDIRMAX_DEFAULT;
-
-   if(!persistoutgoing)
-	   pipelinelen = 1;
-
-   if(!pipelinelen) {
-	   cerr << "Warning, remote pipeline depth of 0 makes no sense, assuming 1." << endl;
-	   pipelinelen = 1;
-   }
-
-   LoadMappings(true);
-
-	temp_load_cfg.reset();
-} // PostProcConfig
 
 void dump_config(bool includeDelicate)
 {
@@ -1437,160 +814,669 @@ void MarkProxyFailure()
 	proxy_failstate = true;
 }
 
-} // namespace acfg
-
-namespace rex
+// information with limited livespan - consumed and released by PostProcConfig
+struct tConfigBuilder::tImpl
 {
-	// this has the exact order of the "regular" types in the enum
-	struct { regex_t *pat=nullptr, *extra=nullptr; } rex[ematchtype_max];
-	vector<regex_t> vecReqPatters, vecTgtPatterns;
+	std::map<std::string, std::vector<std::string>> remap_lines;
+	bool m_bIgnoreErrors, m_bAssertReadableFiles;
+	// user parameters, with flag == true for directory
+	std::deque<std::pair<std::string,bool>> m_input;
 
-bool ACNG_API CompileExpressions()
-{
-	auto compat = [](regex_t* &re, LPCSTR ps)
+	bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
+
+	void ReadOneConfFile(const string & szFilename)
 	{
-		if(!ps ||! *ps )
-		return true;
-		re=new regex_t;
-		int nErr=regcomp(re, ps, REG_EXTENDED);
-		if(!nErr)
-		return true;
-
-		char buf[1024];
-		regerror(nErr, re, buf, sizeof(buf));
-		delete re;
-		re=nullptr;
-		buf[_countof(buf)-1]=0; // better be safe...
-			std::cerr << buf << ": " << ps << std::endl;
-			return false;
-		};
-	using namespace cfg;
-	return (compat(rex[FILE_SOLID].pat, pfilepat.c_str())
-			&& compat(rex[FILE_VOLATILE].pat, vfilepat.c_str())
-			&& compat(rex[FILE_WHITELIST].pat, wfilepat.c_str())
-			&& compat(rex[FILE_SOLID].extra, pfilepatEx.c_str())
-			&& compat(rex[FILE_VOLATILE].extra, vfilepatEx.c_str())
-			&& compat(rex[FILE_WHITELIST].extra, wfilepatEx.c_str())
-			&& compat(rex[NASTY_PATH].pat, BADSTUFF_PATTERN)
-			&& compat(rex[FILE_SPECIAL_SOLID].pat, spfilepat.c_str())
-			&& compat(rex[FILE_SPECIAL_SOLID].extra, spfilepatEx.c_str())
-			&& compat(rex[FILE_SPECIAL_VOLATILE].pat, svfilepat.c_str())
-			&& compat(rex[FILE_SPECIAL_VOLATILE].extra, svfilepatEx.c_str())
-			&& (connectPermPattern == "~~~" ?
-			true : compat(rex[PASSTHROUGH].pat, connectPermPattern.c_str())));
-}
-
-// match the specified type by internal pattern PLUS the user-added pattern
-inline bool MatchType(cmstring &in, eMatchType type)
-{
-	if(rex[type].pat && !regexec(rex[type].pat, in.c_str(), 0, nullptr, 0))
-		return true;
-	if(rex[type].extra && !regexec(rex[type].extra, in.c_str(), 0, nullptr, 0))
-		return true;
-	return false;
-}
-
-bool Match(cmstring &in, eMatchType type)
-{
-	if(MatchType(in, type))
-		return true;
-	// very special behavior... for convenience
-	return (type == FILE_SOLID && MatchType(in, FILE_SPECIAL_SOLID))
-		|| (type == FILE_VOLATILE && MatchType(in, FILE_SPECIAL_VOLATILE));
-}
-
-ACNG_API eMatchType GetFiletype(const string & in)
-{
-	if (MatchType(in, FILE_SPECIAL_VOLATILE))
-		return FILE_VOLATILE;
-	if (MatchType(in, FILE_SPECIAL_SOLID))
-		return FILE_SOLID;
-	if (MatchType(in, FILE_VOLATILE))
-		return FILE_VOLATILE;
-	if (MatchType(in, FILE_SOLID))
-		return FILE_SOLID;
-	return FILE_INVALID;
-}
-
-#ifndef MINIBUILD
-
-inline bool CompileUncachedRex(const string & token, NOCACHE_PATTYPE type, bool bRecursiveCall)
-{
-	auto & patvec = (NOCACHE_TGT == type) ? vecTgtPatterns : vecReqPatters;
-
-	if (0!=token.compare(0, 5, "file:")) // pure pattern
-	{
-		unsigned pos = patvec.size();
-		patvec.resize(pos+1);
-		return 0==regcomp(&patvec[pos], token.c_str(), REG_EXTENDED);
-	}
-	else if(!bRecursiveCall) // don't go further than one level
-	{
-		tStrDeq srcs = cfg::ExpandFileTokens(token);
-		for(const auto& src: srcs)
+		tCfgIter itor(szFilename);
+		if(!itor.reader.IsGood())
 		{
-			cfg::tCfgIter itor(src);
-			if(!itor)
+			if(!m_bAssertReadableFiles)
+				return;
+			throw tStartupException(string("Cannot read ") + szFilename);
+		}
+
+		while(itor.Next())
+		{
+			// XXX: To something about escaped/quoted version
+			tStrPos pos=itor.sLine.find('#');
+			if(stmiss != pos)
+				itor.sLine.erase(pos);
+	#warning catch exception
+			SetOption(itor.sLine);
+		}
+	}
+
+	void AddRemapInfo(bool bAsBackend, const string_view token,
+			const string &repname)
+	{
+		if (0!=token.compare(0, 5, "file:"))
+		{
+			tHttpUrl url;
+			if(! url.SetHttpUrl(token))
+				BARF(to_string(token) + " <-- bad URL detected");
+			_FixPostPreSlashes(url.sPath);
+
+			if (bAsBackend)
+				repoparms[repname].m_backends.emplace_back(url);
+			else
+				mapUrl2pVname[url.sHost+":"+url.GetPort()].emplace_back(
+						url.sPath, GetRepoEntryRef(repname));
+		}
+		else
+		{
+			auto func = [&](const string & x, const string &y)
+					{
+				return bAsBackend ? ReadBackendsFile(x, y) : ReadRewriteFile(x, y);
+			};
+			unsigned count = 0;
+			for(auto& src : ExpandFileTokens(token))
+				count += func(src, repname);
+			if(!count)
+				for(auto& src : ExpandFileTokens(to_string(token) + ".default"))
+					count = func(src, repname);
+			if(!count && !m_bIgnoreErrors)
+				BARF("WARNING: No configuration was read from " << token);
+		}
+	}
+
+	unsigned ReadBackendsFile(const string & sFile, const string &sRepName)
+	{
+		unsigned nAddCount=0;
+		string key, val;
+		tHttpUrl entry;
+
+		tCfgIter itor(sFile);
+		if(debug&6)
+			cerr << "Reading backend file: " << sFile <<endl;
+
+		if(!itor.reader.IsGood())
+		{
+			if(debug&6)
+				cerr << "No backend data found, file ignored."<<endl;
+			return 0;
+		}
+
+		while(itor.Next())
+		{
+			if(debug & log::LOG_DEBUG)
+				cerr << "Backend URL: " << itor.sLine <<endl;
+
+			trimBack(itor.sLine);
+
+			if( entry.SetHttpUrl(itor.sLine)
+					||	( itor.sLine.empty() && ! entry.sHost.empty() && ! entry.sPath.empty()) )
 			{
-				cerr << "Error opening pattern file: " << src <<endl;
-				return false;
+				_FixPostPreSlashes(entry.sPath);
+	#ifdef DEBUG
+				cerr << "Backend: " << sRepName << " <-- " << entry.ToURI(false) <<endl;
+	#endif
+				repoparms[sRepName].m_backends.emplace_back(entry);
+				nAddCount++;
+				entry.clear();
 			}
-			while(itor.Next())
+			else if(ParseKeyValLine(itor.sLine, key, val))
 			{
-				if(!CompileUncachedRex(itor.sLine, type, true))
-					return false;
+				if(keyEq("Site", key))
+					entry.sHost=val;
+				else if(keyEq("Archive-http", key) || keyEq("X-Archive-http", key))
+					entry.sPath=val;
+			}
+			else
+			{
+				BARF("Bad backend description, around line " << sFile << ":"
+						<< itor.reader.GetCurrentLine());
+			}
+		}
+		return nAddCount;
+	}
+	/* This parses also legacy files, i.e. raw RFC-822 formated mirror catalogue from the
+	 * Debian archive maintenance repository.
+	 */
+	unsigned ReadRewriteFile(const string & sFile, cmstring& sRepName)
+	{
+		unsigned nAddCount=0;
+		filereader reader;
+		if(debug>4)
+			cerr << "Reading rewrite file: " << sFile <<endl;
+		reader.OpenFile(sFile, false, 1);
+		if(!reader.IsGood())
+		{
+			if(m_bIgnoreErrors)
+				return 0;
+			throw tStartupException(tSS() << "Error reading rewrite file " << sFile);
+		}
+
+		tStrVec hosts, paths;
+		string sLine, key, val;
+		tHttpUrl url;
+
+		while (reader.GetOneLine(sLine))
+		{
+			trimFront(sLine);
+
+			if (0 == sLine.compare(0, 1, "#"))
+				continue;
+
+			if (url.SetHttpUrl(sLine))
+			{
+				_FixPostPreSlashes(url.sPath);
+
+				mapUrl2pVname[url.sHost + ":" + url.GetPort()].emplace_back(url.sPath,
+						GetRepoEntryRef(sRepName));
+	#ifdef DEBUG
+				cerr << "Mapping: " << url.ToURI(false) << " -> " << sRepName << endl;
+	#endif
+
+				++nAddCount;
+				continue;
+			}
+
+			// otherwise deal with the complicated RFC-822 format for legacy reasons
+
+			if (sLine.empty()) // end of block, eof, ... -> commit it
+			{
+				if (hosts.empty() && paths.empty())
+					continue; // dummy run or whitespace in a URL style list
+				if ( !hosts.empty() && paths.empty())
+				{
+					cerr << "Warning, missing path spec for the site " << hosts[0] <<", ignoring mirror."<< endl;
+					continue;
+				}
+				if ( !paths.empty() && hosts.empty())
+				{
+					BARF("Parse error, missing Site: field around line "
+							<< sFile << ":"<< reader.GetCurrentLine());
+				}
+				for (const auto& host : hosts)
+				{
+					for (const auto& path : paths)
+					{
+						//mapUrl2pVname[*itHost+*itPath]= &itHostiVec->first;
+						tHttpUrl url;
+						url.sHost=host;
+						url.sPath=path;
+						mapUrl2pVname[url.sHost+":"+url.GetPort()].emplace_back(url.sPath,
+								GetRepoEntryRef(sRepName));
+
+	#ifdef DEBUG
+							cerr << "Mapping: "<< host << path
+							<< " -> "<< sRepName <<endl;
+	#endif
+
+							++nAddCount;
+					}
+				}
+				hosts.clear();
+				paths.clear();
+				continue;
+			}
+
+			if(!ParseKeyValLine(sLine, key, val))
+			{
+				BARF("Error parsing rewrite definitions, around line "
+						<< sFile << ":"<< reader.GetCurrentLine() << " : " << sLine);
+			}
+
+			// got something, interpret it...
+			if( keyEq("Site", key) || keyEq("Alias", key) || keyEq("Aliases", key))
+				Tokenize(val, SPACECHARS, hosts, true);
+
+			if(keyEq("Archive-http", key) || keyEq("X-Archive-http", key))
+			{
+				// help STL saving some memory
+				if(sPopularPath==val)
+					paths.emplace_back(sPopularPath);
+				else
+				{
+					_FixPostPreSlashes(val);
+					paths.emplace_back(val);
+				}
+				continue;
 			}
 		}
 
-		return true;
+		return nAddCount;
 	}
 
-	cerr << token << " is not supported here" <<endl;
-	return false;
-}
-
-
-bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat)
-{
-	return true;
-#warning FIXME. What was the spec? Add test!
-#if 0
-	for(tSplitWalk split(pat); split.Next(); )
-		if (!CompileUncachedRex(split, type, false))
-			return false;
-	return true;
-#endif
-}
-
-bool MatchUncacheable(const string & in, NOCACHE_PATTYPE type)
-{
-	for(const auto& patre: (type == NOCACHE_REQ) ? vecReqPatters : vecTgtPatterns)
-		if(!regexec(&patre, in.c_str(), 0, nullptr, 0))
-			return true;
-	return false;
-}
-
-#endif //MINIBUILD
-
-
-} // namespace rechecks
-
-
-#ifndef MINIBUILD
-LPCSTR ReTest(LPCSTR s)
-{
-	static LPCSTR names[rex::ematchtype_max] =
+	void _AddHooksFile(cmstring& vname)
 	{
-				"FILE_SOLID", "FILE_VOLATILE",
-				"FILE_WHITELIST",
-				"NASTY_PATH", "PASSTHROUGH",
-				"FILE_SPECIAL_SOLID"
-	};
-	auto t = rex::GetFiletype(s);
-	if(t<0 || t>=rex::ematchtype_max)
-		return "NOMATCH";
-	return names[t];
+		auto hfile = cfg::confdir+"/"+vname+".hooks";
+		tCfgIter itor(hfile);
+		if(!itor.reader.IsGood())
+		{
+			// hooks files are optional. XXX: make that an explicit option and fail explicitly.
+			return;
+
+			/*
+			if(m_bIgnoreErrors)
+				return;
+			throw tStartupException("Error reading hooks file " + hfile);
+			*/
+		}
+		struct tHookHandler &hs = *(new tHookHandler(vname));
+		string_view key,val;
+		while (itor.Next())
+		{
+			ParseOptionLine(itor.sLine, key, val);
+
+			if (strcasecmp("PreUp", key) == 0)
+			{
+				hs.cmdCon = val;
+			}
+			else if (strcasecmp("Down", key) == 0)
+			{
+				hs.cmdRel = val;
+			}
+			else if (strcasecmp("DownTimeout", key) == 0)
+			{
+				errno = 0;
+				// XXX: maybe just forcibly terminate it because we know that it came from a string and data is writable. Or eventually make a better strtoul wrapper.
+				unsigned n = strtoul(to_string(val).c_str(), nullptr, 10);
+				if (!errno)
+					hs.downDuration = n;
+			}
+		}
+		repoparms[vname].m_pHooks = &hs;
+	}
+
+	void AddRemapFlag(string_view token, const string &repname)
+	{
+		string_view key, value;
+		ParseOptionLine(token, key, value);
+
+		tRepoData &where = repoparms[repname];
+
+		if(key=="keyfile")
+		{
+			if(value.empty())
+				return;
+			if (cfg::debug & log::LOG_FLUSH)
+				cerr << "Fatal keyfile for " <<repname<<": "<<value <<endl;
+
+			where.m_keyfiles.emplace_back(value);
+		}
+		else if(key=="deltasrc")
+		{
+			if(value.empty())
+				return;
+
+			bool addSlash=!endsWithSzAr(value, "/");
+
+			if(!where.m_deltasrc.SetHttpUrl(addSlash ? (to_string(value)+"/") : value))
+				cerr << "Couldn't parse Debdelta source URL, ignored " <<value <<endl;
+		}
+		else if(key=="proxy")
+		{
+			static std::list<tHttpUrl> alt_proxies;
+			tHttpUrl cand;
+			if(value.empty() || cand.SetHttpUrl(value))
+			{
+				alt_proxies.emplace_back(cand);
+				where.m_pProxy = & alt_proxies.back();
+			}
+			else
+			{
+				cerr << "Warning, failed to parse proxy setting " << value << " , "
+						<< endl << "ignoring it" <<endl;
+			}
+		}
+	}
+
+
+#warning add a --trace-config option to help identifying the problems. However, shall warn or abort if user-id is not matching
+#warning and document the trace mode
+void SetOption(const string &sLine)
+{
+	string_view key, value;
+
+	ParseOptionLine(sLine, key, value);
+
+	string * psTarget;
+	int * pnTarget;
+	tProperty * ppTarget;
+	int nNumBase(10);
+
+	if(key.length() > 6 && 0 == strncasecmp(key.data(), "remap-", 6))
+	{
+		remap_lines[to_string(key.substr(6))].emplace_back(value);
+	}
+	else if ( nullptr != (psTarget = GetStringPtr(key)))
+	{
+		*psTarget=value;
+	}
+	else if ( nullptr != (pnTarget = GetIntPtr(key, nNumBase)))
+	{
+		// temp. copy is ok here since a number string is most likely SSOed
+		auto temp(to_string(value));
+		const char *pStart=temp.c_str();
+		if(! *pStart)
+				throw tStartupException(tSS() << "Missing value for " << key << " option!");
+			errno = 0;
+			char *pEnd(nullptr);
+			long nVal = strtol(pStart, &pEnd, nNumBase);
+			if (errno)
+				throw tStartupException(
+						tSS() << "Invalid number for " << key << ":" << tErrnoFmter());
+
+			if (RESERVED_DEFVAL == nVal)
+				throw tStartupException(
+						tSS() << "Bad value for " << key << " (protected value, use another one)");
+
+			if (*pEnd)
+			{
+				throw tStartupException(
+						tSS() << "Bad value for " << key << " option or found trailing garbage: "
+								<< pEnd);
+			}
+
+			*pnTarget=nVal;
+	}
+	else if ( nullptr != (ppTarget = GetPropPtr(key)))
+	{
+		ppTarget->set(key, value);
+	}
+	else
+	{
+		if(!m_bIgnoreErrors)
+			throw tStartupException(tSS() << "Warning, unknown configuration directive: " << key);
+	}
 }
+
+
+void ParseOptionLine(string_view sLine, string_view &key, string_view &val)
+{
+	string::size_type posCol = sLine.find(":");
+	string::size_type posEq = sLine.find("=");
+	if (posEq==stmiss && posCol==stmiss)
+	{
+		if(m_bIgnoreErrors)
+			return;
+		throw tStartupException(tSS() << "Not a valid configuration directive: " << sLine);
+	}
+	string::size_type pos;
+	if (posEq!=stmiss && posCol!=stmiss)
+		pos=min(posEq,posCol);
+	else if (posEq!=stmiss)
+		pos=posEq;
+	else
+		pos=posCol;
+
+	key=sLine.substr(0, pos);
+	trimBoth(key);
+	val=sLine.substr(pos+1);
+	trimBoth(val);
+	if(key.empty())
+		return; // XXX: report it?
+
+	if(endsWithSzAr(val, "\\"))
+		cerr << "Warning: multilines are not supported, consider using \\n." <<endl;
+}
+
+
+void LoadMappings(bool dry_run)
+{
+	for (const auto &it : remap_lines)
+	{
+		const auto &vname = it.first;
+		if (vname.empty())
+		{
+			if (!m_bIgnoreErrors)
+				throw tStartupException("Bad repository name, check Remap-... directives");
+			continue;
+		}
+		for (const auto &remapLine : it.second)
+		{
+			enum xtype
+			{
+				PREFIXES, BACKENDS, FLAGS
+			} type = xtype(PREFIXES-1);
+			for (auto remapToken : tSplitWalk(remapLine, ";", true))
+			{
+				type = xtype(type + 1);
+				for (auto s : tSplitWalk(remapToken, SPACECHARS, false))
+				{
+					if (s.empty())
+						continue;
+					if (s.starts_with('#'))
+						goto next_remap_line;
+
+					switch (type)
+					{
+					case PREFIXES:
+						AddRemapInfo(false, s, vname);
+						break;
+					case BACKENDS:
+						AddRemapInfo(true, s, vname);
+						break;
+					case FLAGS:
+						AddRemapFlag(s, vname);
+						break;
+					}
+				}
+			}
+			if (type < PREFIXES) // no valid tokens?
+			{
+				if (!m_bIgnoreErrors)
+					throw tStartupException(std::string("Invalid entry, no valid configuration for Remap-") + ": " + remapLine);
+				continue;
+			}
+			next_remap_line:;
+		}
+		_AddHooksFile(vname);
+	}
+}
+
+void ReadConfigDirectory(cmstring& sPath)
+{
+	dump_proc_status();
+	char buf[PATH_MAX];
+	if(!realpath(sPath.c_str(), buf))
+		BARF("Failed to open config directory");
+
+	confdir=buf; // pickup the last config directory
+
+#if defined(HAVE_WORDEXP) || defined(HAVE_GLOB)
+	for(const auto& src: ExpandFilePattern(confdir+SZPATHSEP "*.conf", true))
+		ReadOneConfFile(src);
+
+#else
+	ReadOneConfFile(confdir+SZPATHSEP"acng.conf");
+#endif
+	dump_proc_status();
+	if(debug & log::LOG_DEBUG)
+	{
+		unsigned nUrls=0;
+		for(const auto& x: mapUrl2pVname)
+			nUrls+=x.second.size();
+
+		if(debug&6)
+			cerr << "Loaded " << repoparms.size() << " backend descriptors\nLoaded mappings for "
+				<< mapUrl2pVname.size() << " hosts and " << nUrls<<" paths\n";
+	}
+}
+
+#warning catch exception on all users
+void Build()
+{
+	for(const auto& inputThing: m_input)
+	{
+		if(inputThing.second)
+			ReadConfigDirectory(inputThing.first);
+		else
+			SetOption(inputThing.first);
+	}
+
+	mapUrl2pVname.rehash(mapUrl2pVname.size());
+
+	if(port.empty()) // heh?
+		port=ACNG_DEF_PORT;
+
+	if(connectPermPattern == "~~~")
+	   connectPermPattern="^(bugs\\.debian\\.org|changelogs\\.ubuntu\\.com):443$";
+
+	// let's also apply the umask to the directory permissions
+	{
+		mode_t mask = umask(0);
+		umask(mask); // restore it...
+		dirperms &= ~mask;
+		fileperms &= ~mask;
+	}
+
+    // postprocessing
+
+#ifdef FORCE_CUSTOM_UMASK
+	if(!sUmask.empty())
+	{
+		mode_t nUmask=0;
+		if(sUmask.size()>4)
+			BARF("Invalid umask length\n");
+		for(unsigned int i=0; i<sUmask.size(); i++)
+		{
+			unsigned int val = sUmask[sUmask.size()-i-1]-'0';
+			if(val>7)
+				BARF("Invalid umask value\n");
+			nUmask |= (val<<(3*i));
+
+		}
+		//cerr << "Got umask: " << nUmask <<endl;
+		umask(nUmask);
+	}
 #endif
 
+   if(cachedir.empty() || cachedir[0] != CPATHSEP)
+   {
+	   cerr << "Warning: Cache directory unknown or not absolute, running in degraded mode!" << endl;
+	   degraded=true;
+   }
+   try
+   {
+	   rex::CompileExpressions();
+   }
+   catch(const exception& ex)
+   {
+	   BARF("An error occurred while compiling file type regular expressions: " << ex.what());
+   }
+
+   if(cfg::tpthreadmax < 0)
+	   cfg::tpthreadmax = MAX_VAL(int);
+
+   // get rid of duplicated and trailing slash(es)
+	for(tStrPos pos; stmiss != (pos = cachedir.find(SZPATHSEP SZPATHSEP )); )
+		cachedir.erase(pos, 1);
+
+	cacheDirSlash=cachedir+CPATHSEP;
+
+   if(!pidfile.empty() && pidfile.at(0) != CPATHSEP)
+	   BARF("Pid file path must be absolute, terminating...");
+
+   if(!cfg::agentname.empty())
+	   cfg::agentheader=string("User-Agent: ")+cfg::agentname + "\r\n";
+
+   stripPrefixChars(cfg::reportpage, '/');
+
+   trimBack(cfg::requestapx);
+   trimFront(cfg::requestapx);
+   if(!cfg::requestapx.empty())
+	   cfg::requestapx = unEscape(cfg::requestapx);
+
+   // create working paths before something else fails somewhere
+   if(!udspath.empty())
+	   mkbasedir(cfg::udspath);
+   if(!cachedir.empty())
+	   mkbasedir(cfg::cachedir);
+   if(! pidfile.empty())
+	   mkbasedir(cfg::pidfile);
+
+   if(nettimeout < 5) {
+	   cerr << "Warning: NetworkTimeout value too small, using: 5." << endl;
+	   nettimeout = 5;
+   }
+   if(fasttimeout < 0)
+   {
+	   fasttimeout = 0;
+   }
+
+   if(RESERVED_DEFVAL == forwardsoap)
+	   forwardsoap = !forcemanaged;
+
+   if(RESERVED_DEFVAL == exsupcount)
+	   exsupcount = (extreshhold >= 5);
+
+#ifdef _SC_NPROCESSORS_ONLN
+	numcores = (int) sysconf(_SC_NPROCESSORS_ONLN);
+#elif defined(_SC_NPROC_ONLN)
+	numcores = (int) sysconf(_SC_NPROC_ONLN);
+#endif
+
+   if(!rex::CompileUncExpressions(rex::NOCACHE_REQ,
+		   tmpDontcacheReq.empty() ? tmpDontcache : tmpDontcacheReq)
+   || !rex::CompileUncExpressions(rex::NOCACHE_TGT,
+		   tmpDontcacheTgt.empty() ? tmpDontcache : tmpDontcacheTgt))
+   {
+	   BARF("An error occurred while compiling regular expression for non-cached paths!");
+   }
+   tmpDontcache.clear();
+   tmpDontcacheTgt.clear();
+   tmpDontcacheReq.clear();
+
+   if(usewrap == RESERVED_DEFVAL)
+   {
+	   usewrap=(qgrep("apt-cacher-ng", "/etc/hosts.deny")
+			   || qgrep("apt-cacher-ng", "/etc/hosts.allow"));
+#ifndef HAVE_LIBWRAP
+	   cerr << "Warning: configured to use libwrap filters but feature is not built-in." <<endl;
+#endif
+   }
+
+   if(maxtempdelay<0)
+   {
+	   cerr << "Invalid maxtempdelay value, using default" <<endl;
+	   maxtempdelay=27;
+   }
+
+   if(redirmax == RESERVED_DEFVAL)
+	   redirmax = forcemanaged ? 0 : REDIRMAX_DEFAULT;
+
+   if(!persistoutgoing)
+	   pipelinelen = 1;
+
+   if(!pipelinelen) {
+	   cerr << "Warning, remote pipeline depth of 0 makes no sense, assuming 1." << endl;
+	   pipelinelen = 1;
+   }
+
+   LoadMappings(true);
+} // PostProcConfig
+
+};
+
+tConfigBuilder::tConfigBuilder(bool ignoreAllErrors, bool ignoreFileReadErrors)
+{
+	m_pImpl = new tImpl();
+	m_pImpl->m_bIgnoreErrors = ignoreAllErrors;
+	m_pImpl->m_bAssertReadableFiles = !ignoreFileReadErrors;
+}
+
+tConfigBuilder::~tConfigBuilder()
+{
+	delete m_pImpl;
+}
+
+tConfigBuilder& tConfigBuilder::AddOption(const mstring &line)
+{
+	m_pImpl->m_input.emplace_back(make_pair(line, false));
+	return *this;
+}
+
+tConfigBuilder& tConfigBuilder::AddConfigDirectory(cmstring &sDirName)
+{
+	m_pImpl->m_input.emplace_back(make_pair(sDirName, true));
+	return *this;
+}
+
+void tConfigBuilder::Build()
+{
+	m_pImpl->Build();
+}
+
+} // namespace acfg
 }

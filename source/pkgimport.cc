@@ -7,6 +7,7 @@
 #include "dirwalk.h"
 #include "meta.h"
 #include "acfg.h"
+#include "rex.h"
 #include "filereader.h"
 #include "dlcon.h"
 #include "csmapping.h"

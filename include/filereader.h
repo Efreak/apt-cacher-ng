@@ -38,7 +38,7 @@ public:
 	//! @return False on errors.
 	bool GetOneLine(mstring & sOut, bool bForceUncompress=false);
     unsigned GetCurrentLine() const { return m_nCurLine;}
-	bool CheckGoodState(bool bTerminateOnErrors, cmstring *reportFilePath=nullptr) const;
+	bool IsGood() const { return !m_bError; }
 	
 	bool GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *pDumpFile=nullptr);
 	static bool GetChecksum(const mstring & sFileName, int csType, uint8_t out[],

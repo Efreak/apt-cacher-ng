@@ -11,7 +11,10 @@
 
 namespace acng
 {
-
+namespace rex
+{
+enum eMatchType : int8_t;
+}
 class conn;
 
 class job {

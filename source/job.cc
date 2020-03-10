@@ -11,6 +11,7 @@ using namespace std;
 
 #include "conn.h"
 #include "acfg.h"
+#include "rex.h"
 #include "fileitem.h"
 #include "dlcon.h"
 #include "sockio.h"

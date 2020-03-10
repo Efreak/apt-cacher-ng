@@ -3,6 +3,7 @@
 #include "showinfo.h"
 #include "meta.h"
 #include "acfg.h"
+#include "rex.h"
 #include "filereader.h"
 #include "fileio.h"
 #include "job.h"

@@ -591,7 +591,10 @@ using unique_fd = resource_owner<int, justforceclose, -1>;
 class tStartupException : public std::runtime_error
 {
 public:
-	using runtime_error :: runtime_error;
+	tStartupException(const std::string& s) : std::runtime_error(s)
+	{
+
+	}
 };
 }
 

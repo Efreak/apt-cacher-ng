@@ -13,16 +13,28 @@
 namespace acng
 {
 
-struct ltstring {
-	bool operator()(const mstring &s1, const mstring &s2) const {
-		return strcasecmp(s1.c_str(), s2.c_str()) < 0;
-	}
-};
-
-typedef std::map<mstring, mstring, ltstring> NoCaseStringMap;
-
 namespace cfg
 {
+
+/**
+ * Configuration builder class which collects all parameters and eventually compiles the config.
+ */
+class ACNG_API tConfigBuilder
+{
+	struct tImpl;
+	tImpl *m_pImpl;
+
+public:
+
+	tConfigBuilder(bool ignoreAllErrors, bool ignoreFileReadErrors);
+	~tConfigBuilder();
+
+	tConfigBuilder& AddOption(const mstring &line);
+	tConfigBuilder& AddConfigDirectory(cmstring& sDirName);
+	//! Prepare various things resulting from variable combinations, etc.
+	void Build();
+};
+
 static const int RESERVED_DEFVAL = -4223;
 
 static const int REDIRMAX_DEFAULT = 5;
@@ -50,12 +62,8 @@ extern mstring agentheader;
 
 extern int conprotos[2];
 
-bool ACNG_API SetOption(const mstring &line);
-void ACNG_API dump_config(bool includingDelicateValues=false);
-void ACNG_API ReadConfigDirectory(const char*, bool bReadErrorIsFatal=true);
 
-//! Prepare various things resulting from variable combinations, etc.
-void ACNG_API PostProcConfig();
+void ACNG_API dump_config(bool includingDelicateValues=false);
 
 bool DegradedMode();
 
@@ -107,47 +115,10 @@ ACNG_API mstring * GetStringPtr(string_view key);
 
 int CheckAdminAuth(LPCSTR auth);
 
-extern bool g_bQuiet, g_bNoComplex;
-
 static const cmstring privStoreRelSnapSufix("_xstore/rsnap");
 static const cmstring privStoreRelQstatsSfx("_xstore/qstats");
 
-
-class IMappingConfigValidator
-{
-public:
-	virtual ~IMappingConfigValidator() =default;
-	virtual bool IsDryRun() =0;
-};
-
 } // namespace acfg
-
-namespace rex
-{
-
-enum NOCACHE_PATTYPE : bool
-{
-	NOCACHE_REQ,
-	NOCACHE_TGT
-};
-
-enum eMatchType : int8_t
-{
-	FILE_INVALID = -1,
-	FILE_SOLID = 0, FILE_VOLATILE, FILE_WHITELIST,
-	NASTY_PATH, PASSTHROUGH,
-	FILE_SPECIAL_SOLID,
-	FILE_SPECIAL_VOLATILE,
-	ematchtype_max
-};
-bool Match(cmstring &in, eMatchType type);
-
-eMatchType GetFiletype(const mstring &);
-bool MatchUncacheable(const mstring &, NOCACHE_PATTYPE);
-bool CompileUncExpressions(NOCACHE_PATTYPE type, cmstring& pat);
-bool CompileExpressions();
-}
-LPCSTR ACNG_API ReTest(LPCSTR s);
 
 #define CACHE_BASE (acng::cfg::cacheDirSlash)
 #define CACHE_BASE_LEN (CACHE_BASE.length()) // where the relative paths begin
@@ -156,8 +127,6 @@ LPCSTR ACNG_API ReTest(LPCSTR s);
 
 #define SABSPATHEX(x, y) (CACHE_BASE+(x) + (y))
 #define SZABSPATHEX(x, y) (CACHE_BASE+(x) + (y)).c_str()
-
-bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
 
 // XXX: find a better place for this, shared between server and acngtool
 enum ControLineType : uint8_t

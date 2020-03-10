@@ -13,6 +13,7 @@
 #include "dirwalk.h"
 #include "header.h"
 #include "job.h"
+#include "rex.h"
 
 #include "fileio.h"
 #include <errno.h>
@@ -1987,7 +1988,7 @@ bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&
 				"WARNING: unable to read this file (unsupported format)</span>\n<br>\n");
 		return false;
 	}
-	return reader.CheckGoodState(false);
+	return reader.IsGood();
 }
 
 bool cacheman::CalculateBaseDirectories(cmstring& sPath, enumMetaType idxType, mstring& sBaseDir, mstring& sPkgBaseDir)
@@ -2155,7 +2156,7 @@ bool cacheman::ParseDebianRfc822Index(filereader& reader,
 	else
 		processList(contents[sExtListFilter]);
 
-	return reader.CheckGoodState(false);
+	return reader.IsGood();
 }
 
 void cacheman::ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHandler)

@@ -12,6 +12,7 @@
 #include "tcpconfactory.h"
 #include "cleaner.h"
 #include "conserver.h"
+#include "rex.h"
 
 #include "lockable.h"
 #include "sockio.h"

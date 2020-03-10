@@ -378,20 +378,6 @@ bool filereader::OpenFile(const string & sFilename, bool bNoMagic, unsigned nFak
 	return true;
 }
 
-bool filereader::CheckGoodState(bool bErrorsConsiderFatal, cmstring *reportFilePath) const
-{
-	if (!m_bError)
-		return true;
-	if (!bErrorsConsiderFatal)
-		return false;
-	cerr << "Error opening file";
-	if (reportFilePath)
-		cerr << " " << *reportFilePath;
-	cerr << " (" << m_sErrorString << "), terminating." << endl;
-	exit(EXIT_FAILURE);
-
-}
-
 void filereader::Close()
 {
 	m_nCurLine=0;
@@ -746,7 +732,7 @@ bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE
 	//sha_final(out, &ctx);
 	summer->finish(out);
 	
-	return CheckGoodState(false);
+	return IsGood();
 #else
 	return false;
 #endif
