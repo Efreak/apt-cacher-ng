@@ -1,3 +1,10 @@
+apt-cacher-ng (3.3.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+    + potentially closes: #952811
+
+ -- Eduard Bloch <blade@debian.org>  Thu, 12 Mar 2020 22:54:33 +0100
+
 apt-cacher-ng (3.3.1-2) unstable; urgency=high
 
   * Fixes FTBFS on mipsel/mips64el
