@@ -212,7 +212,6 @@ struct tDlJob
 		m_pCurBackend = nullptr;
 		bool bWasBeMode = m_bBackendMode;
 		m_bBackendMode = false;
-		sErrorMsg = "500 Bad redirection (path)";
 
 		auto sLocationDecoded = UrlUnescape(pNewUrl);
 
@@ -235,7 +234,10 @@ struct tDlJob
 		if(bWasBeMode)
 		{
 			if(!m_pCurBackend)
+			{
+				sErrorMsg = "500 Bad redirection (path)";
 				return false;
+			}
 			auto sPathBackup=m_remoteUri.sPath;
 			m_remoteUri=*m_pCurBackend;
 			m_remoteUri.sPath+=sPathBackup;

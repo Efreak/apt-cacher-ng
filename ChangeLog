@@ -1,3 +1,10 @@
+apt-cacher-ng (3.3.2) ALTERED-HYDROGEN; urgency=low
+
+  * potential fix for a programming bug where a bad redirection was reported
+    although the source was rewritten correctly (Debian bug 952811)
+
+ -- 
+
 apt-cacher-ng (3.3.1) A-LITTLE-BUGFIX-FOR-A-MAN; urgency=medium
 
   * POTENTIAL SECURITY ISSUE (CVE-2020-5202):
