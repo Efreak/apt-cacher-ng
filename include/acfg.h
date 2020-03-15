@@ -29,7 +29,7 @@ public:
 	tConfigBuilder(bool ignoreAllErrors, bool ignoreFileReadErrors);
 	~tConfigBuilder();
 
-	tConfigBuilder& AddOption(const mstring &line);
+	tConfigBuilder& AddOption(cmstring &line);
 	tConfigBuilder& AddConfigDirectory(cmstring& sDirName);
 	//! Prepare various things resulting from variable combinations, etc.
 	void Build();

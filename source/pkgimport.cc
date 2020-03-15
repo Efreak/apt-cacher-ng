@@ -75,15 +75,15 @@ bool pkgimport::ProcessRegular(const mstring &sPath, const struct stat &stinfo)
 		if(m_precachedList.find(sPath)!=m_precachedList.end())
 			return true; // have that already, somewhere...
 		
-		for (CSTYPES ctp : { CSTYPE_MD5, CSTYPE_SHA1, CSTYPE_SHA512 } )
+		for (CSTYPES ctp : { CSTYPES::MD5, CSTYPES::SHA1, CSTYPES::SHA512 } )
 		{
 
 			// get the most likely requested contents id
 			tFingerprint fpr;
-			/*	if ( (IsIndexDiff(sPath) && fpr.ScanFile(sPath, CSTYPE_SHA1, true))
-			 || (!IsIndexDiff(sPath) && fpr.ScanFile(sPath, CSTYPE_MD5, false)))
+			/*	if ( (IsIndexDiff(sPath) && fpr.ScanFile(sPath, CSTYPES::SHA1, true))
+			 || (!IsIndexDiff(sPath) && fpr.ScanFile(sPath, CSTYPES::MD5, false)))
 			 */
-			if (!fpr.ScanFile(sPath, ctp, false, nullptr))
+			if (!fpr.ReadFile(sPath, ctp, false, nullptr))
 			{
 				SendFmt << "<span class=\"ERROR\">Error checking " << sPath << "</span>\n<br>\n";
 				continue;
@@ -250,8 +250,8 @@ void pkgimport::Action()
 
 #define ENDL "\n" // don't flush all the time
 		fList << fpr2info.first.size << ENDL
-				<< (int)fpr2info.first.csType << ENDL
-				<< fpr2info.first.GetCsAsString() << ENDL
+				<< (int)fpr2info.first.csum.csType << ENDL
+				<< fpr2info.first.csum.to_string() << ENDL
 				<< fpr2info.second.sPath.substr(m_sSrcPath.size()+1) <<ENDL
 				<< fpr2info.second.mtime	<<ENDL;
 
@@ -263,8 +263,8 @@ void pkgimport::Action()
 	for(const auto& fpr2info : m_importRest)
 	{
 		fList << fpr2info.first.size << ENDL
-				<< (int)fpr2info.first.csType << ENDL
-				<< fpr2info.first.GetCsAsString() << ENDL
+				<< (int)fpr2info.first.csum.csType << ENDL
+				<< fpr2info.first.csum.to_string() << ENDL
 				<< fpr2info.second.sPath.substr(m_sSrcPath.size()+1) <<ENDL
 				<< fpr2info.second.mtime	<<ENDL;
 		remaining+=fpr2info.first.size;
@@ -374,7 +374,7 @@ void pkgimport::_LoadKeyCache()
 /*	if(m_bVerbose)
 		SendChunk("Loading fingerprints from key cache... \n");
 		*/
-	int csType(CSTYPE_INVALID);
+	auto csType((int) CSTYPES::INVALID);
 
 	for(;;)
 	{
@@ -387,7 +387,7 @@ void pkgimport::_LoadKeyCache()
 		std::getline(in, cs); // newline
 
 		std::getline(in, cs); // checksum line
-		if(!fpr.SetCs(cs, (CSTYPES)csType))
+		if(!fpr.csum.Set(cs, (CSTYPES)csType))
 			return;
 
 		std::getline(in, info.sPath);

@@ -35,7 +35,9 @@ class Cstat : public stat
 {
 	bool bResult;
 public:
-	inline Cstat(cmstring &s) { bResult = !::stat(s.c_str(), static_cast<struct stat*>(this)); }
+	inline void reset(cmstring &s) { bResult = !::stat(s.c_str(), static_cast<struct stat*>(this)); }
+	inline Cstat(cmstring &s) { reset(s); }
+	inline Cstat() : bResult(false) {}
 	inline operator bool() const { return bResult; }
 };
 

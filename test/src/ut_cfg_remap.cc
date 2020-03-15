@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 #include "dbman.h"
-
+#include "csmapping.h"
 #include "acfg.h"
 
 #include <unordered_map>
@@ -24,4 +24,9 @@ TEST(cfg, remap)
 	.AddOption("Remap-foo = bla blub http://fakeserver/irgendwas ; http://realmirror/pub/kubuntu")
 	.AddOption("Remap-bar = bla blub http://fakeserver/irgendwas ; http://realmirror/pub/kubuntu")
 	.Build());
+}
+
+TEST(cfg, algos)
+{
+	ASSERT_NO_THROW(acng::check_algos());
 }

@@ -18,13 +18,6 @@
 #include <iostream>
 #include <atomic>
 
-#ifdef HAVE_SSL
-#include <openssl/sha.h>
-#include <openssl/md5.h>
-#elif defined(HAVE_TOMCRYPT)
-#include <tomcrypt.h>
-#endif
-
 #ifdef DEBUG
 //#define SHRINKTEST
 #endif
@@ -592,116 +585,27 @@ bool filereader::GetOneLine(string & sOut, bool bForceUncompress) {
 	return true;
 }
 
-#ifndef MINIBUILD
 
-#ifdef HAVE_SSL
-class csumSHA1 : public csumBase, public SHA_CTX
-{
-public:
-	csumSHA1() { SHA1_Init(this); }
-	void add(const char *data, size_t size) override { SHA1_Update(this, (const void*) data, size); }
-	void finish(uint8_t* ret) override { SHA1_Final(ret, this); }
-};
-class csumSHA256 : public csumBase, public SHA256_CTX
-{
-public:
-	csumSHA256() { SHA256_Init(this); }
-	void add(const char *data, size_t size) override { SHA256_Update(this, (const void*) data, size); }
-	void finish(uint8_t* ret) override { SHA256_Final(ret, this); }
-};
-class csumSHA512 : public csumBase, public SHA512_CTX
-{
-public:
-	csumSHA512() { SHA512_Init(this); }
-	void add(const char *data, size_t size) override { SHA512_Update(this, (const void*) data, size); }
-	void finish(uint8_t* ret) override { SHA512_Final(ret, this); }
-};
-class csumMD5 : public csumBase, public MD5_CTX
-{
-public:
-	csumMD5() { MD5_Init(this); }
-	void add(const char *data, size_t size) override { MD5_Update(this, (const void*) data, size); }
-	void finish(uint8_t* ret) override { MD5_Final(ret, this); }
-};
-#elif defined(HAVE_TOMCRYPT)
-class csumSHA1 : public csumBase
-{
-	hash_state st;
-public:
-	csumSHA1() { sha1_init(&st); }
-	void add(const char *data, size_t size) override { sha1_process(&st, (const unsigned char*) data, (unsigned long) size); }
-	void finish(uint8_t* ret) override { sha1_done(&st, ret); }
-};
-class csumSHA256 : public csumBase
-{
-	hash_state st;
-public:
-	csumSHA256() { sha256_init(&st); }
-	void add(const char *data, size_t size) override { sha256_process(&st, (const unsigned char*) data, (unsigned long) size); }
-	void finish(uint8_t* ret) override { sha256_done(&st, ret); }
-};
-class csumSHA512 : public csumBase
-{
-	hash_state st;
-public:
-	csumSHA512() { sha512_init(&st); }
-	void add(const char *data, size_t size) override { sha512_process(&st, (const unsigned char*) data, (unsigned long) size); }
-	void finish(uint8_t* ret) override { sha512_done(&st, ret); }
-};
-class csumMD5 : public csumBase
-{
-	hash_state st;
-public:
-	csumMD5() { md5_init(&st); }
-	void add(const char *data, size_t size) override { md5_process(&st, (const unsigned char*) data, (unsigned long) size); }
-	void finish(uint8_t* ret) override { md5_done(&st, ret); }
-};
-#endif
-
-#ifdef HAVE_CHECKSUM
-std::unique_ptr<csumBase> csumBase::GetChecker(CSTYPES type)
-{
-	switch(type)
-	{
-	case CSTYPE_MD5:
-		return std::unique_ptr<csumBase>(new csumMD5);
-	case CSTYPE_SHA1:
-		return std::unique_ptr<csumBase>(new csumSHA1);
-	case CSTYPE_SHA256:
-		return std::unique_ptr<csumBase>(new csumSHA256);
-	case CSTYPE_SHA512:
-		return std::unique_ptr<csumBase>(new csumSHA512);
-	default: // for now
-		return std::unique_ptr<csumBase>();
-	}
-}
-#endif
-
-bool filereader::GetChecksum(const mstring & sFileName, int csType, uint8_t out[],
+bool filereader::GetChecksum(const mstring & sFileName, tChecksum& cs,
 		bool bTryUnpack, off_t &scannedSize, FILE *fDump)
 {
-#ifdef HAVE_CHECKSUM
 	filereader f;
 	return (f.OpenFile(sFileName, !bTryUnpack)
-			&& f.GetChecksum(csType, out, scannedSize, fDump));
-#else
-	return false;
-#endif
+			&& f.GetChecksum(cs, scannedSize, fDump));
 }
 
-bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *fDump)
+bool filereader::GetChecksum(tChecksum& inout_cs, off_t &out_size, FILE *fDump)
 {
-#ifdef HAVE_CHECKSUM
-	unique_ptr<csumBase> summer(csumBase::GetChecker(CSTYPES(csType)));
-	scannedSize=0;
+	auto summer = csumBase::GetChecker(inout_cs.csType);
+	out_size=0;
 	
 	if(!m_Dec.get())
 	{
-		summer->add(m_szFileBuf, m_nBufSize);
+		summer->add((const uint8_t*) m_szFileBuf, m_nBufSize);
 		//sha_update(&ctx, (SHA_BYTE*) m_szFileBuf, m_nBufSize);
 		if(fDump)
 			fwrite(m_szFileBuf, sizeof(char), m_nBufSize, fDump);
-		scannedSize=m_nBufSize;
+		out_size=m_nBufSize;
 	}
 	else
 	{
@@ -715,10 +619,10 @@ bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE
 			}
 
 			unsigned nPlainSize=m_UncompBuf.size();
-			summer->add(m_UncompBuf.rptr(), nPlainSize);
+			summer->add((const uint8_t*) m_UncompBuf.rptr(), nPlainSize);
 			if(fDump)
 				fwrite(m_UncompBuf.rptr(), sizeof(char), nPlainSize, fDump);
-			scannedSize+=nPlainSize;
+			out_size+=nPlainSize;
 			m_UncompBuf.clear();
 
 			if(m_Dec->eof)
@@ -729,44 +633,10 @@ bool filereader::GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE
 		}
 
 	}
-	//sha_final(out, &ctx);
-	summer->finish(out);
+	inout_cs = summer->finish();
 	
 	return IsGood();
-#else
-	return false;
-#endif
 }
-
-// test checksum wrapper classes and their algorithms, also test conversion methods
-void ACNG_API check_algos()
-{
-#ifdef HAVE_CHECKSUM
-	const char testvec[]="abc";
-	uint8_t out[20];
-	unique_ptr<csumBase> ap(csumBase::GetChecker(CSTYPE_SHA1));
-	ap->add(testvec, sizeof(testvec)-1);
-	ap->finish(out);
-	if(!CsEqual("a9993e364706816aba3e25717850c26c9cd0d89d", out, 20))
-	{
-		cerr << "Incorrect SHA1 implementation detected, check compilation settings!\n";
-		exit(EXIT_FAILURE);
-	}
-
-	ap = csumBase::GetChecker(CSTYPE_MD5);
-	ap->add(testvec, sizeof(testvec) - 1);
-	ap->finish(out);
-	if (BytesToHexString(out, 16) != "900150983cd24fb0d6963f7d28e17f72")
-	{
-		cerr << "Incorrect MD5 implementation detected, check compilation settings!\n";
-		exit(EXIT_FAILURE);
-	}
-#endif
-}
-
-
-
-#endif
 
 #ifdef HAVE_LIBBZ2
 

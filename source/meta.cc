@@ -395,8 +395,6 @@ void MakeAbsolutePath(std::string &dirToFix, const std::string &reldir)
 }
 */
 
-extern uint_fast16_t hexmap[];
-
 cmstring sEmptyString("");
 
 /*
@@ -426,73 +424,6 @@ foreach $b (0..255) {
 }
 print "\n";
 */
-
-#define _inv MAX_VAL(uint_fast16_t)
-
-uint_fast16_t hexmap[] = {
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                0,1,2,3,4,5,6,7,8,9,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,10,11,12,13,14,15,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,10,11,12,13,14,15,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,
-                _inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv,_inv
-                };
-
-bool CsAsciiToBin(const char *a, uint8_t b[], unsigned short binLength)
-{
-	const unsigned char *uA = (const unsigned char*) a;
-	for(int i=0; i<binLength;i++)
-	{
-		if(hexmap[uA[i*2]]>15 || hexmap[uA[i*2+1]] > 15)
-			return false;
-		b[i]=hexmap[uA[i*2]] * 16 + hexmap[uA[i*2+1]];
-	}
-	return true;
-}
-#warning move to acbuf::add_hex_chars - but only after merging refactored version from the may branch
-bool Hex2buf(const char *a, size_t len, acbuf& ret)
-{
-	if(len%2)
-		return false;
-	ret.clear();
-	ret.setsize(len/2+1);
-	auto *uA = (const unsigned char*) a;
-	for(auto end=uA+len;uA<end;uA+=2)
-	{
-		if(!*uA || !uA[1])
-			return false;
-		if(hexmap[uA[0]]>15 || hexmap[uA[1]] > 15)
-			return false;
-		*(ret.wptr()) = hexmap[uA[0]] * 16 + hexmap[uA[1]];
-	}
-	ret.got(len/2);
-	return true;
-}
-
-char h2t_map[] =
-	{ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd',
-			'e', 'f' };
-
-string BytesToHexString(const uint8_t sum[], unsigned short lengthBin)
-{
-	string sRet;
-	for (int i=0; i<lengthBin; i++)
-	{
-		sRet+=(char) h2t_map[sum[i]>>4];
-		sRet+=(char) h2t_map[sum[i]&0xf];
-	}
-	return sRet;
-}
 
 
 inline bool is_safe_url_char(char c)

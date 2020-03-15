@@ -7,31 +7,30 @@
 
 #include "dbman.h"
 #include "acfg.h"
-#include <SQLiteCpp/Database.h>
 
 #include <iostream>
 
 #define CREATE_FPRS "CREATE TABLE \"cfgfpr\" ( \"name\"	TEXT NOT NULL, \"purpose\" INTEGER NOT NULL, \"fpr\" BLOB NOT NULL);"
 
-struct acng::dbman::dbdata
+struct acng::dbman::tImpl
 {
 	int m_pending = -1;
 	SQLite::Database db;
-	dbdata() : db(CACHE_BASE + "_acng.sqlite3", SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE)
+	tImpl() : db(CACHE_BASE + "_acng.sqlite3", SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE)
 	{
 	}
 };
 
 acng::dbman::~dbman()
 {
-	delete m_data;
+	delete m_pImpl;
 }
 
-acng::dbman::dbman(): m_data(new dbdata)
+acng::dbman::dbman(): m_pImpl(new tImpl)
 {
     try
     {
-        SQLite::Statement query(m_data->db, CREATE_FPRS);
+        SQLite::Statement query(m_pImpl->db, CREATE_FPRS);
     	query.exec();
     }
     catch(const SQLite::Exception& ex)
@@ -68,5 +67,22 @@ void acng::dbman::MarkChangeVoluntaryCommit()
 }
 
 void acng::dbman::MarkChangeMandatoryCommit()
+{
+}
+
+acng::dbman& acng::dbman::instance()
+{
+	static dbman g_singleton;
+	return g_singleton;
+}
+
+std::string acng::dbman::GetMappingSignature(const std::string &name)
+{
+#warning fixme
+	return "foo";
+}
+
+void acng::dbman::StoreMappingSignature(const std::string &name, const std::string &sig,
+		bool insertNew)
 {
 }

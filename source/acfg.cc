@@ -10,6 +10,7 @@
 #include "cleaner.h"
 #include "csmapping.h"
 #include "rex.h"
+#include "dbman.h"
 
 #include <iostream>
 #include <fstream>
@@ -78,11 +79,6 @@ void _ParseLocalDirs(string_view value)
 		localdirs[to_string(from)]=to_string(sliceFromTo);
 	}
 }
-
-// dummy exception type, thrown to abort parsing
-struct tMismatchException : public std::exception
-{
-};
 
 struct MapNameToString
 {
@@ -586,36 +582,6 @@ tRepoData::~tRepoData()
 	delete m_pHooks;
 }
 
-
-struct tMappingValidator
-{
-	string_view m_name, m_fpr;
-	std::unique_ptr<csumBase> m_summer;
-	enum { VALIDATING, NEW, MISMATCH } m_mode;
-
-	const string_view SIGNATURE = ACVERSION
-#ifdef DEBUG
-		","	__DATE__ "," __TIME__
-#endif
-			;
-	void _initSummer()
-	{
-	m_summer = csumBase::GetChecker(CSTYPES::CSTYPE_MD5);
-	m_summer->add(SIGNATURE);
-	}
-	tMappingValidator(string_view name, string_view fpr) : m_name(name), m_fpr(fpr)
-	{
-		_initSummer();
-		if(fpr.starts_with(SIGNATURE))
-			m_mode = VALIDATING;
-		// TODO: load old DB config
-		// TODO: set mode
-	}
-
-};
-
-
-
 void dump_config(bool includeDelicate)
 {
 	ostream &cmine(cout);
@@ -814,6 +780,12 @@ void MarkProxyFailure()
 	proxy_failstate = true;
 }
 
+static const std::string SIGNATURE_PREFIX = ACVERSION
+#ifdef DEBUG
+	","	__DATE__ "," __TIME__
+#endif
+		;
+
 // information with limited livespan - consumed and released by PostProcConfig
 struct tConfigBuilder::tImpl
 {
@@ -822,7 +794,86 @@ struct tConfigBuilder::tImpl
 	// user parameters, with flag == true for directory
 	std::deque<std::pair<std::string,bool>> m_input;
 
-	bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
+	//bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
+
+	struct tMappingValidator
+	{
+		std::string m_name, m_oldSig;
+		Cstat x;
+		std::unique_ptr<csumBase> m_summer;
+		enum { VALIDATING, NEW_STUFF, MISMATCH } m_mode = NEW_STUFF;
+
+		void init_summer()
+		{
+			m_summer = csumBase::GetChecker(CSTYPES::MD5);
+			m_summer->add(SIGNATURE_PREFIX);
+		}
+
+		tMappingValidator(const std::string& name) : m_name(name)
+		{
+			init_summer();
+			try
+			{
+				m_oldSig = dbman::instance().GetMappingSignature(m_name);
+				m_mode = startsWith(m_oldSig, SIGNATURE_PREFIX) ? VALIDATING : MISMATCH;
+			}
+			catch (const SQLite::Exception& e)
+			{
+				m_mode = NEW_STUFF;
+			}
+		}
+		bool IsDryRun()
+		{
+			return m_mode == VALIDATING;
+		}
+		void ReportString(string_view s)
+		{
+			m_summer->add(s);
+		}
+		void ReportFile(cmstring& path, Cstat* stinfo)
+		{
+			m_summer->add(path);
+			if(!stinfo)
+			{
+				stinfo=&x;
+				x.reset(path);
+			}
+			m_summer->add(";");
+#define PUN2BS(what) (const uint8_t*) (const char*) & what, sizeof(what)
+			m_summer->add(PUN2BS(stinfo->st_size));
+			m_summer->add(PUN2BS(stinfo->st_ino));
+			m_summer->add(PUN2BS(stinfo->st_dev));
+			m_summer->add(PUN2BS(stinfo->st_mtim));
+			if(access(path.c_str(), R_OK))
+				m_summer->add("ntrdbl");
+		}
+		/**
+		 * Finish the input data flow and analyze the resulting signature.
+		 * @return true if the signature was matched
+		 */
+		bool FinishValidation()
+		{
+			auto mx = m_summer->finish().to_string();
+			auto matched = endsWith(m_oldSig, mx);
+			if(!matched)
+				m_mode = MISMATCH;
+			return matched;
+		}
+		/**
+		 * To call when the non-dry run is finished, will store the regenerated signature
+		 * in the database.
+		 */
+		void CommitSignature()
+		{
+			auto mx = m_summer->finish().to_string();
+			dbman::instance().StoreMappingSignature(m_name, SIGNATURE_PREFIX + mx, NEW_STUFF == m_mode);
+		}
+
+	};
+
+
+
+
 
 	void ReadOneConfFile(const string & szFilename)
 	{
@@ -1124,7 +1175,7 @@ struct tConfigBuilder::tImpl
 
 #warning add a --trace-config option to help identifying the problems. However, shall warn or abort if user-id is not matching
 #warning and document the trace mode
-void SetOption(const string &sLine)
+void SetOption(acng::string_view sLine)
 {
 	string_view key, value;
 
@@ -1212,7 +1263,7 @@ void ParseOptionLine(string_view sLine, string_view &key, string_view &val)
 }
 
 
-void LoadMappings(bool dry_run)
+void LoadMappings()
 {
 	for (const auto &it : remap_lines)
 	{
@@ -1223,16 +1274,20 @@ void LoadMappings(bool dry_run)
 				throw tStartupException("Bad repository name, check Remap-... directives");
 			continue;
 		}
+		tMappingValidator ctx(vname);
+
 		for (const auto &remapLine : it.second)
 		{
 			enum xtype
 			{
 				PREFIXES, BACKENDS, FLAGS
-			} type = xtype(PREFIXES-1);
-			for (auto remapToken : tSplitWalk(remapLine, ";", true))
+			} type = xtype(PREFIXES - 1);
+			tSplitWalk tokenSeq(remapLine, ";", true);
+			for (auto remapToken : tokenSeq)
 			{
 				type = xtype(type + 1);
-				for (auto s : tSplitWalk(remapToken, SPACECHARS, false))
+				tSplitWalk itemSeq(remapToken, SPACECHARS, false);
+				for (auto s : itemSeq)
 				{
 					if (s.empty())
 						continue;
@@ -1256,10 +1311,12 @@ void LoadMappings(bool dry_run)
 			if (type < PREFIXES) // no valid tokens?
 			{
 				if (!m_bIgnoreErrors)
-					throw tStartupException(std::string("Invalid entry, no valid configuration for Remap-") + ": " + remapLine);
+					throw tStartupException(
+							std::string("Invalid entry, no valid configuration for Remap-")
+									+ ": " + remapLine);
 				continue;
 			}
-			next_remap_line:;
+			next_remap_line: ;
 		}
 		_AddHooksFile(vname);
 	}
@@ -1444,10 +1501,10 @@ void Build()
 	   pipelinelen = 1;
    }
 
-   LoadMappings(true);
-} // PostProcConfig
+   LoadMappings();
+}
 
-};
+}; // tConfigBuilder::Impl
 
 tConfigBuilder::tConfigBuilder(bool ignoreAllErrors, bool ignoreFileReadErrors)
 {

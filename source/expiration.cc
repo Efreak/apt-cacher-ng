@@ -186,9 +186,9 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 					goto handle_incomplete;
 				}
 			}
-
-			if(entry.fpr.csType != descHave.fpr.csType &&
-					!descHave.fpr.ScanFile(sPathAbs, entry.fpr.csType))
+#warning test that
+			if(entry.fpr.csum.csType != descHave.fpr.csum.csType &&
+					!descHave.fpr.ReadFile(sPathAbs, entry.fpr.csum.csType))
 			{
 				// IO error? better keep it for now, not sure how to deal with it
 				SendFmt << ECLASS "An error occurred while checksumming "
@@ -201,7 +201,7 @@ void expiration::HandlePkgEntry(const tRemoteFileInfo &entry)
 
 			// ok, now fingerprint data must be consistent
 
-			if(!descHave.fpr.csEquals(entry.fpr))
+			if(descHave.fpr.csum != entry.fpr.csum)
 			{
 				SendFmt << ECLASS << "checksum mismatch on " << sPathRel;
 				return finish_bad("checksum mismatch");
@@ -551,7 +551,7 @@ void expiration::Action()
 	for(const auto& sPathRel : GetGoodReleaseFiles())
 	{
 		auto func = [this](const tRemoteFileInfo &e) {
-			auto hexname(BytesToHexString(e.fpr.csum, GetCSTypeLen(e.fpr.csType)));
+			auto hexname = e.fpr.csum.to_string();
 			auto hit = m_trashFile2dir2Info.find(hexname);
 			if(hit == m_trashFile2dir2Info.end())
 				return; // unknown
@@ -560,7 +560,7 @@ void expiration::Action()
 				m_trashFile2dir2Info.erase(hit);
 				return;
 			}
-			auto sdir = e.sDirectory + "by-hash/" + GetCsNameReleaseFile(e.fpr.csType) + '/';
+			auto sdir = e.sDirectory + "by-hash/" + GetCsNameReleaseFile(e.fpr.csum.csType) + '/';
 			hit->second.erase(sdir);
 		};
 		ParseAndProcessMetaFile(func, sPathRel, EIDX_RELEASE, true);

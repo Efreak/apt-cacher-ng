@@ -11,7 +11,7 @@ namespace acng
 {
 
 class IDecompressor;
-
+struct tChecksum;
 
 /*!
  * Helper class used to read files.
@@ -19,7 +19,8 @@ class IDecompressor;
  * Could use boost::iostream templates for most of that, but Boost became such a monster nowadays.
  * And for my work, my class behaves smarter.
  */
-class ACNG_API filereader {
+class ACNG_API filereader
+{
 	
 public:
 	filereader();
@@ -39,9 +40,11 @@ public:
 	bool GetOneLine(mstring & sOut, bool bForceUncompress=false);
     unsigned GetCurrentLine() const { return m_nCurLine;}
 	bool IsGood() const { return !m_bError; }
-	
-	bool GetChecksum(int csType, uint8_t out[], off_t &scannedSize, FILE *pDumpFile=nullptr);
-	static bool GetChecksum(const mstring & sFileName, int csType, uint8_t out[],
+	/**
+	 * Calculate checksum of the specified type
+	 */
+	bool GetChecksum(tChecksum& inout_cs, off_t &out_size, FILE *pDumpFile=nullptr);
+	static bool GetChecksum(const mstring & sFileName, tChecksum& inout_cs,
 			bool bTryUnpack, off_t &scannedSize, FILE *pDumpFile=nullptr);
 
     inline const char *GetBuffer() const { return m_szFileBuf; }
@@ -78,24 +81,6 @@ private:
 	filereader& operator=(const filereader&);
 	filereader(const filereader&);
 	std::unique_ptr<TFileShrinkGuard> m_mmapLock;
-};
-
-extern uint_fast16_t hexmap[];
-
-inline bool CsEqual(const char *sz, uint8_t b[], unsigned short binLen)
-{
-	CUCHAR *a=(CUCHAR*)sz;
-	if(!a)
-		return false;
-	for(int i=0; i<binLen;i++)
-	{
-		if(!*a)
-			return false;
-
-		uint_fast16_t r=hexmap[a[i*2]] * 16 + hexmap[a[i*2+1]];
-		if(r != b[i]) return false;
-	}
-	return true;
 };
 
 bool Bz2compressFile(const char *pathIn, const char*pathOut);

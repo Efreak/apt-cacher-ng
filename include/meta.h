@@ -100,6 +100,9 @@ extern cmstring FAKEDATEMARK;
 
 static const cmstring sCRLF("\r\n");
 
+extern uint_fast16_t hexmap[];
+extern char h2t_map[];
+
 // some alternative versions of these flags
 
 #ifndef O_NONBLOCK
@@ -133,6 +136,7 @@ tStrPos findHostStart(const mstring & sUri);
 
 #define WITHLEN(x) x, (_countof(x)-1)
 #define MAKE_PTR_0_LEN(x) x, 0, (_countof(x)-1)
+#define MAKE_CHAR_PTR_SIZE(x, y) (const y *) (const char*)(& (x)), sizeof(x)
 
 // there is memchr and strpbrk but nothing like the last one acting on specified RAW memory range
 static inline LPCSTR  mempbrk (LPCSTR  membuf, char const * const needles, size_t len)
@@ -261,11 +265,7 @@ public:
 
 void appendLong(mstring &s, long val);
 
-mstring BytesToHexString(const uint8_t b[], unsigned short binLength);
-bool CsAsciiToBin(LPCSTR a, uint8_t b[], unsigned short binLength);
-
-typedef const unsigned char CUCHAR;
-bool CsEqual(LPCSTR a, uint8_t b[], unsigned short binLength);
+mstring BytesToHexString(const std::vector<uint8_t> theBytes);
 
 #if SIZEOF_LONG == 8
 // _FILE_OFFSET_BITS mostly irrelevant. But if it's set, watch out for user's "experiments".
@@ -595,6 +595,7 @@ public:
 	{
 	}
 };
+
 }
 
 #endif // _META_H

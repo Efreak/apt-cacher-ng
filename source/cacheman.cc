@@ -73,7 +73,7 @@ struct tContentKey
 			return distinctName < other.distinctName;
 		return fpr < other.fpr;
 	}
-	bool valid() const { return fpr.csType != CSTYPES::CSTYPE_INVALID; }
+	bool valid() const { return fpr.csum.csType != CSTYPES::INVALID; }
 };
 struct tFileGroup {
 	// the list shall be finally sorted by compression type (most favorable first)
@@ -689,7 +689,7 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 	retList.clear();
 	string sLine;
 	static tFingerprint ret;
-	ret.csType=CSTYPE_INVALID;
+	ret.Invalidate();
 
 	filereader reader;
 	if(!reader.OpenFile(sFilePathAbs))
@@ -706,20 +706,21 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 	off_t otmp;
 	while(reader.GetOneLine(sLine))
 	{
+#warning make cheaper string_view tokenize, maybe use a helper method of splitwalk
 		int nTokens=Tokenize(sLine, SPACECHARS, tmp);
 		if(3==nTokens)
 		{
 			if(tmp[0] == "SHA1-Current:")
 			{
 				otmp=atoofft(tmp[2].c_str(), -2);
-				if(otmp<0 || !ret.Set(tmp[1], CSTYPE_SHA1, otmp))
+				if(otmp<0 || !ret.Set(tmp[1], CSTYPES::SHA1, otmp))
 					return nullptr;
 			}
 			else
 			{
 				tFingerprint fpr;
 				otmp=atoofft(tmp[1].c_str(),-2);
-				if(otmp<0 || !fpr.Set(tmp[0], CSTYPE_SHA1, otmp))
+				if(otmp<0 || !fpr.Set(tmp[0], CSTYPES::SHA1, otmp))
 					return nullptr;
 
 				if(peAnz && retList[peAnz%retList.size()].patchName == tmp[2])
@@ -756,7 +757,7 @@ tFingerprint * BuildPatchList(string sFilePathAbs, deque<tPatchEntry> &retList)
 			return nullptr; // error
 	}
 
-	return ret.csType != CSTYPE_INVALID ? &ret : nullptr;
+	return ret.csum.csType != CSTYPES::INVALID ? &ret : nullptr;
 }
 
 
@@ -1232,7 +1233,7 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 	probe, // temp scan object
 	probeOrig; // appropriate patch base stuff
 
-	if(!probeStateWanted.Set(tSplitWalk(sStateCurrent.front(), SPACECHARS, false), CSTYPE_SHA256))
+	if(!probeStateWanted.Set(tSplitWalk(sStateCurrent.front(), SPACECHARS, false), CSTYPES::SHA256))
 				return;
 
 	unordered_map<string,tFingerprint> patchSums;
@@ -1240,7 +1241,7 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 	{
 		tSplitWalk split(line, SPACECHARS, false);
 		tFingerprint probe;
-		if(!probe.Set(split, CSTYPE_SHA256) || !split.Next())
+		if(!probe.Set(split, CSTYPES::SHA256) || !split.Next())
 			continue;
 		patchSums.emplace(split.str(), probe);
 	}
@@ -1252,7 +1253,7 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 	auto tryPatch = [&](cmstring& pbaseRel) -> bool
 			{
 		// XXX: use smarter line matching or regex
-		auto probeCS = probeOrig.GetCsAsString();
+		auto probeCS = probeOrig.csum.to_string();
 		auto probeSize = offttos(probeOrig.size);
 		FILE_RAII pf;
 		for(const auto& histLine: csHist)
@@ -1300,7 +1301,7 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 
 			// append context to combined diff while unpacking
 			// XXX: probe result can be checked against contents["SHA256-History"]
-			if(!probe.ScanFile(SABSPATH(patchPathRel), CSTYPE_SHA256, true, pf.p))
+			if(!probe.ReadFile(SABSPATH(patchPathRel), CSTYPES::SHA256, true, pf.p))
 			{
 				if(m_bVerbose)
 					SendFmt << "Failure on checking of intermediate patch data in " << patchPathRel << ", stop patching...<br>";
@@ -1342,7 +1343,7 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 				return false;
 			}
 
-			if (!probe.ScanFile(sPatchResultAbs, CSTYPE_SHA256, false))
+			if (!probe.ReadFile(sPatchResultAbs, CSTYPES::SHA256, false))
 			{
 				MTLOGASSERT(false, "Scan failed: " << sPatchResultAbs);
 				return false;
@@ -1376,9 +1377,10 @@ void cacheman::PatchOne(cmstring& pindexPathRel, const tStrDeq& siblings)
 						<< sPatchInputRel << "<br>";
 				return;
 			}
-			if(!probeOrig.ScanFile(SABSPATH(pb),
-					CSTYPE_SHA256, true, df.p))
+			if (!probeOrig.ReadFile(SABSPATH(pb), CSTYPES::SHA256, true, df.p))
+			{
 				continue;
+			}
 			df.close();
 			if(probeStateWanted == probeOrig)
 			{
@@ -1786,7 +1788,9 @@ bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&
 			{
 				// not looking for data we already have
 				if(key==sMD5sum)
-					info.fpr.SetCs(val, CSTYPE_MD5);
+					{
+					info.fpr.csum.Set(val, CSTYPES::MD5);
+					}
 				else if(key==sSize)
 					info.fpr.size=atoofft(val.c_str());
 				else if(key==sFilename)
@@ -1846,7 +1850,7 @@ bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&
 						nStep = 0;
 						break;
 					case _csum:
-						info.fpr.SetCs(sLine, CSTYPE_MD5);
+						info.fpr.csum.Set(sLine, CSTYPES::MD5);
 						nStep++;
 						break;
 					case _csize:
@@ -1882,7 +1886,7 @@ bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&
 #warning review, add test, this was using remainder() method before
 			if(split.Next() && info.SetFromPath(split, sPkgBaseDir)
 					&& split.Next() && info.SetSize(split.str().c_str())
-					&& split.Next() && info.fpr.SetCs(split))
+					&& split.Next() && info.fpr.csum.Set(split.view()))
 			{
 				ret(info);
 			}
@@ -1947,8 +1951,8 @@ bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&
 
 			tSplitWalk split(sLine, SPACECHARS, false);
 			info.fpr.size=-1;
-			if( split.Next() && info.fpr.SetCs(split,
-					idxType == EIDX_MD5DILIST ? CSTYPE_MD5 : CSTYPE_SHA256)
+			if( split.Next() && info.fpr.csum.Set(split.view(),
+					idxType == EIDX_MD5DILIST ? CSTYPES::MD5 : CSTYPES::SHA256)
 					&& split.Next() && (info.sFileName = split).size()>0)
 			{
 				info.sDirectory = sBaseDir;
@@ -1970,19 +1974,19 @@ bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&
 		break;
 	case EIDX_DIFFIDX:
 		return ParseDebianRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_DIFFIDX, CSTYPES::CSTYPE_SHA256, "SHA256-Download", byHashMode);
+				EIDX_DIFFIDX, CSTYPES::SHA256, "SHA256-Download", byHashMode);
 	case EIDX_SOURCES:
 		return ParseDebianRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_SOURCES, CSTYPES::CSTYPE_MD5, "Files", byHashMode);
+				EIDX_SOURCES, CSTYPES::MD5, "Files", byHashMode);
 	case EIDX_TRANSIDX:
 		return ParseDebianRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_TRANSIDX, CSTYPES::CSTYPE_SHA1, "SHA1", byHashMode);
+				EIDX_TRANSIDX, CSTYPES::SHA1, "SHA1", byHashMode);
 	case EIDX_RELEASE:
 		if(byHashMode)
 			return ParseDebianRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-					EIDX_RELEASE, CSTYPES::CSTYPE_INVALID, "", true);
+					EIDX_RELEASE, CSTYPES::INVALID, "", true);
 		return ParseDebianRfc822Index(reader, ret, sBaseDir, sPkgBaseDir,
-				EIDX_RELEASE, CSTYPES::CSTYPE_SHA256, "SHA256", false);
+				EIDX_RELEASE, CSTYPES::SHA256, "SHA256", false);
 	default:
 		SendChunk("<span class=\"WARNING\">"
 				"WARNING: unable to read this file (unsupported format)</span>\n<br>\n");
@@ -2062,7 +2066,7 @@ bool cacheman::ParseDebianIndexLine(tRemoteFileInfo& info, cmstring& fline)
 	// ok, read "checksum size filename" into info and check the word count
 	tSplitWalk split(fline, SPACECHARS, false);
 	if (!split.Next()
-			|| !info.fpr.SetCs(split, info.fpr.csType)
+			|| !info.fpr.csum.Set(split.view(), info.fpr.csum.csType)
 			|| !split.Next())
 		return false;
 	string val(split);
@@ -2098,7 +2102,7 @@ bool cacheman::ParseDebianRfc822Index(filereader& reader,
 
 	tRemoteFileInfo info;
 	info.SetInvalid();
-	info.fpr.csType = csType;
+	info.fpr.csum.csType = csType;
 
 	mstring sPkgBaseDir;
 	UrlUnescapeAppend(sPkgBaseDirConst, sPkgBaseDir);
@@ -2146,10 +2150,10 @@ bool cacheman::ParseDebianRfc822Index(filereader& reader,
 
 	if(origIdxType == EIDX_RELEASE && byHashMode)
 	{
-		for(auto& cst: { CSTYPES::CSTYPE_MD5, CSTYPES::CSTYPE_SHA1,
-			CSTYPES::CSTYPE_SHA256, CSTYPES::CSTYPE_SHA512 })
+		for(auto& cst: { CSTYPES::MD5, CSTYPES::SHA1,
+			CSTYPES::SHA256, CSTYPES::SHA512 })
 		{
-			info.fpr.csType = cst;
+			info.fpr.csum.csType = cst;
 			processList(contents[GetCsNameReleaseFile(cst)]);
 		}
 	}
@@ -2332,7 +2336,7 @@ int parseidx_demo(LPCSTR file)
 		{
 			return !ParseAndProcessMetaFile([](const tRemoteFileInfo &entry) ->void {
 				cout << "Dir: " << entry.sDirectory << endl << "File: " << entry.sFileName << endl
-									<< "Checksum-" << GetCsName(entry.fpr.csType) << ": " << entry.fpr.GetCsAsString()
+									<< "Checksum-" << GetCsName(entry.fpr.csum.csType) << ": " << entry.fpr.GetCsAsString()
 									<< endl;
 				}, file, GuessMetaTypeFromURL(file));
 		}
@@ -2364,7 +2368,7 @@ bool cacheman::_checkSolidHashOnDisk(cmstring& hexname,
 		)
 {
 	string solidPath = CACHE_BASE + entry.sDirectory.substr(srcPrefix.length()) + "by-hash/" +
-				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+				GetCsNameReleaseFile(entry.fpr.csum.csType) + '/' + hexname;
 	return ! ::access(solidPath.c_str(), F_OK);
 }
 
@@ -2385,7 +2389,7 @@ bool cacheman::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cm
 		if(entry.fpr.size < 29)
 			return;
 
-		auto hexname(BytesToHexString(entry.fpr.csum, GetCSTypeLen(entry.fpr.csType)));
+		auto hexname = entry.fpr.csum.to_string();
 		// ok, getting all hash versions...
 		if(!_checkSolidHashOnDisk(hexname, entry, stripPrefix))
 			return; // not for us
@@ -2395,7 +2399,7 @@ bool cacheman::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cm
 		auto wantedPathAbs = SABSPATH(wantedPathRel);
 #ifdef DEBUGIDX
 		SendFmt << entry.sDirectory.substr(stripPrefix.size()) + "by-hash/" +
-				GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname
+				GetCsNameReleaseFile(entry.fpr.csum.csType) + '/' + hexname
 				<< " was " << wantedPathAbs << hendl;
 #endif
 		Cstat wantedState(wantedPathAbs);
@@ -2404,7 +2408,7 @@ bool cacheman::ProcessByHashReleaseFileRestoreFiles(cmstring& releasePathRel, cm
 		if(!wantedState || wantedState.st_size != entry.fpr.size)
 		{
 			solidPathRel = entry.sDirectory.substr(stripPrefix.size()) + "by-hash/" +
-									GetCsNameReleaseFile(entry.fpr.csType) + '/' + hexname;
+									GetCsNameReleaseFile(entry.fpr.csum.csType) + '/' + hexname;
 			solidPathAbs = SABSPATH(solidPathRel);
 		}
 

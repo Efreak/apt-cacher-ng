@@ -1100,7 +1100,7 @@ void do_stuff_before_config()
 		uint8_t csum[20];
 		string s(envvar);
 		off_t resSize;
-		bool ok = filereader::GetChecksum(s, CSTYPE_SHA1, csum, false, resSize /*, stdout*/);
+		bool ok = filereader::GetChecksum(s, CSTYPES::SHA1, csum, false, resSize /*, stdout*/);
 		if(!ok)
 		{
 			perror("");

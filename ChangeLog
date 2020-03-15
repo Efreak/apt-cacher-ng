@@ -1,5 +1,6 @@
 apt-cacher-ng (3.4) SOMETIMES-YOU-EAT-THE-BEAR; urgency=low
 
+TODO: tomcrypt build test
 TODO: make idle connection timeout configurable
 TODO: document "made xxx configurable, fast disconnect of cached idle
 connections"
