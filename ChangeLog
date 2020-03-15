@@ -2,6 +2,8 @@ apt-cacher-ng (3.3.2) ALTERED-HYDROGEN; urgency=low
 
   * potential fix for a programming bug where a bad redirection was reported
     although the source was rewritten correctly (Debian bug 952811)
+  * potential fix for SHA512 related problems (the considered string length
+    was too short which might break comparisons on file import and validation)
 
  -- 
 
