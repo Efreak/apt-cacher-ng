@@ -151,7 +151,7 @@ struct tDlJob
 
 	inline cfg::IHookHandler * GetConnStateTracker()
 	{
-		return m_pRepoDesc ? m_pRepoDesc->m_pHooks : nullptr;
+		return m_pRepoDesc ? m_pRepoDesc->m_pHooks.get() : nullptr;
 	}
 
 	typedef enum : char

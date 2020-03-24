@@ -44,7 +44,7 @@ enum ETransferType
 enum ELogFlags
 	: uint8_t
 	{
-		LOG_FLUSH = 1, LOG_MORE = 2, LOG_DEBUG = 4
+		LOG_FLUSH = 1, LOG_MORE = 2, LOG_DEBUG = 4, LOG_DEBUG_MORE = (2|4)
 };
 
 // access internal counters

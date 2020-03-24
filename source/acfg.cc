@@ -398,9 +398,9 @@ inline decltype(repoparms)::iterator GetRepoEntryRef(const string & sRepName)
 	auto it = repoparms.find(sRepName);
 	if(repoparms.end() != it)
 		return it;
-	// strange...
-	auto rv(repoparms.insert(make_pair(sRepName,tRepoData())));
-	return rv.first;
+	// strange, should not happen
+	repoparms[sRepName].m_pHooks.reset();
+	return repoparms.find(sRepName);
 }
 
 tStrDeq ExpandFileTokens(string_view token)
@@ -577,11 +577,6 @@ void ShutDown()
 	repoparms.clear();
 }
 
-tRepoData::~tRepoData()
-{
-	delete m_pHooks;
-}
-
 void dump_config(bool includeDelicate)
 {
 	ostream &cmine(cout);
@@ -670,23 +665,25 @@ time_t BackgroundCleanup()
 	{
 		if (!parm.second.m_pHooks)
 			continue;
-		tHookHandler & hooks = *(static_cast<tHookHandler*> (parm.second.m_pHooks));
-		lockguard g(hooks);
-		if (hooks.downTimeNext)
+
+		auto hooks = static_cast<tHookHandler*>(parm.second.m_pHooks.get());
+
+		lockguard g(*hooks);
+		if (hooks->downTimeNext)
 		{
-			if (hooks.downTimeNext <= now) // time to execute
+			if (hooks->downTimeNext <= now) // time to execute
 			{
 				if(cfg::debug & log::LOG_MORE)
-					log::misc(hooks.cmdRel, 'X');
+					log::misc(hooks->cmdRel, 'X');
 				if(cfg::debug & log::LOG_FLUSH)
 					log::flush();
 
-				if(system(hooks.cmdRel.c_str()))
-					log::err(tSS() << "Warning: " << hooks.cmdRel << " returned with error code.");
-				hooks.downTimeNext = 0;
+				if(system(hooks->cmdRel.c_str()))
+					log::err(tSS() << "Warning: " << hooks->cmdRel << " returned with error code.");
+				hooks->downTimeNext = 0;
 			}
 			else // in future, use the soonest time
-				ret = min(ret, hooks.downTimeNext);
+				ret = min(ret, hooks->downTimeNext);
 		}
 	}
 	return ret;
@@ -780,10 +777,12 @@ void MarkProxyFailure()
 	proxy_failstate = true;
 }
 
-static const std::string SIGNATURE_PREFIX = ACVERSION
+static const std::string SIGNATURE_PREFIX = "a" ACVERSION "c"
+/* repro builds
 #ifdef DEBUG
 	","	__DATE__ "," __TIME__
 #endif
+*/
 		;
 
 // information with limited livespan - consumed and released by PostProcConfig
@@ -796,84 +795,96 @@ struct tConfigBuilder::tImpl
 
 	//bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
 
-	struct tMappingValidator
-	{
-		std::string m_name, m_oldSig;
-		Cstat x;
-		std::unique_ptr<csumBase> m_summer;
-		enum { VALIDATING, NEW_STUFF, MISMATCH } m_mode = NEW_STUFF;
-
-		void init_summer()
+	class tMappingValidator
 		{
-			m_summer = csumBase::GetChecker(CSTYPES::MD5);
-			m_summer->add(SIGNATURE_PREFIX);
-		}
+			std::string m_oldSig;
+			Cstat x;
+			std::unique_ptr<csumBase> m_summer;
+			enum { INIT, VALIDATING, NEW_STUFF, MISMATCH, FINISHED } m_mode = INIT;
 
-		tMappingValidator(const std::string& name) : m_name(name)
-		{
-			init_summer();
-			try
+			void init_summer()
 			{
-				m_oldSig = dbman::instance().GetMappingSignature(m_name);
-				m_mode = startsWith(m_oldSig, SIGNATURE_PREFIX) ? VALIDATING : MISMATCH;
+				m_summer = csumBase::GetChecker(CSTYPES::MD5);
+				// pointless, better have reproducible tests without constant updates
+				// m_summer->add(SIGNATURE_PREFIX);
 			}
-			catch (const SQLite::Exception& e)
+public:
+			const std::string &m_name;
+
+			explicit tMappingValidator(const std::string& name) : m_name(name)
 			{
-				m_mode = NEW_STUFF;
 			}
-		}
-		bool IsDryRun()
-		{
-			return m_mode == VALIDATING;
-		}
-		void ReportString(string_view s)
-		{
-			m_summer->add(s);
-		}
-		void ReportFile(cmstring& path, Cstat* stinfo)
-		{
-			m_summer->add(path);
-			if(!stinfo)
+
+			bool IsDryRun()
 			{
-				stinfo=&x;
-				x.reset(path);
+				return m_mode == VALIDATING;
 			}
-			m_summer->add(";");
-#define PUN2BS(what) (const uint8_t*) (const char*) & what, sizeof(what)
-			m_summer->add(PUN2BS(stinfo->st_size));
-			m_summer->add(PUN2BS(stinfo->st_ino));
-			m_summer->add(PUN2BS(stinfo->st_dev));
-			m_summer->add(PUN2BS(stinfo->st_mtim));
-			if(access(path.c_str(), R_OK))
-				m_summer->add("ntrdbl");
-		}
-		/**
-		 * Finish the input data flow and analyze the resulting signature.
-		 * @return true if the signature was matched
-		 */
-		bool FinishValidation()
-		{
-			auto mx = m_summer->finish().to_string();
-			auto matched = endsWith(m_oldSig, mx);
-			if(!matched)
-				m_mode = MISMATCH;
-			return matched;
-		}
-		/**
-		 * To call when the non-dry run is finished, will store the regenerated signature
-		 * in the database.
-		 */
-		void CommitSignature()
-		{
-			auto mx = m_summer->finish().to_string();
-			dbman::instance().StoreMappingSignature(m_name, SIGNATURE_PREFIX + mx, NEW_STUFF == m_mode);
-		}
-
-	};
-
-
-
-
+			void ReportString(string_view s)
+			{
+				m_summer->add(s);
+			}
+			void ReportFile(cmstring& path, Cstat* stinfo)
+			{
+				m_summer->add(path);
+				if(!stinfo)
+				{
+					stinfo=&x;
+					x.reset(path);
+				}
+				m_summer->add(";");
+	#define PUN2BS(what) (const uint8_t*) (const char*) & what, sizeof(what)
+				m_summer->add(PUN2BS(stinfo->st_size));
+				m_summer->add(PUN2BS(stinfo->st_ino));
+				m_summer->add(PUN2BS(stinfo->st_dev));
+				m_summer->add(PUN2BS(stinfo->st_mtim));
+				if(access(path.c_str(), R_OK))
+					m_summer->add("ntrdbl");
+			}
+			/**
+			 * Finish the input data flow and analyze the resulting signature.
+			 * @return true if needing another run
+			 */
+			bool Next(IDbManager& dbman)
+			{
+				switch(m_mode)
+				{
+				case INIT:
+				{
+					init_summer();
+					try
+					{
+						m_oldSig = dbman.GetMappingSignature(m_name);
+						m_mode = startsWith(m_oldSig, SIGNATURE_PREFIX) ? VALIDATING : MISMATCH;
+					}
+					catch (const SQLite::Exception &e)
+					{
+						m_mode = NEW_STUFF;
+					}
+					break;
+				}
+				case VALIDATING:
+				{
+					auto mx = m_summer->finish().to_string();
+					if (endsWith(m_oldSig, mx))
+						m_mode = FINISHED;
+					else
+					{
+						init_summer();
+						m_mode = MISMATCH;
+					}
+					break;
+				}
+				case MISMATCH:
+				case NEW_STUFF:
+					dbman.StoreMappingSignature(m_name, SIGNATURE_PREFIX + m_summer->finish().to_string());
+					__just_fall_through;
+				default:
+					m_mode = FINISHED;
+					break;
+				}
+				return FINISHED != m_mode;
+			}
+		};
 
 	void ReadOneConfFile(const string & szFilename)
 	{
@@ -897,10 +908,16 @@ struct tConfigBuilder::tImpl
 	}
 
 	void AddRemapInfo(bool bAsBackend, const string_view token,
-			const string &repname)
+			tMappingValidator &ctx)
 	{
-		if (0!=token.compare(0, 5, "file:"))
+		const auto& repname = ctx.m_name;
+
+		if (0 != token.compare(0, 5, "file:"))
 		{
+			// ok, plain word
+			ctx.ReportString(token);
+			if(ctx.IsDryRun()) return;
+
 			tHttpUrl url;
 			if(! url.SetHttpUrl(token))
 				BARF(to_string(token) + " <-- bad URL detected");
@@ -914,34 +931,44 @@ struct tConfigBuilder::tImpl
 		}
 		else
 		{
-			auto func = [&](const string & x, const string &y)
+			auto func = [&](const string & x)
 					{
-				return bAsBackend ? ReadBackendsFile(x, y) : ReadRewriteFile(x, y);
+				return bAsBackend ? ReadBackendsFile(x, ctx) : ReadRewriteFile(x, ctx);
 			};
+
 			unsigned count = 0;
+
 			for(auto& src : ExpandFileTokens(token))
-				count += func(src, repname);
-			if(!count)
+				count += func(src);
+
+			if(0 == count)
+			{
 				for(auto& src : ExpandFileTokens(to_string(token) + ".default"))
-					count = func(src, repname);
+					count += func(src);
+			}
 			if(!count && !m_bIgnoreErrors)
 				BARF("WARNING: No configuration was read from " << token);
 		}
 	}
 
-	unsigned ReadBackendsFile(const string & sFile, const string &sRepName)
+	unsigned ReadBackendsFile(const string & sFile, tMappingValidator &ctx)
 	{
 		unsigned nAddCount=0;
 		string key, val;
 		tHttpUrl entry;
 
+		const auto& sRepName = ctx.m_name;
+		ctx.ReportFile(sFile, nullptr);
+		if(ctx.IsDryRun()) return 1;
+
 		tCfgIter itor(sFile);
-		if(debug&6)
+#warning fixme, magic number, also below
+		if(debug & 6)
 			cerr << "Reading backend file: " << sFile <<endl;
 
 		if(!itor.reader.IsGood())
 		{
-			if(debug&6)
+			if(debug & 6)
 				cerr << "No backend data found, file ignored."<<endl;
 			return 0;
 		}
@@ -982,9 +1009,15 @@ struct tConfigBuilder::tImpl
 	/* This parses also legacy files, i.e. raw RFC-822 formated mirror catalogue from the
 	 * Debian archive maintenance repository.
 	 */
-	unsigned ReadRewriteFile(const string & sFile, cmstring& sRepName)
+	unsigned ReadRewriteFile(const string & sFile, tMappingValidator &ctx)
 	{
 		unsigned nAddCount=0;
+
+		const auto& sRepName = ctx.m_name;
+		ctx.ReportFile(sFile, nullptr);
+		if(ctx.IsDryRun())
+			return 1;
+
 		filereader reader;
 		if(debug>4)
 			cerr << "Reading rewrite file: " << sFile <<endl;
@@ -1004,7 +1037,7 @@ struct tConfigBuilder::tImpl
 		{
 			trimFront(sLine);
 
-			if (0 == sLine.compare(0, 1, "#"))
+			if (0 == startsWithSz(sLine, "#"))
 				continue;
 
 			if (url.SetHttpUrl(sLine))
@@ -1103,7 +1136,7 @@ struct tConfigBuilder::tImpl
 			throw tStartupException("Error reading hooks file " + hfile);
 			*/
 		}
-		struct tHookHandler &hs = *(new tHookHandler(vname));
+		auto hs = make_unique<tHookHandler>(vname);
 		string_view key,val;
 		while (itor.Next())
 		{
@@ -1111,11 +1144,11 @@ struct tConfigBuilder::tImpl
 
 			if (strcasecmp("PreUp", key) == 0)
 			{
-				hs.cmdCon = val;
+				hs->cmdCon = val;
 			}
 			else if (strcasecmp("Down", key) == 0)
 			{
-				hs.cmdRel = val;
+				hs->cmdRel = val;
 			}
 			else if (strcasecmp("DownTimeout", key) == 0)
 			{
@@ -1123,14 +1156,19 @@ struct tConfigBuilder::tImpl
 				// XXX: maybe just forcibly terminate it because we know that it came from a string and data is writable. Or eventually make a better strtoul wrapper.
 				unsigned n = strtoul(to_string(val).c_str(), nullptr, 10);
 				if (!errno)
-					hs.downDuration = n;
+					hs->downDuration = n;
 			}
 		}
-		repoparms[vname].m_pHooks = &hs;
+		repoparms[vname].m_pHooks = move(hs);
 	}
 
-	void AddRemapFlag(string_view token, const string &repname)
+	void AddRemapFlag(string_view token, tMappingValidator& ctx)
 	{
+
+		const string &repname = ctx.m_name;
+		ctx.ReportString(token);
+		if(ctx.IsDryRun()) return;
+
 		string_view key, value;
 		ParseOptionLine(token, key, value);
 
@@ -1262,8 +1300,7 @@ void ParseOptionLine(string_view sLine, string_view &key, string_view &val)
 		cerr << "Warning: multilines are not supported, consider using \\n." <<endl;
 }
 
-
-void LoadMappings()
+void LoadMappings(IDbManager& dbman)
 {
 	for (const auto &it : remap_lines)
 	{
@@ -1274,10 +1311,14 @@ void LoadMappings()
 				throw tStartupException("Bad repository name, check Remap-... directives");
 			continue;
 		}
-		tMappingValidator ctx(vname);
+
+		for(tMappingValidator ctx(vname); ctx.Next(dbman);)
+		{
 
 		for (const auto &remapLine : it.second)
 		{
+			ctx.ReportString(remapLine);
+
 			enum xtype
 			{
 				PREFIXES, BACKENDS, FLAGS
@@ -1297,13 +1338,13 @@ void LoadMappings()
 					switch (type)
 					{
 					case PREFIXES:
-						AddRemapInfo(false, s, vname);
+						AddRemapInfo(false, s, ctx);
 						break;
 					case BACKENDS:
-						AddRemapInfo(true, s, vname);
+						AddRemapInfo(true, s, ctx);
 						break;
 					case FLAGS:
-						AddRemapFlag(s, vname);
+						AddRemapFlag(s, ctx);
 						break;
 					}
 				}
@@ -1317,6 +1358,7 @@ void LoadMappings()
 				continue;
 			}
 			next_remap_line: ;
+		}
 		}
 		_AddHooksFile(vname);
 	}
@@ -1345,14 +1387,14 @@ void ReadConfigDirectory(cmstring& sPath)
 		for(const auto& x: mapUrl2pVname)
 			nUrls+=x.second.size();
 
-		if(debug&6)
+		if(debug & log::LOG_DEBUG_MORE)
 			cerr << "Loaded " << repoparms.size() << " backend descriptors\nLoaded mappings for "
 				<< mapUrl2pVname.size() << " hosts and " << nUrls<<" paths\n";
 	}
 }
 
 #warning catch exception on all users
-void Build()
+void Build(IDbManager& dbman)
 {
 	for(const auto& inputThing: m_input)
 	{
@@ -1501,7 +1543,7 @@ void Build()
 	   pipelinelen = 1;
    }
 
-   LoadMappings();
+   LoadMappings(dbman);
 }
 
 }; // tConfigBuilder::Impl
@@ -1530,9 +1572,9 @@ tConfigBuilder& tConfigBuilder::AddConfigDirectory(cmstring &sDirName)
 	return *this;
 }
 
-void tConfigBuilder::Build()
+void tConfigBuilder::Build(IDbManager& dbman)
 {
-	m_pImpl->Build();
+	m_pImpl->Build(dbman);
 }
 
 } // namespace acfg

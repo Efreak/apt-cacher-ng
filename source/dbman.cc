@@ -10,37 +10,41 @@
 
 #include <iostream>
 
-#define CREATE_FPRS "CREATE TABLE \"cfgfpr\" ( \"name\"	TEXT NOT NULL, \"purpose\" INTEGER NOT NULL, \"fpr\" BLOB NOT NULL);"
+using namespace std;
 
-struct acng::dbman::tImpl
+auto* CREAT_MAPPINGS = R"<<<(
+CREATE TABLE "mappings" (
+	"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE,
+	"name"	TEXT NOT NULL,
+	"active"	INTEGER NOT NULL DEFAULT 0,
+	"signature"	TEXT NOT NULL
+);
+)<<<";
+
+namespace acng
 {
+
+class DbManager : public IDbManager
+{
+	friend class TExplicitTransaction;
 	int m_pending = -1;
 	SQLite::Database db;
-	tImpl() : db(CACHE_BASE + "_acng.sqlite3", SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE)
+public:
+	DbManager () :
+			db(CACHE_BASE + "_acng.sqlite3", SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE)
 	{
-	}
-};
+		try
+		{
+			SQLite::Statement query(db, CREAT_MAPPINGS);
+			query.exec();
+		} catch (const SQLite::Exception &ex)
+		{
+			//std::cerr << ex.getErrorCode() << " - " << ex.getExtendedErrorCode()  << " ," << ex.getErrorStr() << "-" << ex.what() << std::endl;
 
-acng::dbman::~dbman()
-{
-	delete m_pImpl;
-}
-
-acng::dbman::dbman(): m_pImpl(new tImpl)
-{
-    try
-    {
-        SQLite::Statement query(m_pImpl->db, CREATE_FPRS);
-    	query.exec();
-    }
-    catch(const SQLite::Exception& ex)
-    {
-    	//std::cerr << ex.getErrorCode() << " - " << ex.getExtendedErrorCode()  << " ," << ex.getErrorStr() << "-" << ex.what() << std::endl;
-
-    	// 1 and 1 is ok, that is "logic error", "table already exists"
-    	if(ex.getErrorCode() != 1 || ex.getExtendedErrorCode() != 1)
-    		throw;
-    }
+			// 1 and 1 is ok, that is "logic error", "table already exists"
+			if (ex.getErrorCode() != 1 || ex.getExtendedErrorCode() != 1)
+				throw;
+		}
 
 #if 0
 	    // Compile a SQL query, containing one parameter (index 1)
@@ -60,29 +64,71 @@ acng::dbman::dbman(): m_pImpl(new tImpl)
 	        std::cout << "row: " << id << ", " << value << ", " << size << std::endl;
 	    }
 #endif
-}
+	}
 
-void acng::dbman::MarkChangeVoluntaryCommit()
-{
-}
+	void Sync() override
+	{
+	}
 
-void acng::dbman::MarkChangeMandatoryCommit()
-{
-}
-
-acng::dbman& acng::dbman::instance()
-{
-	static dbman g_singleton;
-	return g_singleton;
-}
-
-std::string acng::dbman::GetMappingSignature(const std::string &name)
-{
+	std::string GetMappingSignature(const std::string &name) override
+	{
 #warning fixme
-	return "foo";
+		return "foo";
+	}
+
+	void StoreMappingSignature(const std::string &name, const std::string &sig) override
+	{
+	}
+	TExplicitTransaction GetExplicitTransaction() override
+	{
+		TExplicitTransaction ret;
+		return std::move(ret);
+	}
+	void tetRollback()
+	{
+#warning fixme
+	}
+	void tetCommit()
+	{
+
+	}
+
+};
+
+std::unique_ptr<IDbManager> IDbManager::create()
+{
+	return std::make_unique<DbManager>();
 }
 
-void acng::dbman::StoreMappingSignature(const std::string &name, const std::string &sig,
-		bool insertNew)
+
+void IDbManager::TExplicitTransaction::commit()
 {
+	if(!m_dbm) // XXX: user mistake? multiple commit?
+		return;
+	try {
+		m_dbm->tetCommit();
+		m_dbm=nullptr;
+	}
+	catch (...)
+	{
+		m_dbm = nullptr;
+		throw;
+	}
 }
+
+IDbManager::TExplicitTransaction::TExplicitTransaction(TExplicitTransaction &&src)
+{
+	swap(m_dbm, src.m_dbm);
+}
+
+IDbManager::TExplicitTransaction::~TExplicitTransaction()
+{
+	if(!m_dbm)
+		return;
+	m_dbm->tetRollback();
+	m_dbm = nullptr;
+}
+
+
+}
+

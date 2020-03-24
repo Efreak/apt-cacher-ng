@@ -12,6 +12,7 @@
 
 namespace acng
 {
+class IDbManager;
 
 namespace cfg
 {
@@ -32,7 +33,7 @@ public:
 	tConfigBuilder& AddOption(cmstring &line);
 	tConfigBuilder& AddConfigDirectory(cmstring& sDirName);
 	//! Prepare various things resulting from variable combinations, etc.
-	void Build();
+	void Build(IDbManager& dbman);
 };
 
 static const int RESERVED_DEFVAL = -4223;
@@ -77,14 +78,15 @@ struct tRepoData
 	std::vector<tHttpUrl> m_backends;
 
 	// dirty little helper to execute custom actions when a jobs associates or forgets this data set
-	IHookHandler *m_pHooks = nullptr;
+	std::unique_ptr<IHookHandler> m_pHooks;
 	tStrVec m_keyfiles;
 	tHttpUrl m_deltasrc;
 	tHttpUrl *m_pProxy = nullptr;
-	virtual ~tRepoData();
+	virtual ~tRepoData() = default;
 };
 
-struct tRepoResolvResult {
+struct tRepoResolvResult
+{
 	cmstring* psRepoName=nullptr;
 	mstring sRestPath;
 	const tRepoData* repodata=nullptr;
