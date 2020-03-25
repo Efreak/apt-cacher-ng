@@ -30,7 +30,7 @@ using namespace std;
 namespace acng
 {
 
-static cmstring sGenericError("567 Unknown download error occured");
+static cmstring sGenericError("502 Bad Gateway");
 
 // those are not allowed to be forwarded
 static const auto taboo =
@@ -159,8 +159,14 @@ struct tDlJob
 	~tDlJob()
 	{
 		LOGSTART("tDlJob::~tDlJob");
+		const auto* pError = &sErrorMsg;
+		if(sErrorMsg.empty())
+		{
+			pError = &sGenericError;
+			log::err(RemoteUri(true)  + " -- bad download descriptor, exited without leaving error message");
+		}
 		if (m_pStorage)
-			m_pStorage->DecDlRefCount(sErrorMsg.empty() ? sGenericError : sErrorMsg);
+			m_pStorage->DecDlRefCount(*pError);
 	}
 
 	inline void ExtractCustomHeaders(LPCSTR reqHead)
