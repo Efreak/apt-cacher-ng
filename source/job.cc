@@ -544,7 +544,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		using namespace rex;
 
 		{
-			tStrMap::const_iterator it = cfg::localdirs.find(theUrl.sHost);
+			auto it = cfg::localdirs.find(theUrl.sHost);
 			if (it != cfg::localdirs.end())
 			{
 				PrepareLocalDownload(sReqPath, it->second, theUrl.sPath);
@@ -591,7 +591,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 
 		m_pItem.PrepareRegisteredFileItemWithStorage(m_sFileLoc, bForceFreshnessChecks);
 	}
-	catch(std::out_of_range&) // better safe...
+	catch(const std::out_of_range&) // better safe...
 	{
     	goto report_invpath;
     }
@@ -683,7 +683,7 @@ try
 					goto report_overload;
 				}
 		}
-		catch(std::bad_alloc&) // OOM, may this ever happen here?
+		catch(const std::bad_alloc&) // OOM, may this ever happen here?
 		{
 			USRDBG( "Out of memory");
 			goto report_overload;
