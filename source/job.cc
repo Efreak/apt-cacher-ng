@@ -19,6 +19,8 @@ using namespace std;
 #include <algorithm>
 #include "maintenance.h"
 
+#include <event2/buffer.h>
+
 #include <errno.h>
 
 #if 0 // defined(DEBUG)
@@ -28,6 +30,7 @@ using namespace std;
 #define CHUNKDEFAULT false
 #endif
 
+#define PT_BUF_MAX 16000
 
 namespace acng
 {
@@ -59,18 +62,21 @@ tTraceData& tTraceData::getInstance()
 class tPassThroughFitem : public fileitem
 {
 protected:
-
-	const char *m_pData;
-	size_t m_nConsumable, m_nConsumed;
+	evbuffer* m_q;
 
 public:
-	tPassThroughFitem(std::string s) :
-	m_pData(nullptr), m_nConsumable(0), m_nConsumed(0)
+	tPassThroughFitem(std::string s) : m_q(evbuffer_new())
 	{
+		if(!m_q)
+			throw std::bad_alloc();
 		m_sPathRel = s;
 		m_bAllowStoreData=false;
 		m_nSizeChecked = m_nSizeSeen = 0;
 	};
+	~tPassThroughFitem()
+	{
+		evbuffer_free(m_q);
+	}
 	virtual FiStatus Setup(bool) override
 	{
 		m_nSizeChecked = m_nSizeSeen = 0;
@@ -107,57 +113,47 @@ public:
 		{
 			dbgline;
 			m_status = FIST_DLRECEIVING;
-			m_nSizeChecked += size;
-			m_pData = data;
-			m_nConsumable=size;
-			m_nConsumed=0;
-			while(0 == m_nConsumed && m_status <= FIST_COMPLETE)
-				wait_for(g, 5, 400);
-
-			dbgline;
-			// let the downloader abort?
-			if(m_status >= FIST_DLERROR)
-				return false;
-
-			dbgline;
-			m_nConsumable=0;
-			m_pData=nullptr;
-			return m_nConsumed;
+			while(true)
+			{
+				dbgline;
+				// abandoned by the user?
+				if(m_status >= FIST_DLERROR)
+					return false;
+				if(g_global_shutdown)
+					return false;
+				auto nInBuf = evbuffer_get_length(m_q);
+				auto canAdd = PT_BUF_MAX - nInBuf;
+				if(canAdd>size)
+					canAdd = size;
+				if(canAdd == 0)
+				{
+					wait_for(g, 5, 400);
+					continue;
+				}
+				evbuffer_add(m_q, data, canAdd);
+				m_nSizeChecked += canAdd;
+				size-=canAdd;
+				if(size == 0)
+					break;
+			}
 		}
 		return true;
 	}
 	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow) override
 	{
 		lockuniq g(this);
-
-		while(0 == m_nConsumable && m_status<=FIST_COMPLETE
-				&& ! (m_nSizeChecked==0 && m_status==FIST_COMPLETE))
-		{
-			wait(g);
-		}
-		if (m_status >= FIST_DLERROR || !m_pData)
-			return -1;
-
-		if(!m_nSizeChecked)
-			return 0;
-
-		auto r = write(out_fd, m_pData, min(nMax2SendNow, m_nConsumable));
-		if (r < 0 && (errno == EAGAIN || errno == EINTR)) // harmless
-			r = 0;
-		if(r<0)
-		{
-			m_status=FIST_DLERROR;
-			m_head.frontLine="HTTP/1.1 500 Data passing error";
-		}
-		else if(r>0)
-		{
-			m_nConsumable-=r;
-			m_pData+=r;
-			m_nConsumed+=r;
-			nSendPos+=r;
-		}
 		notifyAll();
-		return r;
+		if (m_status > FIST_COMPLETE || g_global_shutdown)
+			return -1;
+		auto ret = evbuffer_write_atmost(m_q, out_fd, nMax2SendNow);
+		if (ret > 0)
+			nSendPos += ret;
+		else if(ret == 0)
+			ret = (errno == EAGAIN) ? 0 : -1;
+#ifdef WIN32
+#error check WSAEWOULDBLOCK
+#endif
+		return ret;
 	}
 };
 
@@ -632,6 +628,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 	if (bPtMode && fistate != fileitem::FIST_COMPLETE)
 		fistate = _SwitchToPtItem();
 
+#warning check range requests with pt-mode
 	ParseRange();
 
 	// might need to update the filestamp because nothing else would trigger it
