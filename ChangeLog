@@ -4,6 +4,8 @@ apt-cacher-ng (3.4) ALTERED-HYDROGEN; urgency=low
     although the source was rewritten correctly (Debian bug 952811)
   * potential fix for SHA512 related problems (the considered string length
     was too short which might break comparisons on file import and validation)
+  * Partial support for directory listing pass-through (without caching for
+    now)
   * Database update
 
  -- 

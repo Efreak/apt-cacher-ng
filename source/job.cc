@@ -112,7 +112,7 @@ public:
 			m_nConsumable=size;
 			m_nConsumed=0;
 			while(0 == m_nConsumed && m_status <= FIST_COMPLETE)
-				wait(g);
+				wait_for(g, 5, 400);
 
 			dbgline;
 			// let the downloader abort?
@@ -460,7 +460,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 	cfg::tRepoResolvResult repoMapping;
 
     fileitem::FiStatus fistate(fileitem::FIST_FRESH);
-    bool bPtMode(false);
+    bool bPtMode(false), isDir(false);
     bool bForceFreshnessChecks(false); // force update of the file, i.e. on dynamic index files?
     tSplitWalk tokenizer(& m_reqHead.frontLine, SPACECHARS);
 
@@ -553,15 +553,36 @@ void job::PrepareDownload(LPCSTR headBuf) {
 			}
 		}
 
-		// entered directory but not defined as local? Then 404 it with hints
-		if(!theUrl.sPath.empty() && endsWithSzAr(theUrl.sPath, "/"))
+		// we can proxy the directory requests, but only if they are identifiable as directories
+		// (path ends in /) and are not matched as local directory server above and
+		// the special acngfs hack is not detected
+		if(endsWithSzAr(theUrl.sPath, "/"))
 		{
-			LOG("generic user information page for " << theUrl.sPath);
-			m_eMaintWorkType=tSpecialRequest::workUSERINFO;
-			return;
+			isDir = true;
+			if(!m_reqHead.h[header::XORIG])
+			{
+#if 0
+
+
+				m_type = GetFiletype(theUrl.sPath);
+				// it's still a directory, can assume it to be scanable with volatile contents
+				if(m_type == FILE_INVALID)
+					m_type = FILE_VOLATILE;
+#else
+				m_type = FILE_VOLATILE;
+				bPtMode=true;
+#endif
+			}
+			if (m_type == FILE_INVALID)
+			{
+				LOG("generic user information page for " << theUrl.sPath);
+				m_eMaintWorkType = tSpecialRequest::workUSERINFO;
+				return;
+			}
 		}
 
-		m_type = GetFiletype(theUrl.sPath);
+		if(m_type == FILE_INVALID)
+			m_type = GetFiletype(theUrl.sPath);
 
 		if ( m_type == FILE_INVALID )
 		{

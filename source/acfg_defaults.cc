@@ -51,7 +51,11 @@ string pfilepat
     // for Fedora 29 and 30 , https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=928270
 	// XXX: add unit tests
     "|[a-f0-9]+-modules.yaml.gz|[a-f0-9]+-(primary|filelists|comps-[^.]*.[^.]*|updateinfo|prestodelta).xml(|.gz|.xz|.zck)"
-")$");
+
+	// cachable d-i directory listing with revision
+	//"|/dists/.*/installer-[^/]+/[0-9][^/]+(/images)?/" // d-i stuff with revision
+
+	")$");
 
 string svfilepat("/development/rawhide/.*"
     // more stuff for ubuntu dist-upgrader

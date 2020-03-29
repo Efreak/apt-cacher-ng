@@ -72,7 +72,7 @@ class job {
       off_t m_nAllDataCount;
       
       unsigned long m_nChunkRemainingBytes;
-      rex::eMatchType m_type;
+      rex::eMatchType m_type = rex::eMatchType::FILE_INVALID;
       
       job(const job&);
       job & operator=(const job&);
