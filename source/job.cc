@@ -202,8 +202,6 @@ job::job(header &&h, conn *pParent) :
 	m_filefd(-1),
 	m_pParentCon(pParent),
 	m_bChunkMode(CHUNKDEFAULT),
-	m_bClientWants2Close(false),
-	m_bIsHttp11(false),
 	m_bNoDownloadStarted(false),
 	m_state(STATE_SEND_MAIN_HEAD),
 	m_backstate(STATE_TODISCON),
@@ -467,15 +465,17 @@ void job::PrepareDownload(LPCSTR headBuf) {
     UrlUnescapeAppend(tokenizer, sReqPath);
     if(!tokenizer.Next()) // at proto
     	goto report_invpath;
-    m_bIsHttp11 = (sHttp11 == tokenizer.str());
+    m_proto = (sHttp11 == tokenizer.str()) ? HTTP_11 : HTTP_10;
     
     USRDBG( "Decoded request URI: " << sReqPath);
 
-	// a sane default? normally, close-mode for http 1.0, keep for 1.1.
-	// But if set by the client then just comply!
-	m_bClientWants2Close =!m_bIsHttp11;
 	if(m_reqHead.h[header::CONNECTION])
-		m_bClientWants2Close = !strncasecmp(m_reqHead.h[header::CONNECTION], "close", 5);
+	{
+		if (0 == strncasecmp(m_reqHead.h[header::CONNECTION], WITHLEN("close")))
+			m_keepAlive = CLOSE;
+		if (0 == strncasecmp(m_reqHead.h[header::CONNECTION], WITHLEN("Keep-Alive")))
+			m_keepAlive = KEEP;
+	}
 
     // "clever" file system browsing attempt?
 	if(rex::Match(sReqPath, rex::NASTY_PATH)
@@ -811,8 +811,17 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 		ASSERT(!"no FileItem assigned and no sensible way to continue");
 		return R_DISCON;
 	}
-#define returnSomething(msg) { LOG(msg); if(m_bClientWants2Close) return R_DISCON; \
-		LOG("Reporting job done"); return R_DONE; };
+
+	auto return_stream_ok = [&](const char* msg)
+		{
+		LOG(msg);
+		if(m_keepAlive == KEEP)
+			return R_DONE;
+		if(m_keepAlive == CLOSE)
+			return R_DISCON;
+		// unspecified?
+		return m_proto == HTTP_11 ? R_DONE : R_DISCON;
+		};
 
 	for(;;) // left by returning
 	{
@@ -948,15 +957,15 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 					}
 					return R_AGAIN;
 				}
-				case(STATE_ALLDONE):
-				returnSomething("STATE_ALLDONE?");
-				case (STATE_ERRORCONT):
-				returnSomething("STATE_ERRORCONT?");
-				case(STATE_FINISHJOB):
-				returnSomething("STATE_FINISHJOB?");
-				case(STATE_TODISCON):
-				default:
-					return R_DISCON;
+			case (STATE_ALLDONE):
+				return return_stream_ok("STATE_ALLDONE?");
+			case (STATE_ERRORCONT):
+				return return_stream_ok("STATE_ERRORCONT?");
+			case (STATE_FINISHJOB):
+				return return_stream_ok("STATE_FINISHJOB?");
+			case (STATE_TODISCON):
+			default:
+				return R_DISCON;
 			}
 		}
 		catch(bad_alloc&) {
@@ -1006,7 +1015,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 				)
 		{
 			// unknown length but must have data, will have to improvise: prepare chunked transfer
-			if ( ! m_bIsHttp11 ) // you cannot process this? go away
+			if ( m_proto != HTTP_11 ) // you cannot process this? go away
 				return "505 HTTP version not supported for this file";
 			m_bChunkMode=true;
 			sb<<"Transfer-Encoding: chunked\r\n";
@@ -1113,8 +1122,13 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 	if(!m_sOrigUrl.empty())
 		sb<<"X-Original-Source: "<< m_sOrigUrl <<"\r\n";
 
-	// whatever the client wants
-	sb<<"Connection: "<<(m_bClientWants2Close?"close":"Keep-Alive")<<"\r\n";
+	if(m_keepAlive != UNSPECIFIED)
+	{
+		if(m_keepAlive == KEEP)
+			sb<<"Connection: Keep-Alive\r\n";
+		else
+			sb<<"Connection: close\r\n";
+	}
 
 	sb<<"\r\n";
 	LOG("response prepared:" << sb);

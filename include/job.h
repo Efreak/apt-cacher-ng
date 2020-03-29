@@ -52,11 +52,23 @@ class job {
       
 	  int m_filefd;
 	  conn *m_pParentCon;
-      
+
       bool m_bChunkMode;
-      bool m_bClientWants2Close;
-      bool m_bIsHttp11;
       bool m_bNoDownloadStarted;
+
+	  enum EKeepAliveMode : uint8_t
+	  {
+		  // stay away from boolean, for easy ORing
+		  CLOSE = 0x10,
+		  KEEP,
+		  UNSPECIFIED
+	  } m_keepAlive = UNSPECIFIED;
+	  enum EProtoType : uint8_t
+	  {
+		  HTTP_10 = 0x1,
+		  HTTP_11 = 0x2
+	  } m_proto = HTTP_11;
+
       
       eJobState m_state, m_backstate;
       
