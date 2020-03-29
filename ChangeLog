@@ -6,6 +6,7 @@ apt-cacher-ng (3.4) ALTERED-HYDROGEN; urgency=low
     was too short which might break comparisons on file import and validation)
   * Partial support for directory listing pass-through (without caching for
     now)
+  * Added CID-Index files to Debian's dep11 file filter
   * Database update
 
  -- 

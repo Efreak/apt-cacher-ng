@@ -81,6 +81,7 @@ string vfilepat(INFOLDER
 		"|\\.o" // https://bugs.launchpad.net/ubuntu/+source/apt-cacher-ng/+bug/1078224
 		"|Components-.*yml" COMPOPT // DEP-11 aka AppStream
 		"|icons-[x0-9]+\\.tar" COMPOPT
+		"|CID-Index-[[:alnum:]]+\\.json" COMPOPT
 		"|(latest|pub)\\.ssl" // FreeBSD
 		")$" // end of filename-only patterns
 
