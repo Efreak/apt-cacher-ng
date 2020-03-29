@@ -132,7 +132,7 @@ int dnscachetime(30);
 int dnscachetime(1800);
 #endif
 
-string ACNG_API agentname("Debian Apt-Cacher-NG/" ACVERSION);
+string ACNG_API agentname("Apt-Cacher-NG/" ACVERSION);
 string ACNG_API remoteport("80"), port(ACNG_DEF_PORT);
 string ACNG_API agentheader;
 

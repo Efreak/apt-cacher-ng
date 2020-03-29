@@ -410,7 +410,7 @@ struct tDlJob
 		}
 
 		if (m_pStorage->m_bCheckFreshness)
-			head << "Cache-Control: no-store,no-cache,max-age=0\r\n";
+			head << "Cache-Control: " /*no-store,no-cache,*/ "max-age=0\r\n";
 
 		if (cfg::exporigin && !xff.empty())
 			head << "X-Forwarded-For: " << xff << "\r\n";
@@ -419,9 +419,10 @@ struct tDlJob
 				<< m_extraHeaders
 				<< "Accept: application/octet-stream\r\n"
 				"Accept-Encoding: identity\r\n"
-				"Connection: "
+				"\r\n";
+/*				"Connection: "
 				<< (cfg::persistoutgoing ? "keep-alive\r\n\r\n" : "close\r\n\r\n");
-
+*/
 #ifdef SPAM
 		//head.syswrite(2);
 #endif

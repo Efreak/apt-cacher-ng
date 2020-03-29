@@ -223,9 +223,11 @@ void conn::WorkLoop() {
 
 		if(ready == 0)
 		{
-			USRDBG("Timeout occurred, apt client disappeared silently?");
 			if(GetTime() > client_timeout)
+			{
+				USRDBG("Timeout occurred, apt client disappeared silently?");
 				return; // yeah, time to leave
+			}
 			continue;
 		}
 		else if (ready<0)

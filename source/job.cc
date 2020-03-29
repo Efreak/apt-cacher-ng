@@ -213,7 +213,7 @@ job::job(header &&h, conn *pParent) :
 	m_type(rex::FILE_INVALID),
 	m_nReqRangeFrom(-1), m_nReqRangeTo(-1)
 {
-	LOGSTART2("job::job", "job creating, " << h.frontLine << " and this: " << uintptr_t(this));
+	LOGSTART2("job::job", "job creating\n" << h.ToString());
 }
 
 static const string miscError(" [HTTP error, code: ");

@@ -57,7 +57,7 @@ unsigned g_nStandbyThreads = 0, g_nTotalThreads=0;
 bool g_suspended = false; // temporary suspended operation
 SHARED_PTR<acng::event_socket> g_resumer;
 
-void SetupConAndGo(unique_fd fd, const char *szClientName);
+void SetupConAndGo(unique_fd fd, const char *szClientName, const char *szPort);
 void do_resume();
 
 // safety mechanism, detect when the number of incoming connections
@@ -102,14 +102,15 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 	if (addr.ss_family == AF_UNIX)
 	{
 		USRDBG("Detected incoming connection from the UNIX socket");
-		SetupConAndGo(move(man_fd), nullptr);
+		SetupConAndGo(move(man_fd), nullptr, "unix");
 	}
 	else
 	{
 		USRDBG("Detected incoming connection from the TCP socket");
 		char hbuf[NI_MAXHOST];
+		char pbuf[11];
 		if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf),
-				nullptr, 0, NI_NUMERICHOST))
+				pbuf, sizeof(pbuf), NI_NUMERICHOST|NI_NUMERICSERV))
 		{
 			log::err("ERROR: could not resolve hostname for incoming TCP host");
 			return;
@@ -132,7 +133,7 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 					"WARNING: attempted to use libwrap which was not enabled at build time");
 #endif
 		}
-		SetupConAndGo(move(man_fd), hbuf);
+		SetupConAndGo(move(man_fd), hbuf, pbuf);
 	}
 }
 
@@ -178,8 +179,8 @@ auto SpawnThreadsAsNeeded = []()
 		if(int(g_nTotalThreads+1)>=cfg::tpthreadmax || g_global_shutdown)
 		return false;
 
-	// need a custom one
-		if(g_nStandbyThreads == 0)
+		// need to prepare additional one for the caller?
+		if(g_nStandbyThreads <= g_freshConQueue.size())
 		{
 			try
 			{
@@ -198,7 +199,7 @@ auto SpawnThreadsAsNeeded = []()
 		return true;
 	};
 
-void SetupConAndGo(unique_fd man_fd, const char *szClientName)
+void SetupConAndGo(unique_fd man_fd, const char *szClientName, const char *portName)
 {
 	LOGSTART2s("SetupConAndGo", man_fd.get());
 
@@ -206,7 +207,7 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 		szClientName = "";
 
 
-	USRDBG("Client name: " << szClientName);
+	USRDBG("Client name: " << szClientName << ":" << portName);
 
 	lockguard g(g_thread_push_cond_var);
 
@@ -227,6 +228,8 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 		USRDBG("Out of memory");
 		return;
 	}
+
+	g_thread_push_cond_var.notifyAll();
 
 	if (!SpawnThreadsAsNeeded())
 	{
