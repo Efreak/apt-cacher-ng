@@ -37,7 +37,7 @@ static const auto taboo =
 {
 	string("Host"), string("Cache-Control"),
 	string("Proxy-Authorization"), string("Accept"),
-	string("User-Agent")
+	string("User-Agent"), string("Accept-Encoding")
 };
 
 std::atomic_uint g_nDlCons(0);
