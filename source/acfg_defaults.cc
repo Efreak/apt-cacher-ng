@@ -40,11 +40,11 @@ string pfilepat
 	PKGS
 	"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
 	"|\\.debdelta|\\.diff/.*\\.gz"
-	"|"HEXSEQ"-(susedata|updateinfo|primary|deltainfo).xml.gz" //opensuse, index data, hash in filename
+	"|" HEXSEQ "-(susedata|updateinfo|primary|deltainfo).xml.gz" //opensuse, index data, hash in filename
 	"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
 	"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
-    "|/[[:alpha:]]{1,2}/"HEX(64)"(-"HEX(64)")?(\\.gz)?" // FreeBSD, after https://alioth.debian.org/tracker/?func=detail&atid=413111&aid=315254&group_id=100566
-    "|/by-hash/"CSUM"/.*" // support Debian/Ubuntu by-hash index files
+    "|/[[:alpha:]]{1,2}/" HEX(64) "(-" HEX(64) ")?(\\.gz)?" // FreeBSD, after https://alioth.debian.org/tracker/?func=detail&atid=413111&aid=315254&group_id=100566
+    "|/by-hash/" CSUM "/.*" // support Debian/Ubuntu by-hash index files
     "|\\.asc$" // all remaining PGP signatures. Assuming that volatile ones are matched below.
     "|changelogs/pool/.*/changelog.txt$" // packages.ultimediaos.com
     "|/objects/.*/.*\\.(dirtree|filez|commit|commitmeta)|/repo/deltas/.*" // FlatPak
@@ -101,7 +101,7 @@ string wfilepat(INFOLDER
 		"|" ALXPATTERN // Arch Linux
 		"|[a-z]+32.exe"
 		"|mirrors.ubuntu.com/mirrors.txt"
-    "|/[[:alpha:]]{1,2}/"HEX(64)"(-"HEX(64)")?(\\.gz)?" // FIXME: add expiration code
+    "|/[[:alpha:]]{1,2}/" HEX(64) "(-" HEX(64) ")?(\\.gz)?" // FIXME: add expiration code
 		")$");
 
 string pfilepatEx, spfilepatEx, vfilepatEx, svfilepatEx, wfilepatEx; // for customization by user
