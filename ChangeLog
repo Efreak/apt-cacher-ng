@@ -6,9 +6,11 @@ apt-cacher-ng (3.4) ALTERED-HYDROGEN; urgency=low
     was too short which might break comparisons on file import and validation)
   * Partial support for directory listing pass-through (no caching yet)
   * Added CID-Index files to Debian's dep11 file filter
+  * Fix for deflated contents delivery with some clients in case of
+    pass-trough mode instead of the announced as-is encoding
   * Fix bug of the incoming connection thread pool, sometimes not starting IO
-    processing due to miscalculation of required worker thread count.
-    Apparently a regression since version 3.3.
+    processing immediately due to miscalculation of required worker thread
+    count. Apparently a regression since version 3.3.
   * Database update
 
  -- 
