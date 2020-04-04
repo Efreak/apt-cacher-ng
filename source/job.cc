@@ -159,13 +159,11 @@ public:
 		if (m_status > FIST_COMPLETE || g_global_shutdown)
 			return -1;
 		auto ret = evbuffer_write_atmost(m_q, out_fd, nMax2SendNow);
-		if (ret > 0)
-			nSendPos += ret;
-		else if(ret == 0)
-			ret = (errno == EAGAIN) ? 0 : -1;
 #ifdef WIN32
 #error check WSAEWOULDBLOCK
 #endif
+		if (ret > 0)
+			nSendPos += ret;
 		return ret;
 	}
 };
@@ -220,7 +218,7 @@ job::job(header &&h, conn *pParent) :
 	m_backstate(STATE_TODISCON),
 	m_reqHead(std::move(h)),
 	m_nSendPos(0),
-	m_nCurrentRangeLast(MAX_VAL(off_t)-1),
+	m_nCurrentRangeLast(MAX_VAL(off_t)-2),
 	m_nAllDataCount(0),
 	m_nChunkRemainingBytes(0),
 	m_type(rex::FILE_INVALID),
@@ -897,7 +895,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 						m_nAllDataCount+=n;
 
 					// shortcuts
-					if(m_nSendPos>m_nCurrentRangeLast ||
+					if(m_nSendPos > m_nCurrentRangeLast ||
 							(fistate==fileitem::FIST_COMPLETE && m_nSendPos==nGoodDataSize))
 						GOTOENDE;
 					
