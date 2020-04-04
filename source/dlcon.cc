@@ -145,8 +145,8 @@ struct tDlJob
 			m_pStorage(pFi),
 			m_parent(*p),
 			m_pRepoDesc(pRepoData),
-			m_nRedirRemaining(redirmax),
-			m_isPassThroughRequest(isPassThroughRequest)
+			m_isPassThroughRequest(isPassThroughRequest),
+			m_nRedirRemaining(redirmax)
 	{
 		LOGSTART("tDlJob::tDlJob");
 		ldbg("uri: " << (pUri ? pUri->ToURI(false) :  sEmptyString )
