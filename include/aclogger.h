@@ -35,6 +35,8 @@ private:
 namespace log
 {
 
+extern bool logIsEnabled;
+
 enum ETransferType
 	: char
 	{
@@ -60,10 +62,12 @@ void err(const char *msg, const char *client = nullptr);
 void misc(const mstring & sLine, const char cLogType = 'M');
 inline void err(cmstring &msg)
 {
+	if(!logIsEnabled) return;
 	err(msg.c_str());
 }
 inline void err(const tSS& msg)
 {
+	if(!logIsEnabled) return;
 	err(msg.c_str());
 }
 void flush();

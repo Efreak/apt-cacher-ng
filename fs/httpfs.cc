@@ -742,27 +742,3 @@ int main(int argc, char *argv[])
    argc-=nMyArgCount;
    return my_fuse_main(argc, argv);
 }
-
-#ifndef DEBUG
-namespace acng {
-// for the uber-clever GNU linker and should be removed by strip again
-namespace log
-{
-   void flush() {};
-   void misc(const string &s, const char )
-   {
-#ifdef SPAM
-      cerr << s << endl;
-#endif
-   }
-
-void err(const char *s, const char* z)
-{
-#ifdef SPAM
-      cerr << s << endl << z << endl;
-#endif
-
-};
-}
-}
-#endif
