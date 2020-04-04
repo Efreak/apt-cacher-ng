@@ -740,39 +740,43 @@ inline void fileItemMgmt::Unreg()
 
 	lockguard managementLock(mapItemsMx);
 
-	// invalid or not globally registered?
-	if(m_ptr->m_globRef == mapItems.end())
-		return;
+	bool wasGloballyRegistered = m_ptr->m_globRef != mapItems.end();
 
 	auto local_ptr(m_ptr); // might disappear
 	lockguard fitemLock(*local_ptr);
 
 	if ( -- m_ptr->usercount <= 0)
 	{
+		m_ptr->notifyAll();
+
 		if(m_ptr->m_status < fileitem::FIST_COMPLETE && m_ptr->m_status != fileitem::FIST_INITED)
 		{
 			ldbg("usercount dropped to zero while downloading?: " << (int) m_ptr->m_status);
 		}
 
-		// some file items will be held ready for some time
-		time_t when(0);
-		if (MAXTEMPDELAY && m_ptr->m_bCheckFreshness &&
-				m_ptr->m_status == fileitem::FIST_COMPLETE &&
-				((when = m_ptr->m_nTimeDlStarted+MAXTEMPDELAY) > GetTime()))
+		if(wasGloballyRegistered)
 		{
-			cleaner::GetInstance().ScheduleFor(when, cleaner::TYPE_EXFILEITEM);
-			return;
-		}
+			// some file items will be held ready for some time
 
+			time_t when(0);
+			if (MAXTEMPDELAY && m_ptr->m_bCheckFreshness
+					&& m_ptr->m_status == fileitem::FIST_COMPLETE
+					&& ((when = m_ptr->m_nTimeDlStarted + MAXTEMPDELAY) > GetTime()))
+			{
+				cleaner::GetInstance().ScheduleFor(when, cleaner::TYPE_EXFILEITEM);
+				return;
+			}
+		}
 		// nothing, let's put the item into shutdown state
 		m_ptr->m_status = fileitem::FIST_DLSTOP;
 		m_ptr->m_head.frontLine="HTTP/1.1 500 Cache file item expired";
-		m_ptr->notifyAll();
 
-		LOG("*this is last entry, deleting dl/fi mapping");
-		mapItems.erase(m_ptr->m_globRef);
-		m_ptr->m_globRef = mapItems.end();
-
+		if (wasGloballyRegistered)
+		{
+			LOG("*this is last entry, deleting dl/fi mapping");
+			mapItems.erase(m_ptr->m_globRef);
+			m_ptr->m_globRef = mapItems.end();
+		}
 		// make sure it's not double-unregistered accidentally!
 		m_ptr.reset();
 	}
