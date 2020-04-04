@@ -704,7 +704,7 @@ try
 							bHaveRedirects ? nullptr : &theUrl, repoMapping.repodata,
 							bHaveRedirects ? &repoMapping.sRestPath : nullptr,
 									(LPCSTR) ( bPtMode ? headBuf : nullptr),
-							cfg::redirmax))
+							cfg::redirmax, bPtMode))
 				{
 					ldbg("Download job enqueued for " << m_sFileLoc);
 				}
