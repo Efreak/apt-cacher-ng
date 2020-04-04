@@ -32,6 +32,8 @@ using namespace std;
 
 #define PT_BUF_MAX 16000
 
+#define WTF_HEISENBUG_DISCONNECT //std::cerr << "WTF? " << __LINE__ << std::endl;
+
 namespace acng
 {
 
@@ -158,12 +160,20 @@ public:
 		notifyAll();
 		if (m_status > FIST_COMPLETE || g_global_shutdown)
 			return -1;
+		errno = -42;
 		auto ret = evbuffer_write_atmost(m_q, out_fd, nMax2SendNow);
 #ifdef WIN32
 #error check WSAEWOULDBLOCK
 #endif
 		if (ret > 0)
 			nSendPos += ret;
+		if (ret < 0)
+		{
+			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == -42)
+				return 0;
+			WTF_HEISENBUG_DISCONNECT
+			//std::cerr << errno << " for ret: " << ret << endl;
+		}
 		return ret;
 	}
 };
@@ -749,7 +759,7 @@ report_invport:
     return ;
 }
 
-#define THROW_ERROR(x) { if(m_nAllDataCount) return R_DISCON; SetErrorResponse(x); return R_AGAIN; }
+#define THROW_ERROR(x) { if(m_nAllDataCount) { WTF_HEISENBUG_DISCONNECT; return R_DISCON; } SetErrorResponse(x); return R_AGAIN; }
 job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 {
 	LOGSTART("job::SendData");
@@ -757,6 +767,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 	if(m_eMaintWorkType)
 	{
 		tSpecialRequest::RunMaintWork(m_eMaintWorkType, m_sFileLoc, confd);
+		WTF_HEISENBUG_DISCONNECT
 		return R_DISCON; // just stop and close connection
 	}
 	
@@ -765,7 +776,10 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 	header respHead; // template of the response header, e.g. as found in cache
 
 	if (confd<0)
+	{
+		WTF_HEISENBUG_DISCONNECT
 		return R_DISCON; // shouldn't be here
+	}
 
 	if (m_pItem)
 	{
@@ -823,6 +837,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 	else if(m_state != STATE_SEND_BUFFER)
 	{
 		ASSERT(!"no FileItem assigned and no sensible way to continue");
+		WTF_HEISENBUG_DISCONNECT
 		return R_DISCON;
 	}
 
@@ -832,7 +847,10 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 		if(m_keepAlive == KEEP)
 			return R_DONE;
 		if(m_keepAlive == CLOSE)
+		{
+			WTF_HEISENBUG_DISCONNECT
 			return R_DISCON;
+		}
 		// unspecified?
 		return m_proto == HTTP_11 ? R_DONE : R_DISCON;
 		};
@@ -954,6 +972,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 						{
 							if (errno==EAGAIN || errno==EINTR || errno == ENOBUFS)
 								return R_AGAIN;
+							WTF_HEISENBUG_DISCONNECT
 							return R_DISCON;
 						}
 						m_nAllDataCount+=r;
@@ -967,6 +986,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 					}
 					catch(...)
 					{
+						WTF_HEISENBUG_DISCONNECT
 						return R_DISCON;
 					}
 					return R_AGAIN;
@@ -979,16 +999,19 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 				return return_stream_ok("STATE_FINISHJOB?");
 			case (STATE_TODISCON):
 			default:
+				WTF_HEISENBUG_DISCONNECT
 				return R_DISCON;
 			}
 		}
 		catch(bad_alloc&) {
 			// TODO: report memory failure?
+			WTF_HEISENBUG_DISCONNECT
 			return R_DISCON;
 		}
 		//ASSERT(!"UNREACHED");
 	}
 	//ASSERT(!"UNREACHEABLE");
+	WTF_HEISENBUG_DISCONNECT
 	return R_DISCON;
 }
 
