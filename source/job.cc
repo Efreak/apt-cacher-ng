@@ -67,6 +67,7 @@ protected:
 public:
 	tPassThroughFitem(std::string s) : m_q(evbuffer_new())
 	{
+		LOGSTARTFUNC;
 		if(!m_q)
 			throw std::bad_alloc();
 		m_sPathRel = s;
@@ -87,6 +88,7 @@ public:
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t, const char *,
 			bool, bool&) override
 	{
+		LOGSTARTFUNC;
 		setLockGuard;
 		m_head=h;
 		m_status=FIST_DLGOTHEAD;
@@ -116,11 +118,12 @@ public:
 			while(true)
 			{
 				dbgline;
+				notifyAll();
 				// abandoned by the user?
 				if(m_status >= FIST_DLERROR)
-					return false;
+					LOGRET(false);
 				if(g_global_shutdown)
-					return false;
+					LOGRET(false);
 				auto nInBuf = evbuffer_get_length(m_q);
 				auto canAdd = PT_BUF_MAX - nInBuf;
 				if(canAdd>size)
@@ -130,6 +133,7 @@ public:
 					wait_for(g, 5, 400);
 					continue;
 				}
+				LOG("appending " << canAdd << "b to queue")
 				evbuffer_add(m_q, data, canAdd);
 				m_nSizeChecked += canAdd;
 				size-=canAdd;
@@ -137,10 +141,11 @@ public:
 					break;
 			}
 		}
-		return true;
+		LOGRET(true);
 	}
 	ssize_t SendData(int out_fd, int, off_t &nSendPos, size_t nMax2SendNow) override
 	{
+		LOGSTARTFUNC;
 		lockuniq g(this);
 		notifyAll();
 		if (m_status > FIST_COMPLETE || g_global_shutdown)

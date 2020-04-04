@@ -35,18 +35,29 @@ namespace acng
 #define LOGSTART2s(x,y)
 #define DBGQLOG(x)
 #define dbgprint(x)
+#define LOGRET(x) return x;
 inline void dump_proc_status(){}; // strip away
 
 #else
 
-#define LOGLVL(n, x) if(acng::cfg::debug&n){ __logobj.GetFmter() << x; __logobj.Write(__FILE__,__LINE__); }
+#ifdef GNUC
+#define __ACFUNC__  /*__PRETTY_FUNCTION__*/ __FUNC__
+#elif MSCVER
+#define __ACFUNC__ __FUNCSIG__
+#else
+#define __ACFUNC__ __func__
+#endif
+
+
+#define LOGLVL(n, x) if(acng::cfg::debug&n){ __logobj.GetFmter() << x; __logobj.WriteWithContext(__FILE__ ":" STRINGIFY(__LINE__)); }
 #define LOG(x) LOGLVL(log::LOG_DEBUG, x)
 
-#define LOGSTARTFUNC t_logger __logobj(__func__, this);
+#define LOGSTARTFUNC t_logger __logobj(__ACFUNC__, this);
 #define LOGSTART(x) t_logger __logobj(x, this);
 #define LOGSTARTs(x) t_logger __logobj(x, nullptr);
-#define LOGSTART2(x, y) t_logger __logobj(x, this); LOGLVL(log::LOG_DEBUG, y /* << "@" __FILE__ ":" << __LINE__  */ )
-#define LOGSTART2s(x, y) t_logger __logobj(x, nullptr); LOGLVL(log::LOG_DEBUG, y /*<< "@" __FILE__ ":" << __LINE__ */ )
+#define LOGSTART2(x, y) t_logger __logobj(x, this); LOGLVL(log::LOG_DEBUG, y )
+#define LOGSTART2s(x, y) t_logger __logobj(x, nullptr); LOGLVL(log::LOG_DEBUG, y)
+#define LOGRET(x) { __logobj.GetFmter4End() << " --> " << x << " @" __FILE__ ":" STRINGIFY(__LINE__); return x; }
 
 #define dbgprint(x) std::cerr << x << std::endl;
 
