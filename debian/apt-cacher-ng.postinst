@@ -80,6 +80,20 @@ set_def_files() {
    fi
 }
 
+get_umirrors_txt() {
+   # mirror suggestions from Ubuntu's service might be a good candidate
+   if ! $check_sane_data ; then
+      mirurl=http://mirrors.ubuntu.com/mirrors.txt
+      if which wget > /dev/null 2>&1 ; then
+         timeout 15 wget --timeout=10 -q -O- $mirurl >> $tmpfile 2>/dev/null || true
+      elif which curl > /dev/null 2>&1 ; then
+         timeout 15 curl -m 10 --fail -s $mirurl >> $tmpfile 2>/dev/null || true
+      else
+         timeout 15 $TOOL NetworkTimeout=10 curl $mirurl $BINPATH >> $tmpfile 2>/dev/null || true
+      fi
+   fi
+}
+
 guess_ubuntu_mirrors() {
    
    tmpfile="`mktemp`"
@@ -97,16 +111,12 @@ guess_ubuntu_mirrors() {
    # may hit a local mirror which also hosts Debian, use it then
    sed -e 's,\([a-z]\)/.*,\1,' < $CFG/backends_debian | xargs -n1 -i grep "{}" $DDIR/ubuntu_mirrors > $tmpfile || true
 
-   # mirror suggestions from Ubuntu's service might be a good candidate
-   if ! $check_sane_data ; then
-      mirurl=http://mirrors.ubuntu.com/mirrors.txt
-      if which wget > /dev/null 2>&1 ; then
-         wget --timeout=15 -q -O- $mirurl >> $tmpfile 2>/dev/null || true
-      elif which curl > /dev/null 2>&1 ; then
-         curl -m 15 --fail -s $mirurl >> $tmpfile 2>/dev/null || true
-      else
-         $TOOL NetworkTimeout:15 curl $mirurl $BINPATH >> $tmpfile 2>/dev/null || true
-      fi
+   get_umirrors_txt
+
+   # maybe try without a proxy too, in case the proxy entry points at a broken apt-cacher-ng
+   if ! $check_sane_data && test "$http_proxy" ; then
+           unset http_proxy
+           get_umirrors_txt
    fi
 
    # still nothing. Sneak more information from Debian backend configuration?

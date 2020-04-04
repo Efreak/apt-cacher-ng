@@ -1,13 +1,10 @@
-apt-cacher-ng (3.3.2-1) UNRELEASED; urgency=medium
+apt-cacher-ng (3.4-1) UNRELEASED; urgency=medium
 
-  FIXME: wget might get stuck (bug reported). If that happens, kill after 20s
-  (better reduce timeouts) and try again without a proxy.
-
-
-  *  New upstream release
+  * New upstream release
     + potentially closes: #952811
+  * Added timeouts to postinst steps which access network
 
- -- Eduard Bloch <blade@debian.org>  Thu, 12 Mar 2020 22:54:33 +0100
+ -- Eduard Bloch <blade@debian.org>  Sat, 04 Apr 2020 20:38:51 +0200
 
 apt-cacher-ng (3.3.1-2) unstable; urgency=high
 
