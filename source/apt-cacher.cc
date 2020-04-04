@@ -315,6 +315,7 @@ struct tAppStartStop
 	}
 	~tAppStartStop()
 	{
+		g_global_shutdown = true;
 		cleaner::GetInstance().Stop();
 		if (!cfg::pidfile.empty())
 			unlink(cfg::pidfile.c_str());
