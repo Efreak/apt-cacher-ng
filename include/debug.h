@@ -29,10 +29,16 @@ namespace acng
 #define ASSERT(x)
 #define LOG(x)
 #define LOGSTARTFUNC
+
+#define LOGSTARTFUNC
+#define LOGSTARTFUNCs
+#define LOGSTARTFUNCx(...)
+#define LOGSTARTFUNCsx(...)
+#define LOGSTARTFUNCxs(...)
 #define LOGSTART(x)
+#define LOGSTARTx(x, ...)
 #define LOGSTARTs(x)
-#define LOGSTART2(x,y)
-#define LOGSTART2s(x,y)
+#define LOGSTARTsx(x, ...)
 #define DBGQLOG(x)
 #define dbgprint(x)
 #define LOGRET(x) return x;
