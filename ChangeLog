@@ -12,6 +12,7 @@ apt-cacher-ng (3.4) ALTERED-HYDROGEN; urgency=low
   * Fix bug of the incoming connection thread pool, sometimes not starting IO
     processing immediately due to miscalculation of required worker thread
     count. Apparently a regression since version 3.3.
+  * Permit non-categorized file extensions when pass-through rule is active
   * Database update
 
  -- 

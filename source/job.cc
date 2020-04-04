@@ -590,6 +590,10 @@ void job::PrepareDownload(LPCSTR headBuf) {
 			}
 		}
 
+		// in PT mode we don't care about how to handle it, it's what user wants to do
+		if(m_type == FILE_INVALID && bPtMode)
+			m_type = FILE_SOLID;
+
 		if(m_type == FILE_INVALID)
 			m_type = GetFiletype(theUrl.sPath);
 
@@ -641,7 +645,6 @@ void job::PrepareDownload(LPCSTR headBuf) {
 	if (bPtMode && fistate != fileitem::FIST_COMPLETE)
 		fistate = _SwitchToPtItem();
 
-#warning check range requests with pt-mode
 	ParseRange();
 
 	// might need to update the filestamp because nothing else would trigger it
@@ -1199,7 +1202,8 @@ void job::SetErrorResponse(const char * errorLine, const char *szLocation, const
 			// otherwise do something meaningful
 			m_data <<"<!DOCTYPE html>\n<html lang=\"en\"><head><title>" << (bodytext ? bodytext : szError)
 				<< "</title>\n</head>\n<body><h1>"
-				<< (bodytext ? bodytext : szError) << "</h1></body></html>";
+				<< (bodytext ? bodytext : szError) << "</h1></body>";
+			m_data << GetFooter() << "</html>";
 			m_head.set(header::CONTENT_TYPE, "text/html");
 			seal();
 		}

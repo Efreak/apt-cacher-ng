@@ -32,14 +32,14 @@ namespace acng
 
 static cmstring sGenericError("502 Bad Gateway");
 
-// those are not allowed to be forwarded
-static const auto tabooCached =
+// those are not allowed to be forwarded ever
+static const auto tabooHeadersForCaching =
 {
 	string("Host"), string("Cache-Control"),
 	string("Proxy-Authorization"), string("Accept"),
 	string("User-Agent"), string("Accept-Encoding")
 };
-static const auto tabooPassThrough =
+static const auto tabooHeadersPassThrough =
 {
 	string("Host"), string("Cache-Control"),
 	string("Proxy-Authorization"), string("Accept"),
@@ -193,7 +193,7 @@ struct tDlJob
 						{
 							return;
 						}
-						const auto& taboo = m_isPassThroughRequest ? tabooPassThrough : tabooCached;
+						const auto& taboo = m_isPassThroughRequest ? tabooHeadersPassThrough : tabooHeadersForCaching;
 
 						forbidden = taboo.end() != std::find_if(taboo.begin(), taboo.end(),
 								[&](cmstring &x)
