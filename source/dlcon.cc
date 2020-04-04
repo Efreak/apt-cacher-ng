@@ -163,7 +163,8 @@ struct tDlJob
 		if(sErrorMsg.empty())
 		{
 			pError = &sGenericError;
-			log::err(RemoteUri(true)  + " -- bad download descriptor, exited without leaving error message");
+			// XXX: BS? Leaving without error is not a bad situation
+			// log::err(RemoteUri(true)  + " -- bad download descriptor, exited without leaving error message");
 		}
 		if (m_pStorage)
 			m_pStorage->DecDlRefCount(*pError);

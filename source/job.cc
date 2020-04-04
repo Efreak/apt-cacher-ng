@@ -105,6 +105,8 @@ public:
 		notifyAll();
 
 		m_nIncommingCount += size;
+		// we can add that much inline
+		m_nSizeChecked += size;
 
 		dbgline;
 		if (m_status > fileitem::FIST_COMPLETE || m_status < FIST_DLGOTHEAD)
@@ -118,26 +120,26 @@ public:
 			m_status = FIST_DLRECEIVING;
 			while(true)
 			{
-				dbgline;
+				LOG("notify waiter");
 				notifyAll();
 				// abandoned by the user?
 				if(m_status >= FIST_DLERROR)
 					LOGRET(false);
 				if(g_global_shutdown)
 					LOGRET(false);
-				auto nInBuf = evbuffer_get_length(m_q);
-				auto canAdd = PT_BUF_MAX - nInBuf;
-				if(canAdd>size)
-					canAdd = size;
-				if(canAdd == 0)
+				auto in_buffer = evbuffer_get_length(m_q);
+				off_t nAddLimit = PT_BUF_MAX - in_buffer;
+				auto nToAppend = std::min(nAddLimit, off_t(size));
+				if(0 == nToAppend)
 				{
 					wait_for(g, 5, 400);
 					continue;
 				}
-				LOG("appending " << canAdd << "b to queue")
-				evbuffer_add(m_q, data, canAdd);
-				m_nSizeChecked += canAdd;
-				size-=canAdd;
+				LOG("appending " << nToAppend << " to queue")
+				bool failed = evbuffer_add(m_q, data, nToAppend);
+				if(failed) LOGRET(false);
+				size-=nToAppend;
+				data+=nToAppend;
 				if(size == 0)
 					break;
 			}
@@ -460,7 +462,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 	cfg::tRepoResolvResult repoMapping;
 
     fileitem::FiStatus fistate(fileitem::FIST_FRESH);
-    bool bPtMode(false), isDir(false);
+    bool bPtMode(false);
     bool bForceFreshnessChecks(false); // force update of the file, i.e. on dynamic index files?
     tSplitWalk tokenizer(& m_reqHead.frontLine, SPACECHARS);
 
@@ -560,7 +562,7 @@ void job::PrepareDownload(LPCSTR headBuf) {
 		// the special acngfs hack is not detected
 		if(endsWithSzAr(theUrl.sPath, "/"))
 		{
-			isDir = true;
+			//isDir = true;
 			if(!m_reqHead.h[header::XORIG])
 			{
 #if 0
