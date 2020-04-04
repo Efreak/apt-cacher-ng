@@ -57,7 +57,7 @@ unsigned g_nStandbyThreads = 0, g_nTotalThreads=0;
 bool g_suspended = false; // temporary suspended operation
 SHARED_PTR<acng::event_socket> g_resumer;
 
-void SetupConAndGo(unique_fd fd, const char *szClientName);
+void SetupConAndGo(unique_fd fd, const char *szClientName, const char *szPort);
 void do_resume();
 
 // safety mechanism, detect when the number of incoming connections
@@ -66,7 +66,7 @@ void do_resume();
 
 void do_accept(const std::shared_ptr<evasocket>& soc)
 {
-	LOGSTART2s("do_accept", soc->fd());
+	LOGSTARTFUNCxs(soc->fd());
 
 	struct sockaddr_storage addr;
 	socklen_t addrlen = sizeof(addr);
@@ -102,14 +102,15 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 	if (addr.ss_family == AF_UNIX)
 	{
 		USRDBG("Detected incoming connection from the UNIX socket");
-		SetupConAndGo(move(man_fd), nullptr);
+		SetupConAndGo(move(man_fd), nullptr, "unix");
 	}
 	else
 	{
 		USRDBG("Detected incoming connection from the TCP socket");
 		char hbuf[NI_MAXHOST];
+		char pbuf[11];
 		if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf),
-				nullptr, 0, NI_NUMERICHOST))
+				pbuf, sizeof(pbuf), NI_NUMERICHOST|NI_NUMERICSERV))
 		{
 			log::err("ERROR: could not resolve hostname for incoming TCP host");
 			return;
@@ -132,7 +133,7 @@ void do_accept(const std::shared_ptr<evasocket>& soc)
 					"WARNING: attempted to use libwrap which was not enabled at build time");
 #endif
 		}
-		SetupConAndGo(move(man_fd), hbuf);
+		SetupConAndGo(move(man_fd), hbuf, pbuf);
 	}
 }
 
@@ -178,8 +179,8 @@ auto SpawnThreadsAsNeeded = []()
 		if(int(g_nTotalThreads+1)>=cfg::tpthreadmax || g_global_shutdown)
 		return false;
 
-	// need a custom one
-		if(g_nStandbyThreads == 0)
+		// need to prepare additional one for the caller?
+		if(g_nStandbyThreads <= g_freshConQueue.size())
 		{
 			try
 			{
@@ -198,15 +199,14 @@ auto SpawnThreadsAsNeeded = []()
 		return true;
 	};
 
-void SetupConAndGo(unique_fd man_fd, const char *szClientName)
+void SetupConAndGo(unique_fd man_fd, const char *szClientName, const char *portName)
 {
-	LOGSTART2s("SetupConAndGo", man_fd.get());
+	LOGSTARTFUNCs
 
 	if (!szClientName)
 		szClientName = "";
 
-
-	USRDBG("Client name: " << szClientName);
+	USRDBG("Client name: " << szClientName << ":" << portName);
 
 	lockguard g(g_thread_push_cond_var);
 
@@ -228,6 +228,8 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 		return;
 	}
 
+	g_thread_push_cond_var.notifyAll();
+
 	if (!SpawnThreadsAsNeeded())
 	{
 		tErrnoFmter fer(
@@ -239,7 +241,7 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 
 bool bind_and_listen(shared_ptr<evasocket> mSock, const evutil_addrinfo *pAddrInfo)
 		{
-	LOGSTART2s("bind_and_listen", formatIpPort(pAddrInfo));
+	LOGSTARTFUNCxs(formatIpPort(pAddrInfo));
 			if ( ::bind(mSock->fd(), pAddrInfo->ai_addr, pAddrInfo->ai_addrlen))
 			{
 				log::flush();
@@ -276,7 +278,7 @@ std::string scratchBuf;
 
 unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 {
-	LOGSTART2s("Setup::ConAddr", 0);
+	LOGSTARTFUNCxs(addi, port);
 
 	CAddrInfo resolver;
 	auto hints = evutil_addrinfo();
@@ -333,7 +335,7 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 
 int ACNG_API Setup()
 {
-	LOGSTART2s("Setup", 0);
+	LOGSTARTFUNCs;
 	
 	if (cfg::udspath.empty() && cfg::port.empty())
 	{
@@ -409,7 +411,7 @@ int ACNG_API Setup()
 
 int ACNG_API Run()
 {
-	LOGSTART2s("Run", "GoGoGo");
+	LOGSTARTFUNCs
 
 #ifdef HAVE_SD_NOTIFY
 	sd_notify(0, "READY=1");

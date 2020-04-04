@@ -48,7 +48,7 @@ static cmstring errstring("Information about APT configuration not available, "
 
 void tMarkupFileSend::Run()
 {
-	LOGSTART2("tStaticFileSend::Run", m_parms.cmd);
+	LOGSTARTFUNCx(m_parms.cmd);
 
 	filereader fr;
 	const char *pr(nullptr), *pend(nullptr);

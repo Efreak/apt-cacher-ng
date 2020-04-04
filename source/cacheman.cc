@@ -413,7 +413,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 		}
 	}
 
-	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix, 0, cfg::REDIRMAX_DEFAULT);
+	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix, 0, cfg::REDIRMAX_DEFAULT, false);
 
 	m_pDlcon->WorkLoop();
 	if (pFi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE

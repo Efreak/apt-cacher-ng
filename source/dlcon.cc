@@ -30,10 +30,16 @@ using namespace std;
 namespace acng
 {
 
-static cmstring sGenericError("567 Unknown download error occured");
+static cmstring sGenericError("502 Bad Gateway");
 
-// those are not allowed to be forwarded
-static const auto taboo =
+// those are not allowed to be forwarded ever
+static const auto tabooHeadersForCaching =
+{
+	string("Host"), string("Cache-Control"),
+	string("Proxy-Authorization"), string("Accept"),
+	string("User-Agent"), string("Accept-Encoding")
+};
+static const auto tabooHeadersPassThrough =
 {
 	string("Host"), string("Cache-Control"),
 	string("Proxy-Authorization"), string("Accept"),
@@ -122,7 +128,8 @@ struct tDlJob
 	const tHttpUrl *m_pCurBackend=nullptr;
 
 	uint_fast8_t m_eReconnectASAP =0;
-	bool m_bBackendMode=false;
+	bool m_bBackendMode = false;
+	bool m_isPassThroughRequest = false;
 
 	off_t m_nRest =0;
 
@@ -134,11 +141,12 @@ struct tDlJob
 			const tHttpUrl *pUri,
 			const cfg::tRepoData * pRepoData,
 			const std::string *psPath,
-			int redirmax) :
+			int redirmax, bool isPassThroughRequest) :
 			m_pStorage(pFi),
 			m_parent(*p),
 			m_pRepoDesc(pRepoData),
-			m_nRedirRemaining(redirmax)
+			m_nRedirRemaining(redirmax),
+			m_isPassThroughRequest(isPassThroughRequest)
 	{
 		LOGSTART("tDlJob::tDlJob");
 		ldbg("uri: " << (pUri ? pUri->ToURI(false) :  sEmptyString )
@@ -159,8 +167,15 @@ struct tDlJob
 	~tDlJob()
 	{
 		LOGSTART("tDlJob::~tDlJob");
+		const auto* pError = &sErrorMsg;
+		if(sErrorMsg.empty())
+		{
+			pError = &sGenericError;
+			// XXX: BS? Leaving without error is not a bad situation
+			// log::err(RemoteUri(true)  + " -- bad download descriptor, exited without leaving error message");
+		}
 		if (m_pStorage)
-			m_pStorage->DecDlRefCount(sErrorMsg.empty() ? sGenericError : sErrorMsg);
+			m_pStorage->DecDlRefCount(*pError);
 	}
 
 	inline void ExtractCustomHeaders(LPCSTR reqHead)
@@ -168,18 +183,24 @@ struct tDlJob
 		if(!reqHead)
 			return;
 		header h;
-		bool forbidden=false;
+		// continuation of header line
+		bool forbidden = false;
 		h.Load(reqHead, (unsigned) std::numeric_limits<int>::max(),
-				[this, &forbidden](cmstring& key, cmstring& rest)
+				[this, &forbidden](cmstring &key, cmstring &rest)
 				{
-			// heh, continuation of ignored stuff or without start?
-			if(key.empty() && (m_extraHeaders.empty() || forbidden))
-				return;
-			forbidden = taboo.end() != std::find_if(taboo.begin(), taboo.end(),
-					[&key](cmstring &x){return scaseequals(x,key);});
-			if(!forbidden)
-				m_extraHeaders += key + rest;
-				}
+					// heh, continuation of ignored stuff or without start?
+						if(key.empty() && (m_extraHeaders.empty() || forbidden))
+						{
+							return;
+						}
+						const auto& taboo = m_isPassThroughRequest ? tabooHeadersPassThrough : tabooHeadersForCaching;
+
+						forbidden = taboo.end() != std::find_if(taboo.begin(), taboo.end(),
+								[&](cmstring &x)
+								{	return scaseequals(x,key);});
+						if(!forbidden)
+							m_extraHeaders += key + rest;
+					}
 		);
 	}
 
@@ -404,18 +425,21 @@ struct tDlJob
 		}
 
 		if (m_pStorage->m_bCheckFreshness)
-			head << "Cache-Control: no-store,no-cache,max-age=0\r\n";
+			head << "Cache-Control: " /*no-store,no-cache,*/ "max-age=0\r\n";
 
 		if (cfg::exporigin && !xff.empty())
 			head << "X-Forwarded-For: " << xff << "\r\n";
 
 		head << cfg::requestapx
 				<< m_extraHeaders
-				<< "Accept: application/octet-stream\r\n"
-				"Accept-Encoding: identity\r\n"
-				"Connection: "
-				<< (cfg::persistoutgoing ? "keep-alive\r\n\r\n" : "close\r\n\r\n");
+				<< "Accept: application/octet-stream\r\n";
+		if(!m_isPassThroughRequest)
+		{
+			head << "Accept-Encoding: identity\r\n"
+					"Connection: " << (cfg::persistoutgoing ? "keep-alive\r\n" : "close\r\n");
 
+		}
+		head << "\r\n";
 #ifdef SPAM
 		//head.syswrite(2);
 #endif
@@ -496,7 +520,12 @@ struct tDlJob
 				}
 
 				ldbg("contents: " << std::string(inBuf.rptr(), hDataLen));
-				inBuf.drop((unsigned long) hDataLen);
+
+				if(m_pStorage)
+					m_pStorage->SetRawResponseHeader(string(inBuf.rptr(), hDataLen));
+
+				inBuf.drop(size_t(hDataLen));
+
 				if (h.type != header::ANSWER)
 				{
 					dbgline;
@@ -611,7 +640,7 @@ struct tDlJob
 					}
 				}
 
-				if(!m_pStorage->DownloadStartedStoreHeader(h, hDataLen,
+				if(!m_pStorage->DownloadStartedStoreHeader(h, size_t(hDataLen),
 						inBuf.rptr(), bHotItem, bDoRetry))
 				{
 					if(bDoRetry)
@@ -755,7 +784,7 @@ inline void dlcon::awaken_check()
 bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 		const cfg::tRepoData *pBackends,
 		cmstring *sPatSuffix, LPCSTR reqHead,
-		int nMaxRedirection)
+		int nMaxRedirection, bool isPassThroughRequest)
 {
 	if(!pForcedUrl)
 	{
@@ -775,7 +804,8 @@ bool dlcon::AddJob(tFileItemPtr m_pItem, const tHttpUrl *pForcedUrl,
 	LOGSTART2("dlcon::EnqJob", todo->m_remoteUri.ToURI(false));
 */
 	m_qNewjobs.emplace_back(
-			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,nMaxRedirection));
+			make_shared<tDlJob>(this, m_pItem, pForcedUrl, pBackends, sPatSuffix,
+					nMaxRedirection,isPassThroughRequest));
 
 	m_qNewjobs.back()->ExtractCustomHeaders(reqHead);
 
@@ -808,8 +838,8 @@ dlcon::~dlcon()
 
 inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &inpipe)
 {
-	LOGSTART2("dlcon::ExchangeData",
-			"qsize: " << inpipe.size() << ", sendbuf size: "
+	LOGSTARTFUNC;
+	LOG("qsize: " << inpipe.size() << ", sendbuf size: "
 			<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
 
 	fd_set rfds, wfds;
@@ -1152,8 +1182,7 @@ void dlcon::WorkLoop()
 
 	auto BlacklistMirror = [&](tDlJobPtr & job)
 	{
-		LOGSTART2("BlacklistMirror", "blacklisting " <<
-				job->GetPeerHost().ToURI(false));
+		LOGSTARTx("BlacklistMirror", job->GetPeerHost().ToURI(false));
 		m_blacklist[std::make_pair(job->GetPeerHost().sHost,
 				job->GetPeerHost().GetPort())] = sErrorMsg;
 	};

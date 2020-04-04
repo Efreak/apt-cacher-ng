@@ -2,18 +2,22 @@ http://appuals.com/archlinux/
 http://arch-mirror.cloud.louifox.house/
 http://arch-mirror.wtako.net/
 http://arch.eckner.net/archlinux/
+http://arch.hu.fo/archlinux/
 http://arch.jensgutermuth.de/
 http://arch.midov.pl/arch/
 http://arch.mirror.constant.com/
 http://arch.mirror.far.fi/
 http://arch.mirror.square-r00t.net/
+http://arch.mirrors.lavatech.top/
 http://arch.mirrors.pair.com/
 http://arch.nimukaito.net/
 http://arch.nixlab.pl/
 http://arch.petarmaric.com/
+http://arch.rrig.gs/
 http://arch.serverspace.co.uk/arch/
 http://arch.softver.org.mk/archlinux/
 http://arch.unixpeople.org/
+http://arch.yourlabs.org/
 http://archimonde.ts.si/archlinux/
 http://archlinux.beccacervello.it/archlinux/
 http://archlinux.c3sl.ufpr.br/
@@ -47,7 +51,6 @@ http://archlinux.mirrors.ovh.net/archlinux/
 http://archlinux.mirrors.uk2.net/
 http://archlinux.mivzakim.net/
 http://archlinux.nautile.nc/archlinux/
-http://archlinux.olanfa.rocks/
 http://archlinux.polymorf.fr/
 http://archlinux.pop-es.rnp.br/
 http://archlinux.rezopole.net/
@@ -59,7 +62,7 @@ http://archlinux.vi-di.fr/
 http://archlinux.za.mirror.allworldit.com/archlinux/
 http://archlinux.zepto.cloud/
 http://archmirror.hbit.sztaki.hu/archlinux/
-http://archmirror.lavatech.top/
+http://archmirror1.octyl.net/
 http://arlm.tyzoid.com/
 http://artfiles.org/archlinux.org/
 http://br.mirror.archlinux-br.org/
@@ -69,7 +72,6 @@ http://dist-mirror.fem.tu-ilmenau.de/archlinux/
 http://distro.ibiblio.org/archlinux/
 http://download.nus.edu.sg/mirror/archlinux/
 http://f.archlinuxvn.org/archlinux/
-http://foss.aueb.gr/mirrors/linux/archlinux/
 http://ftp-stud.hs-esslingen.de/pub/Mirrors/archlinux/
 http://ftp.acc.umu.se/mirror/archlinux/
 http://ftp.byfly.by/pub/archlinux/
@@ -85,7 +87,6 @@ http://ftp.hosteurope.de/mirror/ftp.archlinux.org/
 http://ftp.icm.edu.pl/pub/Linux/dist/archlinux/
 http://ftp.iinet.net.au/pub/archlinux/
 http://ftp.jaist.ac.jp/pub/Linux/ArchLinux/
-http://ftp.kaist.ac.kr/ArchLinux/
 http://ftp.lanet.kr/pub/archlinux/
 http://ftp.linux.cz/pub/linux/arch/
 http://ftp.linux.org.tr/archlinux/
@@ -111,6 +112,7 @@ http://ftp.uni-kl.de/pub/linux/archlinux/
 http://ftp.vectranet.pl/archlinux/
 http://ftp.wrz.de/pub/archlinux/
 http://ftp.yzu.edu.tw/Linux/archlinux/
+http://ftpmirror.infania.net/mirror/archlinux/
 http://ger.mirror.pkgbuild.com/
 http://glua.ua.pt/pub/archlinux/
 http://gluttony.sin.cvut.cz/arch/
@@ -123,7 +125,6 @@ http://jpn.mirror.pkgbuild.com/
 http://linorg.usp.br/archlinux/
 http://linux.rz.rub.de/archlinux/
 http://lon.mirror.rackspace.com/archlinux/
-http://mex.mirror.pkgbuild.com/
 http://mir.archlinux.fr/
 http://mirror-archlinux.webruimtehosting.nl/
 http://mirror-hk.koddos.net/archlinux/
@@ -144,6 +145,7 @@ http://mirror.cedia.org.ec/archlinux/
 http://mirror.cedille.club/archlinux/
 http://mirror.chaoticum.net/arch/
 http://mirror.checkdomain.de/archlinux/
+http://mirror.cloroformo.org/archlinux/
 http://mirror.cs.pitt.edu/archlinux/
 http://mirror.cs.vt.edu/pub/ArchLinux/
 http://mirror.csclub.uwaterloo.ca/archlinux/
@@ -155,7 +157,7 @@ http://mirror.dc02.hackingand.coffee/arch/
 http://mirror.digitalnova.at/archlinux/
 http://mirror.dkm.cz/archlinux/
 http://mirror.easyname.at/archlinux/
-http://mirror.edatel.net.co/archlinux/
+http://mirror.efect.ro/archlinux/
 http://mirror.es.its.nyu.edu/archlinux/
 http://mirror.espoch.edu.ec/archlinux/
 http://mirror.f4st.host/archlinux/
@@ -208,12 +210,14 @@ http://mirror.ps.kz/archlinux/
 http://mirror.pseudoform.org/
 http://mirror.puzzle.ch/archlinux/
 http://mirror.rackspace.com/archlinux/
+http://mirror.redrock.team/archlinux/
 http://mirror.reisenbauer.ee/archlinux/
 http://mirror.rise.ph/archlinux/
 http://mirror.rol.ru/archlinux/
 http://mirror.scd31.com/arch/
 http://mirror.selfnet.de/archlinux/
 http://mirror.sergal.org/archlinux/
+http://mirror.serverion.com/archlinux/
 http://mirror.sfo12.us.leaseweb.net/archlinux/
 http://mirror.siena.edu/archlinux/
 http://mirror.smith.geek.nz/archlinux/
@@ -221,6 +225,7 @@ http://mirror.srv.fail/archlinux/
 http://mirror.stephen304.com/archlinux/
 http://mirror.system.is/arch/
 http://mirror.t-home.mk/archlinux/
+http://mirror.telkomuniversity.ac.id/archlinux/
 http://mirror.terrahost.no/linux/archlinux/
 http://mirror.thekinrar.fr/archlinux/
 http://mirror.truenetwork.ru/archlinux/
@@ -229,6 +234,7 @@ http://mirror.ufam.edu.br/archlinux/
 http://mirror.ufro.cl/archlinux/
 http://mirror.ufscar.br/archlinux/
 http://mirror.umd.edu/archlinux/
+http://mirror.undisclose.de/archlinux/
 http://mirror.ungleich.ch/mirror/packages/archlinux/
 http://mirror.united-gameserver.de/archlinux/
 http://mirror.uta.edu.ec/archlinux/
@@ -241,6 +247,7 @@ http://mirror.wtnet.de/arch/
 http://mirror.xeonbd.com/archlinux/
 http://mirror.xtom.com.hk/archlinux/
 http://mirror.yandex.ru/archlinux/
+http://mirror2.evolution-host.com/archlinux/
 http://mirror2.totbb.net/archlinux/
 http://mirrors.163.com/archlinux/
 http://mirrors.acm.wpi.edu/archlinux/
@@ -257,12 +264,12 @@ http://mirrors.evowise.com/archlinux/
 http://mirrors.gigenet.com/archlinux/
 http://mirrors.ims.nksc.lt/archlinux/
 http://mirrors.kernel.org/archlinux/
-http://mirrors.kurnode.com/archlinux/
 http://mirrors.liquidweb.com/archlinux/
 http://mirrors.lug.mtu.edu/archlinux/
 http://mirrors.m247.ro/archlinux/
 http://mirrors.manchester.m247.com/arch-linux/
 http://mirrors.mirjamali.ir/archlinux/
+http://mirrors.mit.edu/archlinux/
 http://mirrors.myaegean.gr/linux/archlinux/
 http://mirrors.n-ix.net/archlinux/
 http://mirrors.nav.ro/archlinux/
@@ -273,7 +280,6 @@ http://mirrors.nix.org.ua/linux/archlinux/
 http://mirrors.niyawe.de/archlinux/
 http://mirrors.nxthost.com/archlinux/
 http://mirrors.ocf.berkeley.edu/archlinux/
-http://mirrors.phx.ms/arch/
 http://mirrors.pidginhost.com/arch/
 http://mirrors.prometeus.net/archlinux/
 http://mirrors.rit.edu/archlinux/
@@ -296,9 +302,9 @@ http://nova.quantum-mirror.hu/mirrors/pub/archlinux/
 http://ord.mirror.rackspace.com/archlinux/
 http://osl.ugr.es/archlinux/
 http://packages.oth-regensburg.de/archlinux/
-http://pet.inf.ufsc.br/mirrors/archlinux/
 http://piotrkosoft.net/pub/mirrors/ftp.archlinux.org/
 http://pkg.adfinis-sygroup.ch/archlinux/
+http://plug-mirror.rcac.purdue.edu/archlinux/
 http://quantum-mirror.hu/mirrors/pub/archlinux/
 http://reflector.luehm.com/arch/
 http://repo.ialab.dsu.edu/archlinux/

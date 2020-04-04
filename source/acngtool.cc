@@ -285,7 +285,7 @@ void DownloadItem(const tHttpUrl &url, IDlConFactory &pDlconFac, const SHARED_PT
 {
 	dlcon dl("", nullptr, &pDlconFac);
 	std::thread dlThread([&]() {dl.WorkLoop();});
-	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT);
+	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT, false);
 	int st;
 	auto fistatus = fi->WaitForFinish(&st);
 	// just be sure to set a proper error code
@@ -1116,7 +1116,7 @@ int wcat(LPCSTR surl, LPCSTR proxy, IFitemFactory* fac, IDlConFactory *pDlconFac
 	dlcon dl(true, nullptr, pDlconFac);
 
 	auto fi=fac->Create();
-	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT);
+	dl.AddJob(fi, &url, nullptr, nullptr, 0, cfg::REDIRMAX_DEFAULT, false);
 	dl.WorkLoop();
 	auto fistatus = fi->GetStatus();
 	header hh = fi->GetHeader();

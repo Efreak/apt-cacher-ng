@@ -59,7 +59,7 @@ void termsocket_async(int fd, event_base* base)
 	event* ev(nullptr);
 	try
 	{
-		LOGSTART2s("::termsocket", fd);
+		LOGSTARTsx("::termsocket", fd);
 		if (!fd)
 			return;
 		// initiate shutdown, i.e. sending FIN and giving the remote some time to confirm
@@ -85,12 +85,12 @@ void termsocket_async(int fd, event_base* base)
 
 void set_connect_sock_flags(evutil_socket_t fd)
 {
+		evutil_make_socket_nonblocking(fd);
 #ifndef NO_TCP_TUNNING
 		int yes(1);
-		::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 		::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
+		::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
 #endif
-		evutil_make_socket_nonblocking(fd);
 }
 
 }

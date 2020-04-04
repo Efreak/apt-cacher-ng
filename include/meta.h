@@ -347,7 +347,7 @@ ACNG_API off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp
 
 void replaceChars(mstring &s, LPCSTR szBadChars, char goodChar);
 
-extern cmstring sEmptyString;
+extern ACNG_API cmstring sEmptyString;
 
 //! iterator-like helper for string splitting, for convenient use with for-loops
 // Works exactly once!

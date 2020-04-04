@@ -24,50 +24,64 @@ capath("/etc/ssl/certs"), cafile, badredmime("text/html");
 #define COMPRLIST "(\\.gz|\\.bz2|\\.lzma|\\.xz|\\.zst)"
 #define ALXPATTERN ".*\\.(db|files|abs)(\\.tar" COMPRLIST ")?"
 #define COMPOPT COMPRLIST"?"
+#define HEX(len) "[a-f0-9]{" STRINGIFY(len) "}"
+#define HEXSEQ "[a-f0-9]+"
+#define PKGS "(\\.[ud]?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")"
+#define CSUM "(SHA|MD)[0-9]+"
+#define CSUMS "(SHA|MD)[0-9]+SUM"
+
 //#define COMPONENT_OPTIONAL "(-[a-z0-9-])"
 //#define PARANOIASOURCE "(\\.orig|\\.debian)"
 
 string spfilepat;
 
-string pfilepat(".*(\\.(u|d)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST
-		"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
-		"|\\.debdelta|\\.diff/.*\\.gz"
-		"|[a-f0-9]+-(susedata|updateinfo|primary|deltainfo).xml.gz" //opensuse, index data, hash in filename
-		"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
-		"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
-    "|/[[:alpha:]]{1,2}/[a-f0-9]{64}(-[a-f0-9]{64})?(\\.gz)?" // FreeBSD, after https://alioth.debian.org/tracker/?func=detail&atid=413111&aid=315254&group_id=100566
-    "|/by-hash/(SHA|MD)[0-9]+/.*" // support Debian/Ubuntu by-hash index files
+string pfilepat
+("^.*("
+	PKGS
+	"|\\.diff" COMPRLIST "|\\.jigdo|\\.template|changelog|copyright"
+	"|\\.debdelta|\\.diff/.*\\.gz"
+	"|" HEXSEQ "-(susedata|updateinfo|primary|deltainfo).xml.gz" //opensuse, index data, hash in filename
+	"|fonts/(final/)?[a-z]+32.exe(\\?download.*)?" // msttcorefonts, fonts/final/comic32.exe /corefonts/comic32.exe plus SF's parameters
+	"|/dists/.*/installer-[^/]+/[0-9][^/]+/images/.*" // d-i stuff with revision
+    "|/[[:alpha:]]{1,2}/" HEX(64) "(-" HEX(64) ")?(\\.gz)?" // FreeBSD, after https://alioth.debian.org/tracker/?func=detail&atid=413111&aid=315254&group_id=100566
+    "|/by-hash/" CSUM "/.*" // support Debian/Ubuntu by-hash index files
     "|\\.asc$" // all remaining PGP signatures. Assuming that volatile ones are matched below.
     "|changelogs/pool/.*/changelog.txt$" // packages.ultimediaos.com
     "|/objects/.*/.*\\.(dirtree|filez|commit|commitmeta)|/repo/deltas/.*" // FlatPak
     // for Fedora 29 and 30 , https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=928270
+	// XXX: add unit tests
     "|[a-f0-9]+-modules.yaml.gz|[a-f0-9]+-(primary|filelists|comps-[^.]*.[^.]*|updateinfo|prestodelta).xml(|.gz|.xz|.zck)"
-")$");
+
+	// cachable d-i directory listing with revision
+	//"|/dists/.*/installer-[^/]+/[0-9][^/]+(/images)?/" // d-i stuff with revision
+
+	")$");
 
 string svfilepat("/development/rawhide/.*"
     // more stuff for ubuntu dist-upgrader
     "|dists/.*dist-upgrader.*/current/.*" // /dists/xenial/main/dist-upgrader-all/current/xenial.tar.gz
     "|changelogs.ubuntu.com/meta.*" // changelogs.ubuntu.com/meta-release-lts-development
     // XXX: signature might change afterwards... any better solution than this location?
-    "|" INFOLDER ".*(\\.(d|u)?deb|\\.rpm|\\.drpm|\\.dsc|\\.tar" COMPRLIST ")\\.gpg$"
+    "|" INFOLDER ".*" PKGS "\\.gpg$"
     );
 
 string vfilepat(INFOLDER
 		"(Index|Packages" COMPOPT "|InRelease|Release|mirrors\\.txt|.*\\.gpg|NEWS\\.Debian"
 		"|Sources" COMPOPT "|release|index\\.db-.*\\.gz|Contents-[^/]*" COMPOPT
 		"|pkglist[^/]*\\.bz2|rclist[^/]*\\.bz2|meta-release[^/]*|Translation[^/]*" COMPOPT
-		"|MD5SUMS|SHA256SUMS|SHA1SUMS" // d-i stuff
+		"|" CSUMS // d-i stuff
 		"|((setup|setup-legacy)(\\.ini|\\.bz2|\\.hint)(\\.sig)?)|mirrors\\.lst" // cygwin
 		"|repo(index|md)\\.xml(\\.asc|\\.key)?|directory\\.yast" // opensuse
 		"|products|content(\\.asc|\\.key)?|media" // opensuse 2, are they important?
 		"|filelists\\.xml\\.gz|filelists\\.sqlite\\.bz2|repomd\\.xml" // SL, http://ra.khe.sh/computers/linux/apt-cacher-ng-with-yum.html
-		"|packages\\.[a-zA-Z][a-zA-Z]\\.gz|info\\.txt|license\\.tar\\.gz|license\\.zip" //opensuse
+		"|packages\\.[[:alpha:]]{2}\\.gz|info\\.txt|license\\.tar\\.gz|license\\.zip" //opensuse
 		"|" ALXPATTERN // Arch Linux
 		"|metalink\\?repo|.*prestodelta\\.xml\\.gz|repodata/.*\\.(yaml|yml|xml|sqlite)" COMPOPT // CentOS
 		"|\\.treeinfo|vmlinuz|(initrd|product|squashfs|updates)\\.img" // Fedora
 		"|\\.o" // https://bugs.launchpad.net/ubuntu/+source/apt-cacher-ng/+bug/1078224
-		"|Components-.*yml" COMPOPT // DEP-11 aka AppStream"
+		"|Components-.*yml" COMPOPT // DEP-11 aka AppStream
 		"|icons-[x0-9]+\\.tar" COMPOPT
+		"|CID-Index-[[:alnum:]]+\\.json" COMPOPT
 		"|(latest|pub)\\.ssl" // FreeBSD
 		")$" // end of filename-only patterns
 
@@ -92,7 +106,7 @@ string wfilepat(INFOLDER
 		"|" ALXPATTERN // Arch Linux
 		"|[a-z]+32.exe"
 		"|mirrors.ubuntu.com/mirrors.txt"
-    "|/[[:alpha:]]{1,2}/[a-f0-9]{64}(-[a-f0-9]{64})?(\\.gz)?" // FIXME: add expiration code
+    "|/[[:alpha:]]{1,2}/" HEX(64) "(-" HEX(64) ")?(\\.gz)?" // FIXME: add expiration code
 		")$");
 
 string pfilepatEx, spfilepatEx, vfilepatEx, svfilepatEx, wfilepatEx; // for customization by user
@@ -118,7 +132,7 @@ int dnscachetime(30);
 int dnscachetime(1800);
 #endif
 
-string ACNG_API agentname("Debian Apt-Cacher-NG/" ACVERSION);
+string ACNG_API agentname("Apt-Cacher-NG/" ACVERSION);
 string ACNG_API remoteport("80"), port(ACNG_DEF_PORT);
 string ACNG_API agentheader;
 

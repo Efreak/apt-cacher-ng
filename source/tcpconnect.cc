@@ -82,7 +82,7 @@ tcpconnect::~tcpconnect()
 
 inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 {
-	LOGSTART2("tcpconnect::_Connect", "hostname: " << m_sHostName);
+	LOGSTARTFUNCx(m_sHostName, timeout);
 
 	auto dns = CAddrInfo::CachedResolve(m_sHostName, m_sPort, sErrorMsg);
 
@@ -125,7 +125,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 				return false;
 			}
 			set_connect_sock_flags(fd);
-#if DEBUG
+#ifdef DEBUG
 			log::err(string("Connecting: ") + formatIpPort(dns));
 #endif
 			while (true)
@@ -337,7 +337,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 
 void tcpconnect::Disconnect()
 {
-	LOGSTART2("tcpconnect::_Disconnect", m_sHostName);
+	LOGSTARTFUNCx(m_sHostName);
 
 #ifdef DEBUG
 	nDisconCount.fetch_add(m_conFd >=0);
@@ -366,8 +366,7 @@ tDlStreamHandle dl_con_factory::CreateConnected(cmstring &sHostname, cmstring &s
 		mstring &sErrOut, bool *pbSecondHand, cfg::tRepoData::IHookHandler *pStateTracker
 		,bool bSsl, int timeout, bool nocache)
 {
-	LOGSTART2s("tcpconnect::CreateConnected", "hostname: " << sHostname << ", port: " << sPort
-			<< (bSsl?" with ssl":" , no ssl"));
+	LOGSTARTFUNCsx(sHostname, sPort, bSsl);
 
 	tDlStreamHandle p;
 #ifndef HAVE_SSL
@@ -448,7 +447,7 @@ void dl_con_factory::RecycleIdleConnection(tDlStreamHandle & handle)
 	if(!handle)
 		return;
 
-	LOGSTART2s("tcpconnect::RecycleIdleConnection", handle->m_sHostName);
+	LOGSTARTFUNCsx(handle->m_sHostName);
 
 	if(handle->m_pStateObserver)
 	{

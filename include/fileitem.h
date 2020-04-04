@@ -47,6 +47,13 @@ public:
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t hDataLen,
 			const char *pNextData,
 			bool bForcedRestart, bool &bDoCleanRestart) =0;
+	/**
+	 * For special implementations, member the original header data.
+	 * By default, drop that data since we pickup everything important already.
+	 */
+	virtual void SetRawResponseHeader(std::string) {}
+	virtual const std::string& GetRawResponseHeader() { return sEmptyString; }
+
 	void IncDlRefCount();
 	void DecDlRefCount(const mstring & sReasonStatusLine);
 	//virtual void SetFailureMode(const mstring & message, FiStatus fist=FIST_ERROR,

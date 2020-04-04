@@ -287,7 +287,7 @@ public:
 
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
-		dler.AddJob(spFi, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
+		dler.AddJob(spFi, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT, false);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		pFi->WaitForFinish(&nHttpCode);
@@ -360,7 +360,7 @@ public:
 			}
 		};
 		auto probe(make_shared<tFitemProbe>());
-		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT);
+		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT, false);
 		dler.WorkLoop();
 		int nHttpCode(100);
 		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
@@ -742,27 +742,3 @@ int main(int argc, char *argv[])
    argc-=nMyArgCount;
    return my_fuse_main(argc, argv);
 }
-
-#ifndef DEBUG
-namespace acng {
-// for the uber-clever GNU linker and should be removed by strip again
-namespace log
-{
-   void flush() {};
-   void misc(const string &s, const char )
-   {
-#ifdef SPAM
-      cerr << s << endl;
-#endif
-   }
-
-void err(const char *s, const char* z)
-{
-#ifdef SPAM
-      cerr << s << endl << z << endl;
-#endif
-
-};
-}
-}
-#endif

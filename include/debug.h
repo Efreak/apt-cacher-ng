@@ -35,18 +35,44 @@ namespace acng
 #define LOGSTART2s(x,y)
 #define DBGQLOG(x)
 #define dbgprint(x)
+#define LOGRET(x) return x;
 inline void dump_proc_status(){}; // strip away
 
 #else
 
-#define LOGLVL(n, x) if(acng::cfg::debug&n){ __logobj.GetFmter() << x; __logobj.Write(__FILE__,__LINE__); }
-#define LOG(x) LOGLVL(log::LOG_DEBUG, x)
+/*
+#ifdef __GNUC__
+#define __ACFUNC__  __FUNC__ // __PRETTY_FUNCTION__
+#elif MSCVER
+#define __ACFUNC__ __FUNCSIG__
+#else
+*/
+#define __ACFUNC__ __func__
+//#endif
 
-#define LOGSTARTFUNC t_logger __logobj(__func__, this);
+
+#define LOGVA(n, pfx, ...) if(acng::cfg::debug & n) \
+		{ auto&f=__logobj.GetFmter(pfx); tSS::Chain(f, ", ", __VA_ARGS__); \
+			__logobj.WriteWithContext(__FILE__ ":" STRINGIFY(__LINE__)); }
+
+#define LOGAPP(n, pfx, x) if(acng::cfg::debug&n){ __logobj.GetFmter(pfx) << x; __logobj.WriteWithContext(__FILE__ ":" STRINGIFY(__LINE__)); }
+
+#define LOG(what) LOGAPP(log::LOG_DEBUG, "- ", what)
+
 #define LOGSTART(x) t_logger __logobj(x, this);
 #define LOGSTARTs(x) t_logger __logobj(x, nullptr);
-#define LOGSTART2(x, y) t_logger __logobj(x, this); LOGLVL(log::LOG_DEBUG, y /* << "@" __FILE__ ":" << __LINE__  */ )
-#define LOGSTART2s(x, y) t_logger __logobj(x, nullptr); LOGLVL(log::LOG_DEBUG, y /*<< "@" __FILE__ ":" << __LINE__ */ )
+#define LOGSTARTx(nam, ...) LOGSTART(nam); LOGVA(log::LOG_DEBUG, "PARMS: ", __VA_ARGS__);
+#define LOGSTARTsx(nam, ...) LOGSTARTs(nam); LOGVA(log::LOG_DEBUG, "PARMS: ", __VA_ARGS__);
+//#define LOGSTART(x, y) t_logger __logobj(x, this); LOGLVL(log::LOG_DEBUG, y )
+//#define LOGSTART2s(x, y) t_logger __logobj(x, nullptr); LOGLVL(log::LOG_DEBUG, y)
+#define LOGRET(x) { __logobj.GetFmter4End() << " --> " << x << " @" __FILE__ ":" STRINGIFY(__LINE__); return x; }
+
+#define LOGSTARTFUNC LOGSTART(__ACFUNC__)
+#define LOGSTARTFUNCs LOGSTARTs(__ACFUNC__)
+#define LOGSTARTFUNCx(...) LOGSTARTx(__ACFUNC__, __VA_ARGS__)
+#define LOGSTARTFUNCsx(...) LOGSTARTsx(__ACFUNC__, __VA_ARGS__)
+#define LOGSTARTFUNCxs(...) LOGSTARTFUNCsx(__VA_ARGS__)
+
 
 #define dbgprint(x) std::cerr << x << std::endl;
 

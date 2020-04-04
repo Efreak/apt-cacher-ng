@@ -50,8 +50,11 @@ tSpecOpDetachable::~tSpecOpDetachable()
 cmstring GetFooter()
 {
         return mstring("<hr><address>Server: ") + cfg::agentname
-                + "&nbsp;&nbsp;|&nbsp;&nbsp;<a\nhref=\"https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=QDCK9C2ZGUKZY&source=url\">Donate!"
-                "</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a\nhref=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
+                + "&nbsp;&nbsp;"
+				"|&nbsp;&nbsp;<a\nhref=\"/\">Usage Information</a>&nbsp;&nbsp;"
+				"|&nbsp;&nbsp;<a\nhref=\"https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=QDCK9C2ZGUKZY&source=url\">Donate!"
+                "</a>&nbsp;&nbsp;"
+				"|&nbsp;&nbsp;<a\nhref=\"http://www.unix-ag.uni-kl.de/~bloch/acng/\">Apt-Cacher NG homepage</a></address>";
 }
 
 std::string to_base36(unsigned int val)

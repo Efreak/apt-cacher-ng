@@ -38,7 +38,7 @@ inline unsigned short GetCSTypeLen(CSTYPES t)
 	case CSTYPE_MD5: return 16;
 	case CSTYPE_SHA1: return 20;
 	case CSTYPE_SHA256: return 32;
-	case CSTYPE_SHA512: return 54;
+	case CSTYPE_SHA512: return 64;
 	default: return 0;
 	}
 }
