@@ -504,7 +504,12 @@ struct tDlJob
 				}
 
 				ldbg("contents: " << std::string(inBuf.rptr(), hDataLen));
-				inBuf.drop((unsigned long) hDataLen);
+
+				if(m_pStorage)
+					m_pStorage->SetRawResponseHeader(string(inBuf.rptr(), hDataLen));
+
+				inBuf.drop(size_t(hDataLen));
+
 				if (h.type != header::ANSWER)
 				{
 					dbgline;
@@ -619,7 +624,7 @@ struct tDlJob
 					}
 				}
 
-				if(!m_pStorage->DownloadStartedStoreHeader(h, hDataLen,
+				if(!m_pStorage->DownloadStartedStoreHeader(h, size_t(hDataLen),
 						inBuf.rptr(), bHotItem, bDoRetry))
 				{
 					if(bDoRetry)

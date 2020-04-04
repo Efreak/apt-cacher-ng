@@ -83,6 +83,11 @@ public:
 		m_nSizeChecked = m_nSizeSeen = 0;
 		return m_status = FIST_INITED;
 	}
+
+	string m_sHeader;
+	void SetRawResponseHeader(std::string s) override { m_sHeader = move(s); }
+	const std::string& GetRawResponseHeader() override { return m_sHeader; }
+
 	virtual int GetFileFd() override
 			{ return SPECIAL_FD; }; // something, don't care for now
 	virtual bool DownloadStartedStoreHeader(const header & h, size_t, const char *,
@@ -986,11 +991,34 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 	return R_DISCON;
 }
 
-
 inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 		const off_t &nGooddataSize, header& respHead)
 {
-	LOGSTART("job::BuildAndEnqueHeader");
+	LOGSTARTFUNCx(int(fistate), nGooddataSize);
+
+	auto& remoteHead = m_pItem.getFiPtr()->GetRawResponseHeader();
+	if(!remoteHead.empty())
+	{
+		const static std::string dummyTE("\nX-No-Trans-Encode:"), badTE("\nTransfer-Encoding:");
+		const char *szHeadBegin = remoteHead.c_str();
+		// don't care about its contents, with exception of chunked transfer-encoding
+		// since it's too messy to support, use the plain close-on-end strategy here
+		auto szTEHeader = strcasestr(szHeadBegin, badTE.c_str());
+		if(szTEHeader == nullptr)
+			m_sendbuf << remoteHead;
+		else
+		{
+			m_keepAlive = CLOSE;
+			m_sendbuf.add(szHeadBegin, szTEHeader - szHeadBegin);
+			// as long as the te string
+			m_sendbuf<<dummyTE;
+			auto szRest = szTEHeader + badTE.length();
+			m_sendbuf.add(szRest, szHeadBegin + remoteHead.length() - szRest);
+		}
+		if(strcasestr(szHeadBegin, "Connection: close\r\n"))
+			m_keepAlive = CLOSE;
+		return nullptr;
+	}
 
 	if(respHead.type != header::ANSWER)
 	{
@@ -1144,7 +1172,7 @@ inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,
 	if(m_reqHead.type==header::HEAD)
 		m_backstate=STATE_ALLDONE; // simulated head is prepared but don't send stuff
 
-	return 0;
+	return nullptr;
 }
 
 fileitem::FiStatus job::_SwitchToPtItem()

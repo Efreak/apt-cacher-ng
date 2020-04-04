@@ -385,7 +385,7 @@ void MakeAbsolutePath(std::string &dirToFix, const std::string &reldir)
 
 extern uint_fast16_t hexmap[];
 
-cmstring sEmptyString("");
+cmstring sEmptyString;
 
 /*
 int GetSimilarity(cmstring& wanted, cmstring& candidate)

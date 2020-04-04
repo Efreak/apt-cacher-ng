@@ -40,13 +40,15 @@ inline void dump_proc_status(){}; // strip away
 
 #else
 
-#ifdef GNUC
-#define __ACFUNC__  /*__PRETTY_FUNCTION__*/ __FUNC__
+/*
+#ifdef __GNUC__
+#define __ACFUNC__  __FUNC__ // __PRETTY_FUNCTION__
 #elif MSCVER
 #define __ACFUNC__ __FUNCSIG__
 #else
+*/
 #define __ACFUNC__ __func__
-#endif
+//#endif
 
 
 #define LOGVA(n, pfx, ...) if(acng::cfg::debug & n) \
