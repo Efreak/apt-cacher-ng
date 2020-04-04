@@ -126,6 +126,21 @@ public:
 	{ if(val) return add(val, strlen(val)); else return add("(null)", 6); }
 	inline tSS & add(cmstring& val) { return add((const char*) val.data(), (size_t) val.size());}
 
+
+	template <typename Arg>
+	static void Chain(tSS& fmter, const std::string& delimiter, Arg arg) {
+		(void) delimiter;
+		fmter << arg;
+	}
+	template <typename First, typename... Args>
+	static void Chain(tSS& fmter, const std::string& delimiter, First first, Args... args) {
+		Chain(fmter, delimiter, first);
+		fmter << delimiter;
+		Chain(fmter, delimiter, args...);
+	}
+
+
+
 protected:
 	fmtflags m_fmtmode;
 	/// make sure to have at least minWriteCapa bytes extra available for writing

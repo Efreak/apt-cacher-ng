@@ -32,7 +32,7 @@ conn::conn(unique_fd fd, const char *c) :
 	if(c) // if nullptr, pick up later when sent by the wrapper
 		m_sClientHost=c;
 
-	LOGSTART2("con::con", "fd: " << m_confd << ", clienthost: " << c);
+	LOGSTARTx("con::con", m_confd, c);
 
 #ifdef DEBUG
 	m_nProcessedJobs=0;

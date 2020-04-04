@@ -98,7 +98,8 @@ public:
 	{
 		lockuniq g(this);
 
-		LOGSTART2("tPassThroughFitem::StoreFileData", "status: " << (int) m_status);
+		LOGSTARTFUNCx(size);
+		LOG("status: " << int(m_status));
 
 		// something might care, most likely... also about BOUNCE action
 		notifyAll();
@@ -218,7 +219,7 @@ job::job(header &&h, conn *pParent) :
 	m_type(rex::FILE_INVALID),
 	m_nReqRangeFrom(-1), m_nReqRangeTo(-1)
 {
-	LOGSTART2("job::job", "job creating\n" << h.ToString());
+	LOGSTARTFUNCx(h.ToString());
 }
 
 static const string miscError(" [HTTP error, code: ");
@@ -1156,7 +1157,7 @@ fileitem::FiStatus job::_SwitchToPtItem()
 
 void job::SetErrorResponse(const char * errorLine, const char *szLocation, const char *bodytext)
 {
-	LOGSTART2("job::SetErrorResponse", errorLine << " ; for " << m_sOrigUrl);
+	LOGSTARTFUNCx(errorLine, m_sOrigUrl);
 	class erroritem: public tGeneratedFitemBase
 	{
 	public:

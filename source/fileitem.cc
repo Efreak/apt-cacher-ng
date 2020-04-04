@@ -143,7 +143,7 @@ void fileitem::ResetCacheState()
 
 fileitem::FiStatus fileitem::Setup(bool bCheckFreshness)
 {
-	LOGSTART2("fileitem::Setup", bCheckFreshness);
+	LOGSTARTFUNCx(bCheckFreshness);
 
 	setLockGuard;
 
@@ -655,8 +655,7 @@ bool fileitem_with_storage::DownloadStartedStoreHeader(const header & h, size_t 
 bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 {
 	setLockGuard;
-
-	LOGSTART2("fileitem::StoreFileData", "status: " <<  (int) m_status << ", size: " << size);
+	LOGSTARTFUNCx(int(size));
 
 	// something might care, most likely... also about BOUNCE action
 	notifyAll();
@@ -782,7 +781,7 @@ inline void fileItemMgmt::Unreg()
 
 bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped, bool bConsiderAltStore)
 {
-	LOGSTART2("fileitem::GetFileItem", sPathUnescaped);
+	LOGSTARTFUNCx(bConsiderAltStore);
 
 	try
 	{
@@ -841,7 +840,7 @@ bool fileItemMgmt::PrepareRegisteredFileItemWithStorage(cmstring &sPathUnescaped
 // make the fileitem globally accessible
 bool fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 {
-	LOGSTART2("fileitem::RegisterFileItem", spCustomFileItem->m_sPathRel);
+	LOGSTARTFUNCx(spCustomFileItem->m_sPathRel);
 
 	if (!spCustomFileItem || spCustomFileItem->m_sPathRel.empty())
 		return false;
@@ -862,7 +861,7 @@ bool fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 
 void fileItemMgmt::RegisterFileitemLocalOnly(fileitem* replacement)
 {
-	LOGSTART2("fileItemMgmt::ReplaceWithLocal", replacement);
+	LOGSTARTFUNCx(replacement);
 	Unreg();
 	m_ptr.reset(replacement);
 }
@@ -873,10 +872,11 @@ void fileItemMgmt::RegisterFileitemLocalOnly(fileitem* replacement)
 // thread but us is using them.
 time_t fileItemMgmt::BackgroundCleanup()
 {
-	LOGSTART2s("fileItemMgmt::BackgroundCleanup", GetTime());
+	auto now = GetTime();
+	LOGSTARTFUNCsx(now);
 	lockguard lockGlobalMap(mapItemsMx);
 
-	time_t now = GetTime();
+
 	time_t oldestGet = END_OF_TIME;
 	time_t expBefore = now - MAXTEMPDELAY;
 

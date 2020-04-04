@@ -815,8 +815,8 @@ dlcon::~dlcon()
 
 inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tDljQueue &inpipe)
 {
-	LOGSTART2("dlcon::ExchangeData",
-			"qsize: " << inpipe.size() << ", sendbuf size: "
+	LOGSTARTFUNC;
+	LOG("qsize: " << inpipe.size() << ", sendbuf size: "
 			<< m_sendBuf.size() << ", inbuf size: " << m_inBuf.size());
 
 	fd_set rfds, wfds;
@@ -1159,8 +1159,7 @@ void dlcon::WorkLoop()
 
 	auto BlacklistMirror = [&](tDlJobPtr & job)
 	{
-		LOGSTART2("BlacklistMirror", "blacklisting " <<
-				job->GetPeerHost().ToURI(false));
+		LOGSTARTx("BlacklistMirror", job->GetPeerHost().ToURI(false));
 		m_blacklist[std::make_pair(job->GetPeerHost().sHost,
 				job->GetPeerHost().GetPort())] = sErrorMsg;
 	};

@@ -33,7 +33,7 @@ static acmutex mx;
 #ifndef DEBUG
 bool logIsEnabled = false;
 #else
-bool logIsEnabled = true;
+ACNG_API bool logIsEnabled = true;
 #endif
 
 std::atomic<off_t> totalIn(0), totalOut(0);

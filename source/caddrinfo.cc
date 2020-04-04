@@ -33,7 +33,7 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 		const evutil_addrinfo* pHints,
 		bool & bTransientError)
 {
-	LOGSTART2("CAddrInfo::Resolve", "Resolving " << sHostname);
+	LOGSTARTFUNCx(sHostname);
 
 	sErrorBuf.clear();
 	auto filter_specific = (cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC);

@@ -66,7 +66,7 @@ void do_resume();
 
 void do_accept(const std::shared_ptr<evasocket>& soc)
 {
-	LOGSTART2s("do_accept", soc->fd());
+	LOGSTARTFUNCxs(soc->fd());
 
 	struct sockaddr_storage addr;
 	socklen_t addrlen = sizeof(addr);
@@ -201,11 +201,10 @@ auto SpawnThreadsAsNeeded = []()
 
 void SetupConAndGo(unique_fd man_fd, const char *szClientName, const char *portName)
 {
-	LOGSTART2s("SetupConAndGo", man_fd.get());
+	LOGSTARTFUNCs
 
 	if (!szClientName)
 		szClientName = "";
-
 
 	USRDBG("Client name: " << szClientName << ":" << portName);
 
@@ -242,7 +241,7 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName, const char *portN
 
 bool bind_and_listen(shared_ptr<evasocket> mSock, const evutil_addrinfo *pAddrInfo)
 		{
-	LOGSTART2s("bind_and_listen", formatIpPort(pAddrInfo));
+	LOGSTARTFUNCxs(formatIpPort(pAddrInfo));
 			if ( ::bind(mSock->fd(), pAddrInfo->ai_addr, pAddrInfo->ai_addrlen))
 			{
 				log::flush();
@@ -279,7 +278,7 @@ std::string scratchBuf;
 
 unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 {
-	LOGSTART2s("Setup::ConAddr", 0);
+	LOGSTARTFUNCxs(addi, port);
 
 	CAddrInfo resolver;
 	auto hints = evutil_addrinfo();
@@ -336,7 +335,7 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 
 int ACNG_API Setup()
 {
-	LOGSTART2s("Setup", 0);
+	LOGSTARTFUNCs;
 	
 	if (cfg::udspath.empty() && cfg::port.empty())
 	{
@@ -412,7 +411,7 @@ int ACNG_API Setup()
 
 int ACNG_API Run()
 {
-	LOGSTART2s("Run", "GoGoGo");
+	LOGSTARTFUNCs
 
 #ifdef HAVE_SD_NOTIFY
 	sd_notify(0, "READY=1");

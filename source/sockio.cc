@@ -59,7 +59,7 @@ void termsocket_async(int fd, event_base* base)
 	event* ev(nullptr);
 	try
 	{
-		LOGSTART2s("::termsocket", fd);
+		LOGSTARTsx("::termsocket", fd);
 		if (!fd)
 			return;
 		// initiate shutdown, i.e. sending FIN and giving the remote some time to confirm
