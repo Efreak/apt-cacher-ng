@@ -163,11 +163,15 @@ public:
 	inline fileItemMgmt() {}
 	inline tFileItemPtr getFiPtr() {return m_ptr;}
 	inline operator bool() const {return (bool) m_ptr;}
-
-	tFileItemPtr m_ptr;
+	/**
+	 * Unregister from global lookup (running cleanup actions as needed)
+	 * and clear internal reference.
+	 */
+	void reset();
 
 private:
-	void Unreg();
+
+	tFileItemPtr m_ptr;
 
 	fileItemMgmt(const fileItemMgmt &src);
 	fileItemMgmt& operator=(const fileItemMgmt &src);

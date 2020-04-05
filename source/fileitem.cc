@@ -728,12 +728,12 @@ bool fileitem_with_storage::StoreFileData(const char *data, unsigned int size)
 fileItemMgmt::~fileItemMgmt()
 {
 	LOGSTART("fileItemMgmt::~fileItemMgmt");
-	Unreg();
+	reset();
 }
 
-inline void fileItemMgmt::Unreg()
+void fileItemMgmt::reset()
 {
-	LOGSTART("fileItemMgmt::Unreg");
+	LOGSTARTFUNC
 
 	if(!m_ptr) // unregistered before?
 		return;
@@ -849,7 +849,7 @@ bool fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 	if (!spCustomFileItem || spCustomFileItem->m_sPathRel.empty())
 		return false;
 
-	Unreg();
+	reset();
 
 	lockguard lockGlobalMap(mapItemsMx);
 
@@ -866,7 +866,7 @@ bool fileItemMgmt::RegisterFileItem(tFileItemPtr spCustomFileItem)
 void fileItemMgmt::RegisterFileitemLocalOnly(fileitem* replacement)
 {
 	LOGSTARTFUNCx(replacement);
-	Unreg();
+	reset();
 	m_ptr.reset(replacement);
 }
 

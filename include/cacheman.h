@@ -101,7 +101,7 @@ protected:
 
 	// evil shortcut, might point to read-only dummy... to be used with care
 	tIfileAttribs &GetRWFlags(cmstring &sPathRel);
-	void UpdateVolatileFiles();
+	bool UpdateVolatileFiles();
 	void _BusyDisplayLogs();
 	void _Usermsg(mstring m);
 	bool AddIFileCandidate(const mstring &sFileRel);

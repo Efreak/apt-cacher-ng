@@ -677,9 +677,9 @@ void expiration::TrimFiles()
 			item.PrepareRegisteredFileItemWithStorage(fil, true);
 			if(!item)
 				continue;
-			lockguard g(item.m_ptr.get());
+			lockguard g(item.getFiPtr().get());
 			off_t nix;
-			if(item.m_ptr->GetStatusUnlocked(nix) >= fileitem::FIST_DLGOTHEAD)
+			if(item.getFiPtr()->GetStatusUnlocked(nix) >= fileitem::FIST_DLGOTHEAD)
 				continue;
 
 			if(0 != truncate(fil.c_str(), stinfo.st_size))
