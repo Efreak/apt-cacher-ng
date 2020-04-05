@@ -37,7 +37,7 @@ class ACNG_API dlcon
         bool AddJob(SHARED_PTR<fileitem> m_pItem, const tHttpUrl *pForcedUrl,
         		const cfg::tRepoData *pRepoDesc,
         		cmstring *sPatSuffix, LPCSTR reqHead,
-				int nMaxRedirection, const char* szHeaderXff);
+				int nMaxRedirection, bool isPassThroughRequest);
 };
 
 #define IS_REDIRECT(st) (st == 301 || st == 302 || st == 307)

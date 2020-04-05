@@ -238,6 +238,7 @@ void term_handler(evutil_socket_t signum, short what, void *arg)
 	case (SIGINT):
 	case (SIGQUIT):
 	{
+		evabase::in_shutdown.store(true);
 		evabase::SignalStop();
 		break;
 	}
@@ -320,6 +321,7 @@ struct tAppStartStop
 	}
 	~tAppStartStop()
 	{
+		g_global_shutdown = true;
 		cleaner::GetInstance().Stop();
 		if (!cfg::pidfile.empty())
 			unlink(cfg::pidfile.c_str());

@@ -1,4 +1,4 @@
-apt-cacher-ng (3.4) SOMETIMES-YOU-EAT-THE-BEAR; urgency=low
+apt-cacher-ng (4) FOR-ELIZA; urgency=low
 
 TODO: tomcrypt build test
 TODO: make idle connection timeout configurable
@@ -39,6 +39,60 @@ TODO: how big is tConnectionCache::iterator?
     side cache
 
  -- 
+apt-cacher-ng (3.4) ALTERED-HYDROGEN; urgency=low
+
+  [ Various bugfixes]
+
+  * potential fix for a programming bug where a bad redirection was reported
+    although the source was rewritten correctly (Debian bug 952811)
+  * potential fix for SHA512 related problems (the considered string length
+    was too short which might break comparisons on file import and validation)
+  * Fix bug of the incoming connection thread pool, sometimes not starting IO
+    processing immediately due to miscalculation of required worker thread
+    count. Apparently a regression since version 3.3.
+
+  [ For single request Pass-Through mode (DontCache rule) ]
+
+  * Fix response body corruption in pass-through items
+  * Partial support for directory listing (PT, no caching yet)
+  * Permit non-categorized file extensions when PT rule is active
+  * Permit encoding negotiation on PT items (gzip deflated), previously there
+    was a bug where deflated contents could be delivered although not declared
+    as such, now it's explicitly allowed (where it fits into the flow) or not
+    avoided
+  * Fix potential thread leak
+
+  [ Miscellaneous]
+
+  * Database update
+  * Added CID-Index files to Debian's DEP11 file filter
+  * Internal refactoring, better debug logging
+
+ -- Eduard Bloch <blade@debian.org>  Sun, 05 Apr 2020 18:22:54 +0200
+
+apt-cacher-ng (3.3.1) A-LITTLE-BUGFIX-FOR-A-MAN; urgency=medium
+
+  * POTENTIAL SECURITY ISSUE (CVE-2020-5202):
+    - in certain situations, the maint job run by acngtool could leak the
+      administrator credentials from apt-cacher-ng configuration. This is only
+      likely if the attacker is able to impersonate the daemon with an own
+      server listening on the same port.
+    - The mitigation path for this is:
+      - SocketPath option is configured by default
+      - By default, acngtool only attempts to run the maint job through the
+        Unix Domain Socket. If SocketPath is not set but admin credentials are
+        configured, the operation is denied.
+      - For non-standard cases where acngtool is used to run special arbitrary
+        commands (ACNG_REQ variable) and the operation through SocketPath is not
+        possible (i.e. missing permissions or the tool is run on a different
+        host), the operation through TCP can be enforced with ACNG_INSECURE
+        environment variable
+  * Support .zst compressed packages (reference:
+    https://www.archlinux.org/news/now-using-zstandard-instead-of-xz-for-package-compression/ )
+  * Added global cancelation points for the daemon shutdown phase, now
+    terminating sooner especially when a maintenance jobs runs in background
+
+ -- Eduard Bloch <blade@debian.org>  Wed, 08 Jan 2020 20:47:37 +0100
 
 apt-cacher-ng (3.3) THE-CLAMPS-ARE-MARCHING; urgency=low
 

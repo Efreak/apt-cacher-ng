@@ -33,7 +33,7 @@ static acmutex mx;
 #ifndef DEBUG
 bool logIsEnabled = false;
 #else
-bool logIsEnabled = true;
+ACNG_API bool logIsEnabled = true;
 #endif
 
 std::atomic<off_t> totalIn(0), totalOut(0);
@@ -201,7 +201,7 @@ void misc(const string & sLine, const char cLogType)
 		fStat.flush();
 }
 
-void err(const char *msg, size_t len)
+void ACNG_API err(const char *msg, size_t len)
 {
 	if(!logIsEnabled)
 		return;
@@ -408,56 +408,76 @@ string GetStatReport()
 
 #ifdef DEBUG
 
-static struct : public base_with_mutex, public std::map<pthread_t, int>
-{} indentPerThread;
+thread_local unsigned gtls_indent_level=0;
 
-t_logger::t_logger(const char *szFuncName,  const void * ptr)
+t_logger::t_logger(const char *szFuncName,  const void * ptr, const char *szIndentString)
+: m_szName(szFuncName), m_szIndentString(szIndentString)
 {
 	if(!cfg::debug) return;
-	m_id = pthread_self();
-	m_szName = szFuncName;
-	callobj = uintptr_t(ptr);
-	{
-		lockguard __lockguard(indentPerThread);
-		m_nLevel = indentPerThread[m_id]++;
-	}
+	// explicit truncation, don't care about the PID part of it
+	auto id = uint32_t((uint64_t)pthread_self());
+	m_threadNameBEGIN = std::string(" [T:") + std::to_string(id);
+	m_objectIdEND = std::string(" P:") + std::to_string((uintptr_t)ptr) +"]";
 	// writing to the level of parent since it's being "created there"
-	GetFmter() << ">> " << szFuncName << " [T:"<<m_id<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
+	GetFmter(" >> ") << m_szName << m_threadNameBEGIN << m_objectIdEND;
 	Write();
-	m_nLevel++;
+	gtls_indent_level++;
 }
 
 t_logger::~t_logger()
 {
 	if(!cfg::debug) return;
-	m_nLevel--;
-	GetFmter() << "<< " << m_szName << " [T:"<<m_id<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
+	if(m_szName)
+	{
+		gtls_indent_level--;
+		GetFmter(" << ") << m_szName << m_threadNameBEGIN << m_objectIdEND;
+	}
+	else
+	{
+		// otherwise there is unfinished string in buffer for the printing
+	}
 	Write();
-	lockguard __lockguard(indentPerThread);
-	indentPerThread[m_id]--;
-	if(0 == indentPerThread[m_id])
-		indentPerThread.erase(m_id);
 }
 
-tSS & t_logger::GetFmter()
+/**
+ * Start formating the last string in this scope, which shall replace the exit string
+ */
+tSS & t_logger::GetFmter4End()
+{
+	gtls_indent_level--;
+	auto& ret = GetFmter();
+	GetFmter(" << ") << m_szName << m_threadNameBEGIN << m_objectIdEND;
+	m_szName = nullptr;
+	return ret;
+}
+/**
+ * Reset the format object into ready-to-format state, adjust indentation as needed
+ */
+tSS & t_logger::GetFmter(const char *szPrefix)
 {
 	m_strm.clear();
-	for(unsigned i=0;i<m_nLevel;i++)
-		m_strm << "\t";
-	m_strm<< " - ";
+	for(unsigned i=0;i<gtls_indent_level;i++)
+		m_strm << m_szIndentString;
+	if(szPrefix)
+		m_strm << szPrefix;
 	return m_strm;
 }
 
-void t_logger::Write(const char *pFile, unsigned int nLine)
+void t_logger::Write()
 {
-	if(pFile)
-	{
-		const char *p=strrchr(pFile, CPATHSEP);
-		pFile=p?(p+1):pFile;
-		m_strm << " [T:" << m_id << " S:" << pFile << ":" << tSS::dec << nLine
-				<<" P:0x"<< tSS::hex<< callobj << tSS::dec <<"]";
-	}
 	log::err(m_strm.c_str());
+	m_strm.clear();
+}
+
+void t_logger::WriteWithContext(const char *pSourceLocation)
+{
+	if(pSourceLocation)
+	{
+		const char *p=strrchr(pSourceLocation, CPATHSEP);
+		pSourceLocation=p?(p+1):pSourceLocation;
+		m_strm << m_threadNameBEGIN << " S:" << pSourceLocation << m_objectIdEND;
+	}
+	Write();
 }
 
 #endif

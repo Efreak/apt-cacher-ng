@@ -38,6 +38,8 @@ endif()
 if(NOT DEFINED(RUNDIR))
 	set(RUNDIR "/run")
 endif()
+set(SOCKET_PATH "${RUNDIR}/${PACKAGE}/socket")
+
 
 set(SOCKET_PATH "${RUNDIR}/${PACKAGE}/socket")
 

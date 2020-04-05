@@ -69,6 +69,8 @@ void cleaner::WorkLoop()
 			if(when == END_OF_TIME)
 				when = now | 0x3ffffffe;
 			wait_until(g, when, 111);
+			if(m_terminating || g_global_shutdown)
+				return;
 			continue;
 		}
 		stamps[what] = END_OF_TIME;
@@ -118,6 +120,8 @@ void cleaner::ScheduleFor(time_t when, eType what)
 	setLockGuard;
 	if(m_thr == 0)
 	{
+		if(g_global_shutdown)
+			return;
 		Init();
 		stamps[what] = when;
 		pthread_create(&m_thr, nullptr, CleanerThreadAction, (void *)this);
@@ -137,6 +141,8 @@ void cleaner::ScheduleFor(time_t when, eType what)
 
 void cleaner::Stop()
 {
+	LOGSTARTFUNC;
+
 	{
 		setLockGuard;
 

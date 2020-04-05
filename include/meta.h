@@ -340,7 +340,7 @@ ACNG_API mstring offttosH(off_t n);
 //template<typename charp>
 ACNG_API off_t strsizeToOfft(const char *sizeString); // XXX: if needed... charp sizeString, charp *next)
 
-extern cmstring sEmptyString;
+extern ACNG_API cmstring sEmptyString;
 
 //bool CreateDetachedThread(void *(*threadfunc)(void *));
 

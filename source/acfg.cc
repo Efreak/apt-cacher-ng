@@ -575,6 +575,8 @@ void ShutDown()
 {
 	mapUrl2pVname.clear();
 	repoparms.clear();
+   if(!fifopath.empty())
+	   mkbasedir(cfg::fifopath);
 }
 
 void dump_config(bool includeDelicate)

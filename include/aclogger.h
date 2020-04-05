@@ -10,18 +10,18 @@ namespace acng
 
 #ifdef DEBUG
 
-struct ACNG_API t_logger
+struct t_logger
 {
-	t_logger(const char *szFuncName, const void * ptr); // starts the logger, shifts stack depth
+	t_logger(const char *szFuncName, const void * ptr, const char* szIndent="   "); // starts the logger, shifts stack depth
 	~t_logger();
-	tSS & GetFmter();
-	void Write(const char *pFile = nullptr, unsigned int nLine = 0);
+	tSS & GetFmter(const char *szPrefix = " - ");
+	tSS & GetFmter4End();
+	void WriteWithContext(const char *pSourceLocation);
+	void Write();
 private:
 	tSS m_strm;
-	pthread_t m_id;
-	unsigned int m_nLevel;
-	const char * m_szName;
-	uintptr_t callobj;
+	const char * m_szName, *m_szIndentString;
+	std::string m_threadNameBEGIN, m_objectIdEND;
 	// don't copy
 	t_logger(const t_logger&);
 	t_logger operator=(const t_logger&);
@@ -34,6 +34,8 @@ private:
 
 namespace log
 {
+
+extern bool logIsEnabled;
 
 enum ETransferType
 	: char
@@ -60,10 +62,12 @@ void ACNG_API err(const char *msg, size_t len);
 void misc(const mstring & sLine, const char cLogType = 'M');
 inline void err(cmstring &msg)
 {
+	if(!logIsEnabled) return;
 	err(msg.data(), msg.length());
 }
 inline void err(const tSS& msg)
 {
+	if(!logIsEnabled) return;
 	err(msg.rptr(), msg.length());
 }
 void flush();

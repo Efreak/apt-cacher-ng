@@ -290,7 +290,7 @@ public:
 
 		tFitem *pFi = new tFitem(retbuf, len, pos, fid, bIsFirst);
 		tFileItemPtr spFi(static_cast<fileitem*>(pFi));
-		dler.AddJob(spFi, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT, nullptr);
+		dler.AddJob(spFi, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT, nullptr, false);
 		int nHttpCode(100);
 		pFi->WaitForFinish(&nHttpCode);
 		bIsFirst=false;
@@ -360,7 +360,7 @@ public:
 			}
 		};
 		auto probe(make_shared<tFitemProbe>());
-		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT, nullptr);
+		dler.AddJob(probe, &uri, 0, 0, 0, cfg::REDIRMAX_DEFAULT, nullptr, false);
 		int nHttpCode(100);
 		fileitem::FiStatus res = probe->WaitForFinish(&nHttpCode);
 		stbuf.st_size = atoofft(probe->GetHeaderUnlocked().h[header::CONTENT_LENGTH], 0);
@@ -751,27 +751,3 @@ int main(int argc, char *argv[])
 
    return my_fuse_main(argc, argv);
 }
-
-#ifndef DEBUG
-namespace acng {
-// for the uber-clever GNU linker and should be removed by strip again
-namespace log
-{
-   void flush() {};
-   void misc(const string &s, const char )
-   {
-#ifdef SPAM
-      cerr << s << endl;
-#endif
-   }
-
-void err(const char *s, const char* z)
-{
-#ifdef SPAM
-      cerr << s << endl << z << endl;
-#endif
-
-};
-}
-}
-#endif

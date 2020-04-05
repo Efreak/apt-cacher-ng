@@ -48,7 +48,7 @@ deque<unique_ptr<conn>> g_freshConQueue;
 unsigned g_nStandbyThreads = 0, g_nTotalThreads=0;
 const struct timeval g_resumeTimeout { 2, 11 };
 
-void SetupConAndGo(unique_fd fd, const char *szClientName);
+void SetupConAndGo(unique_fd fd, const char *szClientName, const char *szPort);
 
 // safety mechanism, detect when the number of incoming connections
 // is growing A LOT faster than it can be processed 
@@ -62,7 +62,7 @@ void cb_resume(evutil_socket_t fd, short what, void* arg)
 
 void do_accept(evutil_socket_t server_fd, short what, void* arg)
 {
-	LOGSTART2s("do_accept", server_fd);
+	LOGSTARTFUNCxs(server_fd);
 	auto self((event*)arg);
 
 	if(evabase::in_shutdown)
@@ -107,14 +107,15 @@ void do_accept(evutil_socket_t server_fd, short what, void* arg)
 	if (addr.ss_family == AF_UNIX)
 	{
 		USRDBG("Detected incoming connection from the UNIX socket");
-		SetupConAndGo(move(man_fd), nullptr);
+		SetupConAndGo(move(man_fd), nullptr, "unix");
 	}
 	else
 	{
 		USRDBG("Detected incoming connection from the TCP socket");
 		char hbuf[NI_MAXHOST];
+		char pbuf[11];
 		if (getnameinfo((struct sockaddr*) &addr, addrlen, hbuf, sizeof(hbuf),
-				nullptr, 0, NI_NUMERICHOST))
+				pbuf, sizeof(pbuf), NI_NUMERICHOST|NI_NUMERICSERV))
 		{
 			log::err("ERROR: could not resolve hostname for incoming TCP host");
 			return;
@@ -137,7 +138,7 @@ void do_accept(evutil_socket_t server_fd, short what, void* arg)
 					"WARNING: attempted to use libwrap which was not enabled at build time");
 #endif
 		}
-		SetupConAndGo(move(man_fd), hbuf);
+		SetupConAndGo(move(man_fd), hbuf, pbuf);
 	}
 }
 
@@ -183,8 +184,8 @@ auto SpawnThreadsAsNeeded = []()
 		if(int(g_nTotalThreads+1)>=cfg::tpthreadmax || evabase::in_shutdown)
 		return false;
 
-	// need a custom one
-		if(g_nStandbyThreads == 0)
+		// need to prepare additional one for the caller?
+		if(g_nStandbyThreads <= g_freshConQueue.size())
 		{
 			try
 			{
@@ -203,15 +204,14 @@ auto SpawnThreadsAsNeeded = []()
 		return true;
 	};
 
-void SetupConAndGo(unique_fd man_fd, const char *szClientName)
+void SetupConAndGo(unique_fd man_fd, const char *szClientName, const char *portName)
 {
-	LOGSTART2s("SetupConAndGo", man_fd.get());
+	LOGSTARTFUNCs
 
 	if (!szClientName)
 		szClientName = "";
 
-
-	USRDBG("Client name: " << szClientName);
+	USRDBG("Client name: " << szClientName << ":" << portName);
 
 	lockguard g(g_thread_push_cond_var);
 
@@ -233,6 +233,8 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 		return;
 	}
 
+	g_thread_push_cond_var.notifyAll();
+
 	if (!SpawnThreadsAsNeeded())
 	{
 		tErrnoFmter fer(
@@ -244,7 +246,7 @@ void SetupConAndGo(unique_fd man_fd, const char *szClientName)
 
 bool bind_and_listen(evutil_socket_t mSock, const evutil_addrinfo *pAddrInfo, cmstring& port)
 		{
-	LOGSTART2s("bind_and_listen", formatIpPort(pAddrInfo));
+	LOGSTARTFUNCxs(formatIpPort(pAddrInfo));
 			if ( ::bind(mSock, pAddrInfo->ai_addr, pAddrInfo->ai_addrlen))
 			{
 				log::flush();
@@ -279,7 +281,7 @@ std::string scratchBuf;
 
 unsigned setup_tcp_listeners(cmstring& addi, const std::string& port)
 {
-	LOGSTARTs("Setup::ConAddr");
+	LOGSTARTFUNCxs(addi, port);
 	USRDBG("Binding on host: " << addi << ", port: " << port);
 
 	auto hints = evutil_addrinfo();
@@ -338,9 +340,9 @@ unsigned setup_tcp_listeners(cmstring& addi, const std::string& port)
 
 int ACNG_API Setup()
 {
-	LOGSTART2s("Setup", 0);
+	LOGSTARTFUNCs;
 	
-	if (cfg::udspath.empty() && (cfg::port.empty() && cfg::bindaddr.empty()))
+	if (cfg::udspath.empty() && cfg::port.empty())
 	{
 		cerr << "Neither TCP nor UNIX interface configured, cannot proceed.\n";
 		exit(EXIT_FAILURE);

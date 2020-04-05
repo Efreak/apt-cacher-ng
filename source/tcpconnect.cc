@@ -20,6 +20,7 @@
 #include "fileitem.h"
 #include "cleaner.h"
 #include "dnsiter.h"
+#include "evabase.h"
 //#include <tuple>
 #include <evabase.h>
 #include <event.h>

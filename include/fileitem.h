@@ -82,6 +82,13 @@ public:
 	 * 4 aborted because another download is active
 	 */
 	virtual short Set(cmstring srcPathRel, cmstring srcHeadRel, const header* h, bool sacrificeSource) {return false;}
+	/**
+	 * For special implementations, member the original header data.
+	 * By default, drop that data since we pickup everything important already.
+	 */
+	virtual void SetRawResponseHeader(std::string) {}
+	virtual const std::string& GetRawResponseHeader() { return sEmptyString; }
+
 
 	//! Detect when the last possible downloader disappears for any reason and mark this as error state then
 	void IncDlRefCount();
