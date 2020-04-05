@@ -1,21 +1,33 @@
 apt-cacher-ng (3.4) ALTERED-HYDROGEN; urgency=low
 
+  [ Various bugfixes]
+
   * potential fix for a programming bug where a bad redirection was reported
     although the source was rewritten correctly (Debian bug 952811)
-  * Fix file body corruption in pass-through items
   * potential fix for SHA512 related problems (the considered string length
     was too short which might break comparisons on file import and validation)
-  * Partial support for directory listing pass-through (no caching yet)
-  * Added CID-Index files to Debian's dep11 file filter
-  * Fix for deflated contents delivery with some clients in case of
-    pass-trough mode instead of the announced as-is encoding
   * Fix bug of the incoming connection thread pool, sometimes not starting IO
     processing immediately due to miscalculation of required worker thread
     count. Apparently a regression since version 3.3.
-  * Permit non-categorized file extensions when pass-through rule is active
-  * Database update
 
- -- 
+  [ For single request Pass-Through mode (DontCache rule) ]
+
+  * Fix response body corruption in pass-through items
+  * Partial support for directory listing (PT, no caching yet)
+  * Permit non-categorized file extensions when PT rule is active
+  * Permit encoding negotiation on PT items (gzip deflated), previously there
+    was a bug where deflated contents could be delivered although not declared
+    as such, now it's explicitly allowed (where it fits into the flow) or not
+    avoided
+  * Fix potential thread leak
+
+  [ Miscellaneous]
+
+  * Database update
+  * Added CID-Index files to Debian's DEP11 file filter
+  * Internal refactoring, better debug logging
+
+ -- Eduard Bloch <blade@debian.org>  Sun, 05 Apr 2020 18:22:54 +0200
 
 apt-cacher-ng (3.3.1) A-LITTLE-BUGFIX-FOR-A-MAN; urgency=medium
 

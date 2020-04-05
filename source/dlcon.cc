@@ -900,12 +900,8 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 		{
 			if (EINTR == errno)
 				continue;
-#ifdef MINIBUILD
-			string fer("select failed");
-#else
 			tErrnoFmter fer("FAILURE: select, ");
 			LOG(fer);
-#endif
 			sErrorMsg = string("500 Internal malfunction, ") + fer;
 			return HINT_DISCON|EFLAG_JOB_BROKEN|EFLAG_MIRROR_BROKEN;
 		}
