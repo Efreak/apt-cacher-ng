@@ -8,7 +8,7 @@ pkg_check_modules(fuse fuse)
 _append(acngfs_cflags ${fuse_CFLAGS} ${CFLAGS_PTHREAD})
 
 # double-check and make sure it compiles
-FILE(READ ../test/build/HAVE_FUSE_25.cc TESTSRC)
+FILE(READ ${PROJECT_SOURCE_DIR}/${TESTKITDIR}/HAVE_FUSE_25.cc TESTSRC)
 SET(CMAKE_REQUIRED_FLAGS "${ACNG_COMPFLAGS} ${acngfs_cflags}")
 CHECK_CXX_SOURCE_COMPILES("${TESTSRC}" HAVE_FUSE_25)
 
