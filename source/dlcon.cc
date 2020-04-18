@@ -289,7 +289,7 @@ struct tDlJob
 				const auto bliter = blacklist.find(
 						make_pair(m_pCurBackend->sHost, m_pCurBackend->GetPort()));
 				if (bliter == blacklist.end())
-					return true;
+					LOGRET(true);
 			}
 
 			// look in the constant list, either it's usable or it was blacklisted before
@@ -299,23 +299,25 @@ struct tDlJob
 				if (bliter == blacklist.end())
 				{
 					m_pCurBackend = &bend;
-					return true;
+					LOGRET(true);
 				}
 
 				// uh, blacklisted, remember the last reason
 				sReasonMsg = bliter->second;
 			}
-			return false;
+			if(sReasonMsg.empty())
+				sReasonMsg = "502 Mirror blocked due to repeated errors";
+			LOGRET(false);
 		}
 
 		// ok, not backend mode. Check the mirror data (vs. blacklist)
 		auto bliter = blacklist.find(
 				make_pair(GetPeerHost().sHost, GetPeerHost().GetPort()));
 		if (bliter == blacklist.end())
-			return true;
+			LOGRET(true);
 
 		sReasonMsg = bliter->second;
-		return false;
+		LOGRET(false);
 	}
 
 	// needs connectedHost, blacklist, output buffer from the parent, proxy mode?
