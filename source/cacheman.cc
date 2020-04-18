@@ -282,7 +282,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	const cfg::tRepoData *pRepoDesc=nullptr;
 	mstring sRemoteSuffix, sFilePathAbs(SABSPATH(sFilePathRel));
 
-	uint64_t prog_before = 0;
+	//uint64_t prog_before = 0;
 
 	fileItemMgmt fiaccess;
 	tHttpUrl parserPath, parserHead;
@@ -440,9 +440,11 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if (pFi->WaitForFinish(nullptr, 1,
 	[&](){
+		/*
 		auto prog_now = pFi->GetTransferCountUnlocked();
 		if(prog_now == prog_before) return;
 		prog_before = prog_now;
+		*/
 		SendChunk(".");
 	}
 	) == fileitem::FIST_COMPLETE
@@ -991,7 +993,6 @@ bool cacheman::StartDlder()
 		{
 			m_pDlcon->WorkLoop();
 		});
-		m_dlThread.detach();
 	} catch (...)
 	{
 		m_pDlcon->SignalStop();
