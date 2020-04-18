@@ -1,4 +1,4 @@
-apt-cacher-ng (3.5) I-NEED-A-NAME; urgency=low
+apt-cacher-ng (3.5) CLOUDY-WITH-A-CHANCE-OF-BURGERS; urgency=low
 
   * Faster stop of progrss observers on maintenance tasks
   * Avoid earlier stop on download errors in expirations, so all files for
@@ -6,6 +6,8 @@ apt-cacher-ng (3.5) I-NEED-A-NAME; urgency=low
     of multiple runs
   * Added little progress hints in expiration job, so that browsers don't
     close the connection due to suspected timeout
+  * Automatic blocking of IPv6 connection attempts in case of too many failed
+    attemption (where IPv4 was still working) and vice versa
 
  -- 
 

@@ -1825,7 +1825,8 @@ bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&
 	string sStartMark;
 
 	unsigned progHint=0;
-	tDtorEx postNewline([this, &progHint](){if(progHint>=1024) SendChunk("<br>\n");});
+#define STEP 2048
+	tDtorEx postNewline([this, &progHint](){if(progHint>=STEP) SendChunk("<br>\n");});
 
 	switch(idxType)
 	{
@@ -1839,10 +1840,8 @@ bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&
 		{
 			trimBack(sLine);
 			//cout << "file: " << *it << " line: "  << sLine<<endl;
-			if(0 == ((++progHint) & 1023))
-				SendChunk(".");
-			if(0 == (progHint & 131071))
-				SendChunk("<br>\n");
+			if(0 == ((++progHint) & (STEP-1)))
+				SendChunk("<wbr>.");
 
 
 			if (sLine.empty())

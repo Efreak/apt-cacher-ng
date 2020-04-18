@@ -80,11 +80,62 @@ tcpconnect::~tcpconnect()
 	}
 }
 
+class tProtoBlocker
+{
+	atomic_uint v4, v6;
+	// block connection type after that many failed attempts
+	const unsigned threshhold=4;
+    struct timeval block_time = {30,0};
+
+	static void reset_cb(evutil_socket_t, short, void *arg)
+	{
+		auto what = (std::atomic_uint*)arg;
+		what->store(0);
+	};
+public:
+	void report(int proto, unsigned fail_count)
+	{
+		if(0 == fail_count) return;
+
+		atomic_uint* what;
+		switch(proto)
+		{
+		case PF_INET: what=&v4; break;
+		case PF_INET6: what=&v6; break;
+		default: return;
+		}
+		auto before = what->fetch_add(fail_count);
+		if(before < threshhold && (before+fail_count) >= threshhold)
+		{
+			event_base_once(evabase::instance->base, -1, EV_TIMEOUT, reset_cb, &what, &block_time);
+		}
+	}
+	bool can_connect(int proto)
+	{
+		switch (proto)
+		{
+		case PF_INET:
+			return v4 < threshhold;
+		case PF_INET6:
+			return v6 < threshhold;
+		default:
+			return true;
+		}
+
+	}
+} proto_blocker;
+
 inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 {
 	LOGSTARTFUNCx(m_sHostName, timeout);
 
 	auto dns = CAddrInfo::CachedResolve(m_sHostName, m_sPort, sErrorMsg);
+
+	unsigned timeouts_v4(0), timeouts_v6(0);
+	tDtorEx transfer_timeout_counts([&](){
+		proto_blocker.report(PF_INET, timeouts_v4);
+		proto_blocker.report(PF_INET6, timeouts_v6);
+	});
 
 	if(!dns)
 	{
@@ -118,6 +169,15 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 		{
 			checkforceclose(fd);
 			tmexp = time_exp;
+
+			// check if temporary blacklisted
+			if(!proto_blocker.can_connect(dns->ai_family))
+			{
+				errno = EAFNOSUPPORT;
+				state = HANDLE_ERROR;
+				return false;
+			}
+
 			fd = ::socket(dns->ai_family, dns->ai_socktype, dns->ai_protocol);
 			if(fd == -1)
 			{
@@ -155,7 +215,16 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 	// pickup the first and/or probably the best errno code which can be reported to user
 	int error_prim = 0;
 
-	auto retGood = [&](int& fd) { std::swap(fd, m_conFd); return true; };
+	auto retGood = [&](tConData& condata)
+			{
+		std::swap(condata.fd, m_conFd);
+		// mark this as good protocol, report failure count on other on return later
+		if(condata.dns->ai_family == PF_INET6)
+			timeouts_v6 = 0;
+		else
+			timeouts_v4 = 0;
+		return true;
+	};
 	auto retError = [&](const std::string &errStr) { sErrorMsg = errStr; return false; };
 	auto withErrnoError = [&]() { return retError(tErrnoFmter("500 Connection failure: "));	};
 	auto withThisErrno = [&withErrnoError](int myErr) { errno = myErr; return withErrnoError(); };
@@ -181,7 +250,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			break;
 		case ADDR_PICKED:
 			if(prim.init_con(time_start + cfg::nettimeout))
-				return retGood(prim.fd);
+				return retGood(prim);
 			OPTSET(error_prim, errno);
 			__just_fall_through;
 		case SELECT_CONN:
@@ -189,6 +258,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			if(GetTime() >= prim.tmexp)
 			{
 				OPTSET(error_prim, ELVIS(errno, ETIMEDOUT));
+				++(prim.dns->ai_family == PF_INET ? timeouts_v4 : timeouts_v6);
 				prim.state = HANDLE_ERROR;
 				continue;
 			}
@@ -237,7 +307,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 		case ADDR_PICKED:
 		{
 			if(alt.init_con(GetTime() + cfg::fasttimeout))
-				return retGood(alt.fd);
+				return retGood(alt);
 			continue;
 		}
 		case PICK_ADDR:
@@ -256,6 +326,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			}
 			if(now >= alt.tmexp)
 			{
+				++(alt.dns->ai_family == PF_INET ? timeouts_v4 : timeouts_v6);
 				alt.state = HANDLE_ERROR;
 				continue;
 			}
@@ -320,7 +391,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 						prim.state = HANDLE_ERROR;
 					}
 					else
-						return retGood(p->fd);
+						return retGood(*p);
 				}
 			}
 		}
