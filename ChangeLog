@@ -1,3 +1,9 @@
+apt-cacher-ng (3.5) I-NEED-A-NAME; urgency=low
+
+  * Faster stop of progrss observers on maintenance tasks
+
+ -- 
+
 apt-cacher-ng (3.4) ALTERED-HYDROGEN; urgency=low
 
   [ Various bugfixes]
