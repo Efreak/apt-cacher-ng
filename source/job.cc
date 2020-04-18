@@ -251,7 +251,7 @@ job::~job()
 	m_pParentCon->LogDataCounts(
 			m_sFileLoc + (bErr ? (miscError + ltos(stcode) + ']') : sEmptyString),
 			m_reqHead.h[header::XFORWARDEDFOR],
-			(m_pItem ? m_pItem.getFiPtr()->GetTransferCount() : 0),
+			(m_pItem ? m_pItem.getFiPtr()->TakeTransferCount() : 0),
 			m_nAllDataCount, bErr);
 	
 	checkforceclose(m_filefd);

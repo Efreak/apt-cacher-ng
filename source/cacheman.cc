@@ -123,8 +123,13 @@ cacheman::cacheman(const tSpecialRequest::tRunParms& parms) :
 
 cacheman::~cacheman()
 {
-	delete m_pDlcon;
-	m_pDlcon=nullptr;
+	if(m_pDlcon)
+	{
+		m_pDlcon->SignalStop();
+		m_dlThread.join();
+		delete m_pDlcon;
+		m_pDlcon=nullptr;
+	}
 }
 
 bool cacheman::ProcessOthers(const string &, const struct stat &)
@@ -277,6 +282,8 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 	const cfg::tRepoData *pRepoDesc=nullptr;
 	mstring sRemoteSuffix, sFilePathAbs(SABSPATH(sFilePathRel));
 
+	uint64_t prog_before = 0;
+
 	fileItemMgmt fiaccess;
 	tHttpUrl parserPath, parserHead;
 	const tHttpUrl *pResolvedDirectUrl=nullptr;
@@ -339,7 +346,8 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 			<< sFilePathRel	<< "...\n";
 	}
 
-	StartDlder();
+	if(!StartDlder())
+		return false;
 
 	if (pForcedURL)
 		pResolvedDirectUrl=pForcedURL;
@@ -430,14 +438,20 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	m_pDlcon->AddJob(pFi, pResolvedDirectUrl, pRepoDesc, &sRemoteSuffix, 0, cfg::REDIRMAX_DEFAULT, false);
 
-	m_pDlcon->WorkLoop();
-	if (pFi->WaitForFinish(nullptr) == fileitem::FIST_COMPLETE
+	if (pFi->WaitForFinish(nullptr, 1,
+	[&](){
+		auto prog_now = pFi->GetTransferCountUnlocked();
+		if(prog_now == prog_before) return;
+		prog_before = prog_now;
+		SendChunk(".");
+	}
+	) == fileitem::FIST_COMPLETE
 			&& pFi->GetHeaderUnlocked().getStatus() == 200)
 	{
 		dbgline;
 		bSuccess = true;
 		if (NEEDED_VERBOSITY_ALL_BUT_ERRORS)
-			SendFmt << "<i>(" << pFi->GetTransferCount() / 1024 << "KiB)</i>\n";
+			SendFmt << "<i>(" << pFi->TakeTransferCount() / 1024 << "KiB)</i>\n";
 	}
 	else
 	{
@@ -487,7 +501,7 @@ bool cacheman::Download(cmstring& sFilePathRel, bool bIsVolatileFile,
 
 	if(pFi)
 	{
-		auto dlCount = pFi->GetTransferCount();
+		auto dlCount = pFi->TakeTransferCount();
 		static cmstring sInternal("[INTERNAL:");
 		// need to account both, this traffic as officially tracked traffic, and also keep the count
 		// separately for expiration about trade-off calculation
@@ -958,10 +972,33 @@ bool cacheman::Inject(cmstring &fromRel, cmstring &toRel,
 	return bOK;
 }
 
-void cacheman::StartDlder()
+bool cacheman::StartDlder()
 {
-	if (!m_pDlcon)
-		m_pDlcon = new dlcon(true);
+	try
+	{
+		if (m_pDlcon)
+			return true;
+		m_pDlcon = new dlcon(false);
+	}
+	catch(...)
+	{
+		SendFmt << "<span class=\"ERROR\">Internal resource error (remote connection)</span>\n";
+		return false;
+	}
+	try
+	{
+		m_dlThread = std::thread([this]()
+		{
+			m_pDlcon->WorkLoop();
+		});
+		m_dlThread.detach();
+	} catch (...)
+	{
+		m_pDlcon->SignalStop();
+		SendFmt << "<span class=\"ERROR\">Internal resource error (remote thread)</span>\n";
+		return false;
+	}
+	return true;
 }
 
 void cacheman::ExtractAllRawReleaseDataFixStrandedPatchIndex(tFileGroups& idxGroups,

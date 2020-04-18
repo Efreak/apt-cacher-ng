@@ -91,8 +91,10 @@ void pkgmirror::Action()
 		}
 	}
 	if(m_bUseDelta)
-		StartDlder();
-
+	{
+		if(!StartDlder())
+			return;
+	}
 	BuildCacheFileList();
 
 	if(CheckStopSignal())

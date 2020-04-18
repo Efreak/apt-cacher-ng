@@ -38,7 +38,8 @@ public:
 	virtual FiStatus Setup(bool bDynType);
 	
 	virtual int GetFileFd();
-	uint64_t GetTransferCount();
+	uint64_t TakeTransferCount();
+	uint64_t GetTransferCountUnlocked() { return m_nIncommingCount; }
 	// send helper like wrapper for sendfile. Just declare virtual here to make it better customizable later.
 	virtual ssize_t SendData(int confd, int filefd, off_t &nSendPos, size_t nMax2SendNow)=0;
 	
@@ -76,6 +77,8 @@ public:
 
 	// returns when the state changes to complete or error
 	FiStatus WaitForFinish(int *httpCode=nullptr);
+
+	FiStatus WaitForFinish(int *httpCode, unsigned check_interval, const std::function<void()> &check_func);
 
 	bool SetupClean(bool bForce=false);
 	
