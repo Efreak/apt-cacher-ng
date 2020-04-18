@@ -1786,6 +1786,9 @@ bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&
 	tStrVec vsMetrics;
 	string sStartMark;
 
+	unsigned progHint=0;
+	tDtorEx postNewline([this, &progHint](){if(progHint>=1024) SendChunk("<br>\n");});
+
 	switch(idxType)
 	{
 	case EIDX_PACKAGES:
@@ -1798,6 +1801,12 @@ bool cacheman::ParseAndProcessMetaFile(std::function<void(const tRemoteFileInfo&
 		{
 			trimBack(sLine);
 			//cout << "file: " << *it << " line: "  << sLine<<endl;
+			if(0 == ((++progHint) & 1023))
+				SendChunk(".");
+			if(0 == (progHint & 131071))
+				SendChunk("<br>\n");
+
+
 			if (sLine.empty())
 			{
 				if(info.IsUsable())

@@ -1,6 +1,11 @@
 apt-cacher-ng (3.5) I-NEED-A-NAME; urgency=low
 
   * Faster stop of progrss observers on maintenance tasks
+  * Avoid earlier stop on download errors in expirations, so all files for
+    expired distros can be easily cleaned manually in one or two runs instead
+    of multiple runs
+  * Added little progress hints in expiration job, so that browsers don't
+    close the connection due to suspected timeout
 
  -- 
 
