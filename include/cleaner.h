@@ -11,6 +11,7 @@
 #include "lockable.h"
 #include <ctime>
 #include <limits>
+#include <array>
 
 namespace acng
 {
@@ -49,7 +50,7 @@ public:
 private:
 	cleaner(bool noop=false);
 	pthread_t m_thr;
-	time_t stamps[cleaner::ETYPE_MAX];
+	std::array<time_t,cleaner::ETYPE_MAX> stamps;
 	bool m_terminating = false;
 	bool m_noop=false;
 };
