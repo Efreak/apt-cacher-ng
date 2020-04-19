@@ -1,13 +1,17 @@
-apt-cacher-ng (3.5) CLOUDY-WITH-A-CHANCE-OF-BURGERS; urgency=low
+apt-cacher-ng (3.5) CLOUDY-WITH-A-CHANCE-OF-VEGGIE-BURGERS; urgency=medium
 
-  * Faster stop of progrss observers on maintenance tasks
+  * Faster stop of progress observers on maintenance tasks
   * Avoid earlier stop on download errors in expirations, so all files for
     expired distros can be easily cleaned manually in one or two runs instead
     of multiple runs
+  * Automatic blocking of IPv6 connection attempts in case of too many failed
+    attempts (where IPv4 was still working) and vice versa
+
+  [ Various bugfixes]
+  * Data race in DNS result caching, sometimes resulting incorrect resolution
+    error reports and/or marking backends bad temporarily
   * Added little progress hints in expiration job, so that browsers don't
     close the connection due to suspected timeout
-  * Automatic blocking of IPv6 connection attempts in case of too many failed
-    attemption (where IPv4 was still working) and vice versa
 
  -- 
 

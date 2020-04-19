@@ -129,7 +129,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 {
 	LOGSTARTFUNCx(m_sHostName, timeout);
 
-	auto dns = CAddrInfo::CachedResolve(m_sHostName, m_sPort, sErrorMsg);
+	auto dns = CAddrInfo::CachedResolve(m_sHostName, m_sPort);
 
 	unsigned timeouts_v4(0), timeouts_v6(0);
 	tDtorEx transfer_timeout_counts([&](){
@@ -137,8 +137,9 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 		proto_blocker.report(PF_INET6, timeouts_v6);
 	});
 
-	if(!dns)
+	if(!dns || dns->HasError())
 	{
+		sErrorMsg = dns->GetError();
 		USRDBG(sErrorMsg);
 		return false; // sErrorMsg got the info already, no other chance to fix it
 	}

@@ -24,6 +24,9 @@ using namespace std;
 namespace acng
 {
 
+// forward declation, see caddrinfo.cc
+time_t expireDnsCache();
+
 cleaner::cleaner(bool noop) : m_thr(0), m_noop(noop)
 {
 	Init();
@@ -71,15 +74,16 @@ void cleaner::WorkLoop()
 
 			case TYPE_EXCONNS:
 				time_cand = g_tcp_con_factory.BackgroundCleanup();
-				USRDBG("tcpconnect::ExpireCache, nextRunTime now: " << time_cand)
-				;
+				USRDBG("tcpconnect::ExpireCache, nextRunTime now: " << time_cand);
 				break;
 			case TYPE_EXFILEITEM:
 				time_cand = fileItemMgmt::BackgroundCleanup();
-				USRDBG("fileitem::DoDelayedUnregAndCheck, nextRunTime now: " << time_cand)
-				;
+				USRDBG("fileitem::DoDelayedUnregAndCheck, nextRunTime now: " << time_cand);
 				break;
-
+			case DNS_CACHE:
+				time_cand = expireDnsCache();
+				USRDBG("dnsExpiration, nextRunTime now: " << time_cand);
+				break;
 			case ETYPE_MAX:
 				return; // heh?
 			}

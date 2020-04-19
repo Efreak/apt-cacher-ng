@@ -286,7 +286,8 @@ unsigned setup_tcp_listeners(LPCSTR addi, const std::string& port)
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_family = PF_UNSPEC;
 	bool ignored;
-	if(!resolver.ResolveTcpTarget(addi ? addi : sEmptyString, port, scratchBuf, &hints, ignored))
+	resolver.ResolveTcpTarget(addi ? addi : sEmptyString, port, &hints, ignored);
+	if(resolver.HasError())
 	{
 		log::flush();
 		perror("Error resolving address for binding");
