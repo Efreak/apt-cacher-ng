@@ -303,7 +303,11 @@ struct tDlJob
 				}
 
 				// uh, blacklisted, remember the last reason
-				sReasonMsg = bliter->second;
+				if(sReasonMsg.empty())
+				{
+					sReasonMsg = bliter->second;
+					LOG(sReasonMsg);
+				}
 			}
 			if(sReasonMsg.empty())
 				sReasonMsg = "502 Mirror blocked due to repeated errors";

@@ -9,7 +9,8 @@
 #include "dnsiter.h"
 #include <arpa/inet.h>
 
-#include <iostream>
+//#include <iostream>
+#include "debug.h"
 
 namespace acng
 {
@@ -38,24 +39,30 @@ const evutil_addrinfo* tDnsIterator::next()
 
 const evutil_addrinfo* tAlternatingDnsIterator::next()
 {
+	LOGSTARTFUNC;
+	dbgline;
 	if (m_toggle)
 	{
+		dbgline;
 		auto ret = m_iters[!m_idx].next();
 		// EOF at alternative, staying here then
 		if(!ret)
 		{
+			dbgline;
 			m_toggle = false;
 			return next();
 		}
 		m_idx = !m_idx;
 		return ret;
 	}
+	dbgline;
 	return m_iters[m_idx].next();
 }
 
 tAlternatingDnsIterator::tAlternatingDnsIterator(const evutil_addrinfo* parObj) :
 		m_idx(false), m_toggle(false)
 {
+	LOGSTARTFUNCx(uintptr_t(parObj), cfg::conprotos[0], cfg::conprotos[1]);
 	if(cfg::conprotos[0] == PF_UNSPEC)
 	{
 		m_idx = 0;

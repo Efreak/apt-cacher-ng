@@ -37,6 +37,7 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 
 	sErrorBuf.clear();
 	auto filter_specific = (cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC);
+	dbgline;
 	evutil_addrinfo default_connect_hints =
 	{
 		// we provide plain port numbers, no resolution needed
@@ -49,6 +50,7 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 
 	auto ret_error = [&](const char* sfx, int rc)
 			{
+		dbgline;
 		// XXX: maybe also evaluate errno in case of EAI_SYSTEM
 		sErrorBuf = "503 DNS error for " + sHostname + ":" + sPort + " : " + evutil_gai_strerror(rc);
 		if(sfx)	sErrorBuf += string("(") + sfx + ")";
@@ -74,9 +76,11 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 	case EAI_AGAIN:
 	case EAI_MEMORY:
 	case EAI_SYSTEM:
+		dbgline;
 		bTransientError = true;
 		__just_fall_through;
 	default:
+		dbgline;
 		return ret_error("If this refers to a configured cache repository, please check the corresponding configuration file", r);
 	}
 #ifdef DEBUG
@@ -86,9 +90,11 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 	// find any suitable-looking entry and keep a pointer to it faster lookup
 	for (auto pCur=m_rawInfo; pCur; pCur = pCur->ai_next)
 	{
+		dbgline;
 		if (pCur->ai_socktype != SOCK_STREAM || pCur->ai_protocol != IPPROTO_TCP)
 			continue;
 		m_tcpAddrInfo = pCur;
+		dbgline;
 		return true;
 	}
 
@@ -109,6 +115,7 @@ CAddrInfo::~CAddrInfo()
 
 CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sPort, string &sErrorMsgBuf)
 {
+	LOGSTARTFUNCxs(sHostname, sPort);
 	bool dummy_run = sHostname.empty() && sPort.empty();
 	bool bTransientError = false;
 	auto resolve_now = [&]()
@@ -120,6 +127,7 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 	};
 	if (!cfg::dnscachetime && !dummy_run)
 		return resolve_now();
+	dbgline;
 
 	auto dnsKey = make_dns_key(sHostname, sPort);
 	auto now(GetTime());
@@ -146,6 +154,7 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 	{
 		// something is fishy, too long exp. time? Just pass through then
 		lg.unLock();
+		dbgline;
 		return resolve_now();
 	}
 
@@ -164,8 +173,10 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 			if(p->m_sError)
 			{
 				sErrorMsgBuf = * p->m_sError;
+				dbgline;
 				return CAddrInfoPtr();
 			}
+			dbgline;
 			if(p->m_expTime <= MAX_VAL(time_t))
 				return p;
 			dnsCacheCv.wait(lg);
@@ -174,10 +185,12 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 	lg.unLock();
 	auto resret = p->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, nullptr, bTransientError);
 	lg.reLock();
+	dbgline;
 	if(resret)
 	{
 		p->m_expTime = now + cfg::dnscachetime;
 		dnsCacheCv.notifyAll();
+		dbgline;
 		return p;
 	}
 	// or handle errors, keep them for observers

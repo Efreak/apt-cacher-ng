@@ -217,6 +217,7 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 
 	auto retGood = [&](tConData& condata)
 			{
+		LOG(condata.fd);
 		std::swap(condata.fd, m_conFd);
 		// mark this as good protocol, report failure count on other on return later
 		if(condata.dns->ai_family == PF_INET6)
@@ -225,19 +226,32 @@ inline bool tcpconnect::_Connect(string & sErrorMsg, int timeout)
 			timeouts_v4 = 0;
 		return true;
 	};
-	auto retError = [&](const std::string &errStr) { sErrorMsg = errStr; return false; };
+	auto retError = [&](const std::string &errStr) {
+		LOG(errStr);
+		sErrorMsg = errStr;
+		return false;
+	};
 	auto withErrnoError = [&]() { return retError(tErrnoFmter("500 Connection failure: "));	};
 	auto withThisErrno = [&withErrnoError](int myErr) { errno = myErr; return withErrnoError(); };
 
 	// ok, initial condition, one target should be always there, iterator would also hop to the next fallback if allowed
 	if(!prim.dns)
-		return withThisErrno(EAFNOSUPPORT);
+	{
+		dbgline;
+		if(cfg::conprotos[0] == PF_UNSPEC)
+			return retError("523 Target address could not be resolved");
+		else
+			return withThisErrno(EAFNOSUPPORT);
+	}
+
 	if (cfg::fasttimeout > 0)
 	{
+		dbgline;
 		alt.dns = iter.next();
 		alt.state = alt.dns ? NOT_YET : NO_ALTERNATIVES;
 	}
 
+	dbgline;
 	for(auto op_max=0; op_max < 30000; ++op_max) // fail-safe switch, in case of any mistake here
 	{
 		LOG("state a: " << prim.state << ", state b: " << alt.state );
