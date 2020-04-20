@@ -1,3 +1,9 @@
+apt-cacher-ng (3.5-1) unstable; urgency=low
+
+  * New upstream release
+
+ -- 
+
 apt-cacher-ng (3.4-1) unstable; urgency=low
 
   * New upstream release
