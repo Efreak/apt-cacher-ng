@@ -907,6 +907,8 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 		{
 			if (EINTR == errno)
 				continue;
+			if(EBADF == errno) // that some times happen for no obvious reason
+				return HINT_DISCON;
 			tErrnoFmter fer("FAILURE: select, ");
 			LOG(fer);
 			sErrorMsg = string("500 Internal malfunction, ") + fer;
