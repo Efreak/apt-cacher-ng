@@ -24,7 +24,7 @@ ifneq (,$(filter $(DEB_HOST_ARCH), mipsel mips64el))
 endif
 
 %:
-	dh $@ --parallel --with systemd
+	dh $@ --with systemd
 
 override_dh_auto_configure:
 	dh_auto_configure -- -DSDINSTALL=on -DACNG_CACHE_DIR=/var/cache/apt-cacher-ng -DACNG_LOG_DIR=/var/log/apt-cacher-ng -DUSE_LTO=off $(EXTRA_LIBS)
