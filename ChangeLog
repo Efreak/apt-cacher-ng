@@ -13,7 +13,7 @@ apt-cacher-ng (3.5) CLOUDY-WITH-A-CHANCE-OF-VEGGIE-BURGERS; urgency=medium
   * Added little progress hints in expiration job, so that browsers don't
     close the connection due to suspected timeout
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Mon, 20 Apr 2020 23:33:27 +0200
 
 apt-cacher-ng (3.4) ALTERED-HYDROGEN; urgency=low
 
