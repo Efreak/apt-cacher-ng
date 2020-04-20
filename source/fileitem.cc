@@ -101,7 +101,7 @@ void fileitem::DecDlRefCount(const string &sReason)
 	checkforceclose(m_filefd);
 }
 
-uint64_t fileitem::GetTransferCount()
+uint64_t fileitem::TakeTransferCount()
 {
 	setLockGuard;
 	uint64_t ret=m_nIncommingCount;
@@ -303,6 +303,19 @@ fileitem::FiStatus fileitem::WaitForFinish(int *httpCode)
 	lockuniq g(this);
 	while(m_status<FIST_COMPLETE)
 		wait(g);
+	if(httpCode)
+		*httpCode=m_head.getStatus();
+	return m_status;
+}
+
+fileitem::FiStatus fileitem::WaitForFinish(int *httpCode, unsigned check_interval, const std::function<void()> &check_func)
+{
+	lockuniq g(this);
+	while(m_status<FIST_COMPLETE)
+	{
+		if(wait_for(g, 1, 1)) // on timeout
+			check_func();
+	}
 	if(httpCode)
 		*httpCode=m_head.getStatus();
 	return m_status;

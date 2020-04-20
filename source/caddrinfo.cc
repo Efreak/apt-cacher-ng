@@ -1,10 +1,7 @@
 
-#include "meta.h"
 #include "caddrinfo.h"
-#include "sockio.h"
 #include "acfg.h"
 #include "debug.h"
-#include "lockable.h"
 #include "cleaner.h"
 
 #include <deque>
@@ -23,20 +20,17 @@ static string make_dns_key(const string & sHostname, const string &sPort)
 	return sHostname + "/" + sPort;
 }
 
-base_with_condition dnsCacheCv;
-
 map<string,CAddrInfoPtr> dnsCache;
+base_with_mutex dnsCacheMx;
 deque<decltype(dnsCache)::iterator> dnsAddSeq;
 
-bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
-		string & sErrorBuf,
+void CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 		const evutil_addrinfo* pHints,
 		bool & bTransientError)
 {
 	LOGSTARTFUNCx(sHostname);
-
-	sErrorBuf.clear();
 	auto filter_specific = (cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC);
+	dbgline;
 	evutil_addrinfo default_connect_hints =
 	{
 		// we provide plain port numbers, no resolution needed
@@ -49,11 +43,17 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 
 	auto ret_error = [&](const char* sfx, int rc)
 			{
+		dbgline;
 		// XXX: maybe also evaluate errno in case of EAI_SYSTEM
-		sErrorBuf = "503 DNS error for " + sHostname + ":" + sPort + " : " + evutil_gai_strerror(rc);
-		if(sfx)	sErrorBuf += string("(") + sfx + ")";
+		m_sError = "503 DNS error for " + sHostname + ":" + sPort + " : " + evutil_gai_strerror(rc);
+		if(sfx)
+			m_sError += string("(") + sfx + ")";
 		LOG(sfx);
-		return false;
+		m_tcpAddrInfo = nullptr;
+		if(!m_rawInfo)
+			return;
+		evutil_freeaddrinfo(m_rawInfo);
+		m_rawInfo = nullptr;
 	};
 
 	Reset();
@@ -74,9 +74,11 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 	case EAI_AGAIN:
 	case EAI_MEMORY:
 	case EAI_SYSTEM:
+		dbgline;
 		bTransientError = true;
 		__just_fall_through;
 	default:
+		dbgline;
 		return ret_error("If this refers to a configured cache repository, please check the corresponding configuration file", r);
 	}
 #ifdef DEBUG
@@ -86,10 +88,12 @@ bool CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 	// find any suitable-looking entry and keep a pointer to it faster lookup
 	for (auto pCur=m_rawInfo; pCur; pCur = pCur->ai_next)
 	{
+		dbgline;
 		if (pCur->ai_socktype != SOCK_STREAM || pCur->ai_protocol != IPPROTO_TCP)
 			continue;
 		m_tcpAddrInfo = pCur;
-		return true;
+		dbgline;
+		return;
 	}
 
 	return ret_error("no suitable target service", EAI_SYSTEM);
@@ -107,96 +111,90 @@ CAddrInfo::~CAddrInfo()
 	Reset();
 }
 
-CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sPort, string &sErrorMsgBuf)
+CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sPort)
 {
-	bool dummy_run = sHostname.empty() && sPort.empty();
-	bool bTransientError = false;
-	auto resolve_now = [&]()
-			{
-		auto ret = make_shared<CAddrInfo>();
-		if(! ret->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, nullptr, bTransientError))
-			ret.reset();
-		return ret;
-	};
-	if (!cfg::dnscachetime && !dummy_run)
-		return resolve_now();
+	LOGSTARTFUNCxs(sHostname, sPort);
+	CAddrInfoPtr ret;
 
+	bool bTransientError = false;
+
+	if(!cfg::dnscachetime)
+	{
+		ret = make_shared<CAddrInfo>();
+		ret->ResolveTcpTarget(sHostname, sPort, nullptr, bTransientError);
+		return ret;
+	}
 	auto dnsKey = make_dns_key(sHostname, sPort);
 	auto now(GetTime());
 
-	lockuniq lg(dnsCacheCv);
-
-	// clean all expired entries
-	unsigned n(0);
-	while(!dnsAddSeq.empty() && dnsAddSeq.front()->second && dnsAddSeq.front()->second->m_expTime <= now)
 	{
-		// just to be safe in case anyone waits for it
-		if(!dnsAddSeq.front()->second->m_sError)
-			dnsAddSeq.front()->second->m_sError.reset(new string("504 DNS Cache Timeout"));
-		dnsCache.erase(dnsAddSeq.front());
-		dnsAddSeq.pop_front();
-		++n;
-	}
-	if(n) dnsCacheCv.notifyAll();
-
-	if (dummy_run)
-		return CAddrInfoPtr();
-
-	if (dnsCache.size() >= DNS_CACHE_MAX)
-	{
-		// something is fishy, too long exp. time? Just pass through then
-		lg.unLock();
-		return resolve_now();
+		lockguard lg(dnsCacheMx);
+		auto& xref = dnsCache[dnsKey];
+		if(xref)
+			ret = xref;
+		else
+			ret = xref = make_shared<CAddrInfo>();
 	}
 
-	auto insres = dnsCache.emplace(dnsKey, make_shared<CAddrInfo>());
-	auto p = insres.first->second;
-	auto is_ours(insres.second);
-	if (is_ours)
+	bool bKickFromTheMap = false;
+	// remember in different lock context
+	time_t expireWhen = END_OF_TIME;
+
 	{
-		dnsAddSeq.push_back(insres.first);
-		p->m_expTime = now + cfg::dnscachetime;
+		lockguard g(*ret);
+		// ok, either we did resolve it or someone else?
+		if (ret->m_expTime != END_OF_TIME)
+			return ret;
+
+		// ok, our thread is responsible
+		ret->ResolveTcpTarget(sHostname, sPort, nullptr, bTransientError);
+
+		bKickFromTheMap = ret->HasError() && !bTransientError; // otherwise: cache an error hint for permanent errors
+		if(bKickFromTheMap)
+			ret->m_expTime = 0;
+		else
+			expireWhen = ret->m_expTime = now + cfg::dnscachetime;
 	}
-	else // reuse the results from another thread
+
+	if(bKickFromTheMap)
 	{
-		while(true)
-		{
-			if(p->m_sError)
-			{
-				sErrorMsgBuf = * p->m_sError;
-				return CAddrInfoPtr();
-			}
-			if(p->m_expTime <= MAX_VAL(time_t))
-				return p;
-			dnsCacheCv.wait(lg);
-		}
+		lockguard lg(dnsCacheMx);
+		dnsCache.erase(dnsKey);
 	}
-	lg.unLock();
-	auto resret = p->ResolveTcpTarget(sHostname, sPort, sErrorMsgBuf, nullptr, bTransientError);
-	lg.reLock();
-	if(resret)
-	{
-		p->m_expTime = now + cfg::dnscachetime;
-		dnsCacheCv.notifyAll();
-		return p;
-	}
-	// or handle errors, keep them for observers
-	p->m_sError.reset(new string(sErrorMsgBuf));
-	// for permanent failures, also keep them in cache for a while
-	if(!bTransientError)
-		p->m_expTime = now + cfg::dnscachetime;
-	dnsCacheCv.notifyAll();
-	return p;
+	else
+		cleaner::GetInstance().ScheduleFor(expireWhen, cleaner::eType::DNS_CACHE);
+
+	return ret;
 }
 
-#if 0
-void DropDnsCache()
+time_t expireDnsCache()
 {
-#warning check all usage
-	lockguard g(dnsCacheCv);
-	dnsCleanupQ.clear();
-	dnsCache.clear();
+	LOGSTARTFUNCs;
+	lockguard lg(dnsCacheMx);
+	// keep all which expire after now, plus a few second of extra cleanup time (kill sooner) to catch all made by a request burst at once
+	auto dropBefore = GetTime() + 5;
+	auto ret = END_OF_TIME;
+	for(auto it = dnsCache.begin(); it!= dnsCache.end();)
+	{
+		if(!it->second)
+		{
+			it = dnsCache.erase(it);
+			continue;
+		}
+		time_t extime;
+		{
+			lockguard g(*it->second);
+			extime = it->second->GetExpirationTime();
+		}
+		if(extime == 0 || extime == END_OF_TIME // error or initial state -> SEP
+				|| extime > dropBefore) // or not expired
+		{
+			++it;
+			continue;
+		}
+		it = dnsCache.erase(it);
+	}
+	LOGRET(ret);
 }
-#endif
 
 }

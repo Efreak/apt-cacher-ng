@@ -12,6 +12,7 @@
 #include "fileitem.h"
 #include <unordered_map>
 #include <unordered_set>
+#include <thread>
 
 // #define USEDUPEFILTER
 
@@ -123,7 +124,7 @@ protected:
 
 	void ProcessSeenIndexFiles(std::function<void(tRemoteFileInfo)> pkgHandler);
 
-	void StartDlder();
+	bool StartDlder();
 
 	enum eDlMsgPrio
 	{
@@ -195,6 +196,7 @@ private:
 	cacheman& operator=(const cacheman&);
 
 	dlcon *m_pDlcon = nullptr;
+	std::thread m_dlThread;
 	cmstring& GetFirstPresentPath(const tFileGroups& groups, const tContentKey& ckey);
 
 	/*

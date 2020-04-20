@@ -179,15 +179,31 @@ void tSpecOpDetachable::Run()
 			while(true)
 			{
 				int r = sendbuf.sysread(m_logFd);
-				if(r < 0)
+				if(r < 0) // error
 					goto finish_action;
+				if(r == -EAGAIN)
+				{
+					g_StateCv.wait_for(g, 1, 1);
+					if(!nBgTimestamp)
+						break;
+					continue;
+				}
 				if(r == 0)
 				{
-					g_StateCv.wait_for(g, 10, 1);
-					break;
+					g_StateCv.wait_for(g, 5, 1);
+					if(!nBgTimestamp)
+						break;
+					continue;
 				}
 				SendChunkRemoteOnly(sendbuf.rptr(), sendbuf.size());
 				sendbuf.clear();
+				if(r>0)
+				{
+					// read more once?
+					continue;
+				}
+				if(!nBgTimestamp)
+					break;
 			}
 		}
 		// unreachable

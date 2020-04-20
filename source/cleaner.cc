@@ -24,14 +24,16 @@ using namespace std;
 namespace acng
 {
 
+// forward declation, see caddrinfo.cc
+time_t expireDnsCache();
+
 cleaner::cleaner(bool noop) : m_thr(0), m_noop(noop)
 {
 	Init();
 }
 void cleaner::Init()
 {
-	for(auto&ts : stamps)
-		ts=END_OF_TIME;
+	stamps.fill(END_OF_TIME);
 }
 
 cleaner::~cleaner()
@@ -42,74 +44,67 @@ void cleaner::WorkLoop()
 {
 	LOGSTART("cleaner::WorkLoop");
 
-	lockuniq g(this);
-	for(;;)
+	while(true)
 	{
-		// XXX: review the flow, is this always safe?
-		eType what = TYPE_EXCONNS;
-		time_t when = END_OF_TIME;
-
-		if(m_terminating)
+		if (m_terminating || g_global_shutdown)
 			return;
 
-		// ok, who's next?
+		decltype(stamps) snapshot;
+		auto now = GetTime();
+		{
+			lockuniq g(this);
+			snapshot = stamps;
+			stamps.fill(END_OF_TIME);
+		}
 		for (unsigned i = 0; i < ETYPE_MAX; ++i)
 		{
-			if (stamps[i] < when)
+			auto &time_cand = snapshot[i];
+			if (time_cand > now)
+				continue;
+			if (m_terminating || g_global_shutdown)
+				return;
+
+			switch (eType(i))
 			{
-				what = (eType) i;
-				when = stamps[i];
+			case TYPE_ACFGHOOKS:
+				time_cand = cfg::BackgroundCleanup();
+				USRDBG("acng::cfg:ExecutePostponed, nextRunTime now: " << time_cand)
+				;
+				break;
+
+			case TYPE_EXCONNS:
+				time_cand = g_tcp_con_factory.BackgroundCleanup();
+				USRDBG("tcpconnect::ExpireCache, nextRunTime now: " << time_cand);
+				break;
+			case TYPE_EXFILEITEM:
+				time_cand = fileItemMgmt::BackgroundCleanup();
+				USRDBG("fileitem::DoDelayedUnregAndCheck, nextRunTime now: " << time_cand);
+				break;
+			case DNS_CACHE:
+				time_cand = expireDnsCache();
+				USRDBG("dnsExpiration, nextRunTime now: " << time_cand);
+				break;
+			case ETYPE_MAX:
+				return; // heh?
 			}
 		}
+		// playback the calculated results and calculate the delay
 
-		auto now=GetTime();
-		if(when > now)
+		lockuniq g(this);
+		now = GetTime();
+		time_t next = END_OF_TIME;
+		for (unsigned i = 0; i < ETYPE_MAX; ++i)
 		{
-			// work around buggy STL: add some years on top and hope it will be fixed then
-			if(when == END_OF_TIME)
-				when = now | 0x3ffffffe;
-			wait_until(g, when, 111);
-			if(m_terminating || g_global_shutdown)
-				return;
+			auto t = std::min(snapshot[i], stamps[i]);
+			next = std::min(next, t);
+			stamps[i] = t;
+		}
+		if (next <= now)
 			continue;
-		}
-		stamps[what] = END_OF_TIME;
-		g.unLock();
-
-		// good, do the work now
-		time_t time_nextcand=END_OF_TIME;
-		switch(what)
-		{
-		case TYPE_ACFGHOOKS:
-			time_nextcand = cfg::BackgroundCleanup();
-			USRDBG("acng::cfg:ExecutePostponed, nextRunTime now: " << time_nextcand);
-			break;
-
-		case TYPE_EXCONNS:
-			time_nextcand = g_tcp_con_factory.BackgroundCleanup();
-			USRDBG("tcpconnect::ExpireCache, nextRunTime now: " << time_nextcand);
-			break;
-		case TYPE_EXFILEITEM:
-			time_nextcand = fileItemMgmt::BackgroundCleanup();
-			USRDBG("fileitem::DoDelayedUnregAndCheck, nextRunTime now: " << time_nextcand);
-			break;
-
-		case ETYPE_MAX:
-			return; // heh?
-		}
-
-		if(time_nextcand <= now || time_nextcand < 1)
-		{
-			log::err(tSS() << "ERROR: looping bug candidate on " << (int) what
-					<< ", value: " << time_nextcand);
-			time_nextcand=GetTime()+60;
-		}
-
-		g.reLock();
-
-		if (time_nextcand < stamps[what])
-			stamps[what] = time_nextcand;
-	};
+		auto delta = next - now;
+		// limit this to a day to avoid buggy STL behavior reported in the past
+		wait_for(g, std::min(long(delta), long(84600)), 1);
+	}
 }
 
 inline void * CleanerThreadAction(void *pVoid)
@@ -120,7 +115,8 @@ inline void * CleanerThreadAction(void *pVoid)
 
 void cleaner::ScheduleFor(time_t when, eType what)
 {
-	if(m_noop) return;
+	if(m_noop || g_global_shutdown)
+		return;
 
 	setLockGuard;
 	if(m_thr == 0)

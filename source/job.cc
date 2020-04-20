@@ -251,7 +251,7 @@ job::~job()
 	m_pParentCon->LogDataCounts(
 			m_sFileLoc + (bErr ? (miscError + ltos(stcode) + ']') : sEmptyString),
 			m_reqHead.h[header::XFORWARDEDFOR],
-			(m_pItem ? m_pItem.getFiPtr()->GetTransferCount() : 0),
+			(m_pItem ? m_pItem.getFiPtr()->TakeTransferCount() : 0),
 			m_nAllDataCount, bErr);
 	
 	checkforceclose(m_filefd);
@@ -760,7 +760,7 @@ report_invport:
     return ;
 }
 
-#define THROW_ERROR(x) { if(m_nAllDataCount) { DBG_DISCONNECT; return R_DISCON; } SetErrorResponse(x); return R_AGAIN; }
+#define THROW_ERROR(x) { LOG("THROW_ERROR" << x); if(m_nAllDataCount) { DBG_DISCONNECT; return R_DISCON; } SetErrorResponse(x); return R_AGAIN; }
 job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 {
 	LOGSTART("job::SendData");
@@ -793,10 +793,12 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 			LOG((int) fistate);
 			if (fistate > fileitem::FIST_COMPLETE)
 			{
+				dbgline;
 				const header &h = m_pItem.getFiPtr()->GetHeaderUnlocked();
 				g.unLock(); // item lock must be released in order to replace it!
+				dbgline
 				if(m_nAllDataCount)
-					return R_DISCON;
+					LOGRET(R_DISCON);
 				if(h.h[header::XORIG])
 					m_sOrigUrl=h.h[header::XORIG];
 				// must be something like "HTTP/1.1 403 Forbidden"
@@ -807,7 +809,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 					ldbg("good ungood, consused?" << h.frontLine)
 					SetErrorResponse("500 Unknown error");
 				}
-				return R_AGAIN;
+				LOGRET(R_AGAIN);
 			}
 			/*
 			 * Detect the same special case as above. There is no download agent to change
@@ -815,11 +817,12 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 			*/
 			if(m_bNoDownloadStarted)
 			{
+				dbgline;
 				fistate = fileitem::FIST_DLRECEIVING;
 				break;
 			}
 			// or wait for the dl source to get data at the position we need to start from
-			LOG("sendstate: " << (int) fistate << " , sendpos: " << m_nSendPos << nGoodDataSize);
+			dbgline;
 			if(fistate==fileitem::FIST_COMPLETE || (m_nSendPos < nGoodDataSize && fistate>=fileitem::FIST_DLGOTHEAD))
 				break;
 			
@@ -828,6 +831,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 			
 			dbgline;
 		}
+		LOG("sendstate: " << (int) fistate << " , sendpos: " << m_nSendPos << nGoodDataSize);
 		
 		respHead = m_pItem.getFiPtr()->GetHeaderUnlocked();
 
@@ -866,7 +870,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 				{
 					ldbg("STATE_FRESH");
 					if(fistate < fileitem::FIST_DLGOTHEAD) // be sure about that
-						return R_AGAIN;
+						LOGRET(R_AGAIN);
 					m_state=STATE_SEND_BUFFER;
 					m_backstate=STATE_HEADER_SENT; // could be changed while creating header
 					const char *szErr = BuildAndEnqueHeader(fistate, nGoodDataSize, respHead);
@@ -880,8 +884,8 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 					
 					if(fistate < fileitem::FIST_DLGOTHEAD)
 					{
-						ldbg("ERROR condition detected: starts activity while downloader not ready")
-						return R_AGAIN;
+						ldbg("ERROR condition detected: starts activity while downloader not ready");
+						LOGRET(R_AGAIN);
 					}
 
 					m_filefd=m_pItem.getFiPtr()->GetFileFd();
@@ -902,7 +906,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 						if(fistate>=fileitem::FIST_COMPLETE)
 							GOTOENDE;
 						LOG("Cannot send more, not enough fresh data yet");
-						return R_AGAIN;
+						LOGRET(R_AGAIN);
 					}
 
 					size_t nMax2SendNow=min(nGoodDataSize-m_nSendPos, m_nCurrentRangeLast+1-m_nSendPos);
@@ -921,7 +925,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 					if(n<0)
 						THROW_ERROR("400 Client error");
 					
-					return R_AGAIN;
+					LOGRET(R_AGAIN);
 				}
 				case(STATE_SEND_CHUNK_HEADER):
 				{
@@ -930,7 +934,7 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 					if(!m_nChunkRemainingBytes && fistate < fileitem::FIST_COMPLETE)
 					{
 						ldbg("No data to send YET, will try later");
-						return R_AGAIN;
+						LOGRET(R_AGAIN);
 					}
 					m_sendbuf << tSS::hex << m_nChunkRemainingBytes << tSS::dec
 							<< (m_nChunkRemainingBytes ? "\r\n" : "\r\n\r\n");
@@ -955,9 +959,10 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 						m_sendbuf<<"\r\n";
 						m_state=STATE_SEND_BUFFER;
 						m_backstate=STATE_SEND_CHUNK_HEADER;
+						dbgline;
 						continue;
 					}
-					return R_AGAIN;
+					LOGRET(R_AGAIN);
 				}
 				case(STATE_SEND_BUFFER):
 				{
@@ -972,9 +977,9 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 						if (r<0)
 						{
 							if (errno==EAGAIN || errno==EINTR || errno == ENOBUFS)
-								return R_AGAIN;
+								LOGRET(R_AGAIN);
 							DBG_DISCONNECT
-							return R_DISCON;
+							LOGRET(R_DISCON);
 						}
 						m_nAllDataCount+=r;
 						m_sendbuf.drop(r);
@@ -988,9 +993,9 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 					catch(...)
 					{
 						DBG_DISCONNECT
-						return R_DISCON;
+						LOGRET(R_DISCON);
 					}
-					return R_AGAIN;
+					LOGRET(R_AGAIN);
 				}
 			case (STATE_ALLDONE):
 				return return_stream_ok("STATE_ALLDONE?");
@@ -1007,13 +1012,13 @@ job::eJobResult job::SendData(int confd, bool haveMoreJobs)
 		catch(bad_alloc&) {
 			// TODO: report memory failure?
 			DBG_DISCONNECT
-			return R_DISCON;
+			LOGRET(R_DISCON);
 		}
 		//ASSERT(!"UNREACHED");
 	}
 	//ASSERT(!"UNREACHEABLE");
 	DBG_DISCONNECT
-	return R_DISCON;
+	LOGRET(R_DISCON);
 }
 
 inline const char * job::BuildAndEnqueHeader(const fileitem::FiStatus &fistate,

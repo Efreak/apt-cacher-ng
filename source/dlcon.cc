@@ -289,7 +289,7 @@ struct tDlJob
 				const auto bliter = blacklist.find(
 						make_pair(m_pCurBackend->sHost, m_pCurBackend->GetPort()));
 				if (bliter == blacklist.end())
-					return true;
+					LOGRET(true);
 			}
 
 			// look in the constant list, either it's usable or it was blacklisted before
@@ -299,23 +299,29 @@ struct tDlJob
 				if (bliter == blacklist.end())
 				{
 					m_pCurBackend = &bend;
-					return true;
+					LOGRET(true);
 				}
 
 				// uh, blacklisted, remember the last reason
-				sReasonMsg = bliter->second;
+				if(sReasonMsg.empty())
+				{
+					sReasonMsg = bliter->second;
+					LOG(sReasonMsg);
+				}
 			}
-			return false;
+			if(sReasonMsg.empty())
+				sReasonMsg = "502 Mirror blocked due to repeated errors";
+			LOGRET(false);
 		}
 
 		// ok, not backend mode. Check the mirror data (vs. blacklist)
 		auto bliter = blacklist.find(
 				make_pair(GetPeerHost().sHost, GetPeerHost().GetPort()));
 		if (bliter == blacklist.end())
-			return true;
+			LOGRET(true);
 
 		sReasonMsg = bliter->second;
-		return false;
+		LOGRET(false);
 	}
 
 	// needs connectedHost, blacklist, output buffer from the parent, proxy mode?
@@ -891,9 +897,10 @@ inline unsigned dlcon::ExchangeData(mstring &sErrorMsg, tDlStreamHandle &con, tD
 
 		r=select(nMaxFd + 1, &rfds, &wfds, nullptr, CTimeVal().ForNetTimeout());
 		ldbg("returned: " << r << ", errno: " << errno);
-		if(m_bStopASAP || evabase::in_shutdown)
 		{
-			return HINT_DISCON;
+			setLockGuard
+			if (m_bStopASAP || evabase::in_shutdown)
+				return HINT_DISCON;
 		}
 
 		if (r == -1)
@@ -1389,11 +1396,13 @@ void dlcon::WorkLoop()
 
         // inner loop: plain communication until something happens. Maybe should use epoll here?
         loopRes=ExchangeData(sErrorMsg, con, inpipe);
-        ldbg("loopRes: "<< loopRes);
-        if(m_bStopASAP || evabase::in_shutdown)
-        	return;
-
-        /* check whether we have a pipeline stall. This may happen because a) we are done or
+		ldbg("loopRes: "<< loopRes);
+		{
+			setLockGuard
+			if (m_bStopASAP || evabase::in_shutdown)
+				return;
+		}
+		/* check whether we have a pipeline stall. This may happen because a) we are done or
          * b) because of the remote hostname change or c) the client stopped sending tasks.
          * Anyhow, that's a reason to put the connection back into the shared pool so either we
          * get it back from the pool in the next workloop cycle or someone else gets it and we

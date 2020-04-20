@@ -11,6 +11,7 @@
 #include "lockable.h"
 #include <ctime>
 #include <limits>
+#include <array>
 
 namespace acng
 {
@@ -40,6 +41,7 @@ public:
 	enum eType : char
 	{
 		TYPE_EXFILEITEM, TYPE_ACFGHOOKS, /* TYPE_EXDNS,*/ TYPE_EXCONNS,
+		DNS_CACHE,
 		ETYPE_MAX
 	};
 	void ScheduleFor(time_t when, eType what);
@@ -49,7 +51,7 @@ public:
 private:
 	cleaner(bool noop=false);
 	pthread_t m_thr;
-	time_t stamps[cleaner::ETYPE_MAX];
+	std::array<time_t,cleaner::ETYPE_MAX> stamps;
 	bool m_terminating = false;
 	bool m_noop=false;
 };

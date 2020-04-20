@@ -536,7 +536,7 @@ void expiration::Action()
 	LoadHints();
 	UpdateVolatileFiles();
 
-	if(CheckAndReportError() || CheckStopSignal())
+	if(/* CheckAndReportError() || */ CheckStopSignal())
 		goto save_fail_count;
 
 	m_damageList.open(SZABSPATH(FNAME_DAMAGED), ios::out | ios::trunc);

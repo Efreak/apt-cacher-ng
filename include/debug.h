@@ -47,14 +47,16 @@ inline void dump_proc_status(){}; // strip away
 #else
 
 /*
+ * They are all too heavy
 #ifdef __GNUC__
-#define __ACFUNC__  __FUNC__ // __PRETTY_FUNCTION__
-#elif MSCVER
-#define __ACFUNC__ __FUNCSIG__
+#define __ACFUNC__  __PRETTY_FUNCTION__
+//#elif MSCVER
+//#define __ACFUNC__ __FUNCSIG__
 #else
+#define __ACFUNC__ __func__
+#endif
 */
 #define __ACFUNC__ __func__
-//#endif
 
 
 #define LOGVA(n, pfx, ...) if(acng::cfg::debug & n) \
