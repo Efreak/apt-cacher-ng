@@ -52,9 +52,10 @@ public:
 	 */
 	const evutil_addrinfo *getTcpAddrInfo() const { return m_tcpAddrInfo; }
 
-	bool HasResult() { return m_tcpAddrInfo || !m_sError.empty(); }
+	//bool HasResult() { return m_tcpAddrInfo || !m_sError.empty(); }
 	bool HasError() { return !m_tcpAddrInfo; }
 	time_t GetExpirationTime() { return m_expTime; }
+
 	const std::string& GetError() {
 		return m_sError;
 	}

@@ -50,7 +50,8 @@ void CAddrInfo::ResolveTcpTarget(const string & sHostname, const string &sPort,
 			m_sError += string("(") + sfx + ")";
 		LOG(sfx);
 		m_tcpAddrInfo = nullptr;
-		if(!m_rawInfo) return;
+		if(!m_rawInfo)
+			return;
 		evutil_freeaddrinfo(m_rawInfo);
 		m_rawInfo = nullptr;
 	};
@@ -132,23 +133,26 @@ CAddrInfoPtr CAddrInfo::CachedResolve(const string & sHostname, const string &sP
 		if(xref)
 			ret = xref;
 		else
-			ret = xref =  make_shared<CAddrInfo>();
+			ret = xref = make_shared<CAddrInfo>();
 	}
 
 	bool bKickFromTheMap = false;
+	// remember in different lock context
 	time_t expireWhen = END_OF_TIME;
+
 	{
 		lockguard g(*ret);
 		// ok, either we did resolve it or someone else?
-		if (ret->HasResult())
+		if (ret->m_expTime != END_OF_TIME)
 			return ret;
 
 		// ok, our thread is responsible
 		ret->ResolveTcpTarget(sHostname, sPort, nullptr, bTransientError);
 
 		bKickFromTheMap = ret->HasError() && !bTransientError; // otherwise: cache an error hint for permanent errors
-
-		if(!bKickFromTheMap)
+		if(bKickFromTheMap)
+			ret->m_expTime = 0;
+		else
 			expireWhen = ret->m_expTime = now + cfg::dnscachetime;
 	}
 
@@ -172,13 +176,23 @@ time_t expireDnsCache()
 	auto ret = END_OF_TIME;
 	for(auto it = dnsCache.begin(); it!= dnsCache.end();)
 	{
-		if(!it->second || it->second->GetExpirationTime() <= dropBefore)
-			it = dnsCache.erase(it);
-		else
+		if(!it->second)
 		{
-			ret = std::min(ret, it->second->GetExpirationTime());
-			++it;
+			it = dnsCache.erase(it);
+			continue;
 		}
+		time_t extime;
+		{
+			lockguard g(*it->second);
+			extime = it->second->GetExpirationTime();
+		}
+		if(extime == 0 || extime == END_OF_TIME // error or initial state -> SEP
+				|| extime > dropBefore) // or not expired
+		{
+			++it;
+			continue;
+		}
+		it = dnsCache.erase(it);
 	}
 	LOGRET(ret);
 }
