@@ -2,7 +2,7 @@ apt-cacher-ng (3.5-1) unstable; urgency=low
 
   * New upstream release
 
- -- 
+ -- Eduard Bloch <blade@debian.org>  Mon, 20 Apr 2020 23:35:50 +0200
 
 apt-cacher-ng (3.4-1) unstable; urgency=low
 
