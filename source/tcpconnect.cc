@@ -26,6 +26,7 @@
 #include <event.h>
 #include <thread>
 
+#include "dnsbase.h"
 #include "tlsio.h"
 
 using namespace std;
@@ -56,10 +57,9 @@ namespace acng
 {
 
 
-tcpconnect::tcpconnect(cmstring& sHost, cmstring& sPort, bool bSsl,
-		cfg::IHookHandler *pObserver) :
-				m_bUseSsl(bSsl), m_sHostName(sHost), m_sPort(sPort),
-				m_pStateObserver(pObserver)
+tcpconnect::tcpconnect(tSysRes& res, cmstring& sHost, cmstring& sPort, cfg::IHookHandler *pObserver) :
+		m_sysres(res), m_sHostName(sHost), m_sPort(sPort),
+		m_pStateObserver(pObserver)
 {
 	if(pObserver)
 		pObserver->OnAccess();
@@ -88,8 +88,8 @@ struct tcpconnect::tConnProgress
 	tDlStreamHandle han;
 	int timeout;
 	IDlConFactory::funcRetCreated resRep;
-	tConnProgress(tDlStreamHandle h, int t, IDlConFactory::funcRetCreated r)
-	: han(move(h)), timeout(t), resRep(r)
+	tConnProgress(tDlStreamHandle h, int t, IDlConFactory::funcRetCreated r, tSysRes& sr)
+	: han(move(h)), timeout(t), resRep(r), prim(sr), alt(sr)
 	{
 	}
 
@@ -101,7 +101,9 @@ struct tcpconnect::tConnProgress
 	{
 		unique_fd fd;
 		tAutoEv ev;
+		tSysRes& m_sr;
 		const evutil_addrinfo *dns = nullptr;
+		explicit tConData(tSysRes& rs):m_sr(rs){}
 
 		enum class eConnRes
 		{
@@ -116,7 +118,7 @@ struct tcpconnect::tConnProgress
 		}
 		void init_timeout(event_callback_fn cb, void *arg)
 		{
-			ev.reset(event_new(evabase::base, -1, EV_TIMEOUT, cb, arg));
+			ev.reset(event_new(m_sr.base, -1, EV_TIMEOUT, cb, arg));
 			event_add(*ev, CTimeVal().Remaining(cfg::fasttimeout));
 		}
 		eConnRes init_con(event_callback_fn cb, int tmout,void *arg)
@@ -138,7 +140,7 @@ struct tcpconnect::tConnProgress
 				if (errno == EINPROGRESS)
 				{
 					errno = 0;
-					ev.reset(event_new(evabase::base, *fd, EV_READ|EV_WRITE, cb, arg));
+					ev.reset(event_new(m_sr.base, *fd, EV_READ|EV_WRITE, cb, arg));
 					event_add(*ev, CTimeVal().For(tmout));
 					return eConnRes::STARTED;
 				}
@@ -164,7 +166,6 @@ struct tcpconnect::tConnProgress
 		IDlConFactory::tConRes result { move(han), sError, false };
 		auto rfunc = move(resRep);
 		rfunc(move(result));
-		delete this;
 		return srt::a;
 	};
 	srt retBad(int ec)
@@ -173,7 +174,7 @@ struct tcpconnect::tConnProgress
 	}
 	srt retGood(int &fd)
 	{
-		std::swap(fd, han->m_conFd);
+		std::swap(fd, han->m_conFd); // @suppress("Invalid arguments")
 		return retErr(sEmptyString);
 	};
 #warning test simulated timeouts, maybe dedicated unit/integration test which suppresses the callback and runs one later
@@ -196,7 +197,7 @@ struct tcpconnect::tConnProgress
 	}
 	srt on_event_alt(bool tmedout)
 	{
-		if(evabase::in_shutdown || GetTime() > total_timeout)
+		if(alt.m_sr.in_shutdown || GetTime() > total_timeout)
 			return retBad(ETIMEDOUT);
 		bool was_poll = alt.fd.get() != -1;
 		bool do_check = !tmedout && was_poll;
@@ -228,8 +229,13 @@ struct tcpconnect::tConnProgress
 		ASSERT(!"Unreachable");
 		return srt::a;
 	}
-	srt Connect(shared_ptr<CAddrInfo> dns) noexcept
+	srt Connect(shared_ptr<CAddrInfo> dns)
 	{
+		if(!dns)
+			return retBad(ENETUNREACH);
+		if(!dns->getError().empty())
+			return retErr(dns->getError());
+
 		dnsres = move(dns);
 		iter = tAlternatingDnsIterator(dnsres->getTcpAddrInfo());
 
@@ -258,44 +264,33 @@ struct tcpconnect::tConnProgress
 	}
 };
 
-void tcpconnect::DoConnect(tDlStreamHandle han, int timeout,
-		IDlConFactory::funcRetCreated resRep)
+void tcpconnect::DoConnect(cmstring& sHost, cmstring& sPort, cfg::IHookHandler *pStateReport,
+		int timeout,
+		IDlConFactory::funcRetCreated resRep,
+		tSysRes& sysres)
 {
-	tConnProgress *x = nullptr;
 	try
 	{
-		auto p = han.get(); // survives the move
-		x = new tConnProgress(move(han), timeout, move(resRep));
-		resRep = decltype(resRep)(); // be sure to clear it, see catcher
+		auto han = make_unique<tcpconnect>(sysres, sHost, sPort, pStateReport);
+		// XXX: unique_ptr with move fails for unknown reason: copy constructor of '' is implicitly deleted because field '' has a deleted copy constructor
+		auto flow = make_shared<tConnProgress>(move(han), timeout, move(resRep), sysres);
 
-		// owns the connection handle
-		auto after_resolve =
-				[x](shared_ptr<CAddrInfo> dnsresult) -> void
-						{
-			// all paths must clean x
-							try
-							{
-								if(dnsresult && dnsresult->getError().empty())
-									x->Connect(move(dnsresult));
-								else
-								{
-									if(!dnsresult)
-										x->retBad(ENETUNREACH);
-									else
-										x->retErr(dnsresult->getError());
-								}
-							}
-							catch(...)
-							{
-								x->retBad(ECONNABORTED);
-							}
-						};
-		CAddrInfo::Resolve(p->GetHostname(), p->GetPort(), after_resolve);
+		auto after_resolve = [flow](shared_ptr<CAddrInfo> dnsresult)
+		{
+			// all paths must report through connectFlow
+			try
+			{
+				flow->Connect(dnsresult);
+			}
+			catch(...)
+			{
+				flow->retBad(ECONNABORTED);
+			}
+		};
+		sysres.dnsbase->Resolve(sHost, sPort, move(after_resolve));
 	}
 	catch (...)
 	{
-		if(x)
-			delete x;
 		if(resRep)
 			resRep(MAKE_CON_RES_DUMMY());
 	}
@@ -313,7 +308,7 @@ void tcpconnect::KillLastFile()
 
 
 #ifdef HAVE_SSL
-
+#warning this is all crap, convert to SslUpgrade async function
 mstring tcpconnect::SSLinit(cmstring &sHostname, cmstring &sPort)
 {
 	auto errorStatusLine = [](const char *perr)

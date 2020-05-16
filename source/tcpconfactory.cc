@@ -25,6 +25,8 @@ void ACNG_API cb_clean_cached_con(evutil_socket_t fd, short what, void* arg);
 
 class ACNG_API dl_con_factory : public IDlConFactory
 {
+	tSysRes& sysres;
+
 public:
 	static unordered_multimap<string, tDlStreamHandle> spareConPool;
 
@@ -91,8 +93,9 @@ public:
 				return;
 			}
 		}
-		tcpconnect::DoConnect(make_unique<tcpconnect>(sHostname, sPort, ssl, pStateTracker),
+		tcpconnect::DoConnect(make_unique<tcpconnect>(sHostname, sPort, pStateTracker),
 				timeout, resultRep);
+#warning ssl upgrade einbauen
 	}
 
 	IDlConFactory::tConRes CreateConnected(
@@ -171,20 +174,10 @@ void dl_con_factory::RecycleIdleConnection(tDlStreamHandle handle)
 	);
 }
 
-dl_con_factory g_tcp_con_factory;
-ACNG_API ::acng::IDlConFactory & GetTcpConFactory()
+ACNG_API ::acng::IDlConFactory CreateTcpConFactory(tSysRes* resman)
 {
-	return g_tcp_con_factory;
+	return new dl_con_factory>(resman);
 }
-
-
-
-
-
-
-
-
-
 
 
 /*

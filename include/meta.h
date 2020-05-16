@@ -21,6 +21,7 @@
 #include <cstring>
 #include <functional>
 #include <atomic>
+#include <stdexcept>
 
 #include <fcntl.h>
 #include <pthread.h>
@@ -62,6 +63,7 @@ namespace acng
 {
 
 class acbuf;
+struct tSysRes;
 
 typedef std::string mstring;
 typedef const std::string cmstring;

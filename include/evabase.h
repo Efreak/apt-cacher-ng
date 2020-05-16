@@ -12,24 +12,31 @@ namespace acng
 {
 
 using tAutoEv = resource_owner<event*, event_free, nullptr>;
+class tDnsBase;
+class IDlConFactory;
 
-// global resource access to lifecycle things like thread contexts
+// global access to lifecycle resources like thread contexts, and some cached service functionality
 // normally created only once per application lifetime
-class ACNG_API tSysRes
+struct ACNG_API tSysRes
 {
-public:
 	event_base *base;
-	evdns_base *dnsbase;
-	// the only public static element, becase we need this flag to be as easy accessible as possible
+	tDnsBase* dnsbase;
 	std::atomic<bool> in_shutdown;
 
+	IDlConFactory* TcpConnectionFactory;
+
 	// the main activity, run by main thread
-	std::unique_ptr<IActivity> fore;
+	IActivity* fore;
 	// the helper thread used for handling metadata (typically loading of DB records, file opening)
-	std::unique_ptr<IActivity> meta;
+	IActivity* meta;
 	// background thread, for best-effort tasks
-	std::unique_ptr<IActivity> back;
+	IActivity* back;
+
+	virtual ~tSysRes() {}
 };
+
+// test code will have its own mock for this
+std::unique_ptr<tSysRes> CreateRegularSystemResources();
 
 }
 

@@ -21,7 +21,7 @@
 
 namespace acng
 {
-
+class tDnsBase;
 class fileitem;
 using tConnectionCache = std::unordered_multimap<std::string, tDlStreamHandle>;
 
@@ -33,7 +33,7 @@ class ACNG_API tcpconnect
 {
 public:
 	virtual ~tcpconnect();
-	tcpconnect(cmstring& sHost, cmstring& sPort, bool bSsl, cfg::IHookHandler *pStateReport);
+	tcpconnect(tSysRes& res, cmstring& sHost, cmstring& sPort, cfg::IHookHandler *pStateReport);
 
 	virtual evutil_socket_t GetFD() const { return m_conFd; }
 	inline cmstring & GetHostname() const { return m_sHostName; }
@@ -47,6 +47,7 @@ protected:
 	tcpconnect operator=(const tcpconnect&);
 	tcpconnect(const tcpconnect&) =default;
 
+	tSysRes& m_sysres;
 	evutil_socket_t m_conFd = -1;
 	// this comes probably for free, 2xint32 fits into 64bit word
 	evutil_socket_t m_bUseSsl = (evutil_socket_t) false;
@@ -55,9 +56,13 @@ protected:
 
 	std::weak_ptr<fileitem> m_lastFile;
 
-	static void DoConnect(tDlStreamHandle han,
+	// create a plain TCP connection
+	static void DoConnect(cmstring& sHost, cmstring& sPort, cfg::IHookHandler *pStateReport,
 			int timeout,
-			IDlConFactory::funcRetCreated resRep);
+			IDlConFactory::funcRetCreated resRep, tSysRes& dnsBase);
+
+	void DoSslSetup(bool doHttpUpgradeFirst);
+	bool IsSslMode() { return m_bUseSsl; }
 
 	void Disconnect();
 

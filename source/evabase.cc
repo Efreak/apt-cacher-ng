@@ -150,5 +150,10 @@ evabase::~evabase()
 		event_base_free(evabase::base);
 }
 
+std::unique_ptr<tSysRes> CreateRegularSystemResources()
+{
+#error create ordered sequence: first event_base, then evdns_base, then tcpconfactory, then evabase-neu, then extra threads
+#error also add destructor... actually, make a derived interal object with custom constructor
+}
 
 }

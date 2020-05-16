@@ -31,14 +31,7 @@ class ACNG_API CAddrInfo
 	static void clean_dns_cache();
 
 public:
-	typedef std::function<void(SHARED_PTR<CAddrInfo>)> tDnsResultReporter;
-
 	~CAddrInfo();
-
-	// async. DNS resolution on IO thread. Reports result through the reporter.
-	static void Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporter) noexcept;
-	// like above but blocking resolution
-	static SHARED_PTR<CAddrInfo> Resolve(cmstring & sHostname, cmstring &sPort);
 
 	const evutil_addrinfo *getTcpAddrInfo() const { return m_tcpAddrInfo; }
 	const std::string& getError() const { return m_sError; }

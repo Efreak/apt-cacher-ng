@@ -8,12 +8,12 @@
 #ifndef INCLUDE_TCPCONFACTORY_H_
 #define INCLUDE_TCPCONFACTORY_H_
 
-#include "tcpconnect.h"
 #include "confactory.h"
 
 namespace acng
 {
-IDlConFactory& GetTcpConFactory();
+class tSysRes;
+IDlConFactory* CreateTcpConFactory(tSysRes* resman);
 }
 
 #endif /* INCLUDE_TCPCONFACTORY_H_ */

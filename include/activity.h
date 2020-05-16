@@ -28,7 +28,7 @@ public:
 	virtual int MainLoop() =0;
 
 	/**
-	 * Tell the executing loop to shutdown all activities
+	 * Tell the executing loop to cancel unfinished activities and stop.
 	 */
 	virtual void SignalShutdown() =0;
 

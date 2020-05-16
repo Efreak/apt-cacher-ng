@@ -575,8 +575,8 @@ void ShutDown()
 {
 	mapUrl2pVname.clear();
 	repoparms.clear();
-   if(!fifopath.empty())
-	   mkbasedir(cfg::fifopath);
+   if(!udspath.empty())
+	   mkbasedir(cfg::udspath);
 }
 
 void dump_config(bool includeDelicate)
@@ -1305,66 +1305,66 @@ void ParseOptionLine(string_view sLine, string_view &key, string_view &val)
 void LoadMappings(IDbManager& dbman)
 {
 	for (const auto &it : remap_lines)
-	{
-		const auto &vname = it.first;
-		if (vname.empty())
 		{
-			if (!m_bIgnoreErrors)
-				throw tStartupException("Bad repository name, check Remap-... directives");
-			continue;
-		}
-
-		for(tMappingValidator ctx(vname); ctx.Next(dbman);)
-		{
-
-		for (const auto &remapLine : it.second)
-		{
-			ctx.ReportString(remapLine);
-
-			enum xtype
-			{
-				PREFIXES, BACKENDS, FLAGS
-			} type = xtype(PREFIXES - 1);
-			tSplitWalk tokenSeq(remapLine, ";", true);
-			for (auto remapToken : tokenSeq)
-			{
-				type = xtype(type + 1);
-				tSplitWalk itemSeq(remapToken, SPACECHARS, false);
-				for (auto s : itemSeq)
-				{
-					if (s.empty())
-						continue;
-					if (s.starts_with('#'))
-						goto next_remap_line;
-
-					switch (type)
-					{
-					case PREFIXES:
-						AddRemapInfo(false, s, ctx);
-						break;
-					case BACKENDS:
-						AddRemapInfo(true, s, ctx);
-						break;
-					case FLAGS:
-						AddRemapFlag(s, ctx);
-						break;
-					}
-				}
-			}
-			if (type < PREFIXES) // no valid tokens?
+			const auto &vname = it.first;
+			if (vname.empty())
 			{
 				if (!m_bIgnoreErrors)
-					throw tStartupException(
-							std::string("Invalid entry, no valid configuration for Remap-")
-									+ ": " + remapLine);
+					throw tStartupException("Bad repository name, check Remap-... directives");
 				continue;
 			}
-			next_remap_line: ;
+
+			for (tMappingValidator ctx(vname); ctx.Next(dbman);)
+			{
+
+				for (const auto &remapLine : it.second)
+				{
+					ctx.ReportString(remapLine);
+
+					enum xtype
+					{
+						PREFIXES, BACKENDS, FLAGS
+					} type = xtype(PREFIXES - 1);
+					tSplitWalk tokenSeq(remapLine, ";", true);
+					for (auto remapToken : tokenSeq)
+					{
+						type = xtype(type + 1);
+						tSplitWalk itemSeq(remapToken, SPACECHARS, false);
+						for (auto s : itemSeq)
+						{
+							if (s.empty())
+								continue;
+							if (s.starts_with('#'))
+								goto next_remap_line;
+
+							switch (type)
+							{
+							case PREFIXES:
+								AddRemapInfo(false, s, ctx);
+								break;
+							case BACKENDS:
+								AddRemapInfo(true, s, ctx);
+								break;
+							case FLAGS:
+								AddRemapFlag(s, ctx);
+								break;
+							}
+						}
+					}
+					if (type < PREFIXES) // no valid tokens?
+					{
+						if (!m_bIgnoreErrors)
+							throw tStartupException(
+									std::string("Invalid entry, no valid configuration for Remap-")
+											+ ": " + remapLine);
+						continue;
+					}
+					next_remap_line: ;
+				}
+			}
+			_AddHooksFile(vname);
 		}
-		}
-		_AddHooksFile(vname);
 	}
-}
 
 void ReadConfigDirectory(cmstring& sPath)
 {
