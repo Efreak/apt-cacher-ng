@@ -1,4 +1,5 @@
 set(SHAREDSRCS
+        acngbase.cc
 dns/caddrinfo.cc
         sockio.cc acbuf.cc acfg.cc acfg_defaults.cc aclogger.cc dirwalk.cc fileio.cc  filelocks.cc 
 filereader.cc header.cc meta.cc tcpconnect.cc  rex.cc astrop.cc dbman.cc errnofmt.cc csmapping.cc
@@ -9,6 +10,7 @@ filereader.cc header.cc meta.cc tcpconnect.cc  rex.cc astrop.cc dbman.cc errnofm
 set(ACNG_SRCS apt-cacher.cc)
 add_definitions(-DACNG_CORE_IN_SO)
 include_directories(dns)
+include_directories(.)
 
 ADD_LIBRARY(supacng SHARED ${SHAREDSRCS})
 SET_TARGET_PROPERTIES(supacng PROPERTIES COMPILE_FLAGS "${ACNG_COMPFLAGS} ${ACNG_CXXFLAGS} ${CFLAGS_DAEMON} ${CFLAGS_PTHREAD}")

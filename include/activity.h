@@ -20,17 +20,6 @@ class IActivity
 {
 public:
 	virtual ~IActivity() =default;
-	/**
-	 * Runs the main loop for a program around the event_base loop.
-	 * When finished, clean up some resources left behind (fire off specific events
-	 * which have actions that would cause blocking otherwise).
-	 */
-	virtual int MainLoop() =0;
-
-	/**
-	 * Tell the executing loop to cancel unfinished activities and stop.
-	 */
-	virtual void SignalShutdown() =0;
 
 	/**
 	 * Push an action into processing queue. In case operation is not possible, runs the action with the cancel flag (bool argument set to true)

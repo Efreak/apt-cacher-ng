@@ -11,7 +11,7 @@
 #include "acfg.h"
 #include "debug.h"
 #include "lockable.h"
-#include "evabase.h"
+#include "acngbase.h"
 #include <event2/dns.h>
 using namespace std;
 
@@ -113,7 +113,7 @@ std::shared_ptr<CAddrInfo> RESPONSE_FAIL = static_pointer_cast<CAddrInfo>(std::m
 std::shared_ptr<CAddrInfo> RESPONSE_CANCELED = static_pointer_cast<CAddrInfo>(make_shared<CAddrInfoImpl>(EAI_CANCELED));
 
 
-class tDnsBaseImpl: public tDnsBase, public std::enable_shared_from_this<tDnsBaseImpl>
+class ACNG_API tDnsBaseImpl: public tDnsBase, public std::enable_shared_from_this<tDnsBaseImpl>
 {
 public:
 	evdns_base *m_evdnsbase;
@@ -123,7 +123,7 @@ public:
 
 	explicit tDnsBaseImpl(tSysRes &src) : tDnsBase(), m_src(src)
 	{
-		m_evdnsbase = evdns_base_new(src.base, EVDNS_BASE_INITIALIZE_NAMESERVERS);
+		m_evdnsbase = evdns_base_new(src.GetEventBase(), EVDNS_BASE_INITIALIZE_NAMESERVERS);
 	}
 	~tDnsBaseImpl()
 	{
@@ -153,7 +153,7 @@ public:
 
 };
 
-void AddDefaultDnsBase(tSysRes &src)
+void ACNG_API AddDefaultDnsBase(tSysRes &src)
 {
 	src.dnsbase.reset(new tDnsBaseImpl(src));
 }

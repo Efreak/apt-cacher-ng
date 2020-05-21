@@ -3,6 +3,7 @@
 add_subdirectory(/usr/src/googletest gtest)
 
 add_definitions(-DUNDER_TEST)
+include_directories(../source)
 include_directories(src)
 set(TEST_LIB_SET gtest_main gmock_main supacngTEST SQLiteCpp sqlite3 ${BaseNetworkLibs} ${ServerLibs} ${CompLibs} ${SSL_LIB_LIST} ${LDFLAGS_DAEMON} ${CMAKE_THREAD_LIBS_INIT} ${EXTRA_LIBS_ACNG})
 

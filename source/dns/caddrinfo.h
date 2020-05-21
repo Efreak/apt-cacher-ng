@@ -6,7 +6,6 @@
 
 namespace acng
 {
-struct tSysRes;
 
 class ACNG_API CAddrInfo
 {
@@ -19,7 +18,7 @@ public:
 typedef std::shared_ptr<CAddrInfo> CAddrInfoPtr;
 typedef std::function<void(CAddrInfoPtr)> tDnsResultReporter;
 
-class tDnsBase
+class ACNG_API tDnsBase
 {
 public:
 	virtual ~tDnsBase();
@@ -28,6 +27,10 @@ public:
 	// like above but blocking
 	std::shared_ptr<CAddrInfo> Resolve(cmstring & sHostname, cmstring &sPort);
 };
+
+struct tSysRes;
+void AddDefaultDnsBase(tSysRes &src);
+
 }
 
 #endif /*CADDRINFO_H_*/

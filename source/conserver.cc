@@ -267,6 +267,7 @@ bool bind_and_listen(evutil_socket_t mSock, const evutil_addrinfo *pAddrInfo, cm
 				perror("Couldn't listen on socket");
 				return false;
 			}
+
 			auto ev = event_new(evabase::base, mSock, EV_READ|EV_PERSIST, do_accept, event_self_cbarg());
 			if(!ev)
 			{

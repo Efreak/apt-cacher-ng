@@ -20,9 +20,7 @@
 #include "fileitem.h"
 #include "cleaner.h"
 #include "dnsiter.h"
-#include "evabase.h"
-//#include <tuple>
-#include <evabase.h>
+#include "acngbase.h"
 #include <event.h>
 #include <thread>
 
@@ -117,7 +115,7 @@ struct tcpconnect::tConnProgress
 		}
 		void init_timeout(event_callback_fn cb, void *arg)
 		{
-			ev.reset(event_new(m_sr.base, -1, EV_TIMEOUT, cb, arg));
+			ev.reset(event_new(m_sr.GetEventBase(), -1, EV_TIMEOUT, cb, arg));
 			event_add(*ev, CTimeVal().Remaining(cfg::fasttimeout));
 		}
 		eConnRes init_con(event_callback_fn cb, int tmout,void *arg)
@@ -139,7 +137,7 @@ struct tcpconnect::tConnProgress
 				if (errno == EINPROGRESS)
 				{
 					errno = 0;
-					ev.reset(event_new(m_sr.base, *fd, EV_READ|EV_WRITE, cb, arg));
+					ev.reset(event_new(m_sr.GetEventBase(), *fd, EV_READ|EV_WRITE, cb, arg));
 					event_add(*ev, CTimeVal().For(tmout));
 					return eConnRes::STARTED;
 				}

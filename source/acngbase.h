@@ -19,7 +19,6 @@ class IDlConFactory;
 // normally created only once per application lifetime
 struct ACNG_API tSysRes
 {
-	event_base *base;
 	std::shared_ptr<tDnsBase> dnsbase;
 	std::atomic<bool> in_shutdown;
 
@@ -32,7 +31,21 @@ struct ACNG_API tSysRes
 	// background thread, for best-effort tasks
 	IActivity* back;
 
+	virtual event_base * GetEventBase() {return nullptr;}
 	virtual ~tSysRes() {}
+
+	/**
+	 * Runs the main loop for a program around the event_base loop.
+	 * When finished, clean up some resources left behind (fire off specific events
+	 * which have actions that would cause blocking otherwise).
+	 */
+	virtual int MainLoop() { return -1; };
+
+	/**
+	 * Tell the executing loop to cancel unfinished activities and stop.
+	 */
+	virtual void SignalShutdown() {};
+
 };
 
 // test code will have its own mock for this
