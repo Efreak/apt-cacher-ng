@@ -12,6 +12,7 @@
 
 #include <string>
 #include <map>
+#include <unordered_map>
 #include <set>
 #include <vector>
 #include <deque>
@@ -426,7 +427,7 @@ struct tDtorEx {
 	inline ~tDtorEx() { _action(); }
 };
 
-// mostly unique_ptr semantics for a non-pointer type with preserved invalid value, using a custom disposer function
+// mostly unique_ptr semantics for a non-pointer type with preserved invalid value, using a custom disposer function which is defined as static template parameter
 template<typename T, void TDisposeFunction(T), T inval_default>
 struct resource_owner
 {
@@ -438,11 +439,6 @@ struct resource_owner
     T get() const { return m_p; }
     T operator*() { return m_p; }
     resource_owner(const resource_owner&) = delete;
-    resource_owner(resource_owner && other)
-	{
-		m_p = other.m_p;
-		other.m_p = inval_default;
-	}
 	resource_owner& reset(resource_owner &&other)
 	{
 		if (&other != this)
@@ -474,6 +470,16 @@ struct resource_owner
 		return *this;
 	}
 	bool valid() const { return inval_default != m_p;}
+
+    resource_owner(resource_owner && other)
+	{
+    	reset(other);
+	}
+    T operator=(resource_owner && other)
+	{
+    	return reset(other);
+	}
+
 };
 
 // something similar to resource_owner but the owned object needs to be default-constructible and movable.

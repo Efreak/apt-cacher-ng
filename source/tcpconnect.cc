@@ -26,7 +26,6 @@
 #include <event.h>
 #include <thread>
 
-#include "dnsbase.h"
 #include "tlsio.h"
 
 using namespace std;

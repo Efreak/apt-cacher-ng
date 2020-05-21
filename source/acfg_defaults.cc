@@ -126,11 +126,7 @@ int maxdlspeed(RESERVED_DEFVAL);
 string optproxycmd;
 int optproxycheckint=-1;
 
-#ifdef DEBUG
-int dnscachetime(30);
-#else
-int dnscachetime(1800);
-#endif
+int dnscachetime(40);
 
 string ACNG_API agentname("Apt-Cacher-NG/" ACVERSION);
 string ACNG_API remoteport("80"), port(ACNG_DEF_PORT);

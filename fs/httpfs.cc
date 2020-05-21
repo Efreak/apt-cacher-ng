@@ -10,7 +10,7 @@
 
 #include "meta.h"
 #include "header.h"
-#include "caddrinfo.h"
+#include "dns/caddrinfo.h"
 #include "sockio.h"
 #include "acbuf.h"
 #include "acfg.h"

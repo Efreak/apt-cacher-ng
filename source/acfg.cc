@@ -150,7 +150,6 @@ MapNameToInt n2iTbl[] = {
 		,{  "MaxStandbyConThreads",              &tpstandbymax,     nullptr,    10, false}
 		,{  "MaxConThreads",                     &tpthreadmax,      nullptr,    10, false}
 		,{  "DlMaxRetries",                      &dlretriesmax,     nullptr,    10, false}
-		,{  "DnsCacheSeconds",                   &dnscachetime,     nullptr,    10, false}
 		,{  "UnbufferLogs",                      &debug,            nullptr,    10, false}
 		,{  "ExAbortOnProblems",                 &exfailabort,      nullptr,    10, false}
 		,{  "ExposeOrigin",                      &exporigin,        nullptr,    10, false}
@@ -186,6 +185,10 @@ MapNameToInt n2iTbl[] = {
 		,{ "OldIndexUpdater",	&oldupdate, 	"Option is deprecated, ignoring the value." , 10, true}
 		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10, false}
 		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10, false}
+
+
+		,{  "DnsCacheSeconds",                   &dnscachetime,     "DnsCacheSeconds is deprecated and has no effect",    10, true}
+
 };
 
 #define BARF(msg) throw tStartupException(tSS() << msg)

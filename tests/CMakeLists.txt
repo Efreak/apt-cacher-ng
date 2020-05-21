@@ -27,3 +27,9 @@ add_executable(ut_algos
 	src/main.cc
 	)
 target_link_libraries(ut_algos ${TEST_LIB_SET})
+
+add_executable(ut_dns
+	src/ut_dns.cc
+	src/main.cc
+	)
+target_link_libraries(ut_dns ${TEST_LIB_SET})

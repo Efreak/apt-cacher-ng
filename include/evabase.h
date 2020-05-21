@@ -20,7 +20,7 @@ class IDlConFactory;
 struct ACNG_API tSysRes
 {
 	event_base *base;
-	tDnsBase* dnsbase;
+	std::shared_ptr<tDnsBase> dnsbase;
 	std::atomic<bool> in_shutdown;
 
 	IDlConFactory* TcpConnectionFactory;
