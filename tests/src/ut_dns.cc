@@ -12,7 +12,23 @@
 
 using namespace acng;
 
-TEST(dns, remote)
+TEST(dns, hostNameBad)
+{
+	auto rc = CreateRegularSystemResources();
+	CAddrInfoPtr dnsresult;
+	rc->dnsbase->Resolve("this.does.not.exist.localhost", "12345", [&](CAddrInfoPtr ainfo){
+		dnsresult = ainfo;
+		rc->fore->StartShutdown();
+	});
+	int status = rc->MainLoop();
+	ASSERT_EQ(status, 0);
+	ASSERT_TRUE(dnsresult);
+	ASSERT_FALSE(dnsresult->getError().empty());
+	ASSERT_TRUE(startsWithSz(dnsresult->getError(), "503"));
+	std::cout << dnsresult->getError() << std::endl;
+}
+
+TEST(dns, hostNameGood)
 {
 	auto rc = CreateRegularSystemResources();
 	CAddrInfoPtr dnsresult;
@@ -28,6 +44,26 @@ TEST(dns, remote)
 	//std::cout << result << std::endl;
 	ASSERT_TRUE(result.length() > 10);
 	ASSERT_EQ(result.substr(0, 3), "127");
+}
 
+TEST(dns, hostNameMultipleInARow)
+{
+	auto rc = CreateRegularSystemResources();
+	std::vector<CAddrInfoPtr> dnsresults;
+	rc->dnsbase->Resolve("this.does.not.exist.localhost", "12345", [&](CAddrInfoPtr ainfo){
+		dnsresults.emplace_back(move(ainfo));
+	});
+	rc->dnsbase->Resolve("this.does.not.exist.localhost", "12345", [&](CAddrInfoPtr ainfo){
+		dnsresults.emplace_back(move(ainfo));
+	});
+	rc->dnsbase->Resolve("this.does.not.exist.localhost", "12345", [&](CAddrInfoPtr ainfo){
+		dnsresults.emplace_back(move(ainfo));
+		rc->fore->StartShutdown();
+	});
+	int status = rc->MainLoop();
+	ASSERT_EQ(status, 0);
+	ASSERT_EQ(3, dnsresults.size());
+	for(auto& el: dnsresults)
+		ASSERT_EQ(el, dnsresults.front());
 }
 

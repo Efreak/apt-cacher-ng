@@ -54,8 +54,6 @@ class ACNG_API CAddrInfoImpl : public CAddrInfo
 	// shortcut for iterators, first in the list with TCP target
 	evutil_addrinfo *m_tcpAddrInfo = nullptr;
 
-	static void clean_dns_cache();
-
 public:
 
 	const evutil_addrinfo* getTcpAddrInfo() const
@@ -160,8 +158,8 @@ void tDnsBaseImpl::Resolve(cmstring &sHostname, cmstring &sPort, tDnsResultRepor
 	m_src.fore->PostOrRun([sHostname, sPort, rep = move(rep), me = shared_from_this()] // @suppress("Invalid arguments")
 						   (bool canceled)
 						   {
-		if(canceled)
-				return rep(RESPONSE_CANCELED);
+
+				if(canceled) return rep(RESPONSE_CANCELED);
 
 				try
 				{
@@ -216,13 +214,14 @@ void tDnsBaseImpl::Resolve(cmstring &sHostname, cmstring &sPort, tDnsResultRepor
 
 void CAddrInfoImpl::cb_dns(int rc, struct evutil_addrinfo *resultsRaw, void *argRaw)
 {
-	// take ownership in any case
+	// take ownership in any case, to clear or move it around
 	tRawAddrinfoPtr results(resultsRaw);
+	auto ret = RESPONSE_FAIL;
+
+	if (!argRaw)
+		return; // not good but not fixable :-(
+
 	auto ctx = std::unique_ptr<tActiveResolutionContext>((tActiveResolutionContext*)argRaw);
-
-	if (!argRaw || !resultsRaw)
-		return;
-
 	auto dnsbase = ctx->pDnsBase.lock();
 	if(!dnsbase)
 		return;
@@ -230,14 +229,17 @@ void CAddrInfoImpl::cb_dns(int rc, struct evutil_addrinfo *resultsRaw, void *arg
 	if(iter == dnsbase->active_resolvers.end())
 		return;
 	auto cbacks = move(iter->second);
-	auto ret = RESPONSE_FAIL;
 	dnsbase->active_resolvers.erase(iter);
-	// report this in any case
+	// report something this in any case
 	tDtorEx invoke_cbs([&]() { for(auto& it: cbacks) it(ret);}); // @suppress("Invalid arguments")
+
+	// now dispatch actual response
 	try
 	{
 		if(rc)
 			ret = make_shared<CAddrInfoImpl>(rc);
+		else if(!resultsRaw) // failed to provide information nor error? wtf?
+			ret = RESPONSE_FAIL;
 		else
 			ret = make_shared<CAddrInfoImpl>(move(results));
 	} catch (...)
