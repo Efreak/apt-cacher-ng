@@ -2,6 +2,7 @@
 #include "meta.h"
 #include "debug.h"
 #include "lockable.h"
+#include "dbman.h"
 
 #include <thread>
 #include <future>
@@ -18,7 +19,8 @@ using namespace std;
 
 namespace acng
 {
-//std::atomic<bool> evabase::in_shutdown = ATOMIC_VAR_INIT(false);
+
+const struct timeval timeout_asap{0,0};
 
 
 #if false
@@ -62,30 +64,121 @@ int cb_collect_event(const event_base*, const event* ev, void* ret)
 }
 #endif
 
-class tEventActivity : public IActivity
+class CActivityBase : public IActivity
 {
+protected:
+	deque<tCancelableAction> incoming_q;
+	std::thread::id mainThreadId;
+	mutex handover_mx;
+	bool m_shutdown = false;
+
+	virtual void InstallUnderLock(tCancelableAction&& act) =0;
+public:
+	/*
+	 * Like Post, but if the thread is the same as main thread, run the action in-place
+	 */
+	JobAcceptance PostOrRun(tCancelableAction&& act) override
+	{
+		if(!act)
+			return NOT_ACCEPTED;
+
+		if (this_thread::get_id() == mainThreadId)
+		{
+			{
+				std::unique_lock g(handover_mx);
+				if (m_shutdown)
+					return NOT_ACCEPTED;
+			}
+			act(false);
+			return FINISHED;
+		}
+		return Post(move(act));
+	}
+
+	/**
+	 * Push an action into processing queue. In case operation is not possible, runs the action with the cancel flag (bool argument set to true)
+	 */
+	JobAcceptance Post(tCancelableAction&& act) override
+	{
+		if(!act)
+			return NOT_ACCEPTED;
+		{
+			lockguard g(handover_mx);
+			if(m_shutdown)
+				return NOT_ACCEPTED;
+			InstallUnderLock(move(act));
+		}
+		return ACCEPTED;
+	}
+
+	std::thread::id GetThreadId() override
+	{
+		return mainThreadId;
+	}
+
+};
+
+class tEventActivity : public CActivityBase
+{
+
 public:
 	event_base *m_base = nullptr;
-	std::thread::id mainThreadId;
-
-
 	struct event *handover_wakeup;
-	const struct timeval timeout_asap{0,0};
-	deque<tCancelableAction> incoming_q, processing_q;
-	mutex handover_mx;
 
 	static void cb_handover(evutil_socket_t sock, short what, void* arg)
 	{
+		bool last_cycle = false, have_more=false;
 		auto me((tEventActivity*)arg);
+		tCancelableAction todo;
+		// pick just one job per cycle, unless in shutdown phase, then run them ASAP
 		{
 			lockguard g(me->handover_mx);
-			me->processing_q.swap(me->incoming_q);
+			last_cycle = me->m_shutdown;
+			have_more = me->incoming_q.size()>1;
+			todo.swap(me->incoming_q.front());
+			me->incoming_q.pop_front();
 		}
-		for(const auto& ac: me->processing_q)
-			ac(false);
-		me->processing_q.clear();
+		if(todo) todo(last_cycle);
+		if(have_more && !last_cycle)
+			event_add(me->handover_wakeup, &timeout_asap);
+
+
+#if 0
+		while(true)
+		{
+			{
+				lockguard g(me->handover_mx);
+				last_cycle = m_shutdown;
+				me->temp_q.clear();
+				me->temp_q.swap(me->incoming_q);
+			}
+			for (const auto &ac : me->temp_q)
+			{
+				if(ac)
+					ac(false);
+			}
+			me->temp_q.clear();
+			if (!last_cycle)
+			{
+
+			}
+
+		}
+#endif
 	}
 
+	void InstallUnderLock(tCancelableAction&& act) override
+	{
+		incoming_q.emplace_back(move(act));
+		if(incoming_q.size() == 1)
+			event_add(handover_wakeup, &timeout_asap);
+	}
+	void StartShutdown() override
+	{
+		std::lock_guard<std::mutex> g(handover_mx);
+		m_shutdown = true;
+		event_base_loopbreak(m_base);
+	}
 
 	tEventActivity()
 	{
@@ -93,8 +186,12 @@ public:
 		m_base = event_base_new();
 		handover_wakeup =  evtimer_new(m_base, cb_handover, this);
 	}
-
-
+	~tEventActivity()
+	{
+		// just once to finalize outstanding tasks
+		event_base_loop(m_base, EVLOOP_ONCE | EVLOOP_NONBLOCK);
+		event_base_free(m_base);
+	}
 
 	/**
 	 *
@@ -130,120 +227,82 @@ public:
 	#endif
 		return r;
 	}
-
-	/**
-	 * Tell the executing loop to cancel unfinished activities and stop.
-	 */
-	void SignalShutdown()
-	{
-		if(m_base)
-			event_base_loopbreak(m_base);
-	}
-
-	/**
-	 * Push an action into processing queue. In case operation is not possible, runs the action with the cancel flag (bool argument set to true)
-	 */
-	void Post(tCancelableAction&& act) override
-	{
-		{
-			lockguard g(handover_mx);
-			incoming_q.emplace_back(move(act));
-		}
-		event_add(handover_wakeup, &timeout_asap);
-	}
-	/*
-	 * Like Post, but if the thread is the same as main thread, run the action in-place
-	 */
-	void PostOrRun(tCancelableAction&& act) override
-	{
-		if(this_thread::get_id() == mainThreadId)
-			act(false);
-		else
-			Post(move(act));
-	}
-
-	std::thread::id GetThreadId() override
-	{
-		return mainThreadId;
-	}
 };
 
-
-class tThreadedActivity : public IActivity, public base_with_condition
+class tThreadedActivity : public CActivityBase
 {
-public:
 	std::thread m_thread;
-	std::thread::id mainThreadId;
-	deque<tCancelableAction> incoming_q, processing_q;
-
-	tThreadedActivity()
-	{
-	}
+	std::condition_variable waitvar;
+public:
 
 	// start a new background thread, make sure that it became operational when exiting
-	IActivity* Spawn(tSysRes& rc)
+	IActivity* Spawn()
 	{
 		std::promise<bool> confirm_start;
 		std::thread([&]()
 				{
+			decltype(incoming_q) temp_q;
 			mainThreadId = this_thread::get_id();
 			confirm_start.set_value(true);
 
-			lockuniq q(this);
-
-			while (!rc.in_shutdown)
+			while (true)
 			{
-				if (incoming_q.empty())
-				wait(q);
-				processing_q.swap(incoming_q);
-				for (const auto &ac : processing_q)
+				bool last_cycle = false;
+
 				{
-					q.unLock();
-					ac(rc.in_shutdown);
-					q.reLock();
+					std::unique_lock<std::mutex> q(handover_mx);
+					temp_q.clear();
+					while(incoming_q.empty())
+						waitvar.wait(q);
+					last_cycle = m_shutdown;
+					temp_q.swap(incoming_q);
 				}
-				processing_q.clear();
-			}
-			q.unLock();
-			if(rc.in_shutdown && !incoming_q.empty())
-			{
-				for (const auto &ac : processing_q) ac(true);
-			}
+				for (const auto &ac : temp_q)
+				{
+					if(ac)
+						ac(last_cycle);
+				}
 
+				if(last_cycle)
+					break;
+			}
 		}).swap(m_thread);
 
 		return confirm_start.get_future().get() ? this : nullptr;
 	}
 
-	/**
-	 * Push an action into processing queue. In case operation is not possible, runs the action with the cancel flag (bool argument set to true)
-	 */
-	void Post(tCancelableAction &&act) override
+	void StartShutdown() override
 	{
-		lockuniq q(this);
-		incoming_q.emplace_back(move(act));
-		notifyAll();
-	}
-	/*
-	 * Like Post, but if the thread is the same as main thread, run the action in-place
-	 */
-	void PostOrRun(tCancelableAction&& act) override
-	{
-		if(this_thread::get_id() == mainThreadId)
-			act(false);
-		else
-			Post(move(act));
-	}
-
-	std::thread::id GetThreadId() override
-	{
-		return mainThreadId;
+		std::lock_guard<std::mutex> g(handover_mx);
+		m_shutdown = true;
+		// just push it, the thread will stop after
+		incoming_q.emplace_back(tCancelableAction());
+		waitvar.notify_one();
 	}
 
 	~tThreadedActivity()
 	{
 		if(m_thread.joinable())
 			m_thread.join();
+
+		// XXX: is flushing here the safest approach?
+		decltype(incoming_q) temp_q;
+		{
+			std::unique_lock<std::mutex> q(handover_mx);
+			temp_q.swap(incoming_q);
+		}
+		for (const auto &ac : temp_q)
+		{
+			if(ac)
+				ac(true);
+		}
+		temp_q.clear();
+	}
+
+	void InstallUnderLock(tCancelableAction&& act) override
+	{
+		incoming_q.emplace_back(move(act));
+		waitvar.notify_one();
 	}
 };
 
@@ -253,29 +312,31 @@ std::unique_ptr<tSysRes> CreateRegularSystemResources()
 {
 	struct tSysResReal : public tSysRes
 	{
+		inline tEventActivity* eac() {return static_cast<tEventActivity*>(this->fore);}
 		event_base * GetEventBase() override
 		{
-			return static_cast<tEventActivity*>(this->fore)->m_base;
+			return eac()->m_base;
 		}
 		~tSysResReal()
 		{
+			// BG threads shall no longer accept jobs and prepare to exit ASAP
+			back->StartShutdown();
+			meta->StartShutdown();
+			fore->StartShutdown();
+			// finalize all outstanding work
 			delete back;
 			delete meta;
 			delete fore;
+			delete db;
 		}
 		int MainLoop() override { return static_cast<tEventActivity*>(fore)->MainLoop(); };
-		void SignalShutdown() override {
-			in_shutdown.store(true);
-			static_cast<tEventActivity*>(fore)->SignalShutdown();
-		};
 		tSysResReal() :
 				tSysRes()
 		{
-			in_shutdown.store(false);
 			fore = new tEventActivity();
 			AddDefaultDnsBase(*this);
-			back = (new tThreadedActivity())->Spawn(*this);
-			meta = (new tThreadedActivity())->Spawn(*this);
+			back = (new tThreadedActivity())->Spawn();
+			meta = (new tThreadedActivity())->Spawn();
 		}
 	};
 	return std::make_unique<tSysResReal>();

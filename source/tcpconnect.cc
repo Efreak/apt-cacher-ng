@@ -194,7 +194,9 @@ struct tcpconnect::tConnProgress
 	}
 	srt on_event_alt(bool tmedout)
 	{
-		if(alt.m_sr.in_shutdown || GetTime() > total_timeout)
+#warning detect shutdown here?
+		if(/*alt.m_sr.in_shutdown || */
+				GetTime() > total_timeout)
 			return retBad(ETIMEDOUT);
 		bool was_poll = alt.fd.get() != -1;
 		bool do_check = !tmedout && was_poll;

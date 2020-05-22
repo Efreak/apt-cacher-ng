@@ -14,25 +14,27 @@ namespace acng
 using tAutoEv = resource_owner<event*, event_free, nullptr>;
 class tDnsBase;
 class IDlConFactory;
+class IDbManager;
 
 // global access to lifecycle resources like thread contexts, and some cached service functionality
 // normally created only once per application lifetime
-struct ACNG_API tSysRes
+class ACNG_API tSysRes
 {
+public:
 	std::shared_ptr<tDnsBase> dnsbase;
-	std::atomic<bool> in_shutdown;
-
-	IDlConFactory* TcpConnectionFactory;
 
 	// the main activity, run by main thread
-	IActivity* fore;
+	IActivity* fore = nullptr;
 	// the helper thread used for handling metadata (typically loading of DB records, file opening)
-	IActivity* meta;
+	IActivity* meta = nullptr;
 	// background thread, for best-effort tasks
-	IActivity* back;
+	IActivity* back = nullptr;
+
+	IDbManager *db = nullptr;
+	IDlConFactory* TcpConnectionFactory = nullptr;
 
 	virtual event_base * GetEventBase() {return nullptr;}
-	virtual ~tSysRes() {}
+	virtual ~tSysRes() =default;
 
 	/**
 	 * Runs the main loop for a program around the event_base loop.
@@ -40,12 +42,6 @@ struct ACNG_API tSysRes
 	 * which have actions that would cause blocking otherwise).
 	 */
 	virtual int MainLoop() { return -1; };
-
-	/**
-	 * Tell the executing loop to cancel unfinished activities and stop.
-	 */
-	virtual void SignalShutdown() {};
-
 };
 
 // test code will have its own mock for this

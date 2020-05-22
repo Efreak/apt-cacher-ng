@@ -160,7 +160,7 @@ void tDnsBaseImpl::Resolve(cmstring &sHostname, cmstring &sPort, tDnsResultRepor
 	m_src.fore->PostOrRun([sHostname, sPort, rep = move(rep), me = shared_from_this()] // @suppress("Invalid arguments")
 						   (bool canceled)
 						   {
-		if(canceled || me->m_src.in_shutdown)
+		if(canceled)
 				return rep(RESPONSE_CANCELED);
 
 				try
