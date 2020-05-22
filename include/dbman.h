@@ -24,11 +24,6 @@ public:
 
 	static std::unique_ptr<IDbManager> create();
 
-	/**
-	 * Commit transaction data and restart internal transaction.
-	 */
-	virtual void Sync() =0;
-
 	virtual std::string GetMappingSignature(const std::string& name) =0;
 	/**
 	 * Will delete old signature data and insert a new one
@@ -49,11 +44,13 @@ public:
 		~TExplicitTransaction();
 	};
 
+#if false
 	/**
 	 * Transfers the responsibility for a transaction execution to the user of the returned object.
 	 * Data is flushed before, and might be reverted if the user does not commit this TA.
 	 */
 	virtual TExplicitTransaction GetExplicitTransaction() =0;
+#endif
 };
 
 }

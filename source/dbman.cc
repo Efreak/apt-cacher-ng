@@ -65,10 +65,11 @@ public:
 	    }
 #endif
 	}
-
+#if false
 	void Sync() override
 	{
 	}
+#endif
 
 	std::string GetMappingSignature(const std::string &name) override
 	{
@@ -79,11 +80,13 @@ public:
 	void StoreMappingSignature(const std::string &name, const std::string &sig) override
 	{
 	}
+#if false
 	TExplicitTransaction GetExplicitTransaction() override
 	{
 		TExplicitTransaction ret;
 		return std::move(ret);
 	}
+#endif
 	void tetRollback()
 	{
 #warning fixme

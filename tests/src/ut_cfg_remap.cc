@@ -10,8 +10,8 @@
 class MockDb : public acng::IDbManager
 {
 public:
-	MOCK_METHOD(void, MarkChangeVoluntaryCommit, (), (override));
-	MOCK_METHOD(void, MarkChangeMandatoryCommit, (), (override));
+//	MOCK_METHOD(void, MarkChangeVoluntaryCommit, (), (override));
+//	MOCK_METHOD(void, MarkChangeMandatoryCommit, (), (override));
 	MOCK_METHOD(std::string, GetMappingSignature, (const std::string& name), (override));
 	MOCK_METHOD(void, StoreMappingSignature, (const std::string& name, const std::string& sig), (override));
 };
@@ -36,7 +36,7 @@ TEST(cfg, remap)
 	ASSERT_NO_THROW(builder.Build(*db));
 
 	db = std::make_unique<MockDb>();
-	EXPECT_CALL(*db, GetMappingSignature(Eq("foo"))).Times(1).WillRepeatedly(Throw(SQLite::Exception()));
+	EXPECT_CALL(*db, GetMappingSignature(Eq("foo"))).Times(1).WillRepeatedly(Throw(SQLite::Exception("oh")));
 	cfg::tConfigBuilder builder2(false, false);
 	builder2.AddOption("Remap-foo = bla blub http://fakeserver/irgendwas ; http://realmirror/pub/kubuntu")
 		.AddOption("Remap-bar = bla blub http://fakeserver/irgendwas ; http://realmirror/pub/kubuntu");

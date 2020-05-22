@@ -463,7 +463,8 @@ struct tHookHandler: public IHookHandler, public base_with_mutex
 		{
 			//system(cmdRel.c_str());
 			downTimeNext = ::time(0) + downDuration;
-			cleaner::GetInstance().ScheduleFor(downTimeNext, cleaner::TYPE_ACFGHOOKS);
+#warning restore TYPE_ACFGHOOKS handling
+			//cleaner::GetInstance().ScheduleFor(downTimeNext, cleaner::TYPE_ACFGHOOKS);
 		}
 	}
 	virtual void OnAccess() override
