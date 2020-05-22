@@ -54,12 +54,9 @@ class ACNG_API CAddrInfoImpl : public CAddrInfo
 	// shortcut for iterators, first in the list with TCP target
 	evutil_addrinfo *m_tcpAddrInfo = nullptr;
 
-	CAddrInfoImpl() = default;
-
 	static void clean_dns_cache();
 
 public:
-	~CAddrInfoImpl() {};
 
 	const evutil_addrinfo* getTcpAddrInfo() const
 	{
@@ -138,7 +135,7 @@ public:
 	std::shared_ptr<CAddrInfo> Resolve(cmstring &sHostname, cmstring &sPort)
 	{
 		promise<shared_ptr<CAddrInfo> > reppro;
-		Resolve(sHostname, sPort, [&reppro](CAddrInfoPtr result) { reppro.set_value(result);} );
+		Resolve(sHostname, sPort, [&reppro](CAddrInfoPtr result) { reppro.set_value(result);} ); // @suppress("Invalid arguments")
 		auto res(reppro.get_future().get());
 		return res ? res : RESPONSE_FAIL;
 	}
@@ -160,7 +157,7 @@ void ACNG_API AddDefaultDnsBase(tSysRes &src)
 
 void tDnsBaseImpl::Resolve(cmstring &sHostname, cmstring &sPort, tDnsResultReporter rep) noexcept
 {
-	m_src.fore->PostOrRun([sHostname, sPort, rep = move(rep), me = shared_from_this()]
+	m_src.fore->PostOrRun([sHostname, sPort, rep = move(rep), me = shared_from_this()] // @suppress("Invalid arguments")
 						   (bool canceled)
 						   {
 		if(canceled || me->m_src.in_shutdown)
@@ -236,7 +233,7 @@ void CAddrInfoImpl::cb_dns(int rc, struct evutil_addrinfo *resultsRaw, void *arg
 	auto ret = RESPONSE_FAIL;
 	dnsbase->active_resolvers.erase(iter);
 	// report this in any case
-	tDtorEx invoke_cbs([&]() { for(auto& it: cbacks) it(ret);});
+	tDtorEx invoke_cbs([&]() { for(auto& it: cbacks) it(ret);}); // @suppress("Invalid arguments")
 	try
 	{
 		if(rc)

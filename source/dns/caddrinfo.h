@@ -10,9 +10,9 @@ namespace acng
 class ACNG_API CAddrInfo
 {
 public:
-	virtual ~CAddrInfo();
-	const evutil_addrinfo *getTcpAddrInfo() const;
-	const std::string& getError() const;
+	virtual ~CAddrInfo() = default;
+	virtual const evutil_addrinfo *getTcpAddrInfo() const =0;
+	virtual const std::string& getError() const =0;
 };
 
 typedef std::shared_ptr<CAddrInfo> CAddrInfoPtr;
@@ -21,11 +21,11 @@ typedef std::function<void(CAddrInfoPtr)> tDnsResultReporter;
 class ACNG_API tDnsBase
 {
 public:
-	virtual ~tDnsBase();
+	virtual ~tDnsBase() = default;
 	// async. DNS resolution on IO thread. Reports result through the reporter.
-	void Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporter) noexcept;
+	virtual void Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporter) noexcept =0;
 	// like above but blocking
-	std::shared_ptr<CAddrInfo> Resolve(cmstring & sHostname, cmstring &sPort);
+	virtual std::shared_ptr<CAddrInfo> Resolve(cmstring & sHostname, cmstring &sPort) =0;
 };
 
 struct tSysRes;
