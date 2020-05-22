@@ -329,7 +329,10 @@ std::unique_ptr<tSysRes> CreateRegularSystemResources()
 			delete fore;
 			delete db;
 		}
-		int MainLoop() override { return static_cast<tEventActivity*>(fore)->MainLoop(); };
+		int MainLoop() override
+		{
+			return eac()->MainLoop();
+		}
 		tSysResReal() :
 				tSysRes()
 		{
