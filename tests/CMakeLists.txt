@@ -34,3 +34,10 @@ add_executable(ut_dns
 	src/main.cc
 	)
 target_link_libraries(ut_dns ${TEST_LIB_SET})
+
+
+add_executable(ut_shared
+	src/ut_shared.cc
+	src/main.cc
+	)
+target_link_libraries(ut_shared ${TEST_LIB_SET})
