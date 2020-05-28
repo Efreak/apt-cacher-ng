@@ -176,6 +176,8 @@ public:
 	void StartShutdown() override
 	{
 		std::lock_guard<std::mutex> g(handover_mx);
+		if(m_shutdown)
+			return;
 		m_shutdown = true;
 		event_base_loopbreak(m_base);
 	}
@@ -274,6 +276,9 @@ public:
 	void StartShutdown() override
 	{
 		std::lock_guard<std::mutex> g(handover_mx);
+
+		if(m_shutdown)
+			return;
 		m_shutdown = true;
 		// just push it, the thread will stop after
 		incoming_q.emplace_back(tCancelableAction());
@@ -308,38 +313,37 @@ public:
 
 void AddDefaultDnsBase(tSysRes &src);
 
+
+std::unique_ptr<IActivity> MakeSelfThreadedActivity()
+{
+	auto ret = make_unique<tThreadedActivity>();
+	ret->Spawn();
+	return move(ret);
+}
+
 std::unique_ptr<tSysRes> CreateRegularSystemResources()
 {
 	struct tSysResReal : public tSysRes
 	{
-		inline tEventActivity* eac() {return static_cast<tEventActivity*>(this->fore);}
+		inline tEventActivity& eac() {return * static_cast<tEventActivity*>(fore.get());}
 		event_base * GetEventBase() override
 		{
-			return eac()->m_base;
+			return eac().m_base;
 		}
-		~tSysResReal()
-		{
-			// BG threads shall no longer accept jobs and prepare to exit ASAP
-			back->StartShutdown();
-			meta->StartShutdown();
-			fore->StartShutdown();
-			// finalize all outstanding work
-			delete back;
-			delete meta;
-			delete fore;
-			delete db;
-		}
+
 		int MainLoop() override
 		{
-			return eac()->MainLoop();
+			return eac().MainLoop();
 		}
 		tSysResReal() :
 				tSysRes()
 		{
-			fore = new tEventActivity();
+			fore.reset(new tEventActivity());
 			AddDefaultDnsBase(*this);
-			back = (new tThreadedActivity())->Spawn();
-			meta = (new tThreadedActivity())->Spawn();
+			back = MakeSelfThreadedActivity();
+			meta = MakeSelfThreadedActivity();
+
+			IDbManager::AddSqliteImpl(*this);
 		}
 	};
 	return std::make_unique<tSysResReal>();

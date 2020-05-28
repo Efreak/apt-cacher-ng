@@ -13,7 +13,7 @@ using namespace acng;
 // bad idea, needs to consider move operations
 //unsigned g_smoketest=0;
 
-TEST(sharedpool, get)
+TEST(sharedpool, simple)
 {
 	struct testBuild
 	{
@@ -40,4 +40,9 @@ TEST(sharedpool, get)
 	EXPECT_EQ(pool->index.size(), 1);
 	elref2.reset();
 	EXPECT_EQ(pool->index.size(), 0);
+}
+
+TEST(timersharedpool, notimer)
+{
+
 }

@@ -170,6 +170,7 @@ void tDnsBaseImpl::Resolve(cmstring &sHostname, cmstring &sPort, tDnsResultRepor
 					{
 						static time_t cache_purge_time = 0;
 						auto now = GetTime();
+#warning FIXME. Purging by timer should be done with a timer, not here
 						if(now > cache_purge_time || me->dns_cache.size() > DNS_CACHE_MAX)
 						{
 							me->dns_cache.clear();

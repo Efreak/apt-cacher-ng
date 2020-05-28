@@ -3,7 +3,6 @@
 
 #include "meta.h"
 #include "activity.h"
-
 #include <event.h>
 
 //struct evdns_base;
@@ -24,17 +23,24 @@ public:
 	std::shared_ptr<tDnsBase> dnsbase;
 
 	// the main activity, run by main thread
-	IActivity* fore = nullptr;
+	std::unique_ptr<IActivity> fore;
 	// the helper thread used for handling metadata (typically loading of DB records, file opening)
-	IActivity* meta = nullptr;
+	std::unique_ptr<IActivity> meta;
 	// background thread, for best-effort tasks
-	IActivity* back = nullptr;
+	std::unique_ptr<IActivity> back;
 
-	IDbManager *db = nullptr;
+	std::shared_ptr<IDbManager> db = nullptr;
 	IDlConFactory* TcpConnectionFactory = nullptr;
 
 	virtual event_base * GetEventBase() {return nullptr;}
-	virtual ~tSysRes() =default;
+
+	virtual ~tSysRes()
+	{
+		// BG threads shall no longer accept jobs and prepare to exit ASAP
+		if(back) back->StartShutdown();
+		if(meta) meta->StartShutdown();
+		if(fore) fore->StartShutdown();
+	}
 
 	/**
 	 * Runs the main loop for a program around the event_base loop.

@@ -141,7 +141,7 @@ public:
 };
 
 /**
- * Alternative version which is supposed to be used by "priviledged" users, which are counted additionaly by "strong count".
+ * Alternative version which is supposed to be used by "privileged" users, which are counted additionally by "strong count".
  * When all strong pointers are gone, dispose method shall be called.
  */
 template<class T>

@@ -8,41 +8,42 @@
 #ifndef INCLUDE_DBMAN_H_
 #define INCLUDE_DBMAN_H_
 
-#include <SQLiteCpp/Database.h>
 #include <string>
 #include <memory>
 
 namespace acng
 {
 class DbManager;
+class tSysRes;
 
 class IDbManager
 {
 public:
-
+	static void AddSqliteImpl(tSysRes&);
+	enum class OpState
+	{
+		CLOSED,
+		STARTING,
+		ACTIVE,
+		RECOVERY,
+		ADMIN_NEEDED,
+		SHUTDOWN
+	};
+#if false
+	virtual OpState GetOpState() =0;
+#endif
 	virtual ~IDbManager() {};
 
-	static std::unique_ptr<IDbManager> create();
+	virtual void Open(const std::string& path) =0;
 
-	virtual std::string GetMappingSignature(const std::string& name) =0;
+	/**
+	 * @return Checksum if such mapping exists, empty string otherwise
+	 */
+	virtual std::string GetMappingSignature(const std::string& name) noexcept =0;
 	/**
 	 * Will delete old signature data and insert a new one
 	 */
-	virtual void StoreMappingSignature(const std::string& name, const std::string& sig) =0;
-
-	/**
-	 * Works analog to SQLiteCpp::Transaction but correlate the timing with internal transactions.
-	 */
-	class TExplicitTransaction
-	{
-		friend class DbManager;
-		DbManager* m_dbm = nullptr;
-		TExplicitTransaction() = default;
-	public:
-		void commit();
-		TExplicitTransaction(TExplicitTransaction&& src);
-		~TExplicitTransaction();
-	};
+	virtual void StoreMappingSignature(const std::string& name, const std::string& sig) noexcept =0;
 
 #if false
 	/**

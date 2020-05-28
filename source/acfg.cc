@@ -186,7 +186,7 @@ MapNameToInt n2iTbl[] = {
 		,{ "Patrace",	&patrace, 				"Don't use in config files!" , 10, false}
 		,{ "NoSSLchecks",	&nsafriendly, 		"Disable SSL security checks" , 10, false}
 
-
+#warning FIXME, revert but limit to << 100
 		,{  "DnsCacheSeconds",                   &dnscachetime,     "DnsCacheSeconds is deprecated and has no effect",    10, true}
 
 };
@@ -802,95 +802,98 @@ struct tConfigBuilder::tImpl
 	//bool AppendPasswordHash(mstring &stringWithSalt, LPCSTR plainPass, size_t passLen);
 
 	class tMappingValidator
+	{
+		std::string m_oldSig;
+		Cstat x;
+		std::unique_ptr<csumBase> m_summer;
+		enum
 		{
-			std::string m_oldSig;
-			Cstat x;
-			std::unique_ptr<csumBase> m_summer;
-			enum { INIT, VALIDATING, NEW_STUFF, MISMATCH, FINISHED } m_mode = INIT;
+			INIT, VALIDATING, NEW_STUFF, MISMATCH, FINISHED
+		} m_mode = INIT;
 
-			void init_summer()
-			{
-				m_summer = csumBase::GetChecker(CSTYPES::MD5);
-				// pointless, better have reproducible tests without constant updates
-				// m_summer->add(SIGNATURE_PREFIX);
-			}
-public:
-			const std::string &m_name;
+		void init_summer()
+		{
+			m_summer = csumBase::GetChecker(CSTYPES::MD5);
+			// pointless, better have reproducible tests without constant updates
+			// m_summer->add(SIGNATURE_PREFIX);
+		}
+	public:
+		const std::string &m_name;
 
-			explicit tMappingValidator(const std::string& name) : m_name(name)
-			{
-			}
+		explicit tMappingValidator(const std::string &name) :
+				m_name(name)
+		{
+		}
 
-			bool IsDryRun()
+		bool IsDryRun()
+		{
+			return m_mode == VALIDATING;
+		}
+		void ReportString(string_view s)
+		{
+			m_summer->add(s);
+		}
+		void ReportFile(cmstring &path, Cstat *stinfo)
+		{
+			m_summer->add(path);
+			if (!stinfo)
 			{
-				return m_mode == VALIDATING;
+				stinfo = &x;
+				x.reset(path);
 			}
-			void ReportString(string_view s)
+			m_summer->add(";");
+#define PUN2BS(what) (const uint8_t*) (const char*) & what, sizeof(what)
+			m_summer->add(PUN2BS(stinfo->st_size));
+			m_summer->add(PUN2BS(stinfo->st_ino));
+			m_summer->add(PUN2BS(stinfo->st_dev));
+			m_summer->add(PUN2BS(stinfo->st_mtim));
+			if (access(path.c_str(), R_OK))
+				m_summer->add("ntrdbl");
+		}
+		/**
+		 * Finish the input data flow and analyze the resulting signature.
+		 * @return true if needing another run
+		 */
+		bool Next(IDbManager &dbman)
+		{
+			switch (m_mode)
 			{
-				m_summer->add(s);
+			case INIT:
+			{
+				init_summer();
+				m_oldSig = dbman.GetMappingSignature(m_name);
+				if (m_oldSig.empty())
+					m_mode = NEW_STUFF;
+				else if (startsWith(m_oldSig, SIGNATURE_PREFIX))
+					m_mode = VALIDATING;
+				else
+					m_mode = MISMATCH;
+				break;
 			}
-			void ReportFile(cmstring& path, Cstat* stinfo)
+			case VALIDATING:
 			{
-				m_summer->add(path);
-				if(!stinfo)
-				{
-					stinfo=&x;
-					x.reset(path);
-				}
-				m_summer->add(";");
-	#define PUN2BS(what) (const uint8_t*) (const char*) & what, sizeof(what)
-				m_summer->add(PUN2BS(stinfo->st_size));
-				m_summer->add(PUN2BS(stinfo->st_ino));
-				m_summer->add(PUN2BS(stinfo->st_dev));
-				m_summer->add(PUN2BS(stinfo->st_mtim));
-				if(access(path.c_str(), R_OK))
-					m_summer->add("ntrdbl");
-			}
-			/**
-			 * Finish the input data flow and analyze the resulting signature.
-			 * @return true if needing another run
-			 */
-			bool Next(IDbManager& dbman)
-			{
-				switch(m_mode)
-				{
-				case INIT:
+				auto mx = m_summer->finish().to_string();
+				if (endsWith(m_oldSig, mx))
+					m_mode = FINISHED;
+				else
 				{
 					init_summer();
-					try
-					{
-						m_oldSig = dbman.GetMappingSignature(m_name);
-						m_mode = startsWith(m_oldSig, SIGNATURE_PREFIX) ? VALIDATING : MISMATCH;
-					}
-					catch (const SQLite::Exception &e)
-					{
-						m_mode = NEW_STUFF;
-					}
-					break;
+					m_mode = MISMATCH;
 				}
-				case VALIDATING:
-				{
-					auto mx = m_summer->finish().to_string();
-					if (endsWith(m_oldSig, mx))
-						m_mode = FINISHED;
-					else
-					{
-						init_summer();
-						m_mode = MISMATCH;
-					}
-					break;
-				}
-				case MISMATCH:
-				case NEW_STUFF:
-					dbman.StoreMappingSignature(m_name, SIGNATURE_PREFIX + m_summer->finish().to_string());
-					__just_fall_through;
-				default:
-					m_mode = FINISHED;
-					break;
-				}
-				return FINISHED != m_mode;
+				break;
 			}
-		};
+			case MISMATCH:
+			case NEW_STUFF:
+				dbman.StoreMappingSignature(m_name,
+						SIGNATURE_PREFIX + m_summer->finish().to_string());
+				__just_fall_through;
+			default:
+				m_mode = FINISHED;
+				break;
+			}
+			return FINISHED != m_mode;
+		}
+	};
 
 	void ReadOneConfFile(const string & szFilename)
 	{

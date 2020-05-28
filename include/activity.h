@@ -36,6 +36,9 @@ public:
 
 	virtual std::thread::id GetThreadId() =0;
 
+	/**
+	 * Trigger the shutdown call. Shall cope with multiple calling.
+	 */
 	virtual void StartShutdown() =0;
 };
 
