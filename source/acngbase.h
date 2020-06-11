@@ -34,11 +34,14 @@ public:
 
 	virtual event_base * GetEventBase() {return nullptr;}
 
+	// predefine a sane shutdown order
 	virtual ~tSysRes()
 	{
 		// BG threads shall no longer accept jobs and prepare to exit ASAP
 		if(back) back->StartShutdown();
 		if(meta) meta->StartShutdown();
+		dnsbase.reset();
+		// and make sure to stop IO, however this is probably already interrupted from the loopbreak callback
 		if(fore) fore->StartShutdown();
 	}
 

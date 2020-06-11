@@ -31,25 +31,6 @@ public:
 };
 
 /**
- * Two-step destruction with two kinds of references; owning ones (strong count) and remaining ones.
- * When owners are gone, object is considered abandoned and a specific function is run.
- */
-struct tRefcountedDetachable : tLintRefcounted
-{
-private:
-    size_t m_nStrongCount = 0;
-public:
-    inline void __inc_strong_ref() noexcept { m_nStrongCount++; }
-    inline void __dec_strong_ref()
-    {
-        if(--m_nStrongCount == 0)
-            abandon();
-    }
-    virtual void abandon() =0;
-    inline size_t __strong_ref_cnt() { return m_nStrongCount; }
-};
-
-/**
  * Lightweight intrusive smart pointer with ordinary reference counting
  */
 template<class T>
@@ -60,10 +41,10 @@ public:
 	explicit lint_ptr()
 	{
 	}
-	explicit lint_ptr(T *rawPtr) :
+	explicit lint_ptr(T *rawPtr, bool initialyTakeRef=true) :
 			m_ptr(rawPtr)
 	{
-		if(rawPtr)
+		if(rawPtr && initialyTakeRef)
 			rawPtr->__inc_ref();
 	}
 	lint_ptr(const ::acng::lint_ptr<T> & orig) :
@@ -138,28 +119,53 @@ public:
 	{
 		return m_ptr < vs.m_ptr;
 	}
+	// pointer-like access options
+	inline bool operator==(const lint_ptr<T> &vs) const noexcept
+	{
+		return m_ptr == vs.m_ptr;
+	}
 };
 
 /**
- * Alternative version which is supposed to be used by "privileged" users, which are counted additionally by "strong count".
- * When all strong pointers are gone, dispose method shall be called.
+ * Two-step destruction with two kinds of reference counts: external users and total users.
+ * When owners are gone, object is considered abandoned and a specific function is run.
+ */
+struct tLintRefcountedIndexable : tLintRefcounted
+{
+private:
+    size_t m_nObjectUsersCount = 0;
+public:
+    inline void __inc_user_ref() noexcept { m_nObjectUsersCount++; }
+    inline void __dec_user_ref()
+    {
+        if(--m_nObjectUsersCount == 0)
+            unshare();
+    }
+    virtual void unshare() =0;
+    inline size_t __user_ref_cnt() { return m_nObjectUsersCount; }
+    virtual ~tLintRefcountedIndexable() =default;
+};
+
+/**
+ * Alternative version which is supposed to be used by "privileged" users, which are counted additionally by "user count".
+ * When all user pointers are gone, dispose method shall be called.
  */
 template<class T>
-class lint_strong_ptr
+class lint_user_ptr
 {
 	T * m_ptr = nullptr;
 public:
-	explicit lint_strong_ptr()
+	explicit lint_user_ptr()
 	{
 	}
-	explicit lint_strong_ptr(T *rawPtr) :
+	explicit lint_user_ptr(T *rawPtr) :
 			m_ptr(rawPtr)
 	{
 		if(!m_ptr) return;
 		m_ptr->__inc_ref();
 		m_ptr->__inc_strong_ref();
 	}
-	lint_strong_ptr(const ::acng::lint_strong_ptr<T> & orig) :
+	lint_user_ptr(const ::acng::lint_user_ptr<T> & orig) :
 			m_ptr(orig.m_ptr)
 	{
 		if(!m_ptr)
@@ -167,7 +173,7 @@ public:
 		m_ptr->__inc_ref();
 		m_ptr->__inc_strong_ref();
 	}
-	inline ~lint_strong_ptr<T>()
+	inline ~lint_user_ptr<T>()
 	{
 		if(!m_ptr) return;
 		m_ptr->__dec_strong_ref();
@@ -197,14 +203,14 @@ public:
 		}
 		m_ptr = nullptr;
 	}
-	lint_strong_ptr<T>& operator=(const lint_strong_ptr<T> &other)
+	lint_user_ptr<T>& operator=(const lint_user_ptr<T> &other)
 	{
 		if(m_ptr == other.m_ptr)
 			return *this;
 		reset(other.m_ptr);
 		return *this;
 	}
-	lint_strong_ptr<T>& operator=(lint_strong_ptr<T> &&other)
+	lint_user_ptr<T>& operator=(lint_user_ptr<T> &&other)
 	{
 		if(m_ptr == other.m_ptr)
 			return *this;
@@ -226,7 +232,7 @@ public:
 		return m_ptr;
 	}
 	// pointer-like access options
-	inline bool operator<(const lint_strong_ptr<T> &vs) const noexcept
+	inline bool operator<(const lint_user_ptr<T> &vs) const noexcept
 	{
 		return m_ptr < vs.m_ptr;
 	}
@@ -238,13 +244,20 @@ inline lint_ptr<C> as_lptr(C* a)
 	return lint_ptr<C>(a);
 };
 
+template<typename C, typename Torig>
+inline lint_ptr<C> static_lptr_cast(lint_ptr<Torig> a)
+{
+	return lint_ptr<C>(static_cast<C*>(a.get()));
+};
 
+
+/*
 template<typename C>
 inline lint_strong_ptr<C> as_lptr_strong(C* a)
 {
 	return lint_strong_ptr<C>(a);
 };
-
+*/
 
 
 template<class C>

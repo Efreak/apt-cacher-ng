@@ -2,12 +2,13 @@
 #define CADDRINFO_H_
 
 #include "meta.h"
+#include "acsmartptr.h"
 #include <event2/util.h>
 
 namespace acng
 {
 
-class ACNG_API CAddrInfo
+class ACNG_API CAddrInfo : public tLintRefcounted
 {
 public:
 	virtual ~CAddrInfo() = default;
@@ -15,7 +16,8 @@ public:
 	virtual const std::string& getError() const =0;
 };
 
-typedef std::shared_ptr<CAddrInfo> CAddrInfoPtr;
+//typedef std::shared_ptr<CAddrInfo> CAddrInfoPtr;
+typedef acng::lint_ptr<CAddrInfo> CAddrInfoPtr;
 typedef std::function<void(CAddrInfoPtr)> tDnsResultReporter;
 
 class ACNG_API tDnsBase
@@ -25,7 +27,7 @@ public:
 	// async. DNS resolution on IO thread. Reports result through the reporter.
 	virtual void Resolve(cmstring & sHostname, cmstring &sPort, tDnsResultReporter) noexcept =0;
 	// like above but blocking
-	virtual std::shared_ptr<CAddrInfo> Resolve(cmstring & sHostname, cmstring &sPort) =0;
+	virtual CAddrInfoPtr Resolve(cmstring & sHostname, cmstring &sPort) =0;
 };
 
 struct tSysRes;

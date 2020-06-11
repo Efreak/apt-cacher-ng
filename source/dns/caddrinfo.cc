@@ -5,6 +5,7 @@
 #include <list>
 #include <unordered_map>
 #include <future>
+#include <queue>
 
 #include "caddrinfo.h"
 #include "sockio.h"
@@ -28,12 +29,19 @@ static const unsigned DNS_CACHE_MAX = 255;
 static const string dns_error_status_prefix("503 DNS error - ");
 
 class tDnsBaseImpl;
+class CAddrInfoImpl;
+typedef acng::lint_ptr<CAddrInfoImpl> CAddrInfoImplPtr;
 
 // descriptor of a running DNS lookup, passed around with libevent callbacks
-struct tActiveResolutionContext
+struct tActiveResolutionContext : tLintRefcounted
 {
-	std::string sHostPortKey;
-	std::weak_ptr<tDnsBaseImpl> pDnsBase;
+	// yes, it builds a reference cycle which is broken by the C callback eventually
+	lint_ptr<CAddrInfoImpl> what;
+	std::list<tDnsResultReporter> requester_actions;
+	tActiveResolutionContext(lint_ptr<CAddrInfoImpl> _what, tDnsResultReporter first_rep)
+	: what(_what), requester_actions({move(first_rep)})
+	{
+	}
 };
 
 using tRawAddrinfoPtr = resource_owner<evutil_addrinfo*, evutil_freeaddrinfo, nullptr>;
@@ -45,42 +53,27 @@ static std::string make_dns_key(const std::string & sHostname, const std::string
 
 class ACNG_API CAddrInfoImpl : public CAddrInfo
 {
+	friend class tDnsBaseImpl;
+
+	// valid as long as the resolution is ongoing
+	lint_ptr<tActiveResolutionContext> current_resolver_activity;
+
 	// resolution results (or error hint for caching)
 	std::string m_sError;
-	//time_t m_expTime = MAX_VAL(time_t);
 
 	// raw returned data from getaddrinfo
 	tRawAddrinfoPtr m_rawInfo;
 	// shortcut for iterators, first in the list with TCP target
 	evutil_addrinfo *m_tcpAddrInfo = nullptr;
 
-public:
-
-	const evutil_addrinfo* getTcpAddrInfo() const
-	{
-		return m_tcpAddrInfo;
-	}
-	const std::string& getError() const
-	{
-		return m_sError;
-	}
-
-	// C-style callback for libevent
-	static void cb_dns(int result, struct evutil_addrinfo *results, void *arg);
-
-	explicit CAddrInfoImpl(const char *szErrorMessage) :
-			m_sError(szErrorMessage)
-	{
-	}
-
-	explicit CAddrInfoImpl(int eaiError)
+	void setError(int eaiError)
 	{
 		if(!eaiError)
 			return;
 		m_sError = dns_error_status_prefix + evutil_gai_strerror(eaiError);
 	}
 
-	explicit CAddrInfoImpl(tRawAddrinfoPtr&& results)
+	void setResult(tRawAddrinfoPtr&& results)
 	{
 		try
 		{
@@ -100,20 +93,43 @@ public:
 			m_sError = dns_error_status_prefix + ex.what();
 		}
 	}
+public:
 
+	const evutil_addrinfo* getTcpAddrInfo() const
+	{
+		return m_tcpAddrInfo;
+	}
+	const std::string& getError() const
+	{
+		return m_sError;
+	}
+
+	// C-style callback for libevent
+	static void cb_dns(int result, struct evutil_addrinfo *results, void *arg);
+
+	explicit CAddrInfoImpl(const char *szErrorMessage) :
+			m_sError(szErrorMessage ? szErrorMessage : "")
+	{
+	}
+
+	CAddrInfoImpl()
+	{
+	}
+
+	explicit CAddrInfoImpl(int eaiError)
+	{
+		setError(eaiError);
+	}
 };
 
 // this shall remain global and forever, for last-resort notifications
-std::shared_ptr<CAddrInfo> RESPONSE_FAIL = static_pointer_cast<CAddrInfo>(std::make_shared<CAddrInfoImpl>("503 Fatal system error within apt-cacher-ng processing"));
-std::shared_ptr<CAddrInfo> RESPONSE_CANCELED = static_pointer_cast<CAddrInfo>(make_shared<CAddrInfoImpl>(EAI_CANCELED));
-
+CAddrInfoPtr RESPONSE_FAIL = CAddrInfoPtr(new CAddrInfoImpl("503 Fatal system error within apt-cacher-ng processing"));
+CAddrInfoPtr RESPONSE_CANCELED = CAddrInfoPtr(new CAddrInfoImpl(EAI_CANCELED));
 
 class ACNG_API tDnsBaseImpl: public tDnsBase, public std::enable_shared_from_this<tDnsBaseImpl>
 {
 public:
 	evdns_base *m_evdnsbase;
-	// this must be regular map because the elements must not be moved in memory!
-	std::map<std::string, std::list<tDnsResultReporter>> active_resolvers;
 	tSysRes &m_src;
 
 	explicit tDnsBaseImpl(tSysRes &src) : tDnsBase(), m_src(src)
@@ -130,9 +146,9 @@ public:
 	// async. DNS resolution on IO thread. Reports result through the reporter.
 	void Resolve(cmstring &sHostname, cmstring &sPort, tDnsResultReporter) noexcept;
 	// like above but blocking
-	std::shared_ptr<CAddrInfo> Resolve(cmstring &sHostname, cmstring &sPort)
+	CAddrInfoPtr Resolve(cmstring &sHostname, cmstring &sPort) override
 	{
-		promise<shared_ptr<CAddrInfo> > reppro;
+		promise<CAddrInfoPtr> reppro;
 		Resolve(sHostname, sPort, [&reppro](CAddrInfoPtr result) { reppro.set_value(result);} ); // @suppress("Invalid arguments")
 		auto res(reppro.get_future().get());
 		return res ? res : RESPONSE_FAIL;
@@ -143,8 +159,21 @@ public:
 	// ordering on expiration date but that's not the case; OTOH could also use a multi-key
 	// index instead of g_active_resolver_index but then again, when the resolution is finished,
 	// that key data becomes worthless.
-	map<string, CAddrInfoPtr> dns_cache;
-	deque<decltype(dns_cache)::iterator> dns_exp_q;
+	map<string, CAddrInfoImplPtr> dns_cache;
+	queue<pair<time_t, decltype(dns_cache)::iterator>> dns_exp_q;
+
+	// add or fetch an existing entry. If added as fresh, arm the timer for expiration
+	CAddrInfoImplPtr GetOrAdd2Cache(cmstring& key)
+	{
+		if(cfg::dnscachetime < 0)
+			return make_lptr<CAddrInfoImpl>();
+
+		auto res = dns_cache.emplace(key, CAddrInfoImplPtr());
+		if(res.second)
+			res.first->second.reset(new CAddrInfoImpl);
+		return res.first->second;
+#warning Implement cleanup with timer
+	}
 
 };
 
@@ -163,34 +192,16 @@ void tDnsBaseImpl::Resolve(cmstring &sHostname, cmstring &sPort, tDnsResultRepor
 
 				try
 				{
-
 					auto key=make_dns_key(sHostname, sPort);
-					// try using old cached entry, if possible
-					if(cfg::dnscachetime > 0)
+					// try using old cached entry, or get a new one
+					auto pImpl = me->GetOrAdd2Cache(key);
+					if(pImpl->current_resolver_activity)
 					{
-						static time_t cache_purge_time = 0;
-						auto now = GetTime();
-#warning FIXME. Purging by timer should be done with a timer, not here
-						if(now > cache_purge_time || me->dns_cache.size() > DNS_CACHE_MAX)
-						{
-							me->dns_cache.clear();
-							cache_purge_time = now + cfg::dnscachetime;
-						}
-						else
-						{
-							auto caIt = me->dns_cache.find(key);
-							if(caIt != me->dns_cache.end()) return rep(caIt->second);
-						}
-					}
-					auto resIt = me->active_resolvers.find(key);
-					// join the waiting crowd, move all callbacks to there...
-					if(resIt != me->active_resolvers.end())
-					{
-						resIt->second.emplace_back(move(rep));
+						// join the waiting crowd, move all callbacks to there...
+						pImpl->current_resolver_activity->requester_actions.emplace_back(move(rep));
 						return;
 					}
-					auto callbackHint = new tActiveResolutionContext { key, me };
-					me->active_resolvers[key].emplace_back(move(rep));
+					pImpl->current_resolver_activity.reset(new tActiveResolutionContext(pImpl, move(rep)));
 					static bool filter_specific = (cfg::conprotos[0] != PF_UNSPEC && cfg::conprotos[1] == PF_UNSPEC);
 					static const evutil_addrinfo default_connect_hints =
 					{
@@ -201,9 +212,10 @@ void tDnsBaseImpl::Resolve(cmstring &sHostname, cmstring &sPort, tDnsResultRepor
 						SOCK_STREAM, IPPROTO_TCP,
 						0, nullptr, nullptr, nullptr
 					};
+					pImpl->current_resolver_activity->__inc_ref(); // to be reverted in the callback
 					evdns_getaddrinfo(me->m_evdnsbase, sHostname.empty() ? nullptr : sHostname.c_str(),
 							sPort.empty() ? nullptr : sPort.c_str(),
-							&default_connect_hints, CAddrInfoImpl::cb_dns, callbackHint);
+							&default_connect_hints, CAddrInfoImpl::cb_dns, pImpl->current_resolver_activity.get());
 				}
 				catch(...)
 				{
@@ -215,36 +227,43 @@ void tDnsBaseImpl::Resolve(cmstring &sHostname, cmstring &sPort, tDnsResultRepor
 
 void CAddrInfoImpl::cb_dns(int rc, struct evutil_addrinfo *resultsRaw, void *argRaw)
 {
-	// take ownership in any case, to clear or move it around
+	// take ownership of result in any case, to clear or move it around
 	tRawAddrinfoPtr results(resultsRaw);
-	auto ret = RESPONSE_FAIL;
 
 	if (!argRaw)
 		return; // not good but not fixable :-(
 
-	auto ctx = std::unique_ptr<tActiveResolutionContext>((tActiveResolutionContext*)argRaw);
-	auto dnsbase = ctx->pDnsBase.lock();
-	if(!dnsbase)
-		return;
-	auto iter = dnsbase->active_resolvers.find(ctx->sHostPortKey);
-	if(iter == dnsbase->active_resolvers.end())
-		return;
-	auto cbacks = move(iter->second);
-	dnsbase->active_resolvers.erase(iter);
-	// report something this in any case
-	tDtorEx invoke_cbs([&]() { for(auto& it: cbacks) it(ret);}); // @suppress("Invalid arguments")
+	// revert the reference offset, take over and remove the resolution context reference
+	auto ctx = lint_ptr<tActiveResolutionContext>((tActiveResolutionContext*)argRaw, false);
+	ctx->what->current_resolver_activity.reset();
+
+	auto report = [&](const CAddrInfoPtr& ret)
+			{
+		for(auto& it: ctx->requester_actions)
+		try {
+			it(ret);
+		} catch (...) {
+		}
+	};
 
 	// now dispatch actual response
 	try
 	{
-		if(rc)
-			ret = make_shared<CAddrInfoImpl>(rc);
-		else if(!resultsRaw) // failed to provide information nor error? wtf?
-			ret = RESPONSE_FAIL;
-		else
-			ret = make_shared<CAddrInfoImpl>(move(results));
-	} catch (...)
-	{
+		if (rc)
+			ctx->what->setError(rc);
+		else if (resultsRaw)
+			ctx->what->setResult(move(results));
+		auto wtf = static_lptr_cast<CAddrInfo>(ctx->what);
+		report(wtf);
+		return;
 	}
+	catch (...)
+	{
+		report(RESPONSE_FAIL);
+		return;
+	}
+
+	// failed to provide information nor error? wtf?
+	report(RESPONSE_FAIL);
 }
 }

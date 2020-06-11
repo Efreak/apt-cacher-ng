@@ -2,10 +2,10 @@ set(SHAREDSRCS
         acngbase.cc
 dns/caddrinfo.cc
         sockio.cc acbuf.cc acfg.cc acfg_defaults.cc aclogger.cc dirwalk.cc fileio.cc  filelocks.cc 
-filereader.cc header.cc meta.cc tcpconnect.cc  rex.cc astrop.cc dbman.cc errnofmt.cc csmapping.cc
+filereader.cc header.cc meta.cc   rex.cc astrop.cc dbman.cc errnofmt.cc csmapping.cc
 dbman.cc
 )
-#  dlcon.cc fileitem.cc cleaner.cc job.cc bgtask.cc cacheman.cc
+#  dlcon.cc fileitem.cc cleaner.cc job.cc bgtask.cc cacheman.cc tcpconnect.cc
 # conn.cc conserver.cc expiration.cc lockable.cc maintenance.cc mirror.cc pkgimport.cc showinfo.cc evabase.cc dnsiter.cc tcpconfactory.cc tlsio.cc fileitemws.cc
 
 set(ACNG_SRCS apt-cacher.cc)

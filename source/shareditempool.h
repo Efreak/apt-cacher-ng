@@ -24,6 +24,8 @@ namespace acng
  * a) elements are reference-counted
  * b) elements are stored as map sub-elements, no extra indirection to allocated additional elements
  * c) refcounting happens through guardian objects - whenever the last reference keeper is gone, the entry is removed from the map
+ *
+ * This is very simple and mostly usable for non-complex items.
  */
 template<typename Tkey, typename Tvalue>
 class TSharedItemPool : public tLintRefcounted
