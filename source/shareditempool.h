@@ -13,7 +13,7 @@
 #include <queue>
 #include <utility>
 
-#include "atimer.h"
+#include "eva/atimer.h"
 #include "sut.h"
 
 namespace acng
@@ -99,6 +99,79 @@ public:
 	inline TReference Get(const Tkey& key) { return Get(key, nullptr); }
 	inline TReference Get(const Tkey& key, bool& was_new) { return Get(key, &was_new); }
 };
+
+class ISharedResource
+{
+public:
+	/**
+	 * Called by TReference when the particular counter became 0 or 1
+	 * @param Member variable referenced by plain pointer
+	 */
+	virtual void __gotUsed(size_t *causingCounter) =0;
+	virtual ~ISharedResource() = default;
+};
+
+/**
+ * Generic version of a usage tracker which differentiates between multiple kinds of usage,
+ * by having differing counters inside of an object (intrusive).
+ *
+ * Reports the zero/non-zero transition of each counter following ISharedResource interface.
+ */
+template<typename T, size_t T::* offset>
+class TReference
+{
+	void __inc_usecount()
+	{
+		if(!ptr)
+			return;
+		++ ((*ptr).*offset);
+		if(((*ptr).*offset) == 1)
+			ptr->__gotUsed(& ((*ptr).*offset));
+	}
+	void __dec_usecount()
+	{
+		if(!ptr)
+			return;
+		-- ((*ptr).*offset);
+		if((*ptr).*offset == 0)
+			ptr->__gotUsed(& ((*ptr).*offset));
+	}
+public:
+	lint_ptr<T> ptr;
+	TReference(const lint_ptr<T> &p) : ptr(p)
+	{
+		__inc_usecount();
+	}
+	TReference(const TReference &src)
+	{
+		if(&src == this)
+			return;
+		ptr = src.ptr;
+		__inc_usecount();
+	}
+	TReference& operator=(const TReference &src)
+	{
+		if(&src == this)
+			return *this;
+		__inc_usecount();
+		return *this;
+	}
+	bool operator==(const TReference& x) const
+	{
+		return x.ptr == ptr;
+	}
+	bool operator!=(const TReference& x) const
+	{
+		return x.ptr != ptr;
+	}
+	bool operator<(const TReference& x) const
+	{
+		return ptr < x.ptr;
+	}
+	~TReference() { __dec_usecount(); }
+
+};
+
 
 #if 0
 // XXX: that was a lousy attempt, and it misses the actual requirements
@@ -257,8 +330,8 @@ public:
 };
 
 
-
-}
 #endif
 
+
+}
 #endif /* SOURCE_SHAREDITEMPOOL_H_ */

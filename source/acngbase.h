@@ -34,7 +34,7 @@ public:
 
 	virtual event_base * GetEventBase() {return nullptr;}
 
-	// predefine a sane shutdown order
+	// predefine a reliable shutdown order,, even for partly mocked versions
 	virtual ~tSysRes()
 	{
 		// BG threads shall no longer accept jobs and prepare to exit ASAP
