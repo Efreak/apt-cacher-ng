@@ -51,10 +51,11 @@ TEST(timersharedpool, notimer)
 }
 
 
-struct TSample : public acng::ISharedResource, public tLintRefcounted
+struct TSample : public tLintRefcounted
 {
 	size_t m_xyCount =0;
 	size_t prev=0;
+#if 0
 	void __gotUsed(size_t *causingCounter) override
 	{
 		/* XXX: good enough for now, add mock sequence later
@@ -67,8 +68,15 @@ struct TSample : public acng::ISharedResource, public tLintRefcounted
 		ASSERT_TRUE(m_xyCount != prev && (m_xyCount == 0 || m_xyCount==1));
 		prev = m_xyCount;
 	}
+#endif
+	void nowUsedXY(bool yes)
+	{
+		cout << "used? " << yes << endl;
+		ASSERT_TRUE(m_xyCount != prev && (m_xyCount == 0 || m_xyCount==1));
+		prev = m_xyCount;
+	}
 };
-using TXYReference = TReference<TSample, &TSample::m_xyCount>;
+using TXYReference = TReference<TSample, &TSample::m_xyCount, &TSample::nowUsedXY>;
 
 TEST(tref, simple)
 {

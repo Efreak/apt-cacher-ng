@@ -100,6 +100,7 @@ public:
 	inline TReference Get(const Tkey& key, bool& was_new) { return Get(key, &was_new); }
 };
 
+#if 0
 class ISharedResource
 {
 public:
@@ -110,31 +111,34 @@ public:
 	virtual void __gotUsed(size_t *causingCounter) =0;
 	virtual ~ISharedResource() = default;
 };
+#endif
 
 /**
  * Generic version of a usage tracker which differentiates between multiple kinds of usage,
  * by having differing counters inside of an object (intrusive).
  *
  * Reports the zero/non-zero transition of each counter following ISharedResource interface.
+ *
+ * Parameters: type (should derive from tLintRefcounted), pointer to counting member (owning class must zero-initialize!), pointer to callback function which reports that something became used or unused
  */
-template<typename T, size_t T::* offset>
+template<typename T, size_t T::* ToffsetCounter, void (T::*ToffsetCallback)(bool) >
 class TReference
 {
 	void __inc_usecount()
 	{
 		if(!ptr)
 			return;
-		++ ((*ptr).*offset);
-		if(((*ptr).*offset) == 1)
-			ptr->__gotUsed(& ((*ptr).*offset));
+		++ ((*ptr).*ToffsetCounter);
+		if(((*ptr).*ToffsetCounter) == 1)
+			((*ptr).*ToffsetCallback)(true);
 	}
 	void __dec_usecount()
 	{
 		if(!ptr)
 			return;
-		-- ((*ptr).*offset);
-		if((*ptr).*offset == 0)
-			ptr->__gotUsed(& ((*ptr).*offset));
+		-- ((*ptr).*ToffsetCounter);
+		if((*ptr).*ToffsetCounter == 0)
+			((*ptr).*ToffsetCallback)(false);
 	}
 public:
 	lint_ptr<T> ptr;
@@ -142,16 +146,17 @@ public:
 	{
 		__inc_usecount();
 	}
+	TReference() = default;
 	TReference(const TReference &src)
 	{
-		if(&src == this)
+		if(&src == this || src.ptr == ptr)
 			return;
 		ptr = src.ptr;
 		__inc_usecount();
 	}
 	TReference& operator=(const TReference &src)
 	{
-		if(&src == this)
+		if(&src == this || src.ptr == ptr)
 			return *this;
 		__inc_usecount();
 		return *this;
@@ -168,6 +173,7 @@ public:
 	{
 		return ptr < x.ptr;
 	}
+	void reset() { __dec_usecount(); ptr.reset();}
 	~TReference() { __dec_usecount(); }
 
 };
