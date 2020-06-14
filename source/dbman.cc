@@ -44,6 +44,19 @@ CREATE TABLE "mappings" (
 const tSetupStructure setup_sequence[] =
 {
 		{
+			"SESSION",
+			"select count(version), count(id) from session;",
+"drop table IF EXISTS session; "
+			R"<<<(
+CREATE TABLE "session" (
+				"id"	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+				"version"	TEXT,
+				"date"	INTEGER DEFAULT 'datetime(''now'')'
+			);
+			)<<<"
+			//"drop table IF EXISTS session; CREATE TABLE session (last_ver TEXT NOT NULL, session_id INTEGER DEFAULT -1);"
+		},
+		{
 				"MAPPINGS",
 
 				R"<<<(
@@ -146,6 +159,7 @@ public:
 			try
 			{
 				SQLite::Statement query(*m_db, instruction.create);
+				//query.bind("asf");
 				query.exec();
 				continue;
 			} catch (const SQLite::Exception& ex)

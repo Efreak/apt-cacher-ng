@@ -365,7 +365,24 @@ static inline time_t GetTime()
 {
 	return ::time(0);
 }
-
+#if 0
+// create a distinguishable timestamp with the highest resolution we can get, which is still ok for 32bit environment
+static inline int64_t GetTimeStamp()
+{
+	timespec ts;
+	if(0 == clock_gettime(CLOCK_MONOTONIC, &ts))
+	{
+		// 2 bits remaining, good enough until 23st century
+		return (int64_t(ts.tv_sec) << 30) | int64_t(ts.tv_nsec);
+	}
+	timeval tv;
+	if(0 == gettimeofday(&tv, nullptr))
+	{
+		return (int64_t(tv.tv_sec) << 30) | int64_t(tv.tv_sec*1000);
+	}
+	throw std::runtime_error("Bad clock or no permissions to fetch high precision time!");
+}
+#endif
 static const time_t END_OF_TIME(MAX_VAL(time_t)-2);
 
 unsigned FormatTime(char *buf, size_t bufLen, const time_t cur);
